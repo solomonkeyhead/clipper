@@ -1,0 +1,241 @@
+"""Filter-graph and command construction.
+
+These tests assert on the *text* of the graph, which is cheap; the integration
+tests then prove FFmpeg actually accepts it.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from clipper.config import RenderConfig
+from clipper.models import CropKeyframe, CropRect, LayoutPlan
+from clipper.render.graph import (
+    RenderSpec,
+    build_audio_filter,
+    build_command,
+    build_sendcmd_script,
+    build_video_filter,
+    output_size,
+)
+
+
+def make_spec(layout: LayoutPlan, **kwargs) -> RenderSpec:
+    defaults = dict(
+        source=Path("C:/media/source.mp4"),
+        output=Path("C:/out/clip.mp4"),
+        start=12.5,
+        duration=30.0,
+        layout=layout,
+        ass_path=None,
+        fonts_dir=None,
+        width=1080,
+        height=1920,
+        fps=30,
+        encoder="libx264",
+        loudness_lufs=-14.0,
+        true_peak_dbtp=-1.5,
+        crf=20,
+        nvenc_cq=23,
+        x264_preset="veryfast",
+        audio_bitrate="192k",
+        audio_rate=48_000,
+    )
+    defaults.update(kwargs)
+    return RenderSpec(**defaults)
+
+
+FOLLOW = LayoutPlan(
+    kind="follow_crop", crop_width=608, crop_height=1080,
+    keyframes=[CropKeyframe(t=0.0, x=100, y=0), CropKeyframe(t=1.0, x=200, y=0)],
+)
+STACK = LayoutPlan(
+    kind="two_speaker_stack", crop_width=1215, crop_height=1080,
+    panes=[CropRect(x=0, y=0, width=1215, height=1080),
+           CropRect(x=705, y=0, width=1215, height=1080)],
+)
+BLURRED = LayoutPlan(kind="blurred_fit", crop_width=1920, crop_height=1080)
+
+
+class TestSendcmdScript:
+    def test_emits_x_and_y_per_keyframe(self):
+        script = build_sendcmd_script(FOLLOW)
+        assert script.count("crop x") == 2
+        assert script.count("crop y") == 2
+
+    def test_lines_end_with_a_semicolon(self):
+        for line in build_sendcmd_script(FOLLOW).strip().splitlines():
+            assert line.endswith(";")
+
+    def test_times_are_ascending(self):
+        times = [
+            float(line.split()[0])
+            for line in build_sendcmd_script(FOLLOW).strip().splitlines()
+        ]
+        assert times == sorted(times)
+
+    def test_empty_plan_yields_an_empty_script(self):
+        assert build_sendcmd_script(LayoutPlan(kind="follow_crop")) == ""
+
+
+class TestVideoFilter:
+    def test_follow_crop_has_crop_scale_and_output_label(self):
+        vf = build_video_filter(make_spec(FOLLOW))
+        assert "crop=608:1080:100:0" in vf
+        assert "scale=1080:1920" in vf
+        assert vf.endswith("[v]")
+
+    def test_follow_crop_includes_sendcmd_upstream_of_crop(self):
+        """sendcmd must precede the filter it drives or the commands go nowhere."""
+        vf = build_video_filter(make_spec(FOLLOW, sendcmd_path=Path("C:/w/cmds.txt")))
+        assert vf.index("sendcmd") < vf.index("crop=")
+
+    def test_single_keyframe_needs_no_sendcmd(self):
+        static = LayoutPlan(kind="follow_crop", crop_width=608, crop_height=1080,
+                            keyframes=[CropKeyframe(t=0.0, x=50, y=0)])
+        vf = build_video_filter(make_spec(static, sendcmd_path=Path("C:/w/c.txt")))
+        assert "sendcmd" not in vf
+
+    def test_stack_produces_two_panes_and_a_vstack(self):
+        vf = build_video_filter(make_spec(STACK))
+        assert vf.count("crop=1215:1080") == 2
+        assert "vstack=inputs=2" in vf
+        assert "scale=1080:960" in vf
+
+    def test_stack_panes_sum_to_the_output_height(self):
+        vf = build_video_filter(make_spec(STACK, height=1921))
+        assert "scale=1080:960" in vf and "scale=1080:961" in vf
+
+    def test_stack_rejects_a_wrong_pane_count(self):
+        bad = LayoutPlan(kind="two_speaker_stack", panes=[CropRect(x=0, y=0, width=8, height=8)])
+        with pytest.raises(ValueError, match="two panes"):
+            build_video_filter(make_spec(bad))
+
+    def test_blurred_fit_blurs_and_darkens_a_background_copy(self):
+        vf = build_video_filter(make_spec(BLURRED))
+        assert "gblur" in vf
+        assert "eq=brightness=" in vf
+        assert "overlay=" in vf
+
+    def test_blurred_fit_never_crops_content_away(self):
+        """The foreground is scaled to width; cropping it would defeat the point."""
+        vf = build_video_filter(make_spec(BLURRED))
+        foreground = vf.split("[fg]")[-1]
+        assert "scale=1080:-2" in foreground
+
+    def test_blur_scales_with_output_width(self):
+        full = build_video_filter(make_spec(BLURRED, width=1080, height=1920))
+        draft = build_video_filter(make_spec(BLURRED, width=540, height=960))
+        assert _sigma(draft) < _sigma(full)
+
+    def test_every_graph_normalises_fps_sar_and_pixel_format(self):
+        for layout in (FOLLOW, STACK, BLURRED):
+            vf = build_video_filter(make_spec(layout))
+            assert "fps=30" in vf
+            assert "setsar=1" in vf
+            assert "format=yuv420p" in vf
+
+    def test_unknown_layout_is_rejected(self):
+        with pytest.raises(ValueError, match="unknown layout"):
+            build_video_filter(make_spec(LayoutPlan.model_construct(kind="spiral")))
+
+
+class TestAssInGraph:
+    def test_ass_is_appended_when_a_subtitle_file_is_given(self):
+        vf = build_video_filter(make_spec(FOLLOW, ass_path=Path("C:/w/s.ass")))
+        assert "ass=f=" in vf
+
+    def test_windows_path_is_escaped(self):
+        """An unescaped drive colon makes the filter argument unparseable."""
+        vf = build_video_filter(make_spec(FOLLOW, ass_path=Path(r"C:\w x\s.ass")))
+        assert "C\\:/w x/s.ass" in vf
+
+    def test_fonts_dir_is_passed_so_bundled_fonts_are_found(self):
+        vf = build_video_filter(
+            make_spec(FOLLOW, ass_path=Path("C:/w/s.ass"), fonts_dir=Path("C:/repo/assets/fonts"))
+        )
+        assert "fontsdir=" in vf
+
+    def test_ass_comes_after_scaling(self):
+        """Captions must be burned onto the final geometry, not the crop."""
+        vf = build_video_filter(make_spec(FOLLOW, ass_path=Path("C:/w/s.ass")))
+        assert vf.index("scale=") < vf.index("ass=f=")
+
+
+class TestAudioFilter:
+    def test_targets_the_configured_loudness(self):
+        af = build_audio_filter(make_spec(FOLLOW))
+        assert "loudnorm=I=-14.0" in af
+        assert "TP=-1.5" in af
+
+    def test_resamples_to_the_configured_rate(self):
+        assert "aresample=48000" in build_audio_filter(make_spec(FOLLOW))
+
+
+class TestCommand:
+    def test_seeks_before_the_input_for_a_fast_cut(self):
+        cmd = build_command(make_spec(FOLLOW))
+        assert cmd.index("-ss") < cmd.index("-i")
+
+    def test_start_and_duration_are_passed(self):
+        cmd = build_command(make_spec(FOLLOW, start=12.5, duration=30.0))
+        assert cmd[cmd.index("-ss") + 1] == "12.500"
+        assert cmd[cmd.index("-t") + 1] == "30.000"
+
+    def test_uses_fps_mode_not_the_removed_vsync_flag(self):
+        """FFmpeg 9 removed -vsync; passing it is a hard error."""
+        cmd = build_command(make_spec(FOLLOW))
+        assert "-fps_mode" in cmd
+        assert "-vsync" not in cmd
+
+    def test_faststart_is_set_for_streaming(self):
+        cmd = build_command(make_spec(FOLLOW))
+        assert cmd[cmd.index("-movflags") + 1] == "+faststart"
+
+    def test_x264_path_uses_crf_and_preset(self):
+        cmd = build_command(make_spec(FOLLOW, encoder="libx264", crf=20, x264_preset="veryfast"))
+        assert cmd[cmd.index("-c:v") + 1] == "libx264"
+        assert cmd[cmd.index("-crf") + 1] == "20"
+        assert cmd[cmd.index("-preset") + 1] == "veryfast"
+
+    def test_nvenc_path_uses_cq_not_crf(self):
+        cmd = build_command(make_spec(FOLLOW, encoder="h264_nvenc", nvenc_cq=23))
+        assert cmd[cmd.index("-c:v") + 1] == "h264_nvenc"
+        assert "-cq" in cmd
+        assert "-crf" not in cmd
+
+    def test_audio_is_mapped_and_encoded_when_present(self):
+        cmd = build_command(make_spec(FOLLOW, has_audio=True))
+        assert "[a]" in cmd
+        assert cmd[cmd.index("-c:a") + 1] == "aac"
+
+    def test_silent_source_gets_an(self):
+        cmd = build_command(make_spec(FOLLOW, has_audio=False))
+        assert "-an" in cmd
+        assert "-c:a" not in cmd
+
+    def test_output_path_is_last(self):
+        spec = make_spec(FOLLOW)
+        assert build_command(spec)[-1] == str(spec.output)
+
+    def test_paths_with_spaces_are_passed_as_single_arguments(self):
+        """Argument-list invocation means no quoting is needed or wanted."""
+        spec = make_spec(FOLLOW, source=Path(r"C:\my videos\a b.mp4"))
+        cmd = build_command(spec)
+        assert r"C:\my videos\a b.mp4" in cmd
+
+
+class TestOutputSize:
+    def test_full_quality(self):
+        assert output_size(RenderConfig(), draft=False) == (1080, 1920)
+
+    def test_draft_is_smaller_and_still_9x16(self):
+        w, h = output_size(RenderConfig(), draft=True)
+        assert (w, h) == (540, 960)
+        assert w / h == pytest.approx(1080 / 1920)
+
+
+def _sigma(vf: str) -> float:
+    return float(vf.split("gblur=sigma=")[1].split(",")[0].split("[")[0])

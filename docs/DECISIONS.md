@@ -114,3 +114,52 @@ the tool's willingness to return two clips instead of five.
 
 The eval set will be proposed concretely at the start of Phase 5 so the user can
 approve the specific videos before anything is downloaded.
+
+---
+
+## Phase 1
+
+### D11. One FFmpeg process per clip, with `sendcmd` driving the follow-crop
+
+BUILD_BRIEF.md section 11.1 proposes decoding with OpenCV, applying the crop
+trajectory per frame in Python, and piping raw frames to FFmpeg. It also says to
+use a cleaner FFmpeg-only approach if one meets the budget. One does.
+
+`crop`'s `x` and `y` options are marked command-capable (`T` in
+`ffmpeg -h filter=crop`), so a time-varying crop can be driven by FFmpeg's own
+`sendcmd` filter reading a generated script of `<t> crop x <px>;` lines. The
+whole render — cut, reframe, burn captions, loudnorm, encode — becomes a single
+invocation.
+
+Why this is better than the frame pipe:
+
+- Raw 1080x1920 at 30 fps is ~93 MB/s through a pipe, with a Python loop in the
+  hot path. The FFmpeg-only path has neither.
+- Decode can use NVDEC, which **does** work on this machine even though NVENC
+  does not.
+- One process means one failure mode and one stderr to read.
+
+**Verified**, not assumed: a 1280x720 source was panned across its full width by
+a generated sendcmd script and the extracted frames show the crop tracking. The
+integration test `test_the_crop_actually_moves` keeps it honest — it renders the
+moving-disc fixture and asserts the disc stays near the centre of the output,
+which only holds if sendcmd actually drove the crop.
+
+Face detection still decodes frames in Python, but at `face_sample_fps` (5 fps),
+not 30, and only to *plan* the trajectory — never in the render path.
+
+Cost to reverse: `render/graph.py` builds the command; a frame-pipe renderer
+would be an alternative implementation behind the same `RenderSpec`.
+
+### D12. `-fps_mode` instead of `-vsync`
+
+FFmpeg 9 removed `-vsync` outright — passing it is a hard error, not a warning.
+Found while building the fixture generator. There is a unit test asserting the
+built command never contains it.
+
+### D13. Synthetic fixtures carry their own analytic trajectory
+
+`moving_face_video` returns both the file and a `FaceTrack` describing exactly
+where the stand-in face is at any time. That lets a test assert the crop followed
+*the right path* rather than only that a file appeared, which is the difference
+between testing the render and testing that FFmpeg exists.

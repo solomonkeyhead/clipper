@@ -55,3 +55,17 @@ def _ffmpeg_available() -> bool:
 needs_ffmpeg = pytest.mark.skipif(not _ffmpeg_available(), reason="ffmpeg not on this machine")
 
 needs_windows = pytest.mark.skipif(os.name != "nt", reason="Windows-specific behaviour")
+
+
+@pytest.fixture(scope="session")
+def media_cache(tmp_path_factory) -> Path:
+    """Session-scoped home for generated fixture media.
+
+    Encoding a fixture costs a second or two, so they are generated once and
+    reused across the whole run rather than per test.
+    """
+    from .fixtures import synthetic
+
+    root = tmp_path_factory.mktemp("media")
+    synthetic.set_cache_dir(root)
+    return root

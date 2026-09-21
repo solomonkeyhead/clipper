@@ -183,3 +183,68 @@ These are called out so nothing downstream assumes them:
 - **large-v3 real-time factor on this GPU** — Phase 2 acceptance criterion.
 - **Ollama** — not installed on this machine at all.
 - Real end-to-end run on a 30–60 minute source. Phase 4.
+
+---
+
+## 2026-09-21 — Phase 1
+
+### Dynamic crop via FFmpeg `sendcmd` — verified
+
+`ffmpeg -h filter=crop` shows `x` and `y` carrying the `T` flag, meaning they
+accept runtime commands. A generated script of `<t> crop x <px>;` lines fed to
+`sendcmd` was used to pan a 405x720 crop across the full width of a 1280x720
+source over 4 seconds. Extracted frames at n=0, 60 and 119 show the left, middle
+and right thirds of the test pattern respectively: the crop tracked.
+
+Output confirmed by ffprobe as `1080,1920,30/1,120` — correct size, frame rate
+and frame count. This removes the need to pipe raw frames through Python
+(see docs/DECISIONS.md D11).
+
+### FFmpeg 9 flag removal
+
+`-vsync` no longer exists in FFmpeg 9.0.1 (`Unrecognized option 'vsync'`), which
+is a hard error rather than a deprecation warning. `-fps_mode` replaces it.
+
+### Windows path handling under load — verified
+
+The integration suite renders from a directory containing spaces
+(`…\my source videos\work dir\a source clip.mp4`) to an output directory that
+also contains spaces, with the ASS file in a third spaced directory. It passes.
+Non-ASCII caption text (`café`, `naïve`, `日本語`) round-trips through the ASS
+file and into the burned-in render.
+
+### Render timings — measured on this machine
+
+6-second clips from a 1920x1080 source to 1080x1920, libx264 `veryfast` CRF 20,
+captions and loudnorm included, single FFmpeg process:
+
+| Layout | Wall clock |
+|---|---|
+| follow_crop (31 sendcmd keyframes) | 1.06 s |
+| two_speaker_stack | 1.26 s |
+| blurred_fit | 2.44 s |
+
+`blurred_fit` is the slowest because `gblur` runs over the full output frame.
+Extrapolating to five 45-second clips gives roughly 40-90 s of rendering, well
+inside the Phase 4 budget even without NVENC.
+
+### Visual inspection — done, not skipped
+
+All three layouts were rendered from synthetic fixtures and frames extracted at
+t=1.0 s and t=4.0 s were inspected:
+
+- **follow_crop**: the moving disc stays centred in the output at both times
+  while it travels across the source — the camera followed it.
+- **two_speaker_stack**: two panes, correct speakers top and bottom, clean seam.
+- **blurred_fit**: source full-width and centred, blurred darkened fill above and
+  below, **no black bars**.
+- Captions sit inside the bottom safe area in all three, active word highlighted
+  in yellow, hook text at the top safe margin, credit top-left.
+
+### Test suite
+
+| Suite | Result |
+|---|---|
+| Full (`pytest`) | **212 passed** in 31.6 s |
+| Fast (`pytest -m "not slow"`) | **199 passed**, 13 deselected, in 2.8 s |
+| `ruff check` | clean |
