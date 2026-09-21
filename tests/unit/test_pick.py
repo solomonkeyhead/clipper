@@ -202,7 +202,26 @@ class TestRejectionReasons:
     def test_the_stop_reason_names_the_binding_constraint(self):
         specs = [(f"c{i}", i * 300, 0.9, 3.0) for i in range(4)]
         result = run(specs, SelectionConfig(min_llm_total=5.5, max_from_same_third=10))
-        assert "min_llm_total" in result.stopped_because
+        assert "quality bar" in result.stopped_because
+        assert "5.5" in result.stopped_because
+
+    def test_the_stop_reason_does_not_blame_quality_for_a_placement_limit(self):
+        """It used to count composite and placement rejections as quality ones,
+        reporting '27 scored below min_llm_total' where only 5 had."""
+        # All four clear the quality bar; three are blocked by overlap.
+        specs = [("a", 100, 0.9, 8.0), ("b", 105, 0.8, 8.0),
+                 ("c", 110, 0.7, 8.0), ("d", 115, 0.6, 8.0)]
+        result = run(specs, SelectionConfig(top_n=4, max_from_same_third=10))
+        assert "below the absolute quality bar" not in result.stopped_because
+        assert "overlapping" in result.stopped_because
+
+    def test_the_stop_reason_breaks_down_mixed_causes(self):
+        specs = [("good", 100, 0.9, 8.0), ("overlap", 105, 0.8, 8.0),
+                 ("weak", 900, 0.7, 2.0)]
+        result = run(specs, SelectionConfig(top_n=3, max_from_same_third=10))
+        note = result.stopped_because
+        assert "overlapping" in note
+        assert "below the absolute quality bar" in note
 
 
 class TestThirds:

@@ -499,3 +499,132 @@ Post-fix distribution across the 24 candidates: `dynamic_range_db` 18.8–21.9,
 | Full (`pytest`) | **554 passed, 1 skipped** in 161.7 s |
 | Fast (`pytest -m "not slow"`) | **511 passed**, 44 deselected, in 5.0 s |
 | `ruff check` | clean |
+
+---
+
+## 2026-09-21 — Phase 4
+
+### End-to-end run, real Gemini backend — measured
+
+Source: a 217-second (3m37s) locally synthesised speech fixture, five distinct
+topic blocks. Full resolution (1080x1920), not draft.
+
+| Stage | Wall clock |
+|---|---|
+| Transcribe (`large-v3`) | 17.0 s |
+| Score (ingest + signals + LLM) | 114.4 s |
+| Render + QA, 3 clips | 68.1 s |
+| **Total** | **~2 m 40 s** |
+
+**3 clips accepted, 0 rejected**, spread across the first, middle and final
+thirds of the source. Composites 0.873 / 0.870 / 0.546. 47 candidates scored,
+13 hard-dropped by the LLM.
+
+The picks are the three strongest distinct stories in the script by inspection:
+the pricing change, the completion-rate habit, and the unused dashboard. Their
+hooks were written by the model, not copied from the transcript:
+
+> "Why raising prices can reduce your workload"
+> "Why most people actually quit"
+> "We wasted six weeks building this"
+
+Campaign hashtags and the required credit were folded into every caption and the
+compliance gate passed all five rules per clip.
+
+### Extrapolation to a 60-minute source — **estimated, not measured**
+
+No 30-60 minute source was run: none is available here that is both long enough
+and authorized. From the measured stage rates:
+
+| Stage | Basis | 60-minute estimate |
+|---|---|---|
+| Transcribe | 12.8x realtime measured | ~4.7 min |
+| Score | candidates cap at 60, so ≈ the measured 47-candidate cost | ~2.5 min |
+| Render + QA | 22.7 s per clip measured, 5 clips | ~1.9 min |
+| **Total** | | **~9 min** |
+
+That sits inside the 25-minute Phase 4 budget with substantial margin, but it is
+an extrapolation from a 3.6-minute source and should be re-measured on real
+long-form footage before being relied on.
+
+### Performance bugs found and fixed
+
+| | Before | After |
+|---|---|---|
+| Face scan, 20 s of video | **15.4 s** | **3.4 s** |
+| QA detection passes per clip | 3 decodes (1.10 + 1.37 + 0.92 s) | 1 decode |
+
+Two causes, both real:
+
+1. **Per-sample seeking.** The face scan called `CAP_PROP_POS_MSEC` for every
+   sample, costing a keyframe seek plus decode each time -- slower than realtime.
+   Sequential decode with frame skipping does the same work far more cheaply.
+2. **Detecting at source resolution.** YuNet is trained at 320x320 and was being
+   run at 1920x1080. Detection now happens on a 640-wide copy with the boxes
+   scaled back to source coordinates.
+
+`blackdetect`, `freezedetect` and `silencedetect` are independent filters over
+the same frames, so they now run in one FFmpeg invocation instead of three.
+
+### Correctness bugs found by running it
+
+1. **Clip IDs collided.** The rank counter was decremented when a clip was
+   rejected and then reused, so two rejected files could share both an id and
+   nearly a filename. Ids now come from a monotonic attempt counter.
+2. **The stop reason blamed the wrong gate.** A run reported "27 scored below
+   min_llm_total 5.5/10" when only **5** actually had -- the count lumped
+   `min_composite` rejections in with quality ones, and the real binding
+   constraint was clip placement. The note now reports the actual distribution
+   of rejection reasons.
+3. **`min_composite: 0.35` rejected the bottom third of candidates.** Percentile
+   ranks spread evenly over [0, 1] by construction, so that is not a "tail" -- and
+   worse, a candidate rejected there cannot become a reserve, starving the
+   QA-failure replacement pool. Lowered to 0.15; the absolute gate does the
+   quality work.
+
+### Two QA checks were measuring the wrong thing
+
+**Silence.** `candidates.max_silence_ratio` estimates silence from gaps between
+word timings; `qa.max_silence_ratio` measures acoustic silence in the rendered
+audio. Measured on the same clip, the acoustic figure reads **~8 points higher**
+(30-34% vs 23-25%). With both set to 0.25 the gate rejected clips the filter had
+already passed, wasting a full render each time. The QA threshold is now 0.35
+and the difference is documented in both files.
+
+**Freezes.** `freezedetect` at `-60 dB` fires on near-identical frames, and a
+1.0-second absolute limit failed a clip for 1.2 s of stillness in a 50-second
+clip. That is a held shot, not a stalled render. Now judged as a *fraction* of
+the clip (fail above 30%) with the absolute seconds only warning.
+
+**Lead silence** was downgraded from fail to warn. Whisper's word timestamps
+lead the actual audio onset by roughly 0.4 s on these fixtures, so clips snapped
+to a word boundary routinely open with a little silence. That makes a clip
+slightly weaker, not broken -- and failing it would substitute a lower-scoring
+clip, which is a worse outcome.
+
+### Visual inspection — done
+
+Frames extracted from all three clips at t=1.2 s and t=12 s show: the model's
+hook text across the top in the safe area for the first two seconds, word-level
+captions at the bottom with the active word highlighted, and the `blurred_fit`
+layout placing the source strip over a blurred, darkened fill.
+
+The fill renders very dark on this fixture because the fixture's own background
+is near-black; `eq=brightness` was softened from -0.22 to -0.15 so a dark source
+does not crush the fill to solid black (which would also risk tripping
+`blackdetect`).
+
+### Fixture limitations worth stating
+
+- **YuNet found faces in 0% of frames**, correctly: the stand-in "faces" are flat
+  coloured discs, not faces. So every clip used `blurred_fit`. The follow-crop
+  and two-speaker paths are covered by unit tests and by the Phase 1 integration
+  tests with scripted trajectories, **not** end to end here. Whether YuNet finds
+  real faces is **unverified on this machine** -- what is verified is that it
+  loads, runs, and produces no false positives across 101 sampled frames.
+- The first synthetic fixture was a static image, so `freezedetect` reported the
+  whole clip frozen. Temporal noise was added (which is what real sensor noise
+  provides) after discovering that slow sinusoidal motion was not enough: a sine
+  has near-zero velocity at its turning points.
+- An earlier attempt to add motion by animating hue manufactured **7 false scene
+  cuts**, because the cut detector compares hue/saturation histograms.

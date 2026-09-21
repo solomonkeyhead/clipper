@@ -121,9 +121,12 @@ class SelectionConfig(StrictModel):
     top_n: int = Field(default=5, ge=1)
     max_from_same_third: int = Field(default=3, ge=1)
 
-    # Relative guard. Defaulted low because with N candidates the top few always
-    # sit high by construction; it exists to catch a pathological tail.
-    min_composite: Unit = 0.35
+    # Relative guard, deliberately low. With N candidates the percentile ranks
+    # spread evenly over [0, 1] by construction, so a threshold of 0.35 rejects
+    # the bottom third outright -- which is not a "tail", and starves the pool
+    # of reserves used to replace a clip that fails QA. The absolute gate does
+    # the quality work; this only catches a pathological bottom end.
+    min_composite: Unit = 0.15
 
     # Absolute guard, on the same 0-10 scale the rubric uses. The prompts tell
     # the model most clips should score 3-6, so 5.5 asks for "above the middle
@@ -209,10 +212,35 @@ class RefineConfig(StrictModel):
 
 
 class QAConfig(StrictModel):
+    """Thresholds for the gate on rendered clips.
+
+    Note `max_silence_ratio` is deliberately looser than
+    `candidates.max_silence_ratio` even though both are "silence". They measure
+    different things: the candidate filter estimates silence from gaps between
+    word timings (cheap, runs on every candidate before scoring), while this
+    measures acoustic silence in the rendered audio. The acoustic measure reads
+    systematically higher -- about 8 points on the speech fixtures -- so an
+    equal threshold here would reject clips the filter had already passed,
+    wasting a full render each time.
+    """
+
     min_face_ratio: Unit = 0.5
-    max_silence_ratio: Unit = 0.25
+    max_silence_ratio: Unit = 0.35
     max_black_seconds: float = Field(default=0.3, ge=0)
-    max_freeze_seconds: float = Field(default=1.0, ge=0)
+
+    # Freezes are judged two ways. A *stall* -- the render genuinely broke --
+    # shows up as a large fraction of the clip being identical, and fails. A
+    # merely still passage (a held shot, a slide, a speaker not moving much) is
+    # normal content and only warns. Judging it on absolute seconds alone made
+    # a 1.2s still moment in a 50s clip a failure, which is not a defect.
+    max_freeze_ratio: Unit = 0.30
+    max_freeze_seconds: float = Field(default=3.0, ge=0)
+    # A run must last this long to count as frozen at all.
+    freeze_min_duration: float = Field(default=1.0, ge=0.1)
+
+    # A gap must last this long to count as dead air rather than a normal
+    # inter-sentence pause.
+    silence_min_gap: float = Field(default=0.5, ge=0.05)
     min_lufs: float = -18.0
     max_lufs: float = -11.0
     max_true_peak_dbtp: float = -0.5

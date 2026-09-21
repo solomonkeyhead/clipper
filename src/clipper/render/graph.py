@@ -22,7 +22,9 @@ from .ffmpeg import escape_filter_path
 
 # Blur strength for the blurred_fit background, at the reference 1080 width.
 BACKGROUND_BLUR_SIGMA = 40.0
-BACKGROUND_DARKEN = -0.22
+# Enough to separate the foreground strip from the fill without crushing a dark
+# source to solid black -- which also risks tripping the QA blackdetect check.
+BACKGROUND_DARKEN = -0.15
 
 
 @dataclass(frozen=True)

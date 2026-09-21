@@ -196,28 +196,49 @@ def _describe_stop(
     cfg: SelectionConfig,
     target: int,
 ) -> str:
-    """A human-readable reason the selection ended where it did."""
+    """A human-readable reason the selection ended where it did.
+
+    Reports the actual distribution of rejection reasons rather than assuming
+    one. An earlier version counted quality *and* composite rejections together
+    and attributed all of them to `min_llm_total`, which said "27 scored below
+    min_llm_total" on a run where only 5 actually had -- and where the real
+    binding constraint was clip placement, not quality at all.
+    """
     if result.count >= target:
         return f"reached the requested {target} clip(s)"
 
-    below_quality = sum(
-        1 for entry in ranked
-        if entry.candidate_id in result.rejections
-        and ("below the absolute minimum" in result.rejections[entry.candidate_id]
-             or "below min_composite" in result.rejections[entry.candidate_id])
+    buckets = {
+        "below the absolute quality bar": 0,
+        "below the relative composite threshold": 0,
+        "overlapping or too close to a better clip": 0,
+        "capped by the per-third spread limit": 0,
+        "dropped before scoring": 0,
+    }
+    for reason in result.rejections.values():
+        if "below the absolute minimum" in reason:
+            buckets["below the absolute quality bar"] += 1
+        elif "below min_composite" in reason:
+            buckets["below the relative composite threshold"] += 1
+        elif "overlaps" in reason or "minimum gap" in reason:
+            buckets["overlapping or too close to a better clip"] += 1
+        elif "third already has" in reason:
+            buckets["capped by the per-third spread limit"] += 1
+        elif "beyond the requested" not in reason:
+            buckets["dropped before scoring"] += 1
+
+    breakdown = ", ".join(
+        f"{count} {label}" for label, count in
+        sorted(buckets.items(), key=lambda kv: -kv[1]) if count
     )
-    if below_quality and result.count == 0:
+    quality_blocked = buckets["below the absolute quality bar"]
+
+    if result.count == 0 and quality_blocked:
         return (
-            f"no candidate met the quality bar (all {below_quality} scored below "
-            f"min_llm_total {cfg.min_llm_total:.1f}/10). Returning nothing beats "
-            "returning filler"
-        )
-    if below_quality:
-        return (
-            f"only {result.count} candidate(s) met the quality bar; {below_quality} "
-            f"scored below min_llm_total {cfg.min_llm_total:.1f}/10"
+            f"no candidate met the quality bar of {cfg.min_llm_total:.1f}/10. "
+            "Returning nothing beats returning filler"
+            + (f" ({breakdown})" if breakdown else "")
         )
     return (
-        f"only {result.count} candidate(s) could be placed without violating the "
-        "overlap, gap or spread constraints"
+        f"produced {result.count} of {target} requested"
+        + (f"; the rest were {breakdown}" if breakdown else "")
     )

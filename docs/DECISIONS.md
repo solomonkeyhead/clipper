@@ -215,3 +215,71 @@ If the LLM cannot score one candidate, that candidate is ranked on the signals
 it does have, with the weights renormalised for it individually. Treating a
 missing signal as a zero would penalise a candidate for a transport failure
 rather than for its content.
+
+---
+
+## Phase 4
+
+### D19. Clips are rendered and checked one at a time, not in a batch
+
+Rendering is the most expensive stage, so a clip is rendered, QA'd, and either
+accepted or replaced before the next one starts. A failure then costs exactly
+one extra render rather than re-running a batch.
+
+The replacement always comes from the *reserve* list, which `select/pick.py`
+fills only with candidates that already cleared the quality gate. So filling a
+failed clip's slot can never quietly substitute filler -- if no qualifying
+reserve exists, the run returns fewer clips and says so.
+
+### D20. QA failures are for broken output; imperfections warn
+
+A `fail` discards the clip and promotes a lower-scoring one, so the bar for
+failing has to be "this output is broken", not "this output is imperfect".
+Applying that consistently moved three checks:
+
+- **frozen frames** -- fails only when a large *fraction* of the clip is frozen
+  (a stalled render); an absolute overrun merely warns (a held shot or a slide).
+- **lead silence** -- warns. Whisper's word timestamps lead the audio by ~0.4 s,
+  so this fires routinely on clips that are fine.
+- **fps drift** -- warns. A clip at 29.97 instead of 30 is playable.
+
+Genuine failures remain: wrong resolution, missing audio, out-of-range loudness,
+black frames, duration outside campaign bounds, captions outside the clip, and
+too few captioned words.
+
+### D21. The two "max_silence_ratio" settings are deliberately different numbers
+
+`candidates.max_silence_ratio` (0.25) estimates silence from word-timing gaps;
+`qa.max_silence_ratio` (0.35) measures acoustic silence in the rendered audio.
+The acoustic measure reads about 8 points higher on the same clip, so setting
+them equal made the gate reject what the filter had just passed -- after paying
+for the render. Both config files now say why they differ.
+
+The alternative -- making the candidate filter measure acoustically -- was
+rejected because that filter runs on every candidate before any audio is
+decoded, and the whole point of it is to be cheap.
+
+### D22. Face detection runs downscaled and sequentially
+
+Two changes, both measured: detect on a 640-wide copy rather than the source
+resolution (YuNet is trained at 320x320, so the extra pixels buy nothing), and
+decode sequentially with frame skipping rather than seeking per sample. Together
+these took a 20-second scan from 15.4 s to 3.4 s.
+
+This is the only place in the pipeline that decodes frames in Python, and it
+only ever *plans* the crop trajectory -- the render itself stays a single FFmpeg
+process (D11).
+
+### D23. `runner.py` rather than extending `pipeline.py`
+
+`pipeline.py` owns stage boundaries and caching for the scoring half, which the
+eval harness (Phase 5) reuses without ever rendering anything. The render/QA/
+manifest half lives in `runner.py` so the eval harness does not import the
+rendering stack to score a video.
+
+### D24. Clip ids come from a monotonic attempt counter
+
+Not from the accepted-clip rank. Reusing the rank after a rejection made two
+rejected files collide on both id and filename, so one silently overwrote the
+other's reason file. The accepted clips still read `001`, `002`, ... in order
+when nothing fails, which is the common case.

@@ -169,10 +169,26 @@ def speech_video(
         f"format=yuva420p,geq=lum='p(X,Y)':"
         f"a='if(lte(hypot(X-{size / 2},Y-{size / 2}),{size / 2}),255,0)'"
     )
+    # Flat synthetic colour encodes to *pixel-identical* frames, so FFmpeg's
+    # `freezedetect` (which fires below a -60 dB frame difference) correctly
+    # reported the whole clip as frozen and failed QA for a reason that says
+    # nothing about the code. Real footage always has sensor noise, so the
+    # fixture gets temporal noise -- which guarantees every frame differs.
+    # Moving the discs alone was not enough: a sine has near-zero velocity at
+    # its turning points, producing long runs of identical frames.
+    #
+    # Deliberately no *hue* animation: the scene-cut detector compares
+    # hue/saturation histograms, and shifting hue manufactured false cuts.
+    sway = f"{int(width * 0.012)}*sin(2*PI*t/7)"
+    bob = f"{int(height * 0.010)}*sin(2*PI*t/5)"
+    background = (
+        f"color=c=0x1c1c2c:size={width}x{height}:rate={fps}:duration={duration:.3f},"
+        f"noise=alls=10:allf=t+u"
+    )
+
     args = [
         "-hide_banner", "-loglevel", "error",
-        "-f", "lavfi", "-i",
-        f"color=c=0x1c1c2c:size={width}x{height}:rate={fps}:duration={duration:.3f}",
+        "-f", "lavfi", "-i", background,
         "-f", "lavfi", "-i",
         f"color=c=0xE8C4A0:size={size}x{size}:rate={fps}:duration={duration:.3f}",
     ]
@@ -181,14 +197,17 @@ def speech_video(
                  f"color=c=0xB8D4F0:size={size}x{size}:rate={fps}:duration={duration:.3f}"]
         chain = (
             f"[1:v]{disc}[d1];[2:v]{disc}[d2];"
-            f"[0:v][d1]overlay=x={int(width * 0.27) - r}:y={int(height * 0.45) - r}[b1];"
-            f"[b1][d2]overlay=x={int(width * 0.73) - r}:y={int(height * 0.45) - r}[v]"
+            f"[0:v][d1]overlay=x='{int(width * 0.27) - r}+{sway}':"
+            f"y='{int(height * 0.45) - r}+{bob}'[b1];"
+            f"[b1][d2]overlay=x='{int(width * 0.73) - r}-{sway}':"
+            f"y='{int(height * 0.45) - r}-{bob}'[v]"
         )
         audio_input = 3
     else:
         chain = (
             f"[1:v]{disc}[d1];"
-            f"[0:v][d1]overlay=x={int(width * 0.5) - r}:y={int(height * 0.45) - r}[v]"
+            f"[0:v][d1]overlay=x='{int(width * 0.5) - r}+{sway}':"
+            f"y='{int(height * 0.45) - r}+{bob}'[v]"
         )
         audio_input = 2
 
@@ -248,6 +267,60 @@ DENSE_SCRIPT: tuple[Utterance, ...] = (
     Utterance("A team that cannot name its next action is a team that is already stuck.", 0.3),
     Utterance("I have watched that happen at three different companies now.", 0.4),
 )
+
+def _block(lines: list[str], pause: float = 0.35) -> list[Utterance]:
+    return [Utterance(line, pause) for line in lines]
+
+
+# Several distinct topics so candidates spread across the source rather than
+# clustering. Long enough (~6 minutes) that more than one non-overlapping clip
+# can actually be placed -- the 75-second DENSE_SCRIPT only has room for one,
+# whatever the scores say, which makes it useless for testing multi-clip runs.
+LONG_SCRIPT: tuple[Utterance, ...] = tuple(
+    list(DENSE_SCRIPT)
+    + _block([
+        "Let me tell you about the worst hiring decision I ever made.",
+        "We needed someone senior and we needed them in three weeks.",
+        "So I skipped the work sample and I went with the interview alone.",
+        "That person lasted five months and cost us an entire quarter.",
+        "The lesson was not that interviews are useless.",
+        "The lesson was that I already knew what the right process looked like.",
+        "I just did not want to wait the extra two weeks to run it.",
+        "Every shortcut I have regretted has that exact shape.",
+        "I knew the right answer and I chose the fast one anyway.",
+    ])
+    + _block([
+        "Here is something almost nobody tells you about pricing.",
+        "Your first price is a guess and everybody knows it is a guess.",
+        "We charged nineteen dollars a month for two years.",
+        "We raised it to forty nine and lost about four percent of customers.",
+        "Revenue went up by a factor of two and a half.",
+        "The customers who left were the ones filing most of the support tickets.",
+        "So we made more money and did less work at the same time.",
+        "I am not saying raise your prices blindly.",
+        "I am saying that the number you picked in week one is not sacred.",
+    ])
+    + _block([
+        "The most useful habit I picked up last year takes about four minutes.",
+        "At the end of the day I write down what actually blocked me.",
+        "Not what I did, what stopped me from doing more.",
+        "After a month you can read it back and the pattern is embarrassing.",
+        "Mine was almost always waiting on a decision I could have made myself.",
+        "Once I saw it written down eleven times I stopped doing it.",
+        "You cannot fix a pattern you have never seen listed out.",
+    ])
+    + _block([
+        "One last thing about shipping something people actually use.",
+        "We spent six weeks building a dashboard nobody opened.",
+        "Six weeks, and the usage data was there the whole time.",
+        "Nobody had looked at it because looking at it was somebody else's job.",
+        "Now the first slide of every planning meeting is last month's usage.",
+        "It is not sophisticated and it changed what we build.",
+        "Most teams do not have an insight problem.",
+        "They have a nobody-is-looking problem.",
+    ])
+)
+
 
 # A sponsor read, to check the pre-LLM ad filter. Several distinct ad phrases,
 # because the filter deliberately requires more than one hit.

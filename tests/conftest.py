@@ -69,3 +69,25 @@ def media_cache(tmp_path_factory) -> Path:
     root = tmp_path_factory.mktemp("media")
     synthetic.set_cache_dir(root)
     return root
+
+
+@pytest.fixture(scope="module")
+def module_data_root(tmp_path_factory) -> Path:
+    """A data root shared by every test in a module.
+
+    The per-test `data_root` fixture gives each test a clean tree, which means
+    each one re-ingests and re-transcribes from scratch. For modules whose tests
+    all exercise the same source that is pure waste -- it took the full suite
+    past ten minutes -- so heavy end-to-end modules share one root and let the
+    stage cache do its job.
+    """
+    root = Path(tmp_path_factory.mktemp("module_data"))
+    previous = os.environ.get("CLIPPER_DATA_DIR")
+    os.environ["CLIPPER_DATA_DIR"] = str(root)
+    paths.data_root.cache_clear()
+    yield root
+    if previous is None:
+        os.environ.pop("CLIPPER_DATA_DIR", None)
+    else:
+        os.environ["CLIPPER_DATA_DIR"] = previous
+    paths.data_root.cache_clear()

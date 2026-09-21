@@ -1,0 +1,342 @@
+"""The end-to-end run: refine, reframe, render, QA, replace, write outputs.
+
+The replacement loop is the part worth reading. Rendering is expensive, so
+clips are rendered one at a time and checked immediately; a failure pulls the
+next-best reserve and tries again. That costs one extra render per failure
+rather than re-rendering a whole batch, and it means the quota of clips is
+filled with things that actually passed rather than things that were merely
+selected.
+
+A reserve is only ever a candidate that already cleared the quality gate
+(`select/pick.py`), so replacing a failure can never quietly substitute filler.
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .campaign import compliance
+from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
+from .candidates.boundaries import refine
+from .config import CampaignConfig, Config
+from .ingest.probe import probe
+from .models import ClipPlan, Sentences, SourceInfo, Transcript
+from .paths import ensure
+from .pipeline import ScoreOutcome, choose, score
+from .qa.checks import QAContext, check_clip, summarize
+from .render.clip import render_clip
+from .render.faces import plan_layout_for
+from .render.graph import output_size
+from .select.pick import Pick
+from .utils.cache import slugify
+from .utils.logging import get_logger
+from .utils.timecode import to_slug_timestamp
+
+log = get_logger(__name__)
+
+
+@dataclass
+class RunResult:
+    """Everything a run produced."""
+
+    info: SourceInfo
+    accepted: list[ClipRecord] = field(default_factory=list)
+    rejected: list[ClipRecord] = field(default_factory=list)
+    outputs: dict[str, Path] = field(default_factory=dict)
+    timings: dict[str, float] = field(default_factory=dict)
+    selection_note: str = ""
+    signals_available: list[str] = field(default_factory=list)
+    weights_used: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def clip_count(self) -> int:
+        return len(self.accepted)
+
+
+def run(
+    source: str,
+    *,
+    config: Config,
+    campaign: CampaignConfig,
+    out_root: Path,
+    top: int | None = None,
+    draft: bool = False,
+    backend_override: str | None = None,
+    force: set[str] | None = None,
+) -> RunResult:
+    """Ingest through manifest for one source."""
+    started = time.perf_counter()
+    timings: dict[str, float] = {}
+
+    score_started = time.perf_counter()
+    outcome = score(source, config, backend_override=backend_override, force=force)
+    timings["score"] = time.perf_counter() - score_started
+
+    result = RunResult(
+        info=outcome.info,
+        signals_available=outcome.available_signals,
+        weights_used=outcome.scored.weights_used,
+    )
+
+    limit = min(top or config.selection.top_n, campaign.max_clips_per_source)
+    selection = choose(outcome, config, limit=limit)
+    result.selection_note = selection.stopped_because
+
+    out_dir = ensure(out_root / outcome.info.source_id)
+    clips_dir = ensure(out_dir / "clips")
+    rejected_dir = out_dir / "rejected"
+    work = ensure(out_dir / "work")
+
+    render_started = time.perf_counter()
+    _render_with_replacement(
+        selection.picks, selection.reserves, outcome,
+        config=config, campaign=campaign, clips_dir=clips_dir,
+        rejected_dir=rejected_dir, work=work, draft=draft,
+        limit=limit, result=result,
+    )
+    timings["render_and_qa"] = time.perf_counter() - render_started
+
+    if outcome.transcribe_stats:
+        timings["transcribe"] = outcome.transcribe_stats.wall_seconds
+    timings["total"] = time.perf_counter() - started
+    result.timings = timings
+
+    result.outputs = write_outputs(
+        result.accepted,
+        info=outcome.info,
+        campaign=campaign,
+        out_dir=out_dir,
+        rejected=result.rejected,
+        selection_note=result.selection_note,
+        signals_available=result.signals_available,
+        weights_used=result.weights_used,
+        timings=timings,
+    )
+
+    log.info(
+        "run complete: %d clip(s) accepted, %d rejected, %.1fs total",
+        len(result.accepted), len(result.rejected), timings["total"],
+    )
+    return result
+
+
+def _render_with_replacement(
+    picks: list[Pick],
+    reserves: list[Pick],
+    outcome: ScoreOutcome,
+    *,
+    config: Config,
+    campaign: CampaignConfig,
+    clips_dir: Path,
+    rejected_dir: Path,
+    work: Path,
+    draft: bool,
+    limit: int,
+    result: RunResult,
+) -> None:
+    """Render, QA, and pull a reserve for each failure until the quota is met."""
+    queue = list(picks)
+    spare = list(reserves)
+    attempted: set[str] = set()
+    attempt = 0
+
+    while queue and len(result.accepted) < limit:
+        pick = queue.pop(0)
+        if pick.candidate.candidate_id in attempted:
+            continue
+        attempted.add(pick.candidate.candidate_id)
+
+        # `attempt` only ever increases, so ids are unique even when a clip is
+        # rejected and replaced. Reusing the accepted-clip rank for this made
+        # two rejected files collide on both id and filename.
+        attempt += 1
+        rank = len(result.accepted) + 1
+        record = _produce_one(
+            pick, outcome, config=config, campaign=campaign,
+            clips_dir=clips_dir, work=work, draft=draft,
+            rank=rank, attempt=attempt,
+        )
+        if record is None:
+            if spare:
+                queue.append(spare.pop(0))
+            continue
+
+        if record.qa.status == "fail" or record.compliance.status == "fail":
+            _reject(record, rejected_dir, result)
+            if spare:
+                replacement = spare.pop(0)
+                log.info(
+                    "replacing %s with reserve %s",
+                    record.plan.clip_id, replacement.candidate.candidate_id,
+                )
+                queue.append(replacement)
+            else:
+                log.warning(
+                    "%s failed QA and no reserve is available; the run will "
+                    "return fewer clips", record.plan.clip_id,
+                )
+            continue
+
+        result.accepted.append(record)
+        log.info("%s accepted: %s", record.plan.clip_id, summarize(record.qa))
+
+
+def _produce_one(
+    pick: Pick,
+    outcome: ScoreOutcome,
+    *,
+    config: Config,
+    campaign: CampaignConfig,
+    clips_dir: Path,
+    work: Path,
+    draft: bool,
+    rank: int,
+    attempt: int,
+) -> ClipRecord | None:
+    """Refine, reframe, render and check one candidate. None if it was dropped."""
+    plan = _build_plan(pick, outcome, config=config, campaign=campaign,
+                       rank=rank, attempt=attempt)
+    if plan is None:
+        return None
+
+    width, height = output_size(config.render, draft=draft)
+    source_path = Path(outcome.info.media.path)
+
+    plan = plan.model_copy(update={"layout": plan_layout_for(
+        source_path,
+        start=plan.start, duration=plan.duration,
+        out_width=width, out_height=height,
+        sample_fps=config.render.face_sample_fps,
+        pan_smoothing=config.render.pan_smoothing,
+        max_pan_speed=config.render.max_pan_speed,
+        min_face_ratio=config.qa.min_face_ratio,
+    )})
+
+    slug = slugify(plan.hook_text or plan.text, max_length=40)
+    output = clips_dir / f"{plan.clip_id}_{slug}.mp4"
+
+    render = render_clip(
+        source=source_path,
+        media=outcome.info.media,
+        plan=plan,
+        words=outcome.transcript.words,
+        config=config,
+        work_dir=work,
+        output=output,
+        draft=draft,
+        campaign_credit=(campaign.required_credit_text
+                         if campaign.burn_credit_in_video else ""),
+        credit_position=campaign.credit_position,
+        mask_profanity=campaign.mask_profanity_in_captions,
+    )
+
+    rendered = probe(output)
+    context = QAContext(
+        plan=plan,
+        words=outcome.transcript.words,
+        ass_text=render.ass_path.read_text(encoding="utf-8") if render.ass_path else "",
+        duration_bounds=(campaign.duration.min_seconds, campaign.duration.max_seconds),
+        expected_width=width,
+        expected_height=height,
+        expected_fps=config.render.fps,
+        pre_roll=config.refine.pre_roll,
+    )
+    qa = check_clip(output, context, config.qa, config.render)
+    rules = compliance.check_clip(plan, campaign, duration=rendered.duration)
+
+    entry = next((s for s in outcome.scored.scored
+                  if s.candidate_id == pick.candidate.candidate_id), None)
+    values = next((v for v in outcome.signals.values
+                   if v.candidate_id == pick.candidate.candidate_id), None)
+    weights = config.llm.rubric_weights.as_dict()
+
+    return ClipRecord(
+        plan=plan,
+        file=output,
+        qa=qa,
+        compliance=rules,
+        components=dict(entry.components) if entry else {},
+        raw=dict(entry.raw) if entry else {},
+        llm_a_total=values.llm_a.total(weights) if values and values.llm_a else None,
+        llm_b_total=values.llm_b.total(weights) if values and values.llm_b else None,
+        rendered_duration=rendered.duration,
+    )
+
+
+def _build_plan(
+    pick: Pick,
+    outcome: ScoreOutcome,
+    *,
+    config: Config,
+    campaign: CampaignConfig,
+    rank: int,
+    attempt: int,
+) -> ClipPlan | None:
+    """Refine a selected candidate's boundaries into a renderable plan."""
+    sentences: Sentences = outcome.sentences
+    transcript: Transcript = outcome.transcript
+    candidate = pick.candidate
+
+    bounds = refine(
+        candidate.start, candidate.end,
+        transcript=transcript,
+        sentences=sentences.sentences,
+        cfg=config.refine,
+        min_duration=campaign.duration.min_seconds,
+        max_duration=campaign.duration.max_seconds,
+        source_duration=outcome.info.media.duration,
+    )
+    if bounds.dropped:
+        log.info("%s dropped during refinement: %s", candidate.candidate_id,
+                 bounds.drop_reason)
+        return None
+
+    values = next((v for v in outcome.signals.values
+                   if v.candidate_id == candidate.candidate_id), None)
+    scores = (values.llm_a or values.llm_b) if values else None
+
+    text = " ".join(
+        w.text for w in transcript.words
+        if bounds.start <= (w.start + w.end) / 2 < bounds.end
+    ).strip() or candidate.text
+
+    plan = ClipPlan(
+        clip_id=f"{attempt:03d}_{to_slug_timestamp(bounds.start)}",
+        candidate_id=candidate.candidate_id,
+        rank=rank,
+        start=bounds.start,
+        end=bounds.end,
+        text=text,
+        composite=pick.scored.composite,
+        hook_text=scores.hook_text if scores else "",
+        suggested_caption=scores.suggested_caption if scores else "",
+        hashtags=list(scores.hashtags) if scores else [],
+        caption_style=config.render.caption_style,
+        refine_notes=bounds.notes,
+    )
+    return compliance.apply_campaign_caption(plan, campaign)
+
+
+def _reject(record: ClipRecord, rejected_dir: Path, result: RunResult) -> None:
+    """Move a failed clip to `rejected/` with its reason file."""
+    ensure(rejected_dir)
+    destination = rejected_dir / record.file.name
+    try:
+        record.file.replace(destination)
+    except OSError as exc:  # pragma: no cover - locked by a viewer
+        log.warning("could not move %s to rejected/: %s", record.file.name, exc)
+        destination = record.file
+
+    moved = ClipRecord(
+        plan=record.plan, file=destination, qa=record.qa,
+        compliance=record.compliance, components=record.components, raw=record.raw,
+        llm_a_total=record.llm_a_total, llm_b_total=record.llm_b_total,
+        rendered_duration=record.rendered_duration,
+    )
+    write_rejection_reason(moved, destination.with_suffix(".reason.json"))
+    result.rejected.append(moved)
+    log.warning("%s rejected: %s", record.plan.clip_id,
+                summarize(record.qa) if record.qa.status == "fail"
+                else record.compliance.summary())

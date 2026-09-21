@@ -29,8 +29,14 @@ weights:                     # renormalized over whichever signals are available
 
 selection:
   top_n: 5
-  min_composite: 0.55        # percentile-scale threshold; tune via `clipper eval`
+  min_composite: 0.15        # relative tail guard only; the real gate is min_llm_total
   max_from_same_third: 3     # spread picks across the video
+  # The absolute quality gate, on the raw 0-10 rubric scale. This is what lets
+  # clipper return two clips, or none, when a source is weak -- a threshold on
+  # the percentile composite cannot, because percentiles are uniform within
+  # every video by construction. See PLAN.md P1 and docs/DECISIONS.md D14.
+  min_llm_total: 5.5
+  use_absolute_gate: true    # false restores the brief's percentile-only behaviour
 
 llm:
   backend: gemini            # gemini | ollama | anthropic | mock
@@ -85,9 +91,17 @@ refine:
 
 qa:
   min_face_ratio: 0.5        # only enforced for face-centric layouts
-  max_silence_ratio: 0.25
+  # Looser than candidates.max_silence_ratio on purpose: that one estimates
+  # silence from word-timing gaps, this one measures acoustic silence in the
+  # rendered audio, which reads ~8 points higher on the same clip.
+  max_silence_ratio: 0.35
+  silence_min_gap: 0.5       # shorter gaps are speech rhythm, not dead air
   max_black_seconds: 0.3
-  max_freeze_seconds: 1.0
+  # A stalled render freezes for a large fraction of the clip (fail); a held
+  # shot or a slide is merely still (warn).
+  max_freeze_ratio: 0.30
+  max_freeze_seconds: 3.0
+  freeze_min_duration: 1.0
   min_lufs: -18
   max_lufs: -11
   max_true_peak_dbtp: -0.5

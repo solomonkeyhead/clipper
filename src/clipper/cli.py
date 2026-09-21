@@ -175,11 +175,116 @@ def run(
     out: Annotated[Path | None, typer.Option("--out", help="Output directory.")] = None,
     draft: Annotated[bool, typer.Option("--draft", help="Fast 540x960 render for iteration.")] = False,
     backend: Annotated[str | None, typer.Option("--backend", help="gemini | ollama | anthropic | mock")] = None,
+    force: Annotated[str | None, typer.Option("--force", help="Stage to invalidate, or 'all'.")] = None,
     verbose: VerboseOpt = False,
 ) -> None:
     """Full pipeline: ingest through manifest."""
     setup_logging(verbose)
-    _not_implemented("run", "Phase 4")
+    from . import runner
+    from .config import AUTHORIZATION_REMINDER, CampaignConfig, Config
+    from .ingest.download import IngestError
+    from .llm.base import LLMConfigError, LLMError
+    from .paths import data_root
+    from .transcribe.whisper import TranscriptionError
+    from .utils.timecode import format_duration
+
+    cfg = Config.load()
+    try:
+        campaign_cfg = CampaignConfig.load(campaign)
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    # Section 2: the authorization is surfaced on every run, not buried in a file.
+    console.print(f"[bold]Campaign:[/bold] {campaign_cfg.name}")
+    console.print(f"[bold]Authorization:[/bold] {campaign_cfg.source_authorization}")
+    console.print(f"[dim]{AUTHORIZATION_REMINDER}[/dim]\n")
+
+    out_root = out or (data_root() / "out")
+    forced = {s.strip() for s in force.split(",")} if force else set()
+
+    try:
+        result = runner.run(
+            _resolve_source(source),
+            config=cfg,
+            campaign=campaign_cfg,
+            out_root=out_root,
+            top=top,
+            draft=draft,
+            backend_override=backend,
+            force=forced,
+        )
+    except (IngestError, TranscriptionError, LLMConfigError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except LLMError as exc:
+        console.print(f"[red]LLM scoring failed: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    _print_run_summary(result, format_duration)
+
+    if not result.accepted:
+        raise typer.Exit(code=1)
+
+
+def _print_run_summary(result, format_duration) -> None:
+    from .campaign.compliance import full_caption
+
+    console.print()
+    if result.accepted:
+        table = Table(box=None, pad_edge=False, header_style="bold")
+        table.add_column("clip")
+        table.add_column("start", justify="right")
+        table.add_column("dur", justify="right")
+        table.add_column("comp", justify="right")
+        table.add_column("layout")
+        table.add_column("qa")
+        table.add_column("hook", overflow="ellipsis", max_width=36, no_wrap=True)
+
+        from .utils.timecode import to_slug_timestamp
+
+        for record in result.accepted:
+            plan = record.plan
+            table.add_row(
+                plan.clip_id,
+                to_slug_timestamp(plan.start),
+                f"{record.duration:.0f}s",
+                f"{plan.composite:.3f}",
+                plan.layout.kind if plan.layout else "-",
+                ("[green]pass[/green]" if record.qa.status == "pass"
+                 else f"[yellow]{record.qa.status}[/yellow]"),
+                plan.hook_text or "-",
+            )
+        console.print(table)
+        console.print()
+        for record in result.accepted:
+            console.print(f"[dim]{record.plan.clip_id}:[/dim] {full_caption(record.plan)}")
+    else:
+        console.print("[yellow]No clips were produced.[/yellow]")
+        console.print(result.selection_note)
+        console.print(
+            "\n[dim]This is deliberate. Returning nothing beats returning filler, "
+            "which earns no views and risks originality flags.[/dim]"
+        )
+
+    if result.rejected:
+        console.print(f"\n[yellow]{len(result.rejected)} clip(s) failed QA[/yellow] "
+                      "and were moved to rejected/ with a reason file:")
+        for record in result.rejected:
+            reasons = "; ".join(c.detail for c in record.qa.failures) \
+                or record.compliance.summary()
+            console.print(f"  {record.plan.clip_id}: {reasons}")
+
+    console.print()
+    console.print("  ".join(
+        f"[bold]{name}[/bold] {format_duration(value)}"
+        for name, value in result.timings.items()
+    ))
+    if result.outputs:
+        console.print(f"\nOutputs in [bold]{result.outputs['report_md'].parent}[/bold]")
+        for key in ("report_md", "manifest_csv", "performance_csv"):
+            if key in result.outputs:
+                console.print(f"  {result.outputs[key].name}")
 
 
 @app.command()
