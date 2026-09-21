@@ -163,3 +163,55 @@ built command never contains it.
 where the stand-in face is at any time. That lets a test assert the crop followed
 *the right path* rather than only that a file appeared, which is the difference
 between testing the render and testing that FFmpeg exists.
+
+---
+
+## Phase 3
+
+### D14. Selection gates on an absolute LLM total, not only the composite
+
+The change proposed in PLAN.md P1, now implemented. `selection.min_llm_total`
+(default 5.5, on the raw 0-10 rubric scale) is the gate that decides whether a
+clip is good enough; `min_composite` is retained as a relative guard and its
+default lowered from 0.55 to 0.35.
+
+The reasoning, restated because it is the most consequential departure in the
+build: every component of the composite is a **per-video percentile rank**, and
+percentile ranks are uniform by construction. The best candidate in any video
+scores near 1.0 whether that video is excellent or worthless, so a threshold on
+the composite cannot express "this source contains nothing worth clipping" --
+which is precisely what BUILD_BRIEF.md section 1 promises the tool will do.
+
+The LLM total is the only quantity on an absolute scale, because the prompts
+instruct the model that most clips should score 3-6 and that 8+ is exceptional.
+That makes it a genuine across-video judgement.
+
+`selection.use_absolute_gate: false` restores the brief's literal behaviour, so
+Phase 5 can measure whether this helps rather than assuming it does.
+
+### D15. `needs_prior_context` with the second opinion disabled
+
+Section 9.1 hard-drops on `needs_prior_context` "with both prompts agreeing",
+which is undefined when `llm.use_second_opinion` is off. Resolved: the single
+verdict is used, and the drop reason says "(single opinion)" so `explain` makes
+the weaker basis visible.
+
+### D16. The LLM cache is keyed per candidate, not per batch
+
+A batch sharing seven of eight candidates with an earlier run costs one call for
+the new one, not a full miss. This matters because batch composition shifts
+whenever candidate generation changes, which would otherwise invalidate every
+cached score on every re-run.
+
+### D17. Signals are computed cheapest-first
+
+Text, then audio, then heatmap, then the LLM. A failure in a free signal
+surfaces before any quota is spent, and the LLM -- the only stage that can cost
+money or hit a rate limit -- runs last.
+
+### D18. A failed signal excludes a candidate from that signal, not from scoring
+
+If the LLM cannot score one candidate, that candidate is ranked on the signals
+it does have, with the weights renormalised for it individually. Treating a
+missing signal as a zero would penalise a candidate for a transport failure
+rather than for its content.

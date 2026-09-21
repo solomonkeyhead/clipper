@@ -81,7 +81,6 @@ class TestCli:
         Commands are removed from this list as their phase lands.
         """
         for argv, phase in [
-            (["score", "abc"], "Phase 3"),
             (["render", "abc"], "Phase 4"),
             (["learn", "--performance", "p.csv"], "Phase 6"),
         ]:
@@ -91,7 +90,8 @@ class TestCli:
 
     def test_implemented_commands_are_no_longer_stubs(self):
         """A command that shipped must stop claiming it is unimplemented."""
-        for argv in (["transcribe", "--help"], ["candidates", "--help"]):
+        for argv in (["transcribe", "--help"], ["candidates", "--help"],
+                     ["score", "--help"], ["explain", "--help"]):
             result = runner.invoke(app, argv)
             assert result.exit_code == 0, argv
             assert "not implemented" not in result.output

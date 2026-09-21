@@ -108,9 +108,31 @@ class RubricWeights(StrictModel):
 
 
 class SelectionConfig(StrictModel):
+    """How many clips to take, and how good they have to be.
+
+    Two thresholds, doing different jobs. `min_composite` is a *relative* guard
+    on the percentile-ranked composite -- it can only say "this is weak for this
+    video". `min_llm_total` is an *absolute* guard on the raw 0-10 rubric total,
+    and is the only thing that can say "this video contains nothing worth
+    clipping", which is what BUILD_BRIEF.md section 1 actually asks for. See
+    PLAN.md P1 for why the brief's single percentile threshold cannot do it.
+    """
+
     top_n: int = Field(default=5, ge=1)
-    min_composite: Unit = 0.55
     max_from_same_third: int = Field(default=3, ge=1)
+
+    # Relative guard. Defaulted low because with N candidates the top few always
+    # sit high by construction; it exists to catch a pathological tail.
+    min_composite: Unit = 0.35
+
+    # Absolute guard, on the same 0-10 scale the rubric uses. The prompts tell
+    # the model most clips should score 3-6, so 5.5 asks for "above the middle
+    # of what a harsh editor would accept". Tuned in Phase 5.
+    min_llm_total: float = Field(default=5.5, ge=0.0, le=10.0)
+
+    # Set false to reproduce the brief's literal percentile-only behaviour, so
+    # the eval harness can measure whether the absolute gate actually helps.
+    use_absolute_gate: bool = True
 
 
 class LLMConfig(StrictModel):

@@ -44,6 +44,23 @@ def _work(source_id: str) -> Path:
     return work_dir(source_id)
 
 
+def _resolve_source(source: str) -> str:
+    """Accept either a source id or a path/URL.
+
+    `clipper score <id>` is the documented form, but re-typing a path is the
+    natural thing to do, and an id that has already been ingested resolves back
+    to its own media file without re-downloading anything.
+    """
+    from .paths import work_dir
+
+    info_path = work_dir(source) / "info.json"
+    if info_path.is_file():
+        from .models import SourceInfo
+
+        return SourceInfo.load(info_path).media.path
+    return source
+
+
 def _require(path: Path, model_cls, source_id: str, producing_command: str):
     """Load a stage artifact, or explain which command produces it.
 
@@ -285,24 +302,244 @@ def candidates(
 
 @app.command()
 def score(
-    source_id: Annotated[str, typer.Argument(help="Source id from a previous ingest.")],
-    backend: Annotated[str | None, typer.Option("--backend")] = None,
+    source: Annotated[str, typer.Argument(help="A source id, or a file/URL to ingest first.")],
+    backend: Annotated[str | None, typer.Option("--backend", help="gemini | ollama | anthropic | mock")] = None,
+    top: Annotated[int, typer.Option("--top", help="How many rows to print.")] = 12,
+    force: Annotated[str | None, typer.Option("--force", help="Stage to invalidate, or 'all'.")] = None,
     verbose: VerboseOpt = False,
 ) -> None:
-    """Compute all signals and the composite score."""
+    """Compute every signal, the composite score, and the selection."""
     setup_logging(verbose)
-    _not_implemented("score", "Phase 3")
+    from . import pipeline
+    from .config import Config
+    from .llm.base import LLMConfigError, LLMError
+    from .utils.timecode import format_duration, to_slug_timestamp
+
+    cfg = Config.load()
+    forced = {s.strip() for s in force.split(",")} if force else set()
+
+    try:
+        outcome = pipeline.score(
+            _resolve_source(source), cfg, backend_override=backend, force=forced
+        )
+    except LLMConfigError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except LLMError as exc:
+        console.print(f"[red]LLM scoring failed: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if not outcome.candidates.candidates:
+        console.print("[yellow]No candidates to score.[/yellow]")
+        raise typer.Exit(code=1)
+
+    selection = pipeline.choose(outcome, cfg)
+    picked = {p.scored.candidate_id for p in selection.picks}
+    by_id = {c.candidate_id: c for c in outcome.candidates.candidates}
+
+    table = Table(box=None, pad_edge=False, header_style="bold")
+    table.add_column("")
+    table.add_column("id")
+    table.add_column("start", justify="right")
+    table.add_column("dur", justify="right")
+    table.add_column("comp", justify="right")
+    for name in outcome.available_signals:
+        table.add_column(name[:4], justify="right")
+    table.add_column("llm/10", justify="right")
+    table.add_column("text", overflow="ellipsis", max_width=52, no_wrap=True)
+
+    for entry in outcome.scored.scored[:top]:
+        candidate = by_id.get(entry.candidate_id)
+        if candidate is None:
+            continue
+        marker = "[green]*[/green]" if entry.candidate_id in picked else " "
+        row = [
+            marker,
+            entry.candidate_id,
+            to_slug_timestamp(candidate.start),
+            f"{candidate.duration:.0f}s",
+            "-" if entry.dropped else f"{entry.composite:.3f}",
+        ]
+        row += [f"{entry.components.get(n, 0):.2f}" if not entry.dropped else "-"
+                for n in outcome.available_signals]
+        row.append(f"{entry.raw.get('llm', 0):.1f}" if "llm" in entry.raw else "-")
+        row.append(entry.drop_reason if entry.dropped else candidate.text)
+        table.add_row(*row)
+
+    console.print(table)
+    console.print(
+        f"\n[green]*[/green] = selected. "
+        f"{selection.count} clip(s) selected of {len(outcome.scored.scored)} scored; "
+        f"{selection.stopped_because}."
+    )
+    console.print(
+        f"signals: {', '.join(outcome.available_signals)}   weights: "
+        + ", ".join(f"{k}={v:.2f}" for k, v in outcome.scored.weights_used.items())
+    )
+    if outcome.transcribe_stats:
+        s = outcome.transcribe_stats
+        console.print(
+            f"transcription: {format_duration(s.audio_seconds)} in {s.wall_seconds:.1f}s "
+            f"({s.realtime_factor:.1f}x realtime, {s.model}/{s.compute_type})"
+        )
+    if outcome.llm_usage:
+        usage = outcome.llm_usage
+        if usage.calls:
+            console.print(f"LLM: {usage.summary()}   cache: {outcome.cache_stats}")
+        elif usage.failed:
+            console.print(
+                f"[red]LLM: every call failed ({usage.failed} batch(es)); "
+                f"candidates were scored without the LLM signal.[/red]"
+            )
+        else:
+            # Worth saying explicitly: a fully cached run makes no calls at all,
+            # and silence here reads like the LLM step was skipped.
+            console.print(f"LLM: no calls needed, every score came from cache ({outcome.cache_stats})")
+    console.print(f"source_id: [bold]{outcome.info.source_id}[/bold]")
 
 
 @app.command()
 def explain(
-    source_id: Annotated[str, typer.Argument()],
-    candidate_id: Annotated[str, typer.Argument()],
+    source_id: Annotated[str, typer.Argument(help="Source id from a previous score.")],
+    candidate_id: Annotated[str, typer.Argument(help="Candidate id, e.g. c003.")],
     verbose: VerboseOpt = False,
 ) -> None:
     """Show every signal behind one candidate, and why it was picked or dropped."""
     setup_logging(verbose)
-    _not_implemented("explain", "Phase 3")
+    from . import pipeline
+    from .config import Config
+    from .utils.timecode import format_duration, to_ffmpeg
+
+    cfg = Config.load()
+    try:
+        info, candidates, signals, scored = pipeline.load_scored(source_id)
+    except FileNotFoundError as exc:
+        console.print(
+            f"[red]{source_id!r} has not been scored yet.[/red]\n"
+            f"Run `clipper score {source_id}` first."
+        )
+        raise typer.Exit(code=1) from exc
+
+    candidate = next((c for c in candidates.candidates if c.candidate_id == candidate_id), None)
+    if candidate is None:
+        known = ", ".join(c.candidate_id for c in candidates.candidates[:12])
+        console.print(f"[red]No candidate {candidate_id!r}.[/red]\nKnown ids: {known}")
+        raise typer.Exit(code=1)
+
+    entry = next((s for s in scored.scored if s.candidate_id == candidate_id), None)
+    values = next((v for v in signals.values if v.candidate_id == candidate_id), None)
+
+    console.print(Panel(
+        candidate.text,
+        title=(
+            f"{candidate_id}  {to_ffmpeg(candidate.start)} - {to_ffmpeg(candidate.end)}  "
+            f"({format_duration(candidate.duration)})"
+        ),
+        title_align="left",
+    ))
+
+    if values is not None:
+        _print_rubric(values)
+        _print_features("Audio features", values.audio_features)
+        _print_features("Text features", values.text_features)
+        _print_features("Heatmap features", values.heatmap_features)
+
+    if entry is None:
+        console.print("[yellow]This candidate has no composite score.[/yellow]")
+        return
+
+    _print_composite(entry, scored)
+
+    selection = pipeline.choose(
+        pipeline.ScoreOutcome(
+            info=info, transcript=None, sentences=None, candidates=candidates,
+            signals=signals, scored=scored,
+        ),
+        cfg,
+    )
+    verdict = next((p for p in selection.picks if p.scored.candidate_id == candidate_id), None)
+    if verdict is not None:
+        console.print(f"\n[green]SELECTED[/green] as clip #{verdict.rank}.")
+    else:
+        reason = selection.rejections.get(candidate_id, "not among the top candidates")
+        console.print(f"\n[yellow]NOT SELECTED[/yellow]: {reason}")
+
+
+def _print_rubric(values) -> None:
+    from .models import RubricScores
+
+    opinions = [("A (editor)", values.llm_a), ("B (viewer)", values.llm_b)]
+    if not any(s for _, s in opinions):
+        console.print("\n[dim]No LLM scores for this candidate.[/dim]")
+        return
+
+    table = Table(title="LLM rubric", box=None, title_justify="left",
+                  header_style="bold", pad_edge=False)
+    table.add_column("criterion")
+    for label, scores in opinions:
+        if scores is not None:
+            table.add_column(label, justify="right")
+
+    fields = [f for f in RubricScores.model_fields if f.endswith(
+        ("strength", "clarity", "payoff", "intensity", "quotability", "completeness"))]
+    for field_name in fields:
+        row = [field_name.replace("_", " ")]
+        for _, scores in opinions:
+            if scores is not None:
+                row.append(f"{getattr(scores, field_name)}/10")
+        table.add_row(*row)
+    console.print()
+    console.print(table)
+
+    if values.llm_total is not None:
+        console.print(f"  weighted total: [bold]{values.llm_total:.2f}/10[/bold]")
+
+    for label, scores in opinions:
+        if scores is None:
+            continue
+        flags = []
+        if scores.needs_prior_context:
+            flags.append("needs prior context")
+        if scores.is_sponsor_or_ad:
+            flags.append("sponsor/ad")
+        if scores.policy_risk != "none":
+            flags.append(f"policy risk: {scores.policy_risk}")
+        if flags:
+            console.print(f"  {label} flags: {', '.join(flags)}")
+
+    first = values.llm_a or values.llm_b
+    if first and first.hook_text:
+        console.print(f"  hook: [italic]{first.hook_text}[/italic]")
+    if first and first.suggested_caption:
+        tags = " ".join(first.hashtags)
+        console.print(f"  caption: {first.suggested_caption} {tags}")
+
+
+def _print_features(title: str, features: dict) -> None:
+    if not features:
+        return
+    console.print(f"\n[bold]{title}[/bold]")
+    for key, value in features.items():
+        console.print(f"  {key:<30} {value:>9.4f}")
+
+
+def _print_composite(entry, scored) -> None:
+    console.print("\n[bold]Composite[/bold]")
+    if entry.dropped:
+        console.print(f"  [red]dropped[/red]: {entry.drop_reason}")
+        return
+
+    for name, component in entry.components.items():
+        weight = scored.weights_used.get(name, 0.0)
+        raw = entry.raw.get(name)
+        raw_text = f"raw {raw:.4f}" if raw is not None else ""
+        console.print(
+            f"  {name:<9} percentile {component:.3f}  x weight {weight:.2f}"
+            f"  = {component * weight:.4f}   {raw_text}"
+        )
+    if entry.penalty < 1.0:
+        console.print(f"  penalty   x{entry.penalty:.3f}  ({'; '.join(entry.penalty_reasons)})")
+    console.print(f"  [bold]composite {entry.composite:.4f}[/bold]")
 
 
 @app.command()

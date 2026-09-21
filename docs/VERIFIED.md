@@ -405,3 +405,97 @@ cache now compares the stored model name against the requested one.
 | Full (`pytest`) | **379 passed** in 103.6 s |
 | Fast (`pytest -m "not slow"`) | **349 passed**, 30 deselected, in 4.1 s |
 | `ruff check` | clean |
+
+---
+
+## 2026-09-21 — Phase 3
+
+### Real Gemini backend, end to end — measured
+
+24 candidates from the 75-second speech fixture, two prompts each, batch size 8:
+
+| | |
+|---|---|
+| LLM calls | **6** (48 candidate-scorings / 8 per batch × 2 prompts) |
+| Failed calls | 0 |
+| Tokens | 8,381 in / 7,897 out |
+| Mean latency per call | **3.95 s** |
+| Rate-limit waiting | 9 s (client limiter at 10 RPM) |
+| Wall clock for the whole scoring stage | **34.9 s** |
+| Candidates scored | 20 of 24 (4 hard-dropped) |
+
+A second run with a warm cache makes **zero** LLM calls.
+
+### The ranking is sensible — checked, not assumed
+
+Top pick, `c008`, weighted total **8.41/10**:
+
+> Why do people quit? … They quit because the next step was never written down.
+> I lost 11 months to that exact mistake. … Every night I wrote one sentence
+> describing tomorrow's first action. … My completion rate went from about 10%
+> to over 70.
+
+That is the strongest moment in the script by inspection: question hook, a
+specific claim, a concrete payoff, a result, and a complete ending. Prompt A and
+prompt B both scored its hook 9/10.
+
+`hook_text`: *"Why most people actually quit"* — original, under ten words, and
+faithful. The Phase 0 verification found the model echoing the transcript
+verbatim here; the explicit rule and worked example in `prompts.py` fixed it.
+
+`suggested_caption`: *"It is not about motivation. It is about not knowing the
+next step."* plus four relevant hashtags.
+
+**The two prompts genuinely differ.** On a mid-ranked candidate, A (editor) vs
+B (distracted viewer) scored hook 5 vs 3, payoff 7 vs 5, emotion 6 vs 4 — B
+consistently harsher, which is what the prompt asks for. They are still not
+independent judges (same model, correlated errors; PLAN.md P3), but the second
+opinion is doing visible work rather than echoing the first.
+
+**Hard drops fire correctly.** Four candidates were dropped, all for
+`needs_prior_context` agreed by both prompts — and correctly so: each begins
+mid-conversation with no referent.
+
+### Three bugs found by running it for real
+
+1. **`response_schema` shape.** The google-genai SDK rejects a plain
+   `[RubricItem]` list literal with a pydantic `ValidationError`; it requires the
+   typing generic `list[RubricItem]`. Verified both forms directly.
+2. **A non-retryable error was retried.** That schema failure was wrapped as a
+   generic `LLMError` and retried with exponential backoff — **2 m 29 s** across
+   six batches before reporting a problem that could never have succeeded.
+   Request-construction failures are now `LLMConfigError`, which is not retried
+   and aborts the run immediately.
+3. **The cache reported hits while still calling the LLM.** `_parse_items`
+   unwrapped "the first list-valued key" to handle `{"clips": [...]}` wrappers —
+   but a rubric item has its own list-valued key, `hashtags`. A cached single
+   item was therefore read back as a list of hashtag strings, parsed as nothing,
+   and re-fetched. The run reported "48 hit / 0 miss" **and** made 6 calls.
+   Unwrapping now requires a list of objects. Regression test:
+   `test_a_bare_object_is_treated_as_one_item`.
+
+Two smaller fixes from the same run: `MockBackend` and `OllamaBackend` were being
+throttled at the configured 10 RPM (a `setdefault` losing to an explicit kwarg),
+making a mock-backed run spend 30 s purely sleeping; and the CLI claimed "every
+score came from cache" when in fact every call had failed.
+
+### Audio signal defects found via `clipper explain`
+
+Printing the raw features made two bad values obvious:
+
+| Feature | Before | After | Why |
+|---|---|---|---|
+| `dynamic_range_db` | 83.7 | 21.2 | Digital silence is −200 dB once EPS is added. Clamped at a −60 dB floor, and now measured over *voiced* frames only — otherwise it just re-measures "contains pauses", which `silence_ratio` already covers |
+| `onset_rate` → `onset_ratio` | 15.1 | 1.01 | The threshold is the 85th percentile over the whole file, so ~15% of frames exceed it *by construction* and the absolute rate carried no information. Now expressed relative to the video's own average |
+
+Both previously saturated their normalisation, making the features dead weight.
+Post-fix distribution across the 24 candidates: `dynamic_range_db` 18.8–21.9,
+`onset_ratio` 0.99–1.09, audio raw score 0.617–0.673.
+
+### Test suite
+
+| Suite | Result |
+|---|---|
+| Full (`pytest`) | **554 passed, 1 skipped** in 161.7 s |
+| Fast (`pytest -m "not slow"`) | **511 passed**, 44 deselected, in 5.0 s |
+| `ruff check` | clean |

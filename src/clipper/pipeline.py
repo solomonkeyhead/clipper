@@ -1,0 +1,308 @@
+"""Stage orchestration: running the pipeline and caching its artifacts.
+
+Each function here owns one stage boundary from BUILD_BRIEF.md section 6 --
+reading the previous stage's artifact, writing its own, and skipping the work
+entirely when the artifact is already fresh. Keeping resumability here rather
+than inside each stage means the stages stay pure and testable.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .candidates.windows import generate as generate_candidates
+from .config import Config
+from .ingest.download import ingest as run_ingest
+from .llm.base import LLMBackend, LLMConfigError, UsageStats
+from .llm.base import create as create_backend
+from .llm.cache import LLMCache
+from .models import (
+    Candidates,
+    Scored,
+    Sentences,
+    Signals,
+    SignalValues,
+    SourceInfo,
+    Transcript,
+)
+from .paths import examples_dir, work_dir
+from .select.pick import SelectionResult
+from .select.pick import select as run_select
+from .signals import audio as audio_signal
+from .signals import heatmap as heatmap_signal
+from .signals import llm as llm_signal
+from .signals import text as text_signal
+from .signals.combine import combine
+from .transcribe.segment import segment as run_segment
+from .transcribe.whisper import TranscribeStats
+from .transcribe.whisper import transcribe as run_transcribe
+from .utils.cache import StageCache
+from .utils.logging import get_logger
+
+log = get_logger(__name__)
+
+
+@dataclass
+class ScoreOutcome:
+    """Everything the scoring half of the pipeline produced."""
+
+    info: SourceInfo
+    transcript: Transcript
+    sentences: Sentences
+    candidates: Candidates
+    signals: Signals
+    scored: Scored
+    transcribe_stats: TranscribeStats | None = None
+    llm_usage: UsageStats | None = None
+    cache_stats: str = ""
+    available_signals: list[str] = field(default_factory=list)
+
+
+def prepare(
+    source: str,
+    config: Config,
+    *,
+    cache: StageCache | None = None,
+    force: set[str] | None = None,
+) -> tuple[SourceInfo, Transcript, Sentences, Candidates, TranscribeStats | None]:
+    """Run ingest -> transcribe -> segment -> candidates, reusing what it can."""
+    info = run_ingest(source, force=bool(force and "ingest" in force))
+    work = work_dir(info.source_id)
+    cache = cache or StageCache(work, forced=force or set())
+
+    transcript, stats = run_transcribe(
+        info, config.transcription, force="transcribe" in cache.forced
+    )
+
+    sentences_path = work / "sentences.json"
+    if cache.is_fresh("segment", "sentences.json"):
+        sentences = Sentences.load(sentences_path)
+    else:
+        sentences = run_segment(transcript)
+        sentences.save(sentences_path)
+
+    candidates_path = work / "candidates.json"
+    if cache.is_fresh("candidates", "candidates.json"):
+        candidates = Candidates.load(candidates_path)
+        log.info("reusing %d cached candidates", len(candidates.candidates))
+    else:
+        candidates = generate_candidates(
+            transcript, sentences, config.candidates, source_duration=info.media.duration
+        )
+        candidates.save(candidates_path)
+
+    return info, transcript, sentences, candidates, stats
+
+
+def build_backend(config: Config, *, override: str | None = None) -> LLMBackend:
+    """Instantiate the configured LLM backend, or the override."""
+    name = override or config.llm.backend
+    return create_backend(
+        name,
+        model=config.llm.model,
+        max_retries=config.llm.max_retries,
+        requests_per_minute=config.llm.requests_per_minute,
+    )
+
+
+def compute_signals(
+    info: SourceInfo,
+    transcript: Transcript,
+    candidates: Candidates,
+    config: Config,
+    *,
+    backend: LLMBackend,
+    llm_cache: LLMCache | None = None,
+) -> Signals:
+    """Compute all four signal families for every candidate.
+
+    Signals that cannot be computed are simply absent from `Signals.available`,
+    and `combine` renormalises the weights over what remains -- so a local file
+    with no heatmap is scored on three signals rather than penalised for the
+    missing fourth.
+    """
+    items = candidates.candidates
+    if not items:
+        return Signals(source_id=info.source_id, available=[], values=[])
+
+    available: list[str] = []
+
+    # Text is free and never fails.
+    text_raw, text_detail = text_signal.score_candidates(items)
+    available.append("text")
+
+    # Audio needs the extracted WAV.
+    audio_raw: dict[str, float] = {}
+    audio_detail: dict[str, dict[str, float]] = {}
+    try:
+        audio_raw, audio_detail = audio_signal.score_candidates(
+            items, Path(info.audio_path), transcript
+        )
+        available.append("audio")
+    except (OSError, ValueError) as exc:
+        log.warning("audio signal unavailable (%s); continuing without it", exc)
+
+    # Heatmap only exists for some YouTube sources.
+    heatmap_raw: dict[str, float] = {}
+    heatmap_detail: dict[str, dict[str, float]] = {}
+    heatmap_result = heatmap_signal.score_candidates(items, info)
+    if heatmap_result is not None:
+        heatmap_raw, heatmap_detail = heatmap_result
+        available.append("heatmap")
+
+    # The LLM last: it is the slowest and the only one that can cost money, so
+    # a failure in a cheap signal surfaces before any quota is spent.
+    llm_result = llm_signal.score_candidates(
+        items, backend, config.llm, cache=llm_cache,
+        examples=_few_shot_examples(config),
+    )
+    if llm_result.totals or llm_result.drops:
+        available.append("llm")
+
+    values: list[SignalValues] = []
+    for candidate in items:
+        cid = candidate.candidate_id
+        a, b = llm_result.scores.get(cid, (None, None))
+        drop_reason = llm_result.drops.get(cid, "")
+        values.append(SignalValues(
+            candidate_id=cid,
+            llm_a=a,
+            llm_b=b,
+            llm_total=llm_result.totals.get(cid),
+            audio=audio_raw.get(cid),
+            heatmap=heatmap_raw.get(cid),
+            text=text_raw.get(cid),
+            audio_features=audio_detail.get(cid, {}),
+            text_features=text_detail.get(cid, {}),
+            heatmap_features=heatmap_detail.get(cid, {}),
+            dropped=bool(drop_reason),
+            drop_reason=drop_reason,
+        ))
+
+    log.info(
+        "signals available: %s (%d candidates, %d dropped by the LLM)",
+        ", ".join(available), len(values), len(llm_result.drops),
+    )
+    return Signals(source_id=info.source_id, available=available, values=values)
+
+
+def score(
+    source: str,
+    config: Config,
+    *,
+    backend_override: str | None = None,
+    force: set[str] | None = None,
+) -> ScoreOutcome:
+    """Run the whole scoring half: ingest through combine."""
+    force = force or set()
+    info, transcript, sentences, candidates, stats = prepare(source, config, force=force)
+
+    work = work_dir(info.source_id)
+    cache = StageCache(work, forced=force)
+
+    signals_path = work / "signals.json"
+    scored_path = work / "scored.json"
+
+    backend: LLMBackend | None = None
+    llm_cache = LLMCache()
+
+    if cache.is_fresh("signals", "signals.json"):
+        signals = Signals.load(signals_path)
+        log.info("reusing cached signals (%s)", ", ".join(signals.available))
+    else:
+        backend = build_backend(config, override=backend_override)
+        log.info("scoring %d candidates with %s", len(candidates.candidates), backend.describe())
+        signals = compute_signals(
+            info, transcript, candidates, config, backend=backend, llm_cache=llm_cache
+        )
+        signals.save(signals_path)
+
+    if cache.is_fresh("combine", "scored.json") and cache.is_fresh("signals", "signals.json"):
+        scored = Scored.load(scored_path)
+    else:
+        scored = combine(signals, config)
+        scored.save(scored_path)
+
+    return ScoreOutcome(
+        info=info,
+        transcript=transcript,
+        sentences=sentences,
+        candidates=candidates,
+        signals=signals,
+        scored=scored,
+        transcribe_stats=stats,
+        llm_usage=backend.usage if backend else None,
+        cache_stats=llm_cache.stats(),
+        available_signals=signals.available,
+    )
+
+
+def choose(outcome: ScoreOutcome, config: Config, *, limit: int | None = None) -> SelectionResult:
+    """Run selection over an existing scoring outcome."""
+    return run_select(
+        outcome.scored,
+        outcome.candidates.candidates,
+        config.selection,
+        min_gap_seconds=config.candidates.min_gap_seconds,
+        source_duration=outcome.info.media.duration,
+        limit=limit,
+    )
+
+
+def load_scored(source_id: str) -> tuple[SourceInfo, Candidates, Signals, Scored]:
+    """Load a previously scored source's artifacts."""
+    from .ingest.download import load_info
+
+    work = work_dir(source_id)
+    return (
+        load_info(source_id),
+        Candidates.load(work / "candidates.json"),
+        Signals.load(work / "signals.json"),
+        Scored.load(work / "scored.json"),
+    )
+
+
+def _few_shot_examples(config: Config) -> list[dict] | None:
+    """Top-performing clips to calibrate the prompts (section 14.2).
+
+    Off by default. The file is built by `clipper learn` from real view counts,
+    so it does not exist until the user has logged some.
+    """
+    if not config.llm.use_few_shot_examples:
+        return None
+
+    path = examples_dir() / "top_clips.jsonl"
+    if not path.is_file():
+        log.warning(
+            "llm.use_few_shot_examples is on but %s does not exist yet; "
+            "run `clipper learn` once you have logged performance data", path,
+        )
+        return None
+
+    import json
+
+    examples: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            examples.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+        if len(examples) >= config.llm.few_shot_count:
+            break
+    return examples or None
+
+
+__all__ = [
+    "LLMConfigError",
+    "ScoreOutcome",
+    "build_backend",
+    "choose",
+    "compute_signals",
+    "load_scored",
+    "prepare",
+    "score",
+]
