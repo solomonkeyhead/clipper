@@ -248,3 +248,160 @@ t=1.0 s and t=4.0 s were inspected:
 | Full (`pytest`) | **212 passed** in 31.6 s |
 | Fast (`pytest -m "not slow"`) | **199 passed**, 13 deselected, in 2.8 s |
 | `ruff check` | clean |
+
+---
+
+## 2026-09-21 — Gemini backend (verified early, key supplied by the user)
+
+`GEMINI_API_KEY` is set in `.env` (git-ignored; confirmed with `git check-ignore`).
+
+**58 models visible, 41 supporting `generateContent`.** Flash/lite tier, which is
+what the rubric scorer will use:
+
+```
+gemini-flash-latest          gemini-flash-lite-latest      (moving aliases)
+gemini-3.8-flash             gemini-3.7-flash              gemini-3.6-flash
+gemini-3.5-flash             gemini-3.5-flash-lite
+gemini-3.1-flash-lite        gemini-3-flash-preview        gemini-2.5-flash
+```
+
+**Do not hardcode a model name.** `gemini-2.5-flash-lite` — which is still widely
+documented — returns:
+
+> `404 NOT_FOUND … This model is no longer available to new users. Please update
+> your code to use models/gemini-3.5-flash-lite`
+
+This confirms the design in `config/default.yaml` (`llm.model: null`): the backend
+enumerates models at runtime and picks from a preference list. The `*-latest`
+aliases are the safest default since they cannot 404.
+
+**Structured output works server-side.** One real call with
+`response_mime_type="application/json"` and a pydantic `response_schema` of
+`list[Rubric]`:
+
+| Model | Latency | Tokens in/out | Result |
+|---|---|---|---|
+| `gemini-3.5-flash-lite` | 1.20 s | 77 / 207 | valid JSON, validated by pydantic first try |
+
+Judgement on two deliberately-opposite test clips was sensible: the rambling one
+scored hook=0 payoff=0 `needs_prior_context=true`; the specific one scored
+hook=10 payoff=10.
+
+Two notes carried into Phase 3:
+
+- `response_schema` enforces the shape server-side, so the brief's "retry once
+  with a repair instruction" path (section 9.1) should rarely fire. It will still
+  be implemented, as a safety net rather than the normal case.
+- The model returned `hook_text` as a verbatim copy of the transcript instead of
+  a punchy line of ≤10 words. That is a prompt-design problem to fix in Phase 3,
+  not a model limitation.
+- Pass `automatic_function_calling=AutomaticFunctionCallingConfig(disable=True)`
+  to suppress the SDK's AFC warning on every call.
+
+**Rate limits were not measured** — doing so means deliberately exhausting the
+free-tier quota. The client-side limiter (`llm.requests_per_minute`) plus
+exponential backoff handles this instead.
+
+---
+
+## 2026-09-21 — Phase 2
+
+### Transcription speed and VRAM — measured on this GPU
+
+75.5 s source, `float16` on the RTX 2070 SUPER, VAD on, word timestamps on:
+
+| Model | Wall clock | Realtime factor | Words |
+|---|---|---|---|
+| **large-v3** | 8.4 s | **9.0x** | 186 |
+| distil-large-v3 | 2.0 s | **38.5x** | 187 |
+| small | 3.2 s | 23.4x | 186 |
+
+Extrapolating `large-v3` to a 60-minute source gives roughly **6.7 minutes** of
+transcription — comfortably inside the 25-minute Phase 4 budget. `distil-large-v3`
+would do the same source in about 1.6 minutes for a near-identical word count,
+and is the obvious fallback if the budget is ever tight.
+
+VRAM, sampled at 0.15 s intervals across a `large-v3` run:
+
+| | MiB |
+|---|---|
+| Baseline before load | 457 |
+| **Peak during transcription** | **4793** |
+| After the model is freed | 569 |
+
+Model footprint ~4.3 GB, leaving ~3.4 GB headroom on the 8192 MiB card, and the
+memory is genuinely released. This is what makes the brief's sequential-stage
+requirement workable.
+
+### Transcription accuracy against known ground truth
+
+Windows SAPI ("Microsoft David Desktop" / "Microsoft Zira Desktop") synthesises
+speech locally, so fixtures have **exact known wording**. faster-whisper
+transcribed a 9-sentence script **word for word, with correct punctuation**:
+
+> Most people think the hardest part is getting started. It isn't. The hardest
+> part is deciding what to stop doing. …
+
+Segmentation then recovered exactly the **9 expected sentences**. This means the
+Phase 2 tests assert against ground truth rather than merely asserting output is
+non-empty, and it needed no downloads.
+
+### Silence measurement — checked, not assumed
+
+Concern: if the silence ratio counts every inter-word micro-gap, it measures the
+transcriber's bracketing rather than dead air. Measured on a real transcript:
+
+```
+gaps between consecutive words: n=77, median 0.000 s
+gaps > 0.3 s: n=10, totalling 16.0 s
+naive silence ratio 42.07%  ==  dead-air ratio 42.07%
+```
+
+The median gap is **zero** — whisper emits contiguous word timings within
+continuous speech — so the simple metric already measures real dead air and no
+gap threshold is needed.
+
+Note for tuning: the 25% `max_silence_ratio` from the brief is tight. On the
+realistic-cadence fixture the whole source measures 29.6% silence while the
+windows that survive measure 23–25%. It works, but it is close enough to the
+line to deserve checking during Phase 5 eval.
+
+### Windows gotcha: huggingface_hub symlinks
+
+Downloading `large-v3` failed **after** the multi-gigabyte download completed:
+
+```
+OSError: [WinError 1314] A required privilege is not held by the client:
+  '..\..\blobs\75336fea…' -> '…\snapshots\…\config.json'
+```
+
+huggingface_hub symlinks snapshot files to blobs, which needs Developer Mode or
+admin. `transcribe/whisper.py` now sets `HF_HUB_DISABLE_SYMLINKS=1` before the
+import, so it copies instead. Costs disk, not a failed run.
+
+### Bug found and fixed: end-snapping could truncate a clip
+
+Boundary refinement preferred a punctuated sentence end within 3 s of the
+requested end — in either direction. With a long unpunctuated tail, the nearest
+punctuated end can be *behind* the requested end, so a window
+`[0.00, 2.70]` snapped to `[0.00, 0.60]`, discarding a whole sentence and
+cutting the clip to a fifth of its length.
+
+Finishing a thought is a forward operation, so the punctuation preference is now
+forward-only. Regression test:
+`test_end_never_snaps_backwards_past_a_whole_sentence`.
+
+### Bug found and fixed: `--model` silently ignored
+
+A cached `transcript.json` was reused regardless of which model produced it, so
+`clipper transcribe --model large-v3` on a source previously transcribed with
+`small` returned the small transcript and reported "reusing transcript". The
+cache now compares the stored model name against the requested one.
+
+### Test suite
+
+| Suite | Result |
+|---|---|
+| Full (`pytest`) | **379 passed** in 103.6 s |
+| Fast (`pytest -m "not slow"`) | **349 passed**, 30 deselected, in 4.1 s |
+| `ruff check` | clean |

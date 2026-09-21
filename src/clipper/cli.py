@@ -38,6 +38,34 @@ def _not_implemented(command: str, phase: str) -> None:
     raise typer.Exit(code=2)
 
 
+def _work(source_id: str) -> Path:
+    from .paths import work_dir
+
+    return work_dir(source_id)
+
+
+def _require(path: Path, model_cls, source_id: str, producing_command: str):
+    """Load a stage artifact, or explain which command produces it.
+
+    A missing artifact is the most common way a partially-run pipeline fails, so
+    the error names the exact command to run rather than raising FileNotFoundError.
+    """
+    if not path.is_file():
+        from .ingest.download import find_source_ids
+
+        known = find_source_ids()
+        hint = (
+            f"\nKnown source ids: {', '.join(known[:5])}"
+            if known else "\nNo sources have been ingested yet."
+        )
+        console.print(
+            f"[red]{path.name} not found for source {source_id!r}.[/red]\n"
+            f"Run `clipper {producing_command} <source>` first.{hint}"
+        )
+        raise typer.Exit(code=1)
+    return model_cls.load(path)
+
+
 @app.callback(invoke_without_command=True)
 def _root(
     ctx: typer.Context,
@@ -139,22 +167,120 @@ def run(
 
 @app.command()
 def transcribe(
-    source: Annotated[str, typer.Argument(help="Local video file or URL.")],
+    source: Annotated[str, typer.Argument(help="Local video file, or a URL you are authorized to clip.")],
+    force: Annotated[bool, typer.Option("--force", help="Re-ingest and re-transcribe, ignoring cache.")] = False,
+    model: Annotated[str | None, typer.Option("--model", help="Override transcription.model.")] = None,
     verbose: VerboseOpt = False,
 ) -> None:
-    """Ingest and transcribe only."""
+    """Ingest a source and transcribe it to word-level timestamps."""
     setup_logging(verbose)
-    _not_implemented("transcribe", "Phase 2")
+    from .config import Config
+    from .ingest.download import IngestError, describe_heatmap, ingest
+    from .transcribe.segment import segment
+    from .transcribe.whisper import TranscriptionError
+    from .transcribe.whisper import transcribe as run_transcribe
+    from .utils.timecode import format_duration
+
+    cfg = Config.load()
+    if model:
+        cfg = cfg.model_copy(
+            update={"transcription": cfg.transcription.model_copy(update={"model": model})}
+        )
+
+    try:
+        info = ingest(source, force=force)
+    except IngestError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(
+        f"[bold]{info.title}[/bold]  {format_duration(info.media.duration)}  "
+        f"{info.media.width}x{info.media.height}  ({describe_heatmap(info)})"
+    )
+
+    try:
+        transcript, stats = run_transcribe(info, cfg.transcription, force=force)
+    except TranscriptionError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    sentences = segment(transcript)
+    sentences.save(_work(info.source_id) / "sentences.json")
+
+    console.print(
+        f"{len(transcript.words)} words, {len(sentences.sentences)} sentences, "
+        f"language={transcript.language}"
+    )
+    if stats:
+        console.print(
+            f"transcribed in {stats.wall_seconds:.1f}s "
+            f"([bold]{stats.realtime_factor:.1f}x realtime[/bold], "
+            f"{stats.model}/{stats.compute_type} on {stats.device})"
+        )
+    console.print(f"source_id: [bold]{info.source_id}[/bold]")
 
 
 @app.command()
 def candidates(
-    source_id: Annotated[str, typer.Argument(help="Source id from a previous ingest.")],
+    source_id: Annotated[str, typer.Argument(help="Source id from a previous transcribe.")],
+    force: Annotated[bool, typer.Option("--force", help="Regenerate, ignoring cache.")] = False,
+    limit: Annotated[int, typer.Option("--limit", help="How many to print.")] = 15,
     verbose: VerboseOpt = False,
 ) -> None:
     """Generate candidate windows from an existing transcript."""
     setup_logging(verbose)
-    _not_implemented("candidates", "Phase 2")
+    from .candidates.windows import generate
+    from .config import Config
+    from .models import Candidates, Sentences, Transcript
+
+    cfg = Config.load()
+    work = _work(source_id)
+    transcript = _require(work / "transcript.json", Transcript, source_id, "transcribe")
+    sentences = _require(work / "sentences.json", Sentences, source_id, "transcribe")
+
+    out_path = work / "candidates.json"
+    if out_path.is_file() and not force:
+        result = Candidates.load(out_path)
+        console.print(f"[dim]reusing {out_path.name}; pass --force to regenerate[/dim]")
+    else:
+        result = generate(transcript, sentences, cfg.candidates,
+                          source_duration=transcript.duration)
+        result.save(out_path)
+
+    if not result.candidates:
+        console.print(
+            "[yellow]No candidates survived the hard filters.[/yellow] Common causes: "
+            "the source is mostly silence, it is shorter than "
+            f"{cfg.candidates.min_seconds:.0f}s of usable speech, or every window "
+            f"exceeds candidates.max_silence_ratio ({cfg.candidates.max_silence_ratio:.0%}). "
+            "Re-run with --verbose to see the per-reason drop counts."
+        )
+        raise typer.Exit(code=1)
+
+    table = Table(box=None, pad_edge=False, header_style="bold")
+    table.add_column("id")
+    table.add_column("start", justify="right")
+    table.add_column("dur", justify="right")
+    table.add_column("silence", justify="right")
+    table.add_column("pre", justify="right")
+    table.add_column("text", overflow="ellipsis", max_width=64)
+
+    from .utils.timecode import to_slug_timestamp
+
+    for candidate in result.candidates[:limit]:
+        table.add_row(
+            candidate.candidate_id,
+            to_slug_timestamp(candidate.start),
+            f"{candidate.duration:.0f}s",
+            f"{candidate.silence_ratio:.0%}",
+            f"{candidate.pre_score:.2f}",
+            candidate.text,
+        )
+    console.print(table)
+    console.print(
+        f"\n{len(result.candidates)} candidates"
+        + (f" (showing {limit})" if len(result.candidates) > limit else "")
+    )
 
 
 @app.command()

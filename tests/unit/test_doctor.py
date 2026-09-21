@@ -76,9 +76,11 @@ class TestCli:
         assert __version__ in result.output
 
     def test_unimplemented_commands_exit_two_and_name_their_phase(self):
-        """Stubs must be honest about not working rather than failing obscurely."""
+        """Stubs must be honest about not working rather than failing obscurely.
+
+        Commands are removed from this list as their phase lands.
+        """
         for argv, phase in [
-            (["transcribe", "x.mp4"], "Phase 2"),
             (["score", "abc"], "Phase 3"),
             (["render", "abc"], "Phase 4"),
             (["learn", "--performance", "p.csv"], "Phase 6"),
@@ -86,3 +88,10 @@ class TestCli:
             result = runner.invoke(app, argv)
             assert result.exit_code == 2, argv
             assert phase in result.output, argv
+
+    def test_implemented_commands_are_no_longer_stubs(self):
+        """A command that shipped must stop claiming it is unimplemented."""
+        for argv in (["transcribe", "--help"], ["candidates", "--help"]):
+            result = runner.invoke(app, argv)
+            assert result.exit_code == 0, argv
+            assert "not implemented" not in result.output
