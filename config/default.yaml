@@ -1,0 +1,96 @@
+# Global pipeline tuning. Campaign rules live in campaigns/<name>.yaml.
+# Every key here is validated by clipper.config.Config -- unknown keys are an error.
+
+transcription:
+  model: large-v3            # distil-large-v3 (English-only, ~2x faster) or medium if slow
+  compute_type: float16      # falls back to int8_float16 automatically on CUDA OOM
+  device: auto               # auto = cuda when CTranslate2 sees a GPU, else cpu
+  language: auto             # or "en" to skip language detection
+  vad_filter: true
+  beam_size: 5
+  chunk_seconds: 3600        # sources longer than this are transcribed in chunks
+
+candidates:
+  min_seconds: 20
+  max_seconds: 55
+  target_seconds: [25, 45]
+  max_candidates: 60
+  min_gap_seconds: 30        # between selected clips
+  max_silence_ratio: 0.25    # hard filter before scoring
+  edge_trim_seconds: 20      # ignore the first/last N seconds of the source...
+  edge_trim_min_source_seconds: 300   # ...unless the source is shorter than this
+  dedupe_iou: 0.8
+
+weights:                     # renormalized over whichever signals are available
+  llm: 0.50
+  heatmap: 0.20
+  audio: 0.15
+  text: 0.15
+
+selection:
+  top_n: 5
+  min_composite: 0.55        # percentile-scale threshold; tune via `clipper eval`
+  max_from_same_third: 3     # spread picks across the video
+
+llm:
+  backend: gemini            # gemini | ollama | anthropic | mock
+  model: null                # null = resolve the best available free model at runtime
+  batch_size: 8              # candidates per call
+  max_retries: 5
+  temperature: 0.2
+  requests_per_minute: 10    # client-side limiter; keep under the free-tier RPM
+  use_second_opinion: true   # prompt B; disabling halves LLM calls
+  disagreement_penalty: 0.25
+  use_few_shot_examples: false
+  few_shot_count: 3
+  rubric_weights:
+    hook_strength: 0.30
+    standalone_clarity: 0.20
+    payoff: 0.20
+    emotional_intensity: 0.15
+    quotability: 0.10
+    ending_completeness: 0.05
+
+render:
+  width: 1080
+  height: 1920
+  fps: 30
+  encoder: auto              # auto = h264_nvenc if it actually works, else libx264
+  x264_preset: veryfast
+  crf: 20
+  nvenc_cq: 23
+  audio_bitrate: 192k
+  audio_rate: 48000
+  loudness_lufs: -14
+  true_peak_dbtp: -1.5
+  caption_style: bold_pop
+  caption_font: Inter
+  show_hook_text: true
+  hook_text_seconds: 2.0
+  safe_area:                 # keep captions clear of platform UI
+    top: 220
+    bottom: 320
+    side: 90
+  face_sample_fps: 5.0
+  pan_smoothing: 0.12        # lower = smoother, laggier camera
+  max_pan_speed: 0.25        # fraction of frame width per second
+  draft_width: 540
+  draft_height: 960
+
+refine:
+  pre_roll: 0.15
+  post_roll: 0.35
+  filler_window: 1.5         # trim leading filler inside this many seconds
+  max_extend_seconds: 8.0    # extend to finish an unfinished closing thought
+
+qa:
+  min_face_ratio: 0.5        # only enforced for face-centric layouts
+  max_silence_ratio: 0.25
+  max_black_seconds: 0.3
+  max_freeze_seconds: 1.0
+  min_lufs: -18
+  max_lufs: -11
+  max_true_peak_dbtp: -0.5
+  max_lead_silence: 0.3
+  max_trail_silence: 1.5
+  caption_sync_tolerance: 0.25

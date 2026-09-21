@@ -1,0 +1,36 @@
+# data & artifacts (never committed)
+data/
+out/
+eval/report.md
+eval_cache/
+
+# secrets
+.env
+*.key
+
+# python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# downloaded assets (fetched by `clipper doctor --fix` / setup)
+assets/fonts/*
+!assets/fonts/.gitkeep
+assets/models/*
+!assets/models/.gitkeep
+
+# os / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

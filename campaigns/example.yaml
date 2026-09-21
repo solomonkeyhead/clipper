@@ -1,0 +1,38 @@
+# Copy this per campaign. `source_authorization` is required -- clipper refuses to
+# run without it, and a placeholder like "TBD" is rejected.
+
+name: example-campaign
+
+# REQUIRED. Name the campaign, the URL, or the explicit creator permission that
+# covers this footage. This is the record of why you are allowed to clip it.
+source_authorization: "Whop Content Rewards campaign 'X', official source content bank"
+
+platform_targets: [tiktok, youtube_shorts, instagram_reels]
+
+duration:
+  min_seconds: 15
+  max_seconds: 60
+
+required_hashtags: ["#example"]
+
+# Appended to the suggested caption. Set burn_credit_in_video when the campaign
+# requires the credit on screen rather than in the description.
+required_credit_text: "Source: @creator"
+burn_credit_in_video: false
+credit_position: top_left
+
+# Matched against the clip transcript; any hit drops the clip.
+forbidden_terms: []
+
+mask_profanity_in_captions: true
+
+brand_mentions:
+  required: false
+  terms: []
+
+language: en
+max_clips_per_source: 8
+
+notes: |
+  Free text. Paste the campaign's own rules here for reference -- payout rate,
+  minimum view threshold, required on-screen elements, banned topics.
