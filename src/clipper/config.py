@@ -185,6 +185,15 @@ class RenderConfig(StrictModel):
     pan_smoothing: Unit = 0.12
     # Cap on crop-centre motion, as a fraction of frame width per second.
     max_pan_speed: float = Field(default=0.25, gt=0)
+    # How far the subject may drift before the camera reframes, as a fraction
+    # of the crop width. Larger means a stiller, less shaky shot.
+    pan_deadzone: Unit = 0.18
+    # For screen-share sources, the share of output height given to the content
+    # pane (the rest goes to the webcam). Only a target: the split also respects
+    # the content's own aspect ratio so it is never squeezed.
+    content_pane_share: Unit = 0.58
+    # Set false to always crop to the face, even on screen-share footage.
+    detect_screen_share: bool = True
     draft_width: int = Field(default=540, gt=0)
     draft_height: int = Field(default=960, gt=0)
 

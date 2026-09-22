@@ -24,6 +24,7 @@ import numpy as np
 from ..assets import face_model_path
 from ..utils.logging import get_logger
 from .layouts import FaceObservation
+from .regions import ActivityAccumulator, ContentMap
 
 log = get_logger(__name__)
 
@@ -56,6 +57,8 @@ class FaceScan:
     sample_times: list[float]
     frame_width: int
     frame_height: int
+    #: Where content sits in the frame, used to spot a screen-share layout.
+    activity: ContentMap | None = None
 
     @property
     def face_ratio(self) -> float:
@@ -146,6 +149,7 @@ def scan(
         sample_times: list[float] = []
         scene_cuts: list[float] = []
         previous_hist: np.ndarray | None = None
+        activity = ActivityAccumulator(frame_width, frame_height)
 
         index = 0
         total_frames = int(duration * source_fps)
@@ -170,6 +174,10 @@ def scan(
                     scene_cuts.append(offset)
                 previous_hist = hist
 
+                # Built from the frames already decoded, so this costs one pass
+                # over small arrays rather than another decode.
+                activity.add(small)
+
             index += 1
     finally:
         capture.release()
@@ -186,6 +194,7 @@ def scan(
         sample_times=sample_times,
         frame_width=frame_width,
         frame_height=frame_height,
+        activity=activity.build(),
     )
 
 
@@ -248,6 +257,9 @@ def plan_layout_for(
     pan_smoothing: float,
     max_pan_speed: float,
     min_face_ratio: float,
+    deadzone_ratio: float = 0.18,
+    content_pane_share: float = 0.58,
+    detect_screen_share: bool = True,
 ):
     """Scan a clip and return the `LayoutPlan` for it.
 
@@ -276,6 +288,17 @@ def plan_layout_for(
             reason="no frames could be sampled from this span",
         )
 
+    # Before cropping to the face, check whether the face is merely an inset
+    # webcam over screen-share content. Cropping to it would discard the actual
+    # subject of the video.
+    if detect_screen_share:
+        stacked = _try_content_stack(
+            result, out_width=out_width, out_height=out_height,
+            content_pane_share=content_pane_share,
+        )
+        if stacked is not None:
+            return stacked
+
     plan = choose_layout(
         result.per_sample,
         src_w=result.frame_width or media.width,
@@ -287,7 +310,41 @@ def plan_layout_for(
         max_pan_speed=max_pan_speed,
         min_face_ratio=min_face_ratio,
         scene_cuts=result.scene_cuts,
+        deadzone_ratio=deadzone_ratio,
     )
     # `choose_layout` estimates the ratio from observation spacing; the scan
     # knows it exactly, so prefer the measured value for the QA check.
     return plan.model_copy(update={"face_ratio": result.face_ratio})
+
+
+def _try_content_stack(result: FaceScan, *, out_width: int, out_height: int,
+                       content_pane_share: float):
+    """Plan a content stack if this looks like a screen-share source, else None."""
+    from .layouts import plan_content_stack
+    from .regions import detect_layout_regions
+
+    observed = [s[0] for s in result.per_sample if s]
+    if len(observed) < 3:
+        return None
+
+    def median(values: list[float]) -> float:
+        ordered = sorted(values)
+        return ordered[len(ordered) // 2]
+
+    face_x = median([o.x for o in observed])
+    face_y = median([o.y for o in observed])
+    face_w = median([o.width for o in observed])
+    face_h = median([o.height for o in observed])
+
+    found = detect_layout_regions(result.activity, face_x, face_y, face_w, face_h)
+    if found is None:
+        return None
+
+    webcam, content = found
+    return plan_content_stack(
+        webcam, content,
+        src_w=result.frame_width, src_h=result.frame_height,
+        out_w=out_width, out_h=out_height,
+        content_share=content_pane_share,
+        face_ratio=result.face_ratio,
+    )

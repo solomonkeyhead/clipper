@@ -74,6 +74,8 @@ def build_video_filter(spec: RenderSpec) -> str:
         chain = _follow_crop_chain(spec)
     elif layout.kind == "two_speaker_stack":
         chain = _two_speaker_chain(spec)
+    elif layout.kind == "content_stack":
+        chain = _content_stack_chain(spec)
     elif layout.kind == "blurred_fit":
         chain = _blurred_fit_chain(spec)
     else:  # pragma: no cover - LayoutKind is a closed Literal
@@ -135,6 +137,37 @@ def _two_speaker_chain(spec: RenderSpec) -> str:
         f"[bsrc]crop={bottom.width}:{bottom.height}:{bottom.x}:{bottom.y},"
         f"scale={spec.width}:{spec.height - pane_h}:flags=lanczos[tbot];"
         f"[ttop][tbot]vstack=inputs=2"
+    )
+
+
+def _content_stack_chain(spec: RenderSpec) -> str:
+    """Screen-share content above the speaker's webcam, each filling its pane.
+
+    Each pane is scaled to *cover* its slot and then centre-cropped, so neither
+    is letterboxed. The pane heights come from the plan, which sized them from
+    the content's own aspect ratio -- see `layouts.plan_content_stack`.
+    """
+    layout = spec.layout
+    if len(layout.panes) != 2 or len(layout.pane_heights) != 2:
+        raise ValueError("content_stack needs two panes and two pane heights")
+
+    top, bottom = layout.panes
+    top_h, bottom_h = layout.pane_heights
+    if top_h + bottom_h != spec.height:
+        raise ValueError(
+            f"content_stack pane heights {top_h}+{bottom_h} do not sum to "
+            f"the output height {spec.height}"
+        )
+
+    return (
+        f"[0:v]split=2[csrc][wsrc];"
+        f"[csrc]crop={top.width}:{top.height}:{top.x}:{top.y},"
+        f"scale={spec.width}:{top_h}:force_original_aspect_ratio=increase:flags=lanczos,"
+        f"crop={spec.width}:{top_h}[ctop];"
+        f"[wsrc]crop={bottom.width}:{bottom.height}:{bottom.x}:{bottom.y},"
+        f"scale={spec.width}:{bottom_h}:force_original_aspect_ratio=increase:flags=lanczos,"
+        f"crop={spec.width}:{bottom_h}[cbot];"
+        f"[ctop][cbot]vstack=inputs=2"
     )
 
 

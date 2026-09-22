@@ -14,7 +14,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-LayoutKind = Literal["follow_crop", "two_speaker_stack", "blurred_fit"]
+LayoutKind = Literal["follow_crop", "two_speaker_stack", "content_stack", "blurred_fit"]
 PolicyRisk = Literal["none", "low", "high"]
 QAStatus = Literal["pass", "warn", "fail"]
 
@@ -315,15 +315,22 @@ class LayoutPlan(Artifact):
     crop_height: int = 0
     # Time-varying crop origin for follow_crop, driven through FFmpeg `sendcmd`.
     keyframes: list[CropKeyframe] = Field(default_factory=list)
-    # two_speaker_stack: one crop per speaker, top then bottom.
+    # two_speaker_stack / content_stack: one crop per pane, top then bottom.
     panes: list[CropRect] = Field(default_factory=list)
+    # Output height of each pane, in the same order. Computed at planning time
+    # so the filter-graph builder needs no layout-specific knowledge.
+    pane_heights: list[int] = Field(default_factory=list)
     face_ratio: float = 0.0  # fraction of sampled frames with a usable face
     reason: str = ""
 
     @property
     def is_face_centric(self) -> bool:
-        """QA only enforces the face-presence check for these layouts."""
-        return self.kind in ("follow_crop", "two_speaker_stack")
+        """QA only enforces the face-presence check for these layouts.
+
+        `content_stack` is included: it still shows the speaker, in its own
+        pane, so losing the face mid-clip is just as wrong there.
+        """
+        return self.kind in ("follow_crop", "two_speaker_stack", "content_stack")
 
 
 class ClipPlan(Artifact):

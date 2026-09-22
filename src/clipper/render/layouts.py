@@ -27,6 +27,13 @@ FACE_VERTICAL_ANCHOR = 0.40
 # Too tight is claustrophobic, too loose wastes the vertical frame.
 TARGET_FACE_HEIGHT_RATIO = 0.32
 
+# How far the subject may drift from where the camera is pointing before it
+# reframes, as a fraction of the crop's width. At 0.18 a face moving within the
+# middle third of the crop produces no camera movement at all -- which is the
+# common case for a seated speaker on a fixed webcam, where any movement is
+# shake rather than tracking.
+DEFAULT_DEADZONE_RATIO = 0.18
+
 
 @dataclass(frozen=True)
 class FaceObservation:
@@ -108,23 +115,36 @@ def smooth_trajectory(
     alpha: float,
     max_step: float,
     initial: float | None = None,
+    deadzone: float = 0.0,
 ) -> list[float]:
     """Smooth a sequence of target positions into a camera path.
 
-    Two stages, in this order, because order matters:
+    Three stages, in this order, because order matters:
 
-    1. An exponential moving average removes per-frame detector jitter.
-    2. A hard per-step cap removes the remaining fast swings.
+    1. A **deadzone**: the camera does not move at all until the subject drifts
+       further than `deadzone` pixels from where it is already pointing.
+    2. An exponential moving average, which removes detector jitter.
+    3. A hard per-step cap, which removes the remaining fast swings.
 
-    Doing the cap *after* the EMA means a sudden jump to a new speaker is
-    approached at a constant, bounded rate rather than with the EMA's
-    ease-out -- which reads as a deliberate camera move instead of a lurch.
+    The deadzone is what makes the result watchable. Without it the camera
+    chases every small head movement, and because the trajectory is applied as
+    discrete steps at the sampling rate (5 Hz by default), those small
+    corrections show up as visible shake rather than as motion. A real operator
+    holds the shot still and only reframes when the subject actually leaves the
+    frame; this reproduces that. On a fixed webcam it means no movement at all.
+
+    Doing the speed cap *after* the EMA means a genuine jump to a new speaker is
+    approached at a constant bounded rate rather than with the EMA's ease-out --
+    which reads as a deliberate camera move instead of a lurch.
+
     `targets` is a list of (time, value); the return is one value per target.
     """
     if not targets:
         return []
     if not 0 < alpha <= 1:
         raise ValueError("alpha must be in (0, 1]")
+    if deadzone < 0:
+        raise ValueError("deadzone must not be negative")
 
     current = initial if initial is not None else targets[0][1]
     out: list[float] = []
@@ -132,7 +152,20 @@ def smooth_trajectory(
 
     for t, target in targets:
         dt = max(0.0, t - prev_t)
-        smoothed = current + alpha * (target - current)
+        error = target - current
+
+        if abs(error) <= deadzone:
+            # Inside the comfort zone: hold the shot completely still.
+            out.append(current)
+            prev_t = t
+            continue
+
+        # Outside it, aim for the edge of the deadzone rather than dead centre.
+        # Recentring fully would make the camera twitch back and forth every
+        # time the subject crosses the boundary.
+        aim = target - (deadzone if error > 0 else -deadzone)
+
+        smoothed = current + alpha * (aim - current)
         limit = max_step * dt if dt > 0 else float("inf")
         delta = smoothed - current
         if abs(delta) > limit:
@@ -154,6 +187,7 @@ def plan_follow_crop(
     pan_smoothing: float,
     max_pan_speed: float,
     scene_cuts: list[float] | None = None,
+    deadzone_ratio: float = DEFAULT_DEADZONE_RATIO,
 ) -> LayoutPlan:
     """Plan a single-face follow crop over the clip's duration.
 
@@ -184,15 +218,21 @@ def plan_follow_crop(
         raw.append((f.t, float(x), float(y)))
 
     max_step = max_pan_speed * src_w  # pixels per second
+    deadzone_x = deadzone_ratio * crop_w
+    # Vertical drift is more noticeable than horizontal, and there is usually
+    # far less of it, so the vertical deadzone is proportionally larger.
+    deadzone_y = deadzone_ratio * crop_h * 1.5
 
     # Smooth within each shot, restarting at every scene cut.
     xs: list[float] = []
     ys: list[float] = []
     for segment in _split_at_cuts(raw, cuts):
         xs += smooth_trajectory([(t, x) for t, x, _ in segment],
-                                alpha=pan_smoothing, max_step=max_step)
+                                alpha=pan_smoothing, max_step=max_step,
+                                deadzone=deadzone_x)
         ys += smooth_trajectory([(t, y) for t, _, y in segment],
-                                alpha=pan_smoothing, max_step=max_step)
+                                alpha=pan_smoothing, max_step=max_step,
+                                deadzone=deadzone_y)
 
     keyframes = []
     for (t, _, _), x, y in zip(raw, xs, ys, strict=True):
@@ -270,6 +310,7 @@ def choose_layout(
     max_pan_speed: float,
     min_face_ratio: float,
     scene_cuts: list[float] | None = None,
+    deadzone_ratio: float = DEFAULT_DEADZONE_RATIO,
 ) -> LayoutPlan:
     """Pick a layout from the sampled face detections.
 
@@ -314,6 +355,7 @@ def choose_layout(
         src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
         duration=duration, pan_smoothing=pan_smoothing,
         max_pan_speed=max_pan_speed, scene_cuts=scene_cuts,
+        deadzone_ratio=deadzone_ratio,
     )
 
 
@@ -412,3 +454,58 @@ def _dedupe_keyframes(keyframes: list[CropKeyframe]) -> list[CropKeyframe]:
             continue
         out.append(kf)
     return out
+
+
+def plan_content_stack(
+    webcam: CropRect,
+    content: CropRect,
+    *,
+    src_w: int,
+    src_h: int,
+    out_w: int,
+    out_h: int,
+    content_share: float = 0.58,
+    face_ratio: float = 1.0,
+) -> LayoutPlan:
+    """Stack screen-share content above the speaker's webcam.
+
+    For a source where the webcam is a small inset and the real subject is
+    elsewhere on screen -- gameplay, a board, a slide deck -- cropping to the
+    face throws the subject away. This keeps both, in their own panes.
+
+    The split respects the content's own aspect ratio rather than forcing a
+    fixed ratio. The content pane is given the height it needs to appear at
+    full output width, clamped so it can neither squeeze the speaker out nor
+    shrink to a strip, and the webcam absorbs whatever is left. That ordering
+    matters: a webcam crops gracefully because its subject is centred with
+    slack around it, whereas cropping a board or a slide loses information.
+    """
+    if out_w <= 0 or out_h <= 0:
+        raise ValueError("output dimensions must be positive")
+
+    # Height the content would occupy at full output width.
+    natural = out_w * content.height / max(1, content.width)
+
+    # Clamp so neither pane collapses. The lower bound keeps the content
+    # dominant on wide content; the upper bound guarantees the speaker a
+    # reasonable pane on very tall content.
+    lo = int(out_h * min(content_share, 0.45))
+    hi = int(out_h * max(content_share, 0.72))
+    content_height = _make_even(int(max(lo, min(hi, natural))))
+    webcam_height = _make_even(out_h - content_height)
+    # Rounding both to even can lose a row; give it to the content pane.
+    if content_height + webcam_height != out_h:
+        content_height = out_h - webcam_height
+
+    return LayoutPlan(
+        kind="content_stack",
+        crop_width=content.width,
+        crop_height=content.height,
+        panes=[content, webcam],
+        pane_heights=[content_height, webcam_height],
+        face_ratio=face_ratio,
+        reason=(
+            f"screen-share source: content {content.width}x{content.height} over "
+            f"webcam {webcam.width}x{webcam.height}, split {content_height}/{webcam_height}"
+        ),
+    )
