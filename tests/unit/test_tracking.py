@@ -83,7 +83,7 @@ class TestBuildTracks:
         per_sample = [[obs(i * 0.2, 900)] for i in range(50)]
         per_sample[25] = [obs(5.0, 1850)]
         track = build_tracks(per_sample, FRAME_W)[0]
-        left, right = track.extent()
+        _, right = track.extent()
         assert right < 1400, "the outlier should be trimmed out of the extent"
 
 

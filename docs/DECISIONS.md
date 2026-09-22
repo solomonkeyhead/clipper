@@ -475,3 +475,76 @@ only about a third of the output height, with blurred bars above and below. A
 moderate crop -- to 4:3 or 3:2 rather than all the way to 9:16 -- would fill more
 of the frame while still keeping both subjects. That is the obvious next
 improvement and has not been built.
+
+### D38. Scene cuts are detected from a grid of tiles, not the whole frame
+
+Cuts were compared using one hue/saturation histogram of the entire frame. That
+histogram carries no spatial information, so a cut between a wide two-shot and a
+close-up of the same person, in the same room, under the same lights, barely
+moves it: measured at **0.752** correlation on a real cut, comfortably inside
+the "no cut" range. A 35-second clip containing an obvious shot change was
+reported as having **one** cut, at a b-roll insert, and none at the real one.
+
+Comparing a 4x4 grid of per-tile luminance histograms scores that same cut at
+**0.512**. Measured across all nine clip spans of the two real sources
+(1733 sample pairs, 2026-09-22):
+
+| source | median | minimum | pairs below 0.70 |
+|---|---|---|---|
+| edited podcast (5 spans) | 0.985-0.997 | -0.175 | 2-17 per span |
+| unedited screen capture (4 spans) | 1.000 | **0.977** | **0** |
+
+The static source never comes within 0.28 of the threshold, and the edited one
+clears it by a wide margin at every real cut, so 0.70 is not a delicate number.
+
+The comparison uses the **mean** tile correlation rather than the minimum. A
+lower-third or a reaction inset appearing in a corner changes one tile
+completely while the shot has not changed at all, and this source adds and
+removes such overlays constantly.
+
+### D39. Each shot is framed separately
+
+A clip gets one framing per shot, not one framing per clip, and the framing
+changes only where the source already cuts.
+
+The failure that forced this, from user feedback with a screenshot: a 35-second
+clip held a wide two-shot for 8.5 seconds and then a 27-second close-up. One
+framing was chosen for the whole clip; the close-up supplied most of the face
+samples, so the clip was cropped to a 608px column in the middle of the frame.
+That column is right for the close-up and is the worst available choice for the
+wide shot, where the two people sit at the far left and far right of the frame:
+the output showed a wall, a book and two disembodied arms for eight seconds.
+
+No single crop can serve both, because the source's editor deliberately changed
+the composition. The fix is not a better global crop, it is to stop choosing
+globally. On the same clip, per-shot framing now selects:
+
+```
+[0]  0.00- 8.55  blurred_fit   a subject-sized face appears in only 15% of frames
+[1]  8.55-35.43  follow_crop   one subject spanning 473px fit inside a 608px crop
+```
+
+which shows both speakers and the b-roll insert for the wide shot, and the
+close-up crop only where it belongs.
+
+This also answers, more cheaply and more reliably than face tracking could, the
+question of when to change who the frame is looking at: the source's editor
+already decided, and their cuts are visible in the footage. Following them costs
+one histogram comparison per sampled frame. Guessing at it from face positions
+is what produced the swinging camera in D32.
+
+**Rendering:** one FFmpeg pass, not one render per shot. The source is split,
+each branch is trimmed to its shot with `setpts=PTS-STARTPTS`, given its own
+layout chain, and the branches are rejoined with `concat`. Captions are burned
+after the concat, on the reassembled timeline, so their timings need no
+adjustment; a segment's crop trajectory *is* rebased, because its timestamps
+restart at zero.
+
+Each branch ends in `setsar=1,format=yuv420p`. This is not defensive: `concat`
+refuses inputs whose sample aspect ratios differ, and the layouts round theirs
+differently -- a `blurred_fit` branch came out at SAR 1216:1215 beside a
+`follow_crop` branch at 10240:10239, which failed the render outright until each
+branch was forced to square pixels individually.
+
+A clip whose shots all reach the same framing collapses back to a plain
+single-layout plan, so the segmented graph is only paid for when it is used.

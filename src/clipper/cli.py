@@ -250,7 +250,7 @@ def _print_run_summary(result, format_duration) -> None:
                 to_slug_timestamp(plan.start),
                 f"{record.duration:.0f}s",
                 f"{plan.composite:.3f}",
-                plan.layout.kind if plan.layout else "-",
+                plan.layout.describe if plan.layout else "-",
                 ("[green]pass[/green]" if record.qa.status == "pass"
                  else f"[yellow]{record.qa.status}[/yellow]"),
                 plan.hook_text or "-",

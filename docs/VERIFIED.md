@@ -846,3 +846,127 @@ exposes the line for tuning.
 - 9714 windows enumerated, 8467 surviving filters, capped to 60 — so the cheap
   pre-score again chose the final set from **99.3%** more candidates than the
   LLM ever saw.
+
+---
+
+## 2026-09-22 — Scene-cut detection and per-shot framing
+
+Prompted by user feedback with two screenshots of clip `002_22m58s`. Both were
+traced to the same cause by extracting the exact source frames they came from.
+
+### What the screenshots showed
+
+`002` was rendered as a single `follow_crop`. Its source span contains two
+compositions:
+
+| source time | composition | largest face |
+|---|---|---|
+| 0.00 - 8.55s | wide two-shot, speakers at the frame edges, b-roll box between them | 18.9% of frame width |
+| 8.55 - 35.43s | close-up of one speaker, graphic overlays on the left | 23.3% |
+
+The close-up supplied 129 of 170 face samples, so the single crop was planted at
+x=745 (608px wide). Over the wide shot that column contains the wall between the
+two people, the book on the table and their inner arms — and neither face. That
+is exactly the frame in the first screenshot.
+
+The second screenshot's clipped text was confirmed to be the **source's own
+burned-in graphic** ("BOTFLY REMOVED FROM PAUL'S BACK"), sliced by our crop, not
+a caption of ours running off the frame. Our caption was correctly centred and
+inside the safe area in both frames.
+
+### Why the cut was missed
+
+Cuts were compared with a single hue/saturation histogram of the whole frame.
+Measured on that span: the 8.55s cut scored **0.752**, against a 0.70 threshold
+— so it was not a cut. The whole 35-second clip was reported as having **one**
+cut, at a b-roll insert, and not the real shot change.
+
+A 4x4 grid of per-tile luminance histograms scores the same cut at **0.512**.
+Swept across all nine clip spans of both real sources (1733 sample pairs):
+
+| source | spans | median | minimum | pairs below 0.70 |
+|---|---|---|---|---|
+| edited podcast `R7duSFu_oeg` | 5 | 0.985 - 0.997 | **-0.175** | 2, 2, 5, 14, 17 |
+| static screen capture `LQHVKbJtNuY` | 4 | 1.000 | **0.977** | 0, 0, 0, 0 |
+
+The static source — which genuinely contains no cuts — stays 0.28 above the
+threshold across 827 pairs, so this produces no false cuts on it. The choice of
+0.70 within the 0.6-0.8 range changes the podcast's cut count by at most two.
+
+### Per-shot framing, measured
+
+With cuts detected, `002` splits into two shots and each is framed on its own:
+
+```
+[0]  0.00- 8.55  blurred_fit   a subject-sized face appears in only 15% of frames
+[1]  8.55-35.43  follow_crop   one subject spanning 473px fit inside a 608px crop
+```
+
+Rendered and inspected: the frame that previously showed a wall and two arms now
+shows both speakers, the book and the b-roll insert; the close-up section is
+unchanged. Captions stay in sync across the join (checked against the ASS
+timings at 3.4s and 22.0s). Output duration 35.50s against 35.43s planned, which
+is the usual frame-boundary rounding and matches the single-layout path.
+
+### Render cost
+
+Single FFmpeg pass via `trim` / `setpts` / `concat`, not one render per shot.
+
+| clip | before | after |
+|---|---|---|
+| `001_14m19s` (27.5s) | 9.8s, `blurred_fit` | 6.9s, 7 shots |
+| `002_22m58s` (35.4s) | 7.0s, `follow_crop` | 10.0s, 2 shots |
+
+Not slower in any systematic way; the variation is dominated by which layouts
+the shots choose (a `blurred_fit` branch blurs a full-size copy of the frame).
+
+### Known limitation, unchanged
+
+A `blurred_fit` shot still occupies about a third of the output height. Per-shot
+framing means fewer shots are letterboxed, but it does not make a letterboxed
+shot fill more frame. A moderate crop — to 4:3 or 3:2 rather than all the way to
+9:16 — remains unbuilt (D37).
+
+Cropping also still clips the source's own burned-in graphics whenever a shot is
+cropped at all, which is inherent: those graphics sit outside any 9:16 slice.
+Only keeping the whole frame avoids it entirely.
+
+### Full run on the podcast source, per-shot framing enabled
+
+All five clips now mix framings where the source changes composition. Before,
+four of the five were a single `blurred_fit` for their whole length.
+
+| clip | before | after |
+|---|---|---|
+| `001_14m19s` | `blurred_fit` | 7 shots: 6x `follow_crop` + 1 `blurred_fit` |
+| `002_22m58s` | `follow_crop` | 2 shots: `blurred_fit` + `follow_crop` |
+| `003_12m27s` | `blurred_fit` | 8 shots: 6x `blurred_fit` + 2x `follow_crop` |
+| `004_6m17s` | `blurred_fit` | 3 shots: `blurred_fit` + `follow_crop` + `blurred_fit` |
+| `005_26m25s` | `blurred_fit` | 4 shots: `blurred_fit` + `follow_crop` + 2x `blurred_fit` |
+
+All five passed QA (12 checks each). Run total 193.6s, render+QA 3m12s.
+
+Clip `001` is the clearest gain: previously letterboxed end to end, it now cuts
+between full-frame close-ups of each speaker and the news b-roll, following the
+source's own cuts. Clip `004` — the one reported as "stayed in the middle of
+them" — now holds a correctly framed close-up for its middle 29 seconds, with
+the wide two-shot kept whole at each end. Verified by extracting rendered frames
+at 29.5, 30.5, 31.0 and 32.0s.
+
+### No A/V drift across the concat
+
+Concatenating trimmed branches could drop a frame per boundary, which would
+accumulate as video running ahead of audio. Checked on `003`, which has the most
+boundaries (8 shots, 7 joins), by detecting where the framing actually changes
+in the rendered file and comparing against the planned times:
+
+| planned | observed | delta |
+|---|---|---|
+| 19.81s | 19.80s | -0.01s |
+| 39.62s | 39.70s | +0.08s |
+| 51.72s | 51.80s | +0.08s |
+
+The error does not grow with each boundary, so nothing is accumulating; ±0.08s
+is the resolution of the check (every third frame). Stream durations across all
+five clips: video is 0.00-0.07s short of audio, i.e. at most two frames at the
+very end, which the single-layout path also produces.

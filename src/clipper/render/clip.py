@@ -84,9 +84,14 @@ def render_clip(
 
     layout = _scale_layout(plan.layout, media, width, height)
     sendcmd_path: Path | None = None
-    if layout.kind == "follow_crop" and len(layout.keyframes) > 1:
-        sendcmd_path = work_dir / f"{plan.clip_id}.cmds.txt"
-        sendcmd_path.write_text(build_sendcmd_script(layout), encoding="utf-8", newline="\n")
+    segment_sendcmd_paths: tuple[Path | None, ...] = ()
+    if layout.kind == "per_shot":
+        segment_sendcmd_paths = tuple(
+            _write_sendcmd(segment.layout, work_dir, f"{plan.clip_id}.shot{i:02d}")
+            for i, segment in enumerate(layout.segments)
+        )
+    else:
+        sendcmd_path = _write_sendcmd(layout, work_dir, plan.clip_id)
 
     encoder, reason = select_video_encoder(rc.encoder)
 
@@ -111,6 +116,7 @@ def render_clip(
         audio_rate=rc.audio_rate,
         has_audio=media.has_audio,
         sendcmd_path=sendcmd_path,
+        segment_sendcmd_paths=segment_sendcmd_paths,
     )
 
     command = build_command(spec)
@@ -121,7 +127,7 @@ def render_clip(
 
     log.info(
         "%s rendered in %.1fs (%s, %s, %.1fs of video)",
-        plan.clip_id, elapsed, layout.kind, encoder, plan.duration,
+        plan.clip_id, elapsed, layout.describe, encoder, plan.duration,
     )
     return RenderResult(
         output=output,
@@ -134,6 +140,15 @@ def render_clip(
     )
 
 
+def _write_sendcmd(layout: LayoutPlan, work_dir: Path, stem: str) -> Path | None:
+    """Write a trajectory file, or return None for a framing that never moves."""
+    if layout.kind != "follow_crop" or len(layout.keyframes) <= 1:
+        return None
+    path = work_dir / f"{stem}.cmds.txt"
+    path.write_text(build_sendcmd_script(layout), encoding="utf-8", newline="\n")
+    return path
+
+
 def _scale_layout(layout: LayoutPlan, media: MediaInfo, width: int, height: int) -> LayoutPlan:
     """Recompute crop geometry if the output size differs from the plan's.
 
@@ -142,6 +157,13 @@ def _scale_layout(layout: LayoutPlan, media: MediaInfo, width: int, height: int)
     depends on the output height, so it is recomputed here rather than assumed.
     """
     from .layouts import crop_size_for_aspect
+
+    if layout.kind == "per_shot":
+        return layout.model_copy(update={"segments": [
+            segment.model_copy(update={
+                "layout": _scale_layout(segment.layout, media, width, height)})
+            for segment in layout.segments
+        ]})
 
     if layout.kind != "two_speaker_stack" or not layout.panes:
         return layout

@@ -14,7 +14,9 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-LayoutKind = Literal["follow_crop", "two_speaker_stack", "content_stack", "blurred_fit"]
+LayoutKind = Literal[
+    "follow_crop", "two_speaker_stack", "content_stack", "blurred_fit", "per_shot",
+]
 PolicyRisk = Literal["none", "low", "high"]
 QAStatus = Literal["pass", "warn", "fail"]
 
@@ -307,6 +309,18 @@ class CropKeyframe(Artifact):
     y: int
 
 
+class LayoutSegment(Artifact):
+    """One shot of a `per_shot` layout, with times relative to the clip."""
+
+    start: float
+    end: float
+    layout: LayoutPlan
+
+    @property
+    def duration(self) -> float:
+        return self.end - self.start
+
+
 class LayoutPlan(Artifact):
     """How one clip gets from 16:9 to 9:16."""
 
@@ -320,6 +334,8 @@ class LayoutPlan(Artifact):
     # Output height of each pane, in the same order. Computed at planning time
     # so the filter-graph builder needs no layout-specific knowledge.
     pane_heights: list[int] = Field(default_factory=list)
+    # per_shot: one framing per shot, in time order, tiling the clip exactly.
+    segments: list[LayoutSegment] = Field(default_factory=list)
     face_ratio: float = 0.0  # fraction of sampled frames with a usable face
     reason: str = ""
 
@@ -329,8 +345,31 @@ class LayoutPlan(Artifact):
 
         `content_stack` is included: it still shows the speaker, in its own
         pane, so losing the face mid-clip is just as wrong there.
+
+        A `per_shot` clip qualifies only if *every* shot does. A clip that is
+        half close-up and half wide has no face for half its length by design,
+        and failing it for that would reject the framing that fixed it.
         """
+        if self.kind == "per_shot":
+            return bool(self.segments) and all(
+                s.layout.is_face_centric for s in self.segments)
         return self.kind in ("follow_crop", "two_speaker_stack", "content_stack")
+
+    @property
+    def describe(self) -> str:
+        """The layout name for a manifest, naming the shots when segmented."""
+        if self.kind != "per_shot" or not self.segments:
+            return self.kind
+        # Run-length encoded: a clip cut into seven shots that mostly agree
+        # should read as "5x follow_crop", not as the same word five times.
+        parts: list[tuple[str, int]] = []
+        for segment in self.segments:
+            if parts and parts[-1][0] == segment.layout.kind:
+                parts[-1] = (parts[-1][0], parts[-1][1] + 1)
+            else:
+                parts.append((segment.layout.kind, 1))
+        return "per_shot[" + "+".join(
+            kind if n == 1 else f"{n}x {kind}" for kind, n in parts) + "]"
 
 
 class ClipPlan(Artifact):
@@ -399,3 +438,6 @@ class QAReport(Artifact):
     @property
     def failures(self) -> list[QACheck]:
         return [c for c in self.checks if c.status == "fail"]
+
+
+LayoutSegment.model_rebuild()

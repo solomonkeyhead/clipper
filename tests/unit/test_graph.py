@@ -6,6 +6,7 @@ tests then prove FFmpeg actually accepts it.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -239,3 +240,92 @@ class TestOutputSize:
 
 def _sigma(vf: str) -> float:
     return float(vf.split("gblur=sigma=")[1].split(",")[0].split("[")[0])
+
+
+# --------------------------------------------------------------------------
+# per_shot: one framing per shot, concatenated in a single pass
+# --------------------------------------------------------------------------
+
+
+def per_shot(*kinds: str) -> LayoutPlan:
+    """A per_shot layout tiling 30 seconds evenly across `kinds`."""
+    from clipper.models import LayoutSegment
+
+    step = 30.0 / len(kinds)
+    built = {
+        "follow_crop": FOLLOW,
+        "two_speaker_stack": STACK,
+        "blurred_fit": LayoutPlan(kind="blurred_fit", crop_width=1920,
+                                  crop_height=1080),
+    }
+    return LayoutPlan(kind="per_shot", segments=[
+        LayoutSegment(start=i * step, end=(i + 1) * step, layout=built[k])
+        for i, k in enumerate(kinds)
+    ])
+
+
+class TestPerShotGraph:
+    def test_each_shot_is_trimmed_to_its_own_span(self):
+        graph = build_video_filter(make_spec(per_shot("blurred_fit", "follow_crop")))
+        assert "trim=start=0.000:end=15.000" in graph
+        assert "trim=start=15.000:end=30.000" in graph
+
+    def test_each_shot_restarts_its_timestamps(self):
+        """Without this the second branch keeps source PTS and concat stalls."""
+        graph = build_video_filter(make_spec(per_shot("blurred_fit", "follow_crop")))
+        assert graph.count("setpts=PTS-STARTPTS") == 2
+
+    def test_the_branches_are_concatenated(self):
+        graph = build_video_filter(make_spec(per_shot("blurred_fit", "follow_crop")))
+        assert "[seg0][seg1]concat=n=2:v=1:a=0" in graph
+
+    def test_every_branch_is_forced_to_square_pixels(self):
+        """concat refuses inputs whose SAR differs, and the layouts round
+        differently -- measured at 1216:1215 against 10240:10239, which failed
+        a real render."""
+        graph = build_video_filter(make_spec(per_shot("blurred_fit", "follow_crop")))
+        for i in range(2):
+            assert f",setsar=1,format=yuv420p[seg{i}]" in graph
+
+    def test_intermediate_labels_do_not_collide(self):
+        """Two blurred_fit shots each need their own split labels."""
+        graph = build_video_filter(make_spec(per_shot("blurred_fit", "blurred_fit")))
+        for label in ("[bgs0]", "[fgs0]", "[bgs1]", "[fgs1]"):
+            assert label in graph
+        # Every declared label is declared exactly once.
+        declared = re.findall(r"\[([a-z]+[a-z0-9]*)\](?=[a-z])", graph)
+        assert len(declared) == len(set(declared)), "a label was declared twice"
+
+    def test_captions_are_burned_after_the_concat(self):
+        """Burning per branch would apply clip-time subtitles to shot time."""
+        spec = make_spec(per_shot("blurred_fit", "follow_crop"),
+                         ass_path=Path("C:/work/clip.ass"))
+        graph = build_video_filter(spec)
+        assert graph.count("ass=") == 1
+        assert graph.index("concat=") < graph.index("ass=")
+
+    def test_a_trajectory_file_is_used_only_where_one_is_given(self):
+        spec = make_spec(
+            per_shot("blurred_fit", "follow_crop"),
+            segment_sendcmd_paths=(None, Path("C:/work/clip.shot01.cmds.txt")),
+        )
+        graph = build_video_filter(spec)
+        assert graph.count("sendcmd=") == 1
+        assert "clip.shot01.cmds.txt" in graph
+
+    def test_mismatched_trajectory_paths_are_rejected(self):
+        spec = make_spec(per_shot("blurred_fit", "follow_crop"),
+                         segment_sendcmd_paths=(None,))
+        with pytest.raises(ValueError, match="must match"):
+            build_video_filter(spec)
+
+    def test_no_segments_is_rejected(self):
+        with pytest.raises(ValueError, match="no segments"):
+            build_video_filter(make_spec(LayoutPlan(kind="per_shot")))
+
+    def test_a_single_layout_graph_is_unchanged_by_the_refactor(self):
+        """The whole-clip path must still read [0:v] directly."""
+        graph = build_video_filter(make_spec(FOLLOW))
+        assert graph.startswith("[0:v]")
+        assert "trim=" not in graph
+        assert "concat=" not in graph

@@ -201,6 +201,14 @@ class RenderConfig(StrictModel):
     # are being blown up. See docs/DECISIONS.md D31 for why this is one number
     # rather than a cleverer test.
     min_subject_face_ratio: Unit = 0.13
+    # Frame each shot of a clip separately, changing the framing only where the
+    # source already cuts. Set false to pick one framing for the whole clip,
+    # which is wrong for any clip whose composition changes part-way through.
+    per_shot_framing: bool = True
+    # Shots shorter than this are merged into a neighbour rather than given
+    # their own framing, and no clip gets more segments than `max_shots`.
+    min_shot_seconds: float = Field(default=1.5, gt=0)
+    max_shots: int = Field(default=8, ge=1)
     draft_width: int = Field(default=540, gt=0)
     draft_height: int = Field(default=960, gt=0)
 

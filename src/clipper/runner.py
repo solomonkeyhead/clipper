@@ -216,6 +216,9 @@ def _produce_one(
         content_pane_share=config.render.content_pane_share,
         detect_screen_share=config.render.detect_screen_share,
         min_subject_face_ratio=config.render.min_subject_face_ratio,
+        per_shot_framing=config.render.per_shot_framing,
+        min_shot_seconds=config.render.min_shot_seconds,
+        max_shots=config.render.max_shots,
     )})
 
     slug = slugify(plan.hook_text or plan.text, max_length=40)

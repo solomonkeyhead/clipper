@@ -51,6 +51,10 @@ class RenderSpec:
     audio_rate: int
     has_audio: bool = True
     sendcmd_path: Path | None = None
+    #: For a `per_shot` layout, one trajectory file per segment (or None where
+    #: that segment's framing does not move). Indexed alongside
+    #: ``layout.segments``.
+    segment_sendcmd_paths: tuple[Path | None, ...] = ()
 
 
 def build_sendcmd_script(layout: LayoutPlan) -> str:
@@ -69,17 +73,10 @@ def build_sendcmd_script(layout: LayoutPlan) -> str:
 
 def build_video_filter(spec: RenderSpec) -> str:
     """The full video filter graph, ending in a stream labelled ``[v]``."""
-    layout = spec.layout
-    if layout.kind == "follow_crop":
-        chain = _follow_crop_chain(spec)
-    elif layout.kind == "two_speaker_stack":
-        chain = _two_speaker_chain(spec)
-    elif layout.kind == "content_stack":
-        chain = _content_stack_chain(spec)
-    elif layout.kind == "blurred_fit":
-        chain = _blurred_fit_chain(spec)
-    else:  # pragma: no cover - LayoutKind is a closed Literal
-        raise ValueError(f"unknown layout {layout.kind!r}")
+    if spec.layout.kind == "per_shot":
+        chain = _per_shot_chain(spec)
+    else:
+        chain = _layout_chain(spec, spec.layout, "[0:v]", "", spec.sendcmd_path)
 
     # Normalise frame rate and pixel aspect before captions, so caption
     # positioning is computed against the final geometry.
@@ -88,6 +85,66 @@ def build_video_filter(spec: RenderSpec) -> str:
         tail.append(_ass_filter(spec))
 
     return f"{chain},{','.join(tail)}[v]"
+
+
+def _layout_chain(spec: RenderSpec, layout: LayoutPlan, src: str, tag: str,
+                  sendcmd_path: Path | None) -> str:
+    """One layout's chain, reading from `src` and using `tag`-suffixed labels.
+
+    `src` and `tag` exist so the same builders serve both a whole clip (reading
+    ``[0:v]``, no suffix) and one shot of a segmented render (reading its own
+    trimmed branch, with a suffix that keeps intermediate labels unique).
+    """
+    if layout.kind == "follow_crop":
+        return _follow_crop_chain(spec, layout, src, sendcmd_path)
+    if layout.kind == "two_speaker_stack":
+        return _two_speaker_chain(spec, layout, src, tag)
+    if layout.kind == "content_stack":
+        return _content_stack_chain(spec, layout, src, tag)
+    if layout.kind == "blurred_fit":
+        return _blurred_fit_chain(spec, src, tag)
+    raise ValueError(f"unknown layout {layout.kind!r}")
+
+
+def _per_shot_chain(spec: RenderSpec) -> str:
+    """Each shot framed by its own chain, then concatenated back together.
+
+    One FFmpeg pass, not one render per shot: the source is split, each branch
+    is trimmed to its shot and given its own layout, and `concat` rejoins them.
+    Every branch produces the same output size, which is what `concat` requires.
+
+    Captions are burned after the concat, on the reassembled timeline, so their
+    timings need no adjustment. `setpts=PTS-STARTPTS` restarts each branch at
+    zero, which is also why a segment's trajectory is rebased (see
+    `shots._rebase`).
+    """
+    segments = spec.layout.segments
+    if not segments:
+        raise ValueError("per_shot layout has no segments")
+
+    count = len(segments)
+    paths = spec.segment_sendcmd_paths or (None,) * count
+    if len(paths) != count:
+        raise ValueError(
+            f"{len(paths)} sendcmd paths for {count} segments; they must match")
+
+    parts = ["[0:v]split=" + str(count)
+             + "".join(f"[shot{i}]" for i in range(count))]
+    for i, (segment, cmds) in enumerate(zip(segments, paths, strict=True)):
+        parts.append(
+            f"[shot{i}]trim=start={segment.start:.3f}:end={segment.end:.3f},"
+            f"setpts=PTS-STARTPTS[cut{i}]"
+        )
+        body = _layout_chain(spec, segment.layout, f"[cut{i}]", f"s{i}", cmds)
+        # `concat` refuses inputs whose sample aspect ratios differ, and the
+        # layouts round theirs differently: a blurred_fit branch came out at
+        # SAR 1216:1215 next to a follow_crop branch at 10240:10239, which
+        # failed the render outright. Forcing square pixels per branch, rather
+        # than once after the concat, is what makes the branches joinable.
+        parts.append(f"{body},setsar=1,format=yuv420p[seg{i}]")
+    parts.append("".join(f"[seg{i}]" for i in range(count))
+                 + f"concat=n={count}:v=1:a=0")
+    return ";".join(parts)
 
 
 def _ass_filter(spec: RenderSpec) -> str:
@@ -106,48 +163,48 @@ def _ass_filter(spec: RenderSpec) -> str:
     return "ass=" + ":".join(parts)
 
 
-def _follow_crop_chain(spec: RenderSpec) -> str:
+def _follow_crop_chain(spec: RenderSpec, layout: LayoutPlan, src: str,
+                       sendcmd_path: Path | None) -> str:
     """Crop tracking the speaker, driven by sendcmd, then scaled to output."""
-    layout = spec.layout
     cw, ch = layout.crop_width, layout.crop_height
     first = layout.keyframes[0] if layout.keyframes else None
     x0, y0 = (first.x, first.y) if first else (0, 0)
 
     steps = []
     # sendcmd must sit upstream of the filter it drives.
-    if spec.sendcmd_path is not None and len(layout.keyframes) > 1:
-        steps.append(f"sendcmd=f='{escape_filter_path(spec.sendcmd_path)}'")
+    if sendcmd_path is not None and len(layout.keyframes) > 1:
+        steps.append(f"sendcmd=f='{escape_filter_path(sendcmd_path)}'")
     steps.append(f"crop={cw}:{ch}:{x0}:{y0}")
     steps.append(f"scale={spec.width}:{spec.height}:flags=lanczos")
-    return "[0:v]" + ",".join(steps)
+    return src + ",".join(steps)
 
 
-def _two_speaker_chain(spec: RenderSpec) -> str:
+def _two_speaker_chain(spec: RenderSpec, layout: LayoutPlan, src: str,
+                       tag: str) -> str:
     """Two static crops stacked vertically, each filling half the output."""
-    layout = spec.layout
     if len(layout.panes) != 2:
         raise ValueError("two_speaker_stack needs exactly two panes")
 
     pane_h = spec.height // 2
     top, bottom = layout.panes
     return (
-        f"[0:v]split=2[tsrc][bsrc];"
-        f"[tsrc]crop={top.width}:{top.height}:{top.x}:{top.y},"
-        f"scale={spec.width}:{pane_h}:flags=lanczos[ttop];"
-        f"[bsrc]crop={bottom.width}:{bottom.height}:{bottom.x}:{bottom.y},"
-        f"scale={spec.width}:{spec.height - pane_h}:flags=lanczos[tbot];"
-        f"[ttop][tbot]vstack=inputs=2"
+        f"{src}split=2[tsrc{tag}][bsrc{tag}];"
+        f"[tsrc{tag}]crop={top.width}:{top.height}:{top.x}:{top.y},"
+        f"scale={spec.width}:{pane_h}:flags=lanczos[ttop{tag}];"
+        f"[bsrc{tag}]crop={bottom.width}:{bottom.height}:{bottom.x}:{bottom.y},"
+        f"scale={spec.width}:{spec.height - pane_h}:flags=lanczos[tbot{tag}];"
+        f"[ttop{tag}][tbot{tag}]vstack=inputs=2"
     )
 
 
-def _content_stack_chain(spec: RenderSpec) -> str:
+def _content_stack_chain(spec: RenderSpec, layout: LayoutPlan, src: str,
+                         tag: str) -> str:
     """Screen-share content above the speaker's webcam, each filling its pane.
 
     Each pane is scaled to *cover* its slot and then centre-cropped, so neither
     is letterboxed. The pane heights come from the plan, which sized them from
     the content's own aspect ratio -- see `layouts.plan_content_stack`.
     """
-    layout = spec.layout
     if len(layout.panes) != 2 or len(layout.pane_heights) != 2:
         raise ValueError("content_stack needs two panes and two pane heights")
 
@@ -160,27 +217,27 @@ def _content_stack_chain(spec: RenderSpec) -> str:
         )
 
     return (
-        f"[0:v]split=2[csrc][wsrc];"
-        f"[csrc]crop={top.width}:{top.height}:{top.x}:{top.y},"
+        f"{src}split=2[csrc{tag}][wsrc{tag}];"
+        f"[csrc{tag}]crop={top.width}:{top.height}:{top.x}:{top.y},"
         f"scale={spec.width}:{top_h}:force_original_aspect_ratio=increase:flags=lanczos,"
-        f"crop={spec.width}:{top_h}[ctop];"
-        f"[wsrc]crop={bottom.width}:{bottom.height}:{bottom.x}:{bottom.y},"
+        f"crop={spec.width}:{top_h}[ctop{tag}];"
+        f"[wsrc{tag}]crop={bottom.width}:{bottom.height}:{bottom.x}:{bottom.y},"
         f"scale={spec.width}:{bottom_h}:force_original_aspect_ratio=increase:flags=lanczos,"
-        f"crop={spec.width}:{bottom_h}[cbot];"
-        f"[ctop][cbot]vstack=inputs=2"
+        f"crop={spec.width}:{bottom_h}[cbot{tag}];"
+        f"[ctop{tag}][cbot{tag}]vstack=inputs=2"
     )
 
 
-def _blurred_fit_chain(spec: RenderSpec) -> str:
+def _blurred_fit_chain(spec: RenderSpec, src: str, tag: str) -> str:
     """Source at full width, centred over a blurred, darkened copy of itself."""
     sigma = round(BACKGROUND_BLUR_SIGMA * spec.width / 1080, 1)
     return (
-        f"[0:v]split=2[bg][fg];"
-        f"[bg]scale={spec.width}:{spec.height}:force_original_aspect_ratio=increase,"
+        f"{src}split=2[bg{tag}][fg{tag}];"
+        f"[bg{tag}]scale={spec.width}:{spec.height}:force_original_aspect_ratio=increase,"
         f"crop={spec.width}:{spec.height},gblur=sigma={sigma},"
-        f"eq=brightness={BACKGROUND_DARKEN}[bgb];"
-        f"[fg]scale={spec.width}:-2:flags=lanczos[fgs];"
-        f"[bgb][fgs]overlay=(W-w)/2:(H-h)/2:shortest=1"
+        f"eq=brightness={BACKGROUND_DARKEN}[bgb{tag}];"
+        f"[fg{tag}]scale={spec.width}:-2:flags=lanczos[fgs{tag}];"
+        f"[bgb{tag}][fgs{tag}]overlay=(W-w)/2:(H-h)/2:shortest=1"
     )
 
 

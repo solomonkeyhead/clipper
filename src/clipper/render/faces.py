@@ -36,8 +36,24 @@ MIN_CONFIDENCE = 0.75
 # someone walking past, a face on a monitor -- not the speaker.
 MIN_FACE_HEIGHT_RATIO = 0.06
 
-# Frame-to-frame histogram correlation below this is treated as a scene cut.
+# Frame-to-frame correlation below this is treated as a scene cut.
+#
+# Measured on the two real sources (docs/VERIFIED.md, 2026-09-22): an unedited
+# single-camera screen capture never drops below 0.977 across 827 sample pairs,
+# while an edited podcast reaches -0.175. Anything in 0.6-0.8 separates them, so
+# the exact value is not delicate; 0.70 sits in the middle of that gap.
 SCENE_CUT_CORRELATION = 0.70
+
+# Cut detection compares a grid of per-tile luminance histograms rather than one
+# histogram of the whole frame. A colour histogram of the whole frame carries no
+# spatial information, so a cut between a wide two-shot and a close-up of the
+# same person in the same room barely moves it -- measured at 0.752 on a real
+# cut, well inside the "no cut" range, which is why those cuts were being missed
+# entirely and one framing was being stretched across the whole clip. The same
+# cut scores 0.512 tile-wise. 4x4 is enough to see the rearrangement without
+# making each tile so small that ordinary movement inside it looks like a cut.
+SCENE_GRID = 4
+SCENE_HIST_BINS = 32
 
 # YuNet is trained at 320x320. Running it at the source resolution is far
 # slower for no accuracy gain on faces of any reasonable size, so frames are
@@ -148,7 +164,7 @@ def scan(
         per_sample: list[list[FaceObservation]] = []
         sample_times: list[float] = []
         scene_cuts: list[float] = []
-        previous_hist: np.ndarray | None = None
+        previous_hist: list[np.ndarray] | None = None
         activity = ActivityAccumulator(frame_width, frame_height)
 
         index = 0
@@ -229,21 +245,40 @@ def _detect(detector, frame, *, min_confidence: float, frame_height: int,
     return faces
 
 
-def _histogram(frame) -> np.ndarray:
-    """Normalised hue/saturation histogram, for scene-cut comparison."""
+def _histogram(frame) -> list[np.ndarray]:
+    """One normalised luminance histogram per tile of a `SCENE_GRID` grid."""
     import cv2
 
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    hist = cv2.calcHist([hsv], [0, 1], None, [50, 60], [0, 180, 0, 256])
-    cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
-    return hist
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape[:2]
+    tiles: list[np.ndarray] = []
+    for row in range(SCENE_GRID):
+        for col in range(SCENE_GRID):
+            tile = gray[
+                row * height // SCENE_GRID:(row + 1) * height // SCENE_GRID,
+                col * width // SCENE_GRID:(col + 1) * width // SCENE_GRID,
+            ]
+            hist = cv2.calcHist([tile], [0], None, [SCENE_HIST_BINS], [0, 256])
+            cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
+            tiles.append(hist)
+    return tiles
 
 
-def _is_cut(previous: np.ndarray, current: np.ndarray) -> bool:
+def _is_cut(previous: list[np.ndarray], current: list[np.ndarray]) -> bool:
+    """True when the *mean* tile correlation falls below the threshold.
+
+    The mean, not the minimum: a graphic appearing in one corner changes a
+    single tile completely, and that is an overlay rather than a new shot.
+    """
     import cv2
 
-    correlation = cv2.compareHist(previous, current, cv2.HISTCMP_CORREL)
-    return correlation < SCENE_CUT_CORRELATION
+    if not previous or len(previous) != len(current):
+        return False
+    correlations = [
+        cv2.compareHist(a, b, cv2.HISTCMP_CORREL)
+        for a, b in zip(previous, current, strict=True)
+    ]
+    return float(np.mean(correlations)) < SCENE_CUT_CORRELATION
 
 
 def plan_layout_for(
@@ -261,6 +296,9 @@ def plan_layout_for(
     content_pane_share: float = 0.58,
     detect_screen_share: bool = True,
     min_subject_face_ratio: float = 0.13,
+    per_shot_framing: bool = True,
+    min_shot_seconds: float = 1.5,
+    max_shots: int = 8,
 ):
     """Scan a clip and return the `LayoutPlan` for it.
 
@@ -270,6 +308,7 @@ def plan_layout_for(
     """
     from ..ingest.probe import probe
     from .layouts import choose_layout, plan_blurred_fit
+    from .shots import plan_per_shot
 
     media = probe(video)
     try:
@@ -300,20 +339,30 @@ def plan_layout_for(
         if stacked is not None:
             return stacked
 
-    plan = choose_layout(
-        result.per_sample,
+    common = dict(
         src_w=result.frame_width or media.width,
         src_h=result.frame_height or media.height,
         out_w=out_width,
         out_h=out_height,
-        duration=duration,
         pan_smoothing=pan_smoothing,
         max_pan_speed=max_pan_speed,
         min_face_ratio=min_face_ratio,
-        scene_cuts=result.scene_cuts,
         deadzone_ratio=deadzone_ratio,
         min_subject_face_ratio=min_subject_face_ratio,
     )
+    if per_shot_framing:
+        # One framing for a clip that changes composition mid-way is wrong for
+        # at least one of its shots; see the module docstring in `shots.py`.
+        plan = plan_per_shot(
+            result.per_sample, result.sample_times, result.scene_cuts,
+            duration=duration, min_shot_seconds=min_shot_seconds,
+            max_shots=max_shots, **common,
+        )
+    else:
+        plan = choose_layout(
+            result.per_sample, duration=duration,
+            scene_cuts=result.scene_cuts, **common,
+        )
     # `choose_layout` estimates the ratio from observation spacing; the scan
     # knows it exactly, so prefer the measured value for the QA check.
     return plan.model_copy(update={"face_ratio": result.face_ratio})
