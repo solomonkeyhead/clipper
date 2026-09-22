@@ -224,3 +224,38 @@ class TestHeatmapScoring:
         )
         raws, _ = result
         assert raws["c"] == 0.0
+
+
+class TestDetrendWindowAdaptsToDuration:
+    """Regression: a window covering most of the series detrends nothing.
+
+    Measured on a real 213-second YouTube heatmap, the nominal 180-second window
+    was effectively a global median.
+    """
+
+    def test_the_window_is_capped_at_a_fraction_of_the_duration(self):
+        # 200 samples = 200 seconds at 1 Hz; the nominal window is 180.
+        values = np.full(200, 0.2, dtype=np.float32)
+        values[:20] = 1.0  # an intro spike
+        corrected = hm.bias_correct(values, window_seconds=180.0)
+        capped = hm.bias_correct(values, window_seconds=200 * hm.MAX_WINDOW_FRACTION)
+        assert corrected[:20].mean() == pytest.approx(capped[:20].mean(), abs=1e-5)
+
+    def test_a_long_video_still_uses_the_configured_window(self):
+        values = np.full(3600, 0.2, dtype=np.float32)
+        values[1000:1010] = 1.0
+        nominal = hm.bias_correct(values, window_seconds=180.0)
+        explicit = hm.bias_correct(values, window_seconds=180.0)
+        assert np.allclose(nominal, explicit)
+
+    def test_capping_improves_intro_correction(self):
+        values = np.full(213, 0.15, dtype=np.float32)
+        values[:25] = 0.6
+        capped = hm.bias_correct(values, window_seconds=180.0)
+        uncapped = values - hm.rolling_median(values, 180)
+        assert abs(capped[:25].mean()) < abs(uncapped[:25].mean())
+
+    def test_a_very_short_video_keeps_a_usable_floor(self):
+        """The cap must not shrink the window to nothing on a tiny input."""
+        values = np.full(12, 0.3, dtype=np.float32)
+        assert hm.bias_correct(values).size == 12

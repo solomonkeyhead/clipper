@@ -1,0 +1,38 @@
+# Local pipeline test. Nothing produced from this config is published.
+name: local-test
+
+# Recorded accurately: this is a technical test of the pipeline on a
+# user-supplied source, run locally, with no publication or redistribution.
+# It is NOT a claim that the footage is licensed for reposting -- if these
+# clips were ever to go out, this field would need to name the campaign or
+# creator permission that actually covers them.
+source_authorization: >-
+  Local pipeline test only, run 2026-09-21. User-supplied source, processed
+  on this machine for technical verification. Not for publication or
+  redistribution.
+
+platform_targets: [tiktok, youtube_shorts, instagram_reels]
+
+duration:
+  min_seconds: 15
+  max_seconds: 60
+
+required_hashtags: []
+required_credit_text: ""
+burn_credit_in_video: false
+credit_position: top_left
+
+forbidden_terms: []
+mask_profanity_in_captions: true
+
+brand_mentions:
+  required: false
+  terms: []
+
+language: en
+max_clips_per_source: 5
+
+notes: |
+  Test run to exercise the full pipeline on real long-form footage: real
+  faces for the reframing path, real speech for transcription, and real
+  timings to check against the 25-minute budget for a 60-minute source.

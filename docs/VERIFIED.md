@@ -628,3 +628,128 @@ does not crush the fill to solid black (which would also risk tripping
   has near-zero velocity at its turning points.
 - An earlier attempt to add motion by animating hue manufactured **7 false scene
   cuts**, because the cut detector compares hue/saturation histograms.
+
+---
+
+## 2026-09-21 — First run on real long-form footage
+
+Source: a 20m51s (1251 s) 1080p YouTube video supplied by the user, 459 MB
+downloaded. Processed locally for technical verification only; the campaign
+config records that explicitly and nothing was published.
+
+### Result: 4 clips accepted, 0 rejected, all QA-passing
+
+| Clip | Start | Duration | Composite | Layout | QA |
+|---|---|---|---|---|---|
+| 001 | 7m24s | 26 s | 0.971 | follow_crop | pass (13 checks) |
+| 002 | 5m05s | 39 s | 0.745 | follow_crop | pass (13 checks) |
+| 003 | 1m58s | 49 s | 0.524 | follow_crop | pass (13 checks) |
+| 004 | 12m42s | 52 s | 0.423 | follow_crop | pass (13 checks) |
+
+### Timings — measured
+
+| Stage | Wall clock | Rate |
+|---|---|---|
+| Download | included below | 459 MB |
+| Transcribe (`large-v3`) | 142.0 s | **8.8x realtime**, 3736 words |
+| Score (candidates + signals + LLM) | 267 s | 60 candidates |
+| Render + QA, 4 clips | 76 s | ~19 s per clip |
+| **Total** | **343.5 s (5m43s)** | **3.6x faster than realtime** |
+
+**Extrapolated to 60 minutes: ~13 minutes.** Transcription scales linearly
+(~6.8 min), rendering scales with clip count not source length (~1.6 min for 5),
+and scoring is roughly flat because candidates are capped at 60 regardless of
+source length. Inside the 25-minute budget with margin. Still an extrapolation,
+but now from a 21-minute real source rather than a 3.6-minute synthetic one.
+
+### Face detection — verified on real faces for the first time
+
+Every clip chose `follow_crop`, with one dominant face found across 131, 194,
+245 and 261 sampled frames respectively. Extracted frames confirm the speaker
+stays centred and well-framed throughout each clip as the crop tracks him.
+
+This closes the gap recorded at CHECKPOINT 2: until now YuNet had only been
+shown to *load and produce no false positives* on synthetic discs. It finds real
+faces, the trajectory smoothing holds, and the QA face-ratio check passes.
+
+Captions also verified on real output: word-level timing with the active word
+highlighted in yellow, inside the bottom safe area.
+
+### Finding: 77% of candidates were dropped for needing prior context
+
+46 of 60 candidates were hard-dropped, **all** for `needs_prior_context` agreed
+by both prompts. Inspecting them, the model is right — this is chess commentary,
+and the dropped windows genuinely open mid-explanation:
+
+> "**Again, keep in mind,** this is a machine programmed to make decisions based
+> on the neurotransmission of a literal, basically microscopic fruit fly..."
+
+So the behaviour is correct, but the rate is worth recording. It left 14 scored
+candidates, of which 12 cleared the quality bar and 4 survived placement. On a
+less clippable source that margin would have produced nothing.
+
+Whether `needs_prior_context` should be a **hard drop** or a heavy **penalty** is
+a real open question for Phase 5 to measure, not to assume. The brief specifies a
+hard drop; on this evidence that is defensible but aggressive.
+
+### Finding: the pre-score is doing far more work than expected
+
+5171 windows were enumerated, 4829 survived the hard filters, and
+`max_candidates: 60` cut that to 60 — so **the cheap pre-score chose the final
+60 out of 4829**, and the LLM never saw 98.8% of the candidate space.
+
+The pre-score is transcript-only heuristics (speech density, hook openers,
+filler, duration, confidence) and was designed as a crude cost cap. On a
+20-minute source it is effectively the primary selector. That makes it a far
+more important component than its implementation suggests, and a prime suspect
+if Phase 5 finds the ranking weak.
+
+### Bug found and fixed: yt-dlp could not find FFmpeg
+
+The first attempt failed after the metadata fetch:
+
+```
+ERROR: You have requested merging of multiple formats but ffmpeg is not
+installed. Aborting due to --abort-on-error
+```
+
+YouTube serves video and audio as separate streams, so yt-dlp needs FFmpeg to
+merge them — and it looks on PATH, which is precisely the thing that is
+unreliable here: a winget install lands on the *user* PATH, which an
+already-running process does not see. `render/ffmpeg.py` exists to solve exactly
+this and had already located the binary; the location simply was not being
+passed through. `ingest/download.py` now sets yt-dlp's `ffmpeg_location`.
+
+### Heatmap: absent here, but verified against real data elsewhere
+
+This video has **no heatmap** despite 2.1M views — it was a week old, and
+YouTube only exposes "Most replayed" after enough accumulated watch time. The
+signal was dropped and the remaining weights renormalised (llm 0.62, audio 0.19,
+text 0.19), which is the intended behaviour.
+
+yt-dlp *does* still extract heatmaps: metadata-only probes of two older videos
+returned 100 segments each. Real shape, confirmed:
+
+```json
+{"start_time": 0.0, "end_time": 2.14, "value": 1.0}
+```
+
+`normalize_heatmap` parses it correctly — the first time it has seen anything
+but synthetic input.
+
+**Intro inflation is real and measured**: on that data the first 30 seconds read
+0.300 against a whole-video mean of 0.159, i.e. **1.89x inflated**, exactly the
+bias the brief predicted.
+
+**And the correction was under-performing.** The rolling median window was fixed
+at 180 s; on a 213-second video that covers most of the series, making it a
+global median that detrends almost nothing. The window is now capped at a third
+of the duration, which improved the corrected intro from +0.113 to +0.087.
+
+**Residual limit, stated honestly:** a rolling median cannot fully remove a spike
+at the very edge of the series — a median is deliberately insensitive to a narrow
+spike, and at t=0 there is no earlier neighbourhood, so the edge padding mirrors
+the spike into its own baseline. This does not affect clip selection, because
+candidate generation already discards the first and last 20 s of any source over
+five minutes. It **will** skew the Phase 5 eval harness unless that harness
+applies the same exclusion.

@@ -156,6 +156,24 @@ def _download(url: str, *, force: bool = False) -> tuple[Path, dict]:
         raise IngestError(f"yt-dlp is not installed: {exc}") from exc
 
     out_dir = ensure(downloads_dir())
+
+    # yt-dlp needs FFmpeg to merge the separate video and audio streams YouTube
+    # serves, and it looks for it on PATH -- which is exactly the thing that is
+    # unreliable here (a winget install lands on the *user* PATH, which a
+    # already-running process does not see). We have already located it, so
+    # hand the directory over rather than letting it fail with
+    # "ffmpeg is not installed" after the metadata fetch.
+    from ..render.ffmpeg import FFmpegNotFound, ffmpeg_path
+
+    try:
+        ffmpeg_dir = str(ffmpeg_path().parent)
+    except FFmpegNotFound:
+        ffmpeg_dir = ""
+        log.warning(
+            "FFmpeg was not found, so yt-dlp cannot merge video and audio "
+            "streams. Run `clipper doctor` for the fix."
+        )
+
     options = {
         # Cap at 1080p: the output is 1080x1920, so a 4K source costs disk and
         # decode time for detail that is cropped or downscaled away.
@@ -173,6 +191,8 @@ def _download(url: str, *, force: bool = False) -> tuple[Path, dict]:
         "encoding": "utf-8",
         "restrictfilenames": True,
     }
+    if ffmpeg_dir:
+        options["ffmpeg_location"] = ffmpeg_dir
 
     log.info("downloading %s", url)
     try:
