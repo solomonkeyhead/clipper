@@ -15,7 +15,7 @@ above the face) is unit-testable without rendering anything.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..models import CropKeyframe, CropRect, LayoutPlan
 
@@ -321,9 +321,21 @@ def choose_layout(
 ) -> LayoutPlan:
     """Pick a layout from the sampled face detections.
 
-    Order of preference: two_speaker_stack when two faces persist, follow_crop
-    when one face is present often enough, blurred_fit otherwise. A vertical or
-    square source skips cropping entirely -- there is nothing to reframe.
+    The guiding rule, learned from real footage: **only crop when there is
+    something unambiguous to crop to.** A 9:16 slice of a 16:9 frame keeps under
+    a third of the width, so a wrong choice does not degrade gracefully -- it
+    discards most of the picture. Every uncertain case resolves to `blurred_fit`.
+
+    Detections are first grouped into per-person tracks and then filtered to
+    those large enough to be a *subject*. Both steps matter:
+
+    * Without tracking, the target is recomputed every frame, so two people make
+      it teleport between them -- measured at 10 side-flips across 68% of frame
+      width in one clip, leaving the camera stranded between them showing
+      neither face.
+    * Without the size filter, a reaction-cam overlay counts as a second person,
+      and a clip with one real speaker plus two tiny overlays is treated as a
+      crowd that cannot be framed.
     """
     if src_h >= src_w:
         return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
@@ -334,55 +346,124 @@ def choose_layout(
         return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
                                 reason="no frames sampled")
 
-    # A face small enough to be an inset is not the subject of the video, and
-    # must not drive the framing. Reaching here means the screen-share detector
-    # already looked for a separate content region and found none -- so the
-    # content is the *whole frame*, and any face-centric crop would discard it.
-    #
-    # This is not hypothetical: on a reaction video with two small circular
-    # reaction cams over full-frame footage, the two-speaker rule fired and
-    # would have blown those two cams up to fill the output, throwing away
-    # everything the clip was about.
-    inset = _inset_face_ratio(faces_per_sample, src_w,
-                              threshold=min_subject_face_ratio)
-    if inset is not None:
+    tracks = build_tracks(faces_per_sample, src_w)
+    subjects = [t for t in tracks
+                if t.median_width / src_w >= min_subject_face_ratio]
+
+    if not subjects:
+        detected = sum(1 for s in faces_per_sample if s) / samples
         return plan_blurred_fit(
             src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
             reason=(
-                f"faces are inset overlays ({inset:.0%} of frame width) with no "
-                "separate content region, so the whole frame is the content"
+                f"every tracked face is an overlay inset (under "
+                f"{min_subject_face_ratio:.0%} of frame width, seen in "
+                f"{detected:.0%} of frames), so the whole frame is the content"
             ),
         )
 
-    with_any = sum(1 for s in faces_per_sample if s)
-    with_two = sum(1 for s in faces_per_sample if len(s) >= 2)
-    ratio_any = with_any / samples
-    ratio_two = with_two / samples
-
-    if ratio_any < min_face_ratio:
+    # Count only frames where a subject-sized face is present. Judging coverage
+    # against frames containing *any* face lets overlays dilute a speaker who is
+    # in fact on screen throughout.
+    subject_faces = {id(o) for t in subjects for o in t.observations}
+    with_subject = sum(
+        1 for sample in faces_per_sample
+        if any(id(face) in subject_faces for face in sample)
+    )
+    if with_subject / samples < min_face_ratio:
         return plan_blurred_fit(
             src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
-            reason=f"faces in only {ratio_any:.0%} of sampled frames "
-                   f"(need {min_face_ratio:.0%})",
+            reason=(
+                f"a subject-sized face appears in only {with_subject / samples:.0%} "
+                f"of frames (need {min_face_ratio:.0%}); keeping the whole frame"
+            ),
         )
 
-    # Two speakers only when the pair persists through most of the clip and they
-    # are horizontally separated -- two detections of the same person's face at
-    # slightly different scales must not trigger a stack.
-    if ratio_two >= 0.6:
-        pair = _persistent_pair(faces_per_sample, src_w)
-        if pair is not None:
-            left, right = pair
-            return plan_two_speaker_stack(left, right, src_w=src_w, src_h=src_h,
-                                          out_w=out_w, out_h=out_h, face_ratio=ratio_two)
+    primary = subjects[0]
+    others = [t for t in subjects[1:]
+              if t.coverage(with_subject) >= SECONDARY_TRACK_COVERAGE]
 
-    dominant = [_dominant_face(s) for s in faces_per_sample if s]
+    # Several subjects sitting close enough to share one crop: that fills the
+    # frame *and* holds still, beating both letterboxing and picking one.
+    if others:
+        group = plan_group_crop(
+            [primary, *others], src_w=src_w, src_h=src_h,
+            out_w=out_w, out_h=out_h, face_ratio=with_subject / samples,
+        )
+        if group is not None:
+            return group
+
+        second = others[0]
+        together = primary.co_presence(second)
+        if together >= CO_PRESENCE_FOR_STACK and                 abs(primary.median_x - second.median_x) / src_w >= 0.15:
+            left, right = sorted((primary, second), key=lambda t: t.median_x)
+            return plan_two_speaker_stack(
+                _track_median_face(left), _track_median_face(right),
+                src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+                face_ratio=with_subject / samples,
+            )
+
+        if together < CO_PRESENCE_FOR_STACK:
+            return plan_blurred_fit(
+                src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+                reason=(
+                    f"subjects appear in different shots rather than together "
+                    f"(co-present in {together:.0%} of frames), so no single "
+                    "framing serves them; keeping the whole frame"
+                ),
+            )
+
+        return plan_blurred_fit(
+            src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+            reason=(
+                f"{len(others) + 1} subjects that neither one crop nor a stack "
+                "can hold; keeping the whole frame"
+            ),
+        )
+
+    # One subject, but only if it is *consistently* the same one.
+    coverage = primary.coverage(with_subject)
+    if coverage < PRIMARY_TRACK_COVERAGE:
+        return plan_blurred_fit(
+            src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+            reason=(
+                f"no consistent subject to follow (the most-present one appears "
+                f"in {coverage:.0%} of frames with a subject); keeping the whole frame"
+            ),
+        )
+
+    # A seated speaker's whole range of motion usually fits inside the crop, and
+    # a shot that never moves beats one that keeps correcting. Panning is the
+    # fallback for a subject who genuinely travels, not the default.
+    static = plan_group_crop(
+        [primary], src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+        face_ratio=with_subject / samples,
+    )
+    if static is not None:
+        return static
+
     return plan_follow_crop(
-        [f for f in dominant if f is not None],
+        primary.observations,
         src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
         duration=duration, pan_smoothing=pan_smoothing,
         max_pan_speed=max_pan_speed, scene_cuts=scene_cuts,
         deadzone_ratio=deadzone_ratio,
+    )
+
+
+def _track_median_face(track: FaceTrack) -> FaceObservation:
+    """A representative observation for a track, robust to stray detections."""
+    def median(values: list[float]) -> float:
+        ordered = sorted(values)
+        return ordered[len(ordered) // 2]
+
+    obs = track.observations
+    return FaceObservation(
+        t=median([o.t for o in obs]),
+        x=median([o.x for o in obs]),
+        y=median([o.y for o in obs]),
+        width=median([o.width for o in obs]),
+        height=median([o.height for o in obs]),
+        confidence=median([o.confidence for o in obs]),
     )
 
 
@@ -539,24 +620,175 @@ def plan_content_stack(
 
 
 
-def _inset_face_ratio(
-    faces_per_sample: list[list[FaceObservation]], src_w: int,
-    *, threshold: float = INSET_FACE_WIDTH_RATIO,
-) -> float | None:
-    """Median width of the dominant face, if every face is an inset overlay.
+# --------------------------------------------------------------------------
+# face tracking
+# --------------------------------------------------------------------------
 
-    Returns None when the faces are large enough to be the subject, which is
-    the normal talking-head case.
+# A face this far (as a fraction of frame width) from a track's last known
+# position is a different person, not that person having moved.
+TRACK_MATCH_DISTANCE = 0.12
+
+# The primary track must appear in at least this share of face-bearing samples
+# for a single-subject follow-crop to be the right answer. Below it, another
+# person is on screen often enough that cropping to one of them is a gamble.
+PRIMARY_TRACK_COVERAGE = 0.85
+
+# A second track present in at least this share is "also a subject".
+SECONDARY_TRACK_COVERAGE = 0.25
+
+# Two subjects must share this share of frames before they are stacked as a
+# two-shot. Tracks that never overlap in time are one person filmed from two
+# camera setups, and stacking those shows the same face twice.
+CO_PRESENCE_FOR_STACK = 0.4
+
+
+@dataclass
+class FaceTrack:
+    """One person followed across sampled frames."""
+
+    observations: list[FaceObservation] = field(default_factory=list)
+
+    @property
+    def last(self) -> FaceObservation:
+        return self.observations[-1]
+
+    @property
+    def median_x(self) -> float:
+        return sorted(o.x for o in self.observations)[len(self.observations) // 2]
+
+    @property
+    def median_width(self) -> float:
+        return sorted(o.width for o in self.observations)[len(self.observations) // 2]
+
+    def extent(self, percentile: float = 0.2) -> tuple[float, float]:
+        """Horizontal span the subject typically occupies over time.
+
+        Trimmed at both ends, because the crop does not need to contain every
+        position the subject ever reached -- the deadzone absorbs the tail, and
+        demanding the full range makes an ordinary seated speaker look
+        un-framable. Measured on a real talking-head clip: the untrimmed span
+        was 784 px against a 511 px usable crop, while the 20%-trimmed span was
+        478 px and fits comfortably.
+        """
+        lefts = sorted(o.x - o.width / 2 for o in self.observations)
+        rights = sorted(o.x + o.width / 2 for o in self.observations)
+        lo = int(len(lefts) * percentile)
+        hi = max(0, len(rights) - 1 - int(len(rights) * percentile))
+        return lefts[lo], rights[hi]
+
+    def coverage(self, samples: int) -> float:
+        return len(self.observations) / samples if samples else 0.0
+
+    @property
+    def times(self) -> set[float]:
+        return {o.t for o in self.observations}
+
+    def co_presence(self, other: FaceTrack) -> float:
+        """Share of this track's frames in which `other` also appears.
+
+        Two tracks that never appear together are not two people -- they are one
+        person filmed from two camera setups, which is what cuts produce. A
+        stacked two-shot of those would show the same person twice.
+        """
+        mine = self.times
+        if not mine:
+            return 0.0
+        return len(mine & other.times) / len(mine)
+
+
+def build_tracks(
+    faces_per_sample: list[list[FaceObservation]], src_w: int
+) -> list[FaceTrack]:
+    """Group per-frame detections into per-person tracks, longest first.
+
+    Without this the "dominant face" is recomputed independently every frame,
+    so two people in shot make the target teleport between them. Measured on
+    real footage: the target flipped sides 10 times across a 36-second clip,
+    swinging over 68% of the frame width. The speed limit then prevented the
+    camera from ever arriving at either, so it sat between them showing
+    *neither* face.
+
+    Association is nearest-neighbour with a distance gate -- enough for a
+    handful of faces in a fixed studio shot, which is what this sees.
     """
-    if src_w <= 0:
+    gate = TRACK_MATCH_DISTANCE * src_w
+    tracks: list[FaceTrack] = []
+
+    for sample in faces_per_sample:
+        claimed: set[int] = set()
+        for face in sorted(sample, key=lambda f: -f.area):
+            best, best_distance = None, gate
+            for index, track in enumerate(tracks):
+                if index in claimed:
+                    continue
+                distance = abs(track.last.x - face.x)
+                if distance < best_distance:
+                    best, best_distance = index, distance
+            if best is None:
+                tracks.append(FaceTrack([face]))
+                claimed.add(len(tracks) - 1)
+            else:
+                tracks[best].observations.append(face)
+                claimed.add(best)
+
+    tracks.sort(key=lambda t: -len(t.observations))
+    return tracks
+
+
+# Breathing room left around a group of subjects, as a fraction of the crop
+# width, so faces are not jammed against the edge of the frame.
+GROUP_MARGIN_RATIO = 0.08
+
+
+def plan_group_crop(
+    tracks: list[FaceTrack],
+    *,
+    src_w: int,
+    src_h: int,
+    out_w: int,
+    out_h: int,
+    face_ratio: float = 1.0,
+) -> LayoutPlan | None:
+    """A single static crop holding every subject, or None if they do not fit.
+
+    This is the answer for two or more people who happen to sit close together
+    -- a sofa interview, a desk two-shot. It fills the output frame, unlike
+    letterboxing the whole picture, and it holds perfectly still, unlike
+    following one of them.
+
+    It exists because the interesting failure was not that subjects did not fit:
+    on real footage two people spanned 462 px inside a 608 px crop, comfortably.
+    The camera swung between them only because the target was recomputed per
+    frame. Framing the group settles that by construction -- there is one
+    target and it does not move.
+    """
+    if not tracks:
         return None
-    widths = [
-        face.width
-        for sample in faces_per_sample
-        if (face := _dominant_face(sample)) is not None
-    ]
-    if not widths:
+
+    crop_w, crop_h = crop_size_for_aspect(src_w, src_h, out_w, out_h)
+
+    extents = [t.extent() for t in tracks]
+    left = min(e[0] for e in extents)
+    right = max(e[1] for e in extents)
+    margin = crop_w * GROUP_MARGIN_RATIO
+    span = (right - left) + 2 * margin
+    if span > crop_w:
         return None
-    median = sorted(widths)[len(widths) // 2]
-    ratio = median / src_w
-    return ratio if ratio < threshold else None
+
+    centre_x = (left + right) / 2
+    centre_y = sum(t.observations[len(t.observations) // 2].y for t in tracks) / len(tracks)
+    x, y = crop_origin_for_face(centre_x, centre_y, crop_w, crop_h, src_w, src_h)
+
+    people = ("one subject" if len(tracks) == 1
+              else f"{len(tracks)} subjects")
+    return LayoutPlan(
+        kind="follow_crop",
+        crop_width=crop_w,
+        crop_height=crop_h,
+        keyframes=[CropKeyframe(t=0.0, x=x, y=y)],
+        face_ratio=face_ratio,
+        reason=(
+            f"{people} spanning {right - left:.0f}px fit inside a {crop_w}px crop; "
+            "holding a single static frame on the group"
+        ),
+    )

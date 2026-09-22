@@ -50,7 +50,7 @@ class TestInsetFacesAreNotTheSubject:
         per_sample = samples(100, [(150, 120, 130), (1770, 120, 130)])
         plan = choose(per_sample)
         assert plan.kind == "blurred_fit"
-        assert "inset overlays" in plan.reason
+        assert "overlay inset" in plan.reason
 
     def test_one_tiny_inset_does_not_become_a_follow_crop(self):
         per_sample = samples(100, [(1600, 400, 130)])

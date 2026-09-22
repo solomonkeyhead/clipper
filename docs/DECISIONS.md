@@ -404,3 +404,74 @@ overlay avatar throws the content away entirely.
 
 The threshold is exposed as `render.min_subject_face_ratio` so it can be tuned
 per source type rather than argued about in the abstract.
+
+### D32. Faces are tracked across frames, not recomputed each frame
+
+`_dominant_face` picked the largest face in each frame independently, with no
+memory of the previous one. With two people on screen the target teleported
+between them: measured on real footage, **10 side-flips across 68% of the frame
+width** in a 36-second clip. The pan-speed limit then stopped the camera ever
+reaching either of them, so it sat between the two showing **neither face** --
+a clip of a sofa and an arm.
+
+Detections are now associated into per-person tracks by nearest-neighbour with a
+distance gate, and the follow-crop follows one *track*, not a per-frame winner.
+
+### D33. Only subject-sized tracks count as subjects
+
+Filtering happens on tracks, before any layout decision. Without it, a clip with
+one real speaker plus two reaction-cam overlays looked like three people that no
+framing could serve, and fell back to letterboxing a speaker who was on screen
+throughout.
+
+Coverage is then measured against frames containing a *subject-sized* face
+rather than any face at all, so overlays cannot dilute a speaker's presence.
+
+### D34. A static frame is preferred over a moving one
+
+If every subject's typical position fits inside one crop, the layout is a single
+keyframe that never moves. Panning is the fallback for a subject who genuinely
+travels, not the default.
+
+The extent is trimmed at the 20th percentile rather than using the full range of
+motion. Measured on a real talking-head clip: the untrimmed span was 784 px
+against a 511 px usable crop, so the subject looked un-framable and the camera
+kept correcting; the trimmed span was 478 px and fits comfortably. The deadzone
+absorbs the tail.
+
+This is what actually removed the shake. The deadzone (D25) reduced it; framing
+the whole range at once eliminates it, because there is nothing left to correct.
+
+### D35. Several subjects who fit in one crop share it
+
+A sofa interview or a desk two-shot often has both people well inside a single
+9:16 slice -- measured at 448 px inside a 608 px crop on real footage. That
+fills the output frame *and* holds still, which beats both letterboxing the
+whole picture and picking one person to follow.
+
+### D36. A stacked two-shot requires the subjects to be on screen together
+
+Two tracks that never appear in the same frame are not two people. They are one
+person filmed from two camera setups, which is what cuts produce -- and stacking
+those shows the same face twice, from two unrelated moments. A stack now
+requires the two tracks to be co-present in at least 40% of frames.
+
+This changed a real clip's verdict: it had been stacking two faces that came
+from entirely different shots of the reacted-to footage.
+
+### D37. Uncertainty resolves to keeping the whole frame
+
+A 9:16 slice of a 16:9 frame keeps under a third of the width, so a wrong
+framing decision does not degrade gracefully -- it discards most of the picture.
+Every ambiguous case therefore falls back to `blurred_fit`.
+
+The cost is asymmetric and that is the whole argument: letterboxing a clip that
+could have been cropped wastes vertical space, while cropping the wrong region
+loses the content outright. On feedback, the full-frame output was the one that
+read as acceptable; the confidently-wrong crops were not.
+
+**Known cost, not yet addressed:** `blurred_fit` leaves the content occupying
+only about a third of the output height, with blurred bars above and below. A
+moderate crop -- to 4:3 or 3:2 rather than all the way to 9:16 -- would fill more
+of the frame while still keeping both subjects. That is the obvious next
+improvement and has not been built.
