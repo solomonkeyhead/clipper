@@ -1,7 +1,8 @@
-"""Crop geometry and camera smoothing.
+"""Crop geometry and static framing.
 
 The invariants that matter: a crop never leaves the source (green bands), the
-camera never exceeds its speed limit (lurching), and a face keeps headroom.
+frame holds the whole face for the whole shot, and graphics beside the speaker
+are kept rather than cut.
 """
 
 from __future__ import annotations
@@ -19,9 +20,8 @@ from clipper.render.layouts import (
     clamp_crop_origin,
     crop_origin_for_face,
     crop_size_for_aspect,
-    plan_follow_crop,
-    smooth_trajectory,
 )
+from clipper.render.overlays import OverlayBox
 
 HD = (1920, 1080)
 VERTICAL = (1080, 1920)
@@ -135,113 +135,124 @@ class TestFaceFraming:
             assert 0 <= y <= 1080 - ch
 
 
-class TestSmoothing:
-    def test_empty_input(self):
-        assert smooth_trajectory([], alpha=0.2, max_step=100) == []
-
-    def test_constant_target_converges_and_stays(self):
-        targets = [(i * 0.2, 500.0) for i in range(30)]
-        out = smooth_trajectory(targets, alpha=0.3, max_step=1e9)
-        assert out[-1] == pytest.approx(500.0, abs=1.0)
-
-    def test_lags_a_step_change_rather_than_snapping(self):
-        """Instant response to a detector jump reads as a lurch."""
-        targets = [(0.0, 0.0), (0.2, 1000.0)]
-        out = smooth_trajectory(targets, alpha=0.2, max_step=1e9)
-        assert out[1] < 1000.0
-
-    def test_speed_limit_is_enforced(self):
-        targets = [(i * 0.2, 0.0 if i == 0 else 5000.0) for i in range(10)]
-        out = smooth_trajectory(targets, alpha=1.0, max_step=100.0)
-        for prev, cur in pairwise(out):
-            assert abs(cur - prev) <= 100.0 * 0.2 + 1e-6
-
-    def test_initial_position_is_honoured(self):
-        out = smooth_trajectory([(0.0, 100.0)], alpha=0.5, max_step=1e9, initial=0.0)
-        assert out[0] == pytest.approx(50.0)
-
-    def test_rejects_bad_alpha(self):
-        for alpha in (0.0, -0.1, 1.5):
-            with pytest.raises(ValueError, match="alpha"):
-                smooth_trajectory([(0.0, 1.0)], alpha=alpha, max_step=10)
-
-    @given(st.lists(st.floats(min_value=0, max_value=1920, allow_nan=False),
-                    min_size=2, max_size=60))
-    def test_output_stays_within_the_input_range(self, values):
-        """Smoothing interpolates; it must never overshoot past the extremes."""
-        targets = [(i * 0.2, v) for i, v in enumerate(values)]
-        out = smooth_trajectory(targets, alpha=0.3, max_step=1e9)
-        assert min(out) >= min(values) - 1e-6
-        assert max(out) <= max(values) + 1e-6
+def choose(samples, **kwargs):
+    return choose_layout(
+        samples, src_w=kwargs.pop("src_w", 1920), src_h=kwargs.pop("src_h", 1080),
+        out_w=1080, out_h=1920,
+        min_face_ratio=kwargs.pop("min_face_ratio", 0.5), **kwargs,
+    )
 
 
-class TestPlanFollowCrop:
-    def _plan(self, faces, **kwargs):
-        return plan_follow_crop(
-            faces, src_w=1920, src_h=1080, out_w=1080, out_h=1920,
-            duration=kwargs.pop("duration", 10.0),
-            pan_smoothing=kwargs.pop("pan_smoothing", 0.15),
-            max_pan_speed=kwargs.pop("max_pan_speed", 0.25),
-            **kwargs,
-        )
+def holds_every_face(plan, samples) -> bool:
+    """True if every detected face lies wholly inside the planned frame."""
+    if plan.kind == "blurred_fit":
+        return True
+    x0 = plan.keyframes[0].x
+    x1 = x0 + plan.crop_width
+    return all(x0 <= f.x - f.width / 2 and f.x + f.width / 2 <= x1
+               for sample in samples for f in sample)
 
-    def test_no_faces_falls_back_to_a_centred_hold(self):
-        plan = self._plan([])
+
+class TestStaticFraming:
+    """The panning camera is gone; every shot gets one frame that holds it all.
+
+    The regression these guard: a panning crop trailed a speaker who leaned
+    across the shot, and the face was fully in frame in only 12 of 27 samples.
+    """
+
+    def test_a_still_face_fills_the_frame(self):
+        plan = choose([[face_at(i * 0.2, 960)] for i in range(30)])
         assert plan.kind == "follow_crop"
         assert len(plan.keyframes) == 1
-        assert plan.face_ratio == 0.0
-        assert "centred" in plan.reason
 
-    def test_keyframes_are_all_legal_crops(self):
-        faces = [face_at(i * 0.2, 200 + i * 30) for i in range(50)]
-        plan = self._plan(faces)
-        for kf in plan.keyframes:
-            assert 0 <= kf.x <= 1920 - plan.crop_width
-            assert 0 <= kf.y <= 1080 - plan.crop_height
+    def test_a_moving_face_is_held_by_a_wider_frame_not_followed(self):
+        """The 003 regression: face centres swinging across ~340px."""
+        xs = [1290, 1110, 1127, 1114, 1070, 1026, 1006, 1024, 1031, 1027, 1013, 1027,
+              1086, 1170, 1200, 1174, 1168, 1129, 1099, 1059, 1072, 1031, 972, 953,
+              1044, 1157, 1297]
+        samples = [[FaceObservation(t=i * 0.2, x=x, y=450, width=380, height=440)]
+                   for i, x in enumerate(xs)]
+        plan = choose(samples)
+        assert plan.kind == "fit_crop"
+        assert len(plan.keyframes) == 1
+        assert plan.crop_width > 608
+        assert holds_every_face(plan, samples)
 
-    def test_trajectory_follows_the_face(self):
-        """A face crossing left to right must drag the crop the same way."""
-        faces = [face_at(i * 0.2, 300 + i * 25) for i in range(40)]
-        plan = self._plan(faces)
-        assert plan.keyframes[-1].x > plan.keyframes[0].x
+    @given(st.lists(st.floats(min_value=300, max_value=1620, allow_nan=False),
+                    min_size=25, max_size=60),
+           st.floats(min_value=260, max_value=420))
+    def test_every_face_is_in_frame_bar_the_trimmed_extremes(self, xs, width):
+        """Wherever a lone subject goes, the frame holds it.
 
-    def test_a_static_face_collapses_to_few_keyframes(self):
-        """Hundreds of identical entries would bloat the sendcmd script."""
-        faces = [face_at(i * 0.2, 960) for i in range(50)]
-        plan = self._plan(faces)
-        assert len(plan.keyframes) < 20
+        The one allowance is the trim that ignores stray detections: at most
+        `EXTENT_TRIM` of samples at each extreme may fall outside. That is the
+        whole guarantee, stated exactly -- before this change the allowance was
+        20% per side plus however far a lagging camera trailed.
+        """
+        samples = [[FaceObservation(t=i * 0.2, x=x, y=450, width=width, height=width)]
+                   for i, x in enumerate(xs)]
+        plan = choose(samples)
+        if plan.kind == "blurred_fit":
+            return
+        x0, x1 = plan.keyframes[0].x, plan.keyframes[0].x + plan.crop_width
+        outside = sum(1 for (f,) in samples
+                      if f.x - f.width / 2 < x0 or f.x + f.width / 2 > x1)
+        allowed = 2 * int(len(samples) * layouts.EXTENT_TRIM)
+        # A face far enough from the rest starts its own track and is not the
+        # subject at all, so it is not held either.
+        gate = layouts.TRACK_MATCH_DISTANCE * 1920
+        strays = sum(1 for a, b in pairwise(xs) if abs(a - b) > gate)
+        assert outside <= allowed + strays
 
-    def test_first_keyframe_is_at_time_zero(self):
-        """Without t=0 the crop holds its default origin until the first cue."""
-        faces = [face_at(1.0 + i * 0.2, 400 + i * 20) for i in range(20)]
-        plan = self._plan(faces)
-        assert plan.keyframes[0].t == 0.0
+    def test_the_frame_never_leaves_the_source(self):
+        samples = [[face_at(i * 0.2, 1880)] for i in range(30)]
+        plan = choose(samples)
+        assert plan.keyframes[0].x >= 0
+        assert plan.keyframes[0].x + plan.crop_width <= 1920
 
-    def test_pan_speed_limit_holds_across_keyframes(self):
-        faces = [face_at(0.0, 200), face_at(0.2, 1800), face_at(0.4, 200)]
-        plan = self._plan(faces, max_pan_speed=0.1, pan_smoothing=1.0)
-        limit = 0.1 * 1920 * 0.2
-        for a, b in zip(plan.keyframes, plan.keyframes[1:], strict=False):
-            if b.t > a.t:
-                assert abs(b.x - a.x) <= limit + 1.5
 
-    def test_scene_cut_allows_an_immediate_jump(self):
-        """Easing across a hard cut looks like a mistake, so tracking restarts."""
-        faces = [face_at(i * 0.2, 300) for i in range(5)]
-        faces += [face_at(1.0 + i * 0.2, 1600) for i in range(5)]
-        smooth = self._plan(faces, pan_smoothing=0.15)
-        cut = self._plan(faces, pan_smoothing=0.15, scene_cuts=[1.0])
-        assert cut.keyframes[-1].x > smooth.keyframes[-1].x
+class TestGraphicsAreKept:
+    """Reported with screenshots: a card sliced at the frame edge, a subtitle
+    bar cut to its middle 608px. A graphic on screen must end up in frame."""
+
+    CARD = OverlayBox(x=81, y=75, width=597, height=489, kind="card")
+    SUBTITLE = OverlayBox(x=399, y=996, width=1128, height=54, kind="text")
+
+    def test_a_card_beside_the_speaker_widens_the_frame(self):
+        samples = [[face_at(i * 0.2, 905, size=330)] for i in range(20)]
+        plan = choose(samples, overlays=[self.CARD])
+        assert plan.kind == "fit_crop"
+        x0 = plan.keyframes[0].x
+        assert x0 <= self.CARD.x and self.CARD.right <= x0 + plan.crop_width
+        assert holds_every_face(plan, samples)
+
+    def test_a_subtitle_bar_is_kept_whole(self):
+        samples = [[face_at(i * 0.2, 1189, size=390)] for i in range(30)]
+        plan = choose(samples, overlays=[self.SUBTITLE])
+        x0 = plan.keyframes[0].x
+        assert x0 <= self.SUBTITLE.x
+        assert self.SUBTITLE.right <= x0 + plan.crop_width
+
+    def test_without_graphics_the_same_shot_fills_the_frame(self):
+        samples = [[face_at(i * 0.2, 905, size=330)] for i in range(20)]
+        assert choose(samples).kind == "follow_crop"
+
+    def test_a_graphic_prevents_a_stack_that_would_drop_it(self):
+        """A stack shows two faces and nothing else."""
+        samples = [[face_at(i * 0.2, 480), face_at(i * 0.2, 1440)] for i in range(30)]
+        assert choose(samples).kind == "two_speaker_stack"
+        plan = choose(samples, overlays=[self.SUBTITLE])
+        assert plan.kind in ("fit_crop", "blurred_fit")
+
+    def test_a_graphic_spanning_the_frame_keeps_the_whole_frame(self):
+        wide = OverlayBox(x=20, y=900, width=1880, height=60, kind="text")
+        samples = [[face_at(i * 0.2, 960)] for i in range(20)]
+        assert choose(samples, overlays=[wide]).kind == "blurred_fit"
 
 
 class TestChooseLayout:
     def _choose(self, samples, **kwargs):
-        return choose_layout(
-            samples, src_w=kwargs.pop("src_w", 1920), src_h=kwargs.pop("src_h", 1080),
-            out_w=1080, out_h=1920, duration=10.0,
-            pan_smoothing=0.15, max_pan_speed=0.25,
-            min_face_ratio=kwargs.pop("min_face_ratio", 0.5), **kwargs,
-        )
+        return choose(samples, **kwargs)
 
     def test_vertical_source_is_never_cropped(self):
         plan = self._choose([[face_at(0, 540)]] * 20, src_w=1080, src_h=1920)
@@ -258,10 +269,11 @@ class TestChooseLayout:
         assert plan.kind == "blurred_fit"
         assert "20%" in plan.reason
 
-    def test_one_persistent_face_gives_follow_crop(self):
+    def test_one_persistent_face_gets_a_subject_frame(self):
         samples = [[face_at(i * 0.2, 800 + i * 5)] for i in range(30)]
         plan = self._choose(samples)
-        assert plan.kind == "follow_crop"
+        assert plan.kind in ("follow_crop", "fit_crop")
+        assert holds_every_face(plan, samples)
 
     def test_two_separated_faces_give_a_stack(self):
         samples = [[face_at(i * 0.2, 480), face_at(i * 0.2, 1440)] for i in range(30)]
@@ -300,5 +312,6 @@ class TestFaceCentric:
         from clipper.models import LayoutPlan
 
         assert LayoutPlan(kind="follow_crop").is_face_centric
+        assert LayoutPlan(kind="fit_crop").is_face_centric
         assert LayoutPlan(kind="two_speaker_stack").is_face_centric
         assert not LayoutPlan(kind="blurred_fit").is_face_centric

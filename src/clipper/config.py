@@ -179,15 +179,8 @@ class RenderConfig(StrictModel):
     show_hook_text: bool = True
     hook_text_seconds: float = Field(default=2.0, ge=0)
     safe_area: SafeArea = SafeArea()
-    # Face sampling rate for the reframing trajectory, in frames per second.
+    # Face and graphic sampling rate for framing, in frames per second.
     face_sample_fps: float = Field(default=5.0, gt=0)
-    # Exponential-moving-average factor for camera smoothing: lower is smoother.
-    pan_smoothing: Unit = 0.12
-    # Cap on crop-centre motion, as a fraction of frame width per second.
-    max_pan_speed: float = Field(default=0.25, gt=0)
-    # How far the subject may drift before the camera reframes, as a fraction
-    # of the crop width. Larger means a stiller, less shaky shot.
-    pan_deadzone: Unit = 0.18
     # For screen-share sources, the share of output height given to the content
     # pane (the rest goes to the webcam). Only a target: the split also respects
     # the content's own aspect ratio so it is never squeezed.

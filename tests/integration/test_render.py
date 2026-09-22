@@ -67,17 +67,9 @@ def render(tmp_path: Path, source: Path, plan: ClipPlan, cfg: Config, **kwargs):
 
 class TestFollowCrop:
     def test_renders_conformant_vertical_video(self, tmp_path, media_cache, cfg):
-        source, track = synthetic.moving_face_video(duration=10.0)
-        keyframes = [
-            CropKeyframe(
-                t=round(i * 0.2, 3),
-                x=int(max(0, min(1920 - 608, track.x_at(1.0 + i * 0.2) - 304))),
-                y=0,
-            )
-            for i in range(int(CLIP_SECONDS / 0.2) + 1)
-        ]
+        source, _ = synthetic.moving_face_video(duration=10.0)
         layout = LayoutPlan(kind="follow_crop", crop_width=608, crop_height=1080,
-                            keyframes=keyframes, face_ratio=1.0)
+                            keyframes=[CropKeyframe(t=0.0, x=656, y=0)], face_ratio=1.0)
 
         result = render(tmp_path, source, make_plan(layout), cfg)
 
@@ -89,44 +81,42 @@ class TestFollowCrop:
         assert info.has_audio
         assert info.video_codec == "h264"
 
-    def test_writes_a_sendcmd_script_it_actually_uses(self, tmp_path, media_cache, cfg):
-        source, _ = synthetic.moving_face_video(duration=10.0)
-        layout = LayoutPlan(
-            kind="follow_crop", crop_width=608, crop_height=1080,
-            keyframes=[CropKeyframe(t=0.0, x=100, y=0), CropKeyframe(t=3.0, x=900, y=0)],
-        )
-        result = render(tmp_path, source, make_plan(layout), cfg)
-        assert result.sendcmd_path is not None
-        assert "crop x 900" in result.sendcmd_path.read_text(encoding="utf-8")
-        assert "sendcmd" in " ".join(result.command)
 
-    def test_the_crop_actually_moves(self, tmp_path, media_cache, cfg):
-        """The strongest available proof that sendcmd drove the crop.
+class TestFitCrop:
+    """A frame wider than 9:16, sized to hold a subject's whole range of motion.
 
-        The fixture's disc slides left to right on a dark field. If the crop
-        tracked it, the disc stays near the centre of the output; if sendcmd did
-        nothing, it drifts out of frame.
-        """
+    This replaces the panning camera. The fixture's disc slides across 690px
+    during the clip -- more than a 608px crop can hold. The old approach chased
+    it; the camera trailed and the subject left the frame. Here one static frame
+    is wide enough for the whole path, which is proved on the rendered pixels:
+    the disc is present at both ends of the clip.
+    """
+
+    def _layout(self, track) -> LayoutPlan:
+        start, end = 1.0, 1.0 + CLIP_SECONDS
+        left = track.x_at(start) - track.radius - 20
+        right = track.x_at(end) + track.radius + 20
+        width = int(right - left) // 2 * 2
+        return LayoutPlan(kind="fit_crop", crop_width=width, crop_height=1080,
+                          keyframes=[CropKeyframe(t=0.0, x=int(left), y=0)], face_ratio=1.0)
+
+    def test_renders_conformant_vertical_video(self, tmp_path, media_cache, cfg):
         source, track = synthetic.moving_face_video(duration=10.0)
-        keyframes = [
-            CropKeyframe(
-                t=round(i * 0.2, 3),
-                x=int(max(0, min(1920 - 608, track.x_at(1.0 + i * 0.2) - 304))),
-                y=0,
-            )
-            for i in range(int(CLIP_SECONDS / 0.2) + 1)
-        ]
-        layout = LayoutPlan(kind="follow_crop", crop_width=608, crop_height=1080,
-                            keyframes=keyframes)
-        plan = make_plan(layout, hook_text="", caption_style="bold_pop")
+        result = render(tmp_path, source, make_plan(self._layout(track)), cfg)
+        info = probe(result.output)
+        assert (info.width, info.height) == (1080, 1920)
+        assert info.duration == pytest.approx(CLIP_SECONDS, abs=0.35)
+
+    def test_the_subject_stays_in_frame_for_the_whole_clip(self, tmp_path, media_cache, cfg):
+        source, track = synthetic.moving_face_video(duration=10.0)
+        plan = make_plan(self._layout(track), hook_text="", caption_style="bold_pop")
         result = render(tmp_path, source, plan, cfg)
 
         early = _bright_centroid_x(result.output, 0.5, tmp_path)
         late = _bright_centroid_x(result.output, CLIP_SECONDS - 0.7, tmp_path)
-        assert early is not None and late is not None, "disc missing from the output"
-        # Both near the middle of the 1080-wide frame: the camera followed.
-        assert abs(early - 540) < 260, f"disc off-centre early at x={early}"
-        assert abs(late - 540) < 260, f"disc off-centre late at x={late}"
+        assert early is not None and late is not None, "disc left the frame"
+        # The frame did not move, so the disc crosses it: left early, right late.
+        assert early < 540 < late
 
 
 class TestTwoSpeakerStack:
@@ -142,17 +132,6 @@ class TestTwoSpeakerStack:
         info = probe(result.output)
         assert (info.width, info.height) == (1080, 1920)
         assert info.duration == pytest.approx(CLIP_SECONDS, abs=0.35)
-
-    def test_no_sendcmd_for_a_static_stack(self, tmp_path, media_cache, cfg):
-        source = synthetic.two_faces_video(duration=10.0)
-        layout = LayoutPlan(
-            kind="two_speaker_stack", crop_width=1215, crop_height=1080,
-            panes=[CropRect(x=0, y=0, width=1215, height=1080),
-                   CropRect(x=705, y=0, width=1215, height=1080)],
-        )
-        result = render(tmp_path, source, make_plan(layout), cfg)
-        assert result.sendcmd_path is None
-
 
 class TestBlurredFit:
     def test_renders_with_no_black_bars(self, tmp_path, media_cache, cfg):

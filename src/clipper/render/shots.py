@@ -29,6 +29,7 @@ from itertools import pairwise
 
 from ..models import LayoutPlan, LayoutSegment
 from .layouts import FaceObservation, choose_layout
+from .overlays import OverlayBox, persistent_regions
 
 # A shot shorter than this is merged into a neighbour. Below roughly a second
 # and a half a framing change reads as a glitch rather than as an edit, and the
@@ -138,6 +139,7 @@ def plan_per_shot(
     out_w: int,
     out_h: int,
     duration: float,
+    overlays_per_sample: list[list[OverlayBox]] | None = None,
     min_shot_seconds: float = MIN_SHOT_SECONDS,
     max_shots: int = MAX_SHOTS,
     **layout_kwargs,
@@ -149,60 +151,98 @@ def plan_per_shot(
     there is no reason to pay for a segmented filter graph to render what is in
     fact one composition.
     """
+    overlays = overlays_per_sample or [[] for _ in faces_per_sample]
     shots = split_into_shots(sample_times, scene_cuts, duration,
                              min_seconds=min_shot_seconds, max_shots=max_shots)
 
-    def whole_clip() -> LayoutPlan:
+    # A graphic on screen for only part of a long shot should widen only that
+    # part. Otherwise a 27-second close-up with a 6-second insert is framed wide
+    # for all 27 seconds.
+    extra = [t for shot in shots
+             for t in _graphic_boundaries(shot, overlays, sample_times,
+                                          min_seconds=min_shot_seconds)]
+    if extra:
+        shots = split_into_shots(sample_times, sorted([*scene_cuts, *extra]), duration,
+                                 min_seconds=min_shot_seconds, max_shots=max_shots)
+
+    def frame(first: int, last: int) -> LayoutPlan:
         return choose_layout(
-            faces_per_sample, src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
-            duration=duration, scene_cuts=scene_cuts, **layout_kwargs,
+            faces_per_sample[first:last], src_w=src_w, src_h=src_h,
+            out_w=out_w, out_h=out_h,
+            overlays=persistent_regions(overlays[first:last]), **layout_kwargs,
         )
 
     if len(shots) <= 1:
-        return whole_clip()
+        return frame(0, len(faces_per_sample))
 
-    segments: list[LayoutSegment] = []
-    for shot in shots:
-        plan = choose_layout(
-            faces_per_sample[shot.first:shot.last],
-            src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
-            duration=shot.duration,
-            # Cuts are what separate the shots, so by construction there are
-            # none left inside one.
-            scene_cuts=[],
-            **layout_kwargs,
-        )
-        segments.append(LayoutSegment(
-            start=round(shot.start, 3), end=round(shot.end, 3),
-            layout=_rebase(plan, shot.start),
-        ))
-
+    segments = [
+        LayoutSegment(start=round(shot.start, 3), end=round(shot.end, 3),
+                      layout=frame(shot.first, shot.last))
+        for shot in shots
+    ]
     if _all_identical(segments):
-        return whole_clip()
+        return frame(0, len(faces_per_sample))
 
     face_ratio = sum(s.layout.face_ratio * (s.end - s.start) for s in segments)
-    kinds = ", ".join(_kind_summary(segments))
-    return LayoutPlan(
+    plan = LayoutPlan(
         kind="per_shot",
         segments=segments,
         face_ratio=face_ratio / duration if duration > 0 else 0.0,
-        reason=f"{len(segments)} shots framed separately ({kinds})",
     )
+    return plan.model_copy(update={
+        "reason": f"{len(segments)} shots framed separately ({plan.describe})"})
 
 
-def _rebase(plan: LayoutPlan, offset: float) -> LayoutPlan:
-    """Shift a segment's keyframe times so they start at zero.
+def _graphic_boundaries(
+    shot: Shot,
+    overlays: list[list[OverlayBox]],
+    sample_times: list[float],
+    *,
+    min_seconds: float,
+) -> list[float]:
+    """Times inside a shot where a recurring graphic appears or disappears.
 
-    Each segment is trimmed and its timestamps reset before its own filter
-    chain runs, so a trajectory planned against clip time would be applied at
-    the wrong moment -- or, for a segment starting after the clip's end of the
-    trajectory, never applied at all.
+    Only shots long enough to hold two sub-shots are split. Presence is
+    smoothed first -- detections are intermittent (the animated Dumbo card was
+    found in 5 of 19 samples), so a raw on/off signal would flicker.
     """
-    if not plan.keyframes:
-        return plan
-    shifted = [kf.model_copy(update={"t": round(max(0.0, kf.t - offset), 3)})
-               for kf in plan.keyframes]
-    return plan.model_copy(update={"keyframes": shifted})
+    if shot.duration < 2 * min_seconds:
+        return []
+    window = overlays[shot.first:shot.last]
+    regions = persistent_regions(window)
+    if not regions:
+        return []
+
+    def covered(box: OverlayBox) -> bool:
+        return any(_share_inside(box, r) >= 0.5 for r in regions if r.kind == box.kind)
+
+    present = [any(covered(b) for b in boxes) for boxes in window]
+    step = shot.duration / max(1, len(window))
+    # Bridge gaps shorter than a shot could be; a graphic that drops out of
+    # detection for a second has not left the screen.
+    gap = max(1, round(min_seconds / step))
+    present = _close_gaps(present, gap)
+
+    times = sample_times[shot.first:shot.last]
+    return [times[i] for i in range(1, len(present)) if present[i] != present[i - 1]]
+
+
+def _share_inside(box: OverlayBox, region: OverlayBox) -> float:
+    ix = max(0.0, min(box.right, region.right) - max(box.x, region.x))
+    iy = max(0.0, min(box.bottom, region.bottom) - max(box.y, region.y))
+    area = box.width * box.height
+    return ix * iy / area if area > 0 else 0.0
+
+
+def _close_gaps(flags: list[bool], gap: int) -> list[bool]:
+    """Fill runs of False no longer than `gap` that lie between two Trues."""
+    out = list(flags)
+    trues = [i for i, f in enumerate(flags) if f]
+    for a, b in pairwise(trues):
+        if 1 < b - a <= gap + 1:
+            for i in range(a + 1, b):
+                out[i] = True
+    return out
 
 
 def _all_identical(segments: list[LayoutSegment]) -> bool:
@@ -217,16 +257,3 @@ def _all_identical(segments: list[LayoutSegment]) -> bool:
         == [(kf.x, kf.y) for kf in first.keyframes]
         for s in segments[1:]
     )
-
-
-def _kind_summary(segments: list[LayoutSegment]) -> list[str]:
-    """`['2x blurred_fit', 'follow_crop']` -- readable in a manifest."""
-    out: list[str] = []
-    for segment in segments:
-        kind = segment.layout.kind
-        if out and out[-1].endswith(kind):
-            count = int(out[-1].split("x ")[0]) + 1 if "x " in out[-1] else 2
-            out[-1] = f"{count}x {kind}"
-        else:
-            out.append(kind)
-    return out

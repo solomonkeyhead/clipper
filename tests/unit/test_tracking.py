@@ -27,8 +27,7 @@ def obs(t: float, x: float, y: float = 450, w: float = 300) -> FaceObservation:
 
 def choose(per_sample, **kwargs):
     defaults = dict(
-        src_w=FRAME_W, src_h=FRAME_H, out_w=1080, out_h=1920, duration=30.0,
-        pan_smoothing=0.12, max_pan_speed=0.25, min_face_ratio=0.5,
+        src_w=FRAME_W, src_h=FRAME_H, out_w=1080, out_h=1920, min_face_ratio=0.5,
     )
     defaults.update(kwargs)
     return choose_layout(per_sample, **defaults)

@@ -548,3 +548,105 @@ branch was forced to square pixels individually.
 
 A clip whose shots all reach the same framing collapses back to a plain
 single-layout plan, so the segmented graph is only paid for when it is used.
+
+### D40. Framing is static; the panning camera is removed
+
+Every shot gets one frame that holds its subject's whole range of movement, and
+the frame changes only where the source cuts (D39). When that range is wider
+than a 9:16 slice, the frame widens (`fit_crop`: the wider region over a blurred
+copy of itself) rather than trimming or following.
+
+The failure that forced this, reported with a screenshot: a close-up showing an
+ear and the back of a head. The speaker leaned across the shot, his face
+swinging over 700px; the static crop could not hold that, so the planner fell
+back to the panning camera, which is deliberately slow and speed-limited so it
+does not shake (D33). It trailed him the whole way. Measured: the face was
+fully in the crop in **12 of 27** samples.
+
+The audit that followed found the static crops were not clean either. They sized
+themselves to a face range trimmed **20% at each end** -- chosen so more subjects
+would squeeze into 9:16, with the panning camera meant to absorb the rest. For a
+static crop nothing absorbs it. Across every cropped shot of the five clips the
+face was fully in frame in **84%** of samples (419/497).
+
+Now: 5% trim (enough to drop a stray detection), the face box padded for hair
+and ears, and a frame that grows to fit. Same five clips: **99.0%** (491/496);
+the remaining five samples are exactly the trimmed extremes.
+
+**What it costs.** A 9:16 slice is now used only when the subject genuinely
+fits one. Many close-ups come out as a `fit_crop` 700-980px wide, so the picture
+fills 60-85% of the output height with a blur above and below, instead of
+filling it edge to edge. That is the trade: every frame holds the whole face,
+and some frames are less full. The constants are `EXTENT_TRIM`,
+`HEAD_PADDING_RATIO` and `FRAME_MARGIN_RATIO` in `layouts.py`.
+
+Removed with it: `smooth_trajectory`, `plan_follow_crop`, the `sendcmd`
+trajectory files, and the `pan_smoothing`, `max_pan_speed` and `pan_deadzone`
+settings. A config file still carrying those keys will be rejected, since
+config is strict (`extra="forbid"`); delete the three lines.
+
+### D41. Graphics beside the speaker are detected and kept in frame
+
+Edited podcasts put subtitle bars, pop-up cards and circular photo inserts in
+the half of the 16:9 frame a vertical crop discards. Reported with screenshots:
+a Dumbo card cut in half at the frame edge, and a 1128px subtitle bar cut to its
+middle 608px.
+
+The first two detectors tried failed on the real footage, and why they failed
+decided the design:
+
+* *Sharp and pixel-static* also matches the set's in-focus posters.
+* *Appears part-way through the shot* missed both reported cases. The card and
+  the subtitle bar were each on screen for their **entire** shot, and the card
+  is animated, so it is never pixel-static either.
+
+So detection is by appearance, one detector per kind of graphic seen:
+
+| kind | method | why this one |
+|---|---|---|
+| text | morphological gradient, Otsu, horizontal close, line-shaped components | subtitle bars are clean, high-contrast lines |
+| card | closed convex contour, rectangular fill | the Dumbo card has a solid border |
+| circle | Hough transform | circular inserts sit on busy backgrounds; their outlines merge with neighbouring edges and never close into a contour |
+
+Text counts only at **25% of frame width or more**. The goal is sentences a
+viewer must read; the same detector finds a book title on the set (13%), a shirt
+logo (4%) and stadium signage in b-roll (20%). The signage was admitted at an
+earlier 20% cut-off and widened a whole shot to 1834px for nothing, which is
+where 25% came from; real subtitle lines measured 44-59%.
+
+A graphic changes the framing only if it recurs: in at least 20% of a shot's
+samples and no fewer than three. The animated card was found in 5 of 19.
+
+A graphic present for only part of a long shot splits that shot at its
+appearance and disappearance, so only that part is widened (smoothed first,
+because detection is intermittent). Without this, a 27-second close-up with a
+10-second insert was framed wide for all 27 seconds.
+
+**Evidence, and its limit.** On 13 hand-labelled real frames: every insert
+present was found and nothing was flagged on the 8 frames without one, posters
+and heads included. One frame of the card was missed, which persistence covers.
+Across all shots of the five clips, all 6 recurring graphics ended up inside
+their frame. That is one source and 13 labelled frames -- enough to trust on
+this kind of footage, not enough to claim it generalises. The likeliest misses
+elsewhere are graphics that are neither text, rectangular cards nor circles.
+
+### D42. The speaker is whoever the source shows
+
+Reported: "the incorrect guy is framed because he's not talking." At that moment
+the source itself is a close-up of the listener -- a reaction shot the original
+editor chose -- and the speaker is not in the picture at all. No crop can frame
+someone who is not in the frame, and cutting in footage of the speaker from
+another moment would put his face on screen out of sync with his words.
+
+This is recorded as a limit, not a bug. Following the source's cuts (D39) means
+inheriting its reaction shots.
+
+### D43. Cuts are placed on their exact frame
+
+Cuts are detected between samples 0.2s apart, and were recorded at the sample
+that saw them -- up to six frames after the real cut. Those frames of the new
+shot were then rendered with the previous shot's framing: a visible flash at
+the start of a shot. The frames in between are already decoded during the scan,
+so on a detected cut they are compared and the cut is moved to the frame where
+the picture changes, minus half a frame so the render's `trim` boundary falls
+between two frames. Cost is only paid at cuts: at most five small histograms each.

@@ -970,3 +970,75 @@ The error does not grow with each boundary, so nothing is accumulating; ±0.08s
 is the resolution of the check (every third frame). Stream durations across all
 five clips: video is 0.00-0.07s short of audio, i.e. at most two frames at the
 very end, which the single-layout path also produces.
+
+---
+
+## 2026-09-22 (later) — Static framing, graphic detection, frame-accurate cuts
+
+Prompted by three more screenshots from the per-shot render. Each was traced to
+its source frame with the planned crop and detected faces drawn on it.
+
+| screenshot | cause |
+|---|---|
+| clip 001, 17.1s: listener framed, Dumbo card cut in half | the source shows only the listener here (a reaction shot); the card sat outside the 608px crop |
+| clip 003, 24.1s: an ear and the back of a head | the speaker's face swung over 700px; the fallback panning camera trailed him |
+| clip 005, 21.8s: subtitle bar unreadable | a 1128px source subtitle bar inside a 608px crop |
+
+### Face containment
+
+Share of face samples fully inside the crop, across every cropped shot of the
+five clips:
+
+| | faces fully in frame |
+|---|---|
+| before: 20%-trimmed static crops + panning fallback | **419/497 = 84%** (panning shots 41% and 68%) |
+| after: 5% trim, head padding, frame widens to fit | **491/496 = 99.0%** |
+
+The five remaining samples are the trimmed extremes, by construction.
+
+### Graphic detection
+
+On 13 hand-labelled real frames (5 with graphics, 8 without, including posters,
+heads, stadium b-roll and a map): every graphic kind present was found on 12 of
+13 frames; the one miss was a single frame of the animated card; **no false
+detections on the 8 frames without a graphic**. Per shot, the persistence rule
+kept: subtitle bar 33/33 samples, Dumbo card 5/19, circles 42/129 and text
+27/129 in the 27-second close-up, nothing in the ear shot.
+
+After the change, all 6 recurring graphics across the five clips sit inside
+their shot's frame (6/6).
+
+One false positive was found in the full run and fixed: stadium signage in
+b-roll at 20% of frame width widened a shot to 1834px. The text-width cut-off
+went from 20% to 25%; real subtitle lines measured 44-59%.
+
+### The three reported moments, re-rendered
+
+Extracted from the new renders at the reported timestamps: the Dumbo card is
+whole with the speaker fully in frame; the ear shot shows the whole face; the
+subtitle bar reads end to end.
+
+### Frame-accurate cuts
+
+Found while checking the new renders, not reported: at each cut, the first
+frames of the new shot kept the previous shot's crop, because cuts were located
+at the 5 fps sample that detected them — up to six frames late. Seen as a flash
+of a chair and a lap for three frames at clip 004's 31.49s cut (every frame
+from 31.0s inspected).
+
+Measured with a checker that counts pairs of large frame-to-frame jumps a few
+frames apart in the rendered files (a source cut then a late reframe):
+
+| | pairs across 5 clips |
+|---|---|
+| cuts at sample time | 27 |
+| cuts refined to the exact frame | 19 |
+
+Every lagged reframe at a hard cut is gone (002, 003 at 25.33s and 39.4s, 004 at
+31.4s). The 19 that remain were inspected frame by frame at the two worst spots:
+they are the source's own whip-pan transitions, where the picture smears across
+several frames and a framing change inside the smear is not visible.
+
+### Tests
+
+774 passed, 2 skipped; ruff clean.

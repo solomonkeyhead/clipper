@@ -1,9 +1,8 @@
 """Rendering one clip: assemble the spec, write side files, run FFmpeg.
 
-The side files (the ASS subtitle and the sendcmd trajectory) are written into a
-per-clip working directory and kept, not deleted. When a clip comes out wrong,
-the exact subtitle and camera path that produced it are the first things worth
-looking at.
+The ASS subtitle file is written into a per-clip working directory and kept,
+not deleted: when a clip comes out wrong, the exact subtitle that produced it is
+one of the first things worth looking at.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from ..models import ClipPlan, LayoutPlan, MediaInfo, Word
 from ..utils.logging import get_logger
 from . import captions as cap
 from .ffmpeg import bundled_fonts_dir, run, select_video_encoder
-from .graph import RenderSpec, build_command, build_sendcmd_script, output_size
+from .graph import RenderSpec, build_command, output_size
 
 log = get_logger(__name__)
 
@@ -28,7 +27,6 @@ class RenderResult:
 
     output: Path
     ass_path: Path | None
-    sendcmd_path: Path | None
     encoder: str
     encoder_reason: str
     elapsed: float
@@ -83,15 +81,6 @@ def render_clip(
     )
 
     layout = _scale_layout(plan.layout, media, width, height)
-    sendcmd_path: Path | None = None
-    segment_sendcmd_paths: tuple[Path | None, ...] = ()
-    if layout.kind == "per_shot":
-        segment_sendcmd_paths = tuple(
-            _write_sendcmd(segment.layout, work_dir, f"{plan.clip_id}.shot{i:02d}")
-            for i, segment in enumerate(layout.segments)
-        )
-    else:
-        sendcmd_path = _write_sendcmd(layout, work_dir, plan.clip_id)
 
     encoder, reason = select_video_encoder(rc.encoder)
 
@@ -115,8 +104,6 @@ def render_clip(
         audio_bitrate=rc.audio_bitrate,
         audio_rate=rc.audio_rate,
         has_audio=media.has_audio,
-        sendcmd_path=sendcmd_path,
-        segment_sendcmd_paths=segment_sendcmd_paths,
     )
 
     command = build_command(spec)
@@ -132,21 +119,11 @@ def render_clip(
     return RenderResult(
         output=output,
         ass_path=ass_path,
-        sendcmd_path=sendcmd_path,
         encoder=encoder,
         encoder_reason=reason,
         elapsed=elapsed,
         command=command,
     )
-
-
-def _write_sendcmd(layout: LayoutPlan, work_dir: Path, stem: str) -> Path | None:
-    """Write a trajectory file, or return None for a framing that never moves."""
-    if layout.kind != "follow_crop" or len(layout.keyframes) <= 1:
-        return None
-    path = work_dir / f"{stem}.cmds.txt"
-    path.write_text(build_sendcmd_script(layout), encoding="utf-8", newline="\n")
-    return path
 
 
 def _scale_layout(layout: LayoutPlan, media: MediaInfo, width: int, height: int) -> LayoutPlan:

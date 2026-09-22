@@ -78,15 +78,12 @@ render:
     bottom: 320
     side: 90
   face_sample_fps: 5.0
-  pan_deadzone: 0.18         # hold the shot still until the subject drifts this far
   detect_screen_share: true  # stack content over the speaker for screen-share sources
   content_pane_share: 0.58   # target share of height for the content pane
   min_subject_face_ratio: 0.13  # smaller faces are overlays, not the subject
   per_shot_framing: true     # frame each shot separately, cutting where the source cuts
   min_shot_seconds: 1.5      # shorter shots merge into a neighbour
   max_shots: 8               # cap on separately-framed shots per clip
-  pan_smoothing: 0.12        # lower = smoother, laggier camera
-  max_pan_speed: 0.25        # fraction of frame width per second
   draft_width: 540
   draft_height: 960
 

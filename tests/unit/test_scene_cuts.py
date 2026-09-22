@@ -92,3 +92,34 @@ class TestCutsFeedShots:
 
         shots = split_into_shots([i * 0.2 for i in range(100)], [cut_at], 20.0)
         assert [s.end for s in shots[:-1]] == [cut_at]
+
+
+class TestCutRefinement:
+    """A cut is detected by a sample up to 0.2s after it; it must be placed on
+    the exact frame. Reported on real output: frames of the new shot were
+    rendered with the previous shot's crop -- a flash of a chair and a lap."""
+
+    FPS = 30.0
+
+    def refine(self, first_new: int):
+        """Six frames between two samples; the shot changes at `first_new`."""
+        from clipper.render.faces import _refine_cut
+
+        old = with_block(40, (10, 20, 130, 160), 220)
+        new = with_block(40, (190, 20, 310, 160), 220)
+        between = [((i + 1) / self.FPS, old if i + 1 < first_new else new)
+                   for i in range(5)]
+        return _refine_cut(_histogram(old), between, _histogram(new), 6 / self.FPS,
+                           size=(320, 180), fps=self.FPS)
+
+    @pytest.mark.parametrize("first_new", [1, 2, 3, 4, 5, 6])
+    def test_the_cut_lands_just_before_the_first_new_frame(self, first_new):
+        t = self.refine(first_new)
+        assert t == pytest.approx((first_new - 0.5) / self.FPS)
+
+    def test_with_nothing_in_between_it_stays_on_the_sample(self):
+        from clipper.render.faces import _refine_cut
+
+        h = _histogram(frame(50))
+        assert _refine_cut(h, [], h, 1.0, size=(320, 180), fps=30.0) == pytest.approx(
+            1.0 - 0.5 / 30.0)

@@ -15,7 +15,8 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 LayoutKind = Literal[
-    "follow_crop", "two_speaker_stack", "content_stack", "blurred_fit", "per_shot",
+    "follow_crop", "fit_crop", "two_speaker_stack", "content_stack", "blurred_fit",
+    "per_shot",
 ]
 PolicyRisk = Literal["none", "low", "high"]
 QAStatus = Literal["pass", "warn", "fail"]
@@ -327,7 +328,9 @@ class LayoutPlan(Artifact):
     kind: LayoutKind
     crop_width: int = 0
     crop_height: int = 0
-    # Time-varying crop origin for follow_crop, driven through FFmpeg `sendcmd`.
+    # Crop origin for follow_crop and fit_crop. Framing is static, so there is
+    # one keyframe, at t=0; the list shape is kept so plans saved by earlier
+    # versions still load.
     keyframes: list[CropKeyframe] = Field(default_factory=list)
     # two_speaker_stack / content_stack: one crop per pane, top then bottom.
     panes: list[CropRect] = Field(default_factory=list)
@@ -353,7 +356,8 @@ class LayoutPlan(Artifact):
         if self.kind == "per_shot":
             return bool(self.segments) and all(
                 s.layout.is_face_centric for s in self.segments)
-        return self.kind in ("follow_crop", "two_speaker_stack", "content_stack")
+        return self.kind in ("follow_crop", "fit_crop", "two_speaker_stack",
+                             "content_stack")
 
     @property
     def describe(self) -> str:

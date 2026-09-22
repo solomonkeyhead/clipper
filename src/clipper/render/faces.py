@@ -16,7 +16,8 @@ detected on the same sampled frames, so they cost nothing extra.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +25,7 @@ import numpy as np
 from ..assets import face_model_path
 from ..utils.logging import get_logger
 from .layouts import FaceObservation
+from .overlays import OverlayBox, detect_overlays
 from .regions import ActivityAccumulator, ContentMap
 
 log = get_logger(__name__)
@@ -75,6 +77,8 @@ class FaceScan:
     frame_height: int
     #: Where content sits in the frame, used to spot a screen-share layout.
     activity: ContentMap | None = None
+    #: Graphics laid over the picture, one list per sampled instant.
+    overlays: list[list[OverlayBox]] = field(default_factory=list)
 
     @property
     def face_ratio(self) -> float:
@@ -164,6 +168,8 @@ def scan(
         per_sample: list[list[FaceObservation]] = []
         sample_times: list[float] = []
         scene_cuts: list[float] = []
+        overlays: list[list[OverlayBox]] = []
+        between: list[tuple[float, np.ndarray]] = []
         previous_hist: list[np.ndarray] | None = None
         activity = ActivityAccumulator(frame_width, frame_height)
 
@@ -174,25 +180,36 @@ def scan(
             if not ok or frame is None:
                 break
 
-            if index % stride == 0:
-                offset = index / source_fps
-                small = (cv2.resize(frame, (detect_w, detect_h),
-                                    interpolation=cv2.INTER_AREA)
-                         if scale < 1.0 else frame)
-                faces = _detect(detector, small, min_confidence=min_confidence,
-                                frame_height=detect_h, t=offset,
-                                upscale=1.0 / scale if scale else 1.0)
-                per_sample.append(faces)
-                sample_times.append(offset)
+            if index % stride != 0:
+                # Kept only until the next sample, so that a cut found there
+                # can be placed on its exact frame (see `_refine_cut`).
+                between.append((index / source_fps, frame))
+                index += 1
+                continue
 
-                hist = _histogram(small)
-                if previous_hist is not None and _is_cut(previous_hist, hist):
-                    scene_cuts.append(offset)
-                previous_hist = hist
+            offset = index / source_fps
+            small = (cv2.resize(frame, (detect_w, detect_h),
+                                interpolation=cv2.INTER_AREA)
+                     if scale < 1.0 else frame)
+            faces = _detect(detector, small, min_confidence=min_confidence,
+                            frame_height=detect_h, t=offset,
+                            upscale=1.0 / scale if scale else 1.0)
+            per_sample.append(faces)
+            sample_times.append(offset)
+            overlays.append(detect_overlays(
+                small, src_w=frame_width, src_h=frame_height))
 
-                # Built from the frames already decoded, so this costs one pass
-                # over small arrays rather than another decode.
-                activity.add(small)
+            hist = _histogram(small)
+            if previous_hist is not None and _is_cut(previous_hist, hist):
+                scene_cuts.append(_refine_cut(
+                    previous_hist, between, hist, offset,
+                    size=(detect_w, detect_h), fps=source_fps))
+            previous_hist = hist
+            between = []
+
+            # Built from the frames already decoded, so this costs one pass
+            # over small arrays rather than another decode.
+            activity.add(small)
 
             index += 1
     finally:
@@ -211,7 +228,44 @@ def scan(
         frame_width=frame_width,
         frame_height=frame_height,
         activity=activity.build(),
+        overlays=overlays,
     )
+
+
+def _refine_cut(previous_hist, between, current_hist, current_offset: float,
+                *, size: tuple[int, int], fps: float) -> float:
+    """Place a detected cut on its exact frame, not on the sample that saw it.
+
+    Cuts are found by comparing samples 0.2s apart, so the sample that detects
+    one can be up to six frames after it. Reported on real output: those frames
+    of the new shot were rendered with the previous shot's framing -- a brief
+    flash of a chair and a lap at the start of a wide shot, because the
+    close-up's crop was still in force. The frames in between were already
+    decoded, so they are compared here and the cut is put where the picture
+    actually changes.
+
+    The returned time sits half a frame before the first frame of the new shot,
+    so the renderer's `trim` boundary falls cleanly between two frames.
+    """
+    import cv2
+
+    if not between:
+        return max(0.0, current_offset - 0.5 / fps)
+    width, height = size
+    chain = [previous_hist]
+    for _, frame in between:
+        small = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+        chain.append(_histogram(small))
+    chain.append(current_hist)
+    offsets = [t for t, _ in between] + [current_offset]
+
+    def similarity(a, b) -> float:
+        return float(np.mean([cv2.compareHist(x, y, cv2.HISTCMP_CORREL)
+                              for x, y in zip(a, b, strict=True)]))
+
+    scores = [similarity(a, b) for a, b in pairwise(chain)]
+    first_new = offsets[int(np.argmin(scores))]
+    return max(0.0, first_new - 0.5 / fps)
 
 
 def _detect(detector, frame, *, min_confidence: float, frame_height: int,
@@ -289,10 +343,7 @@ def plan_layout_for(
     out_width: int,
     out_height: int,
     sample_fps: float,
-    pan_smoothing: float,
-    max_pan_speed: float,
     min_face_ratio: float,
-    deadzone_ratio: float = 0.18,
     content_pane_share: float = 0.58,
     detect_screen_share: bool = True,
     min_subject_face_ratio: float = 0.13,
@@ -308,6 +359,7 @@ def plan_layout_for(
     """
     from ..ingest.probe import probe
     from .layouts import choose_layout, plan_blurred_fit
+    from .overlays import persistent_regions
     from .shots import plan_per_shot
 
     media = probe(video)
@@ -344,25 +396,21 @@ def plan_layout_for(
         src_h=result.frame_height or media.height,
         out_w=out_width,
         out_h=out_height,
-        pan_smoothing=pan_smoothing,
-        max_pan_speed=max_pan_speed,
         min_face_ratio=min_face_ratio,
-        deadzone_ratio=deadzone_ratio,
         min_subject_face_ratio=min_subject_face_ratio,
     )
+    overlays = result.overlays or [[] for _ in result.per_sample]
     if per_shot_framing:
         # One framing for a clip that changes composition mid-way is wrong for
         # at least one of its shots; see the module docstring in `shots.py`.
         plan = plan_per_shot(
             result.per_sample, result.sample_times, result.scene_cuts,
-            duration=duration, min_shot_seconds=min_shot_seconds,
-            max_shots=max_shots, **common,
+            overlays_per_sample=overlays, duration=duration,
+            min_shot_seconds=min_shot_seconds, max_shots=max_shots, **common,
         )
     else:
         plan = choose_layout(
-            result.per_sample, duration=duration,
-            scene_cuts=result.scene_cuts, **common,
-        )
+            result.per_sample, overlays=persistent_regions(overlays), **common)
     # `choose_layout` estimates the ratio from observation spacing; the scan
     # knows it exactly, so prefer the measured value for the QA check.
     return plan.model_copy(update={"face_ratio": result.face_ratio})

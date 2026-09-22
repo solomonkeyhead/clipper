@@ -4,11 +4,10 @@ The whole render is a single FFmpeg invocation: cut, reframe, burn captions,
 normalise loudness, encode. Nothing is piped through Python.
 
 That is a deliberate departure from BUILD_BRIEF.md section 11.1, which suggests
-decoding with OpenCV and piping raw frames out. Raw 1080x1920 at 30 fps is about
-93 MB/s through a pipe, plus a Python loop in the hot path. The time-varying
-follow-crop it was needed for can instead be driven by FFmpeg's own ``sendcmd``
-filter, since ``crop``'s ``x`` and ``y`` options are marked as command-capable
-(``T`` in ``ffmpeg -h filter=crop``). Verified working; see docs/DECISIONS.md D11.
+decoding with OpenCV and piping raw frames out: raw 1080x1920 at 30 fps is about
+93 MB/s through a pipe, plus a Python loop in the hot path. It is also no longer
+needed for the reason it was suggested -- a moving crop. Framing is static per
+shot (docs/DECISIONS.md D40), so every layout is a fixed filter chain.
 """
 
 from __future__ import annotations
@@ -50,25 +49,6 @@ class RenderSpec:
     audio_bitrate: str
     audio_rate: int
     has_audio: bool = True
-    sendcmd_path: Path | None = None
-    #: For a `per_shot` layout, one trajectory file per segment (or None where
-    #: that segment's framing does not move). Indexed alongside
-    #: ``layout.segments``.
-    segment_sendcmd_paths: tuple[Path | None, ...] = ()
-
-
-def build_sendcmd_script(layout: LayoutPlan) -> str:
-    """Render a follow-crop trajectory as a ``sendcmd`` command script.
-
-    Each line is ``<time> crop x <px>;`` -- the format sendcmd expects. Times are
-    relative to the clip, which is what the filter graph sees because the input
-    is seeked with ``-ss`` before ``-i`` and timestamps restart at zero.
-    """
-    lines: list[str] = []
-    for kf in layout.keyframes:
-        lines.append(f"{kf.t:.3f} crop x {kf.x};")
-        lines.append(f"{kf.t:.3f} crop y {kf.y};")
-    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def build_video_filter(spec: RenderSpec) -> str:
@@ -76,7 +56,7 @@ def build_video_filter(spec: RenderSpec) -> str:
     if spec.layout.kind == "per_shot":
         chain = _per_shot_chain(spec)
     else:
-        chain = _layout_chain(spec, spec.layout, "[0:v]", "", spec.sendcmd_path)
+        chain = _layout_chain(spec, spec.layout, "[0:v]", "")
 
     # Normalise frame rate and pixel aspect before captions, so caption
     # positioning is computed against the final geometry.
@@ -87,8 +67,7 @@ def build_video_filter(spec: RenderSpec) -> str:
     return f"{chain},{','.join(tail)}[v]"
 
 
-def _layout_chain(spec: RenderSpec, layout: LayoutPlan, src: str, tag: str,
-                  sendcmd_path: Path | None) -> str:
+def _layout_chain(spec: RenderSpec, layout: LayoutPlan, src: str, tag: str) -> str:
     """One layout's chain, reading from `src` and using `tag`-suffixed labels.
 
     `src` and `tag` exist so the same builders serve both a whole clip (reading
@@ -96,7 +75,9 @@ def _layout_chain(spec: RenderSpec, layout: LayoutPlan, src: str, tag: str,
     trimmed branch, with a suffix that keeps intermediate labels unique).
     """
     if layout.kind == "follow_crop":
-        return _follow_crop_chain(spec, layout, src, sendcmd_path)
+        return _follow_crop_chain(spec, layout, src)
+    if layout.kind == "fit_crop":
+        return _blurred_fit_chain(spec, src, tag, layout)
     if layout.kind == "two_speaker_stack":
         return _two_speaker_chain(spec, layout, src, tag)
     if layout.kind == "content_stack":
@@ -114,28 +95,21 @@ def _per_shot_chain(spec: RenderSpec) -> str:
     Every branch produces the same output size, which is what `concat` requires.
 
     Captions are burned after the concat, on the reassembled timeline, so their
-    timings need no adjustment. `setpts=PTS-STARTPTS` restarts each branch at
-    zero, which is also why a segment's trajectory is rebased (see
-    `shots._rebase`).
+    timings need no adjustment.
     """
     segments = spec.layout.segments
     if not segments:
         raise ValueError("per_shot layout has no segments")
 
     count = len(segments)
-    paths = spec.segment_sendcmd_paths or (None,) * count
-    if len(paths) != count:
-        raise ValueError(
-            f"{len(paths)} sendcmd paths for {count} segments; they must match")
-
     parts = ["[0:v]split=" + str(count)
              + "".join(f"[shot{i}]" for i in range(count))]
-    for i, (segment, cmds) in enumerate(zip(segments, paths, strict=True)):
+    for i, segment in enumerate(segments):
         parts.append(
             f"[shot{i}]trim=start={segment.start:.3f}:end={segment.end:.3f},"
             f"setpts=PTS-STARTPTS[cut{i}]"
         )
-        body = _layout_chain(spec, segment.layout, f"[cut{i}]", f"s{i}", cmds)
+        body = _layout_chain(spec, segment.layout, f"[cut{i}]", f"s{i}")
         # `concat` refuses inputs whose sample aspect ratios differ, and the
         # layouts round theirs differently: a blurred_fit branch came out at
         # SAR 1216:1215 next to a follow_crop branch at 10240:10239, which
@@ -163,20 +137,12 @@ def _ass_filter(spec: RenderSpec) -> str:
     return "ass=" + ":".join(parts)
 
 
-def _follow_crop_chain(spec: RenderSpec, layout: LayoutPlan, src: str,
-                       sendcmd_path: Path | None) -> str:
-    """Crop tracking the speaker, driven by sendcmd, then scaled to output."""
-    cw, ch = layout.crop_width, layout.crop_height
+def _follow_crop_chain(spec: RenderSpec, layout: LayoutPlan, src: str) -> str:
+    """A static 9:16 crop, scaled to fill the output."""
     first = layout.keyframes[0] if layout.keyframes else None
-    x0, y0 = (first.x, first.y) if first else (0, 0)
-
-    steps = []
-    # sendcmd must sit upstream of the filter it drives.
-    if sendcmd_path is not None and len(layout.keyframes) > 1:
-        steps.append(f"sendcmd=f='{escape_filter_path(sendcmd_path)}'")
-    steps.append(f"crop={cw}:{ch}:{x0}:{y0}")
-    steps.append(f"scale={spec.width}:{spec.height}:flags=lanczos")
-    return src + ",".join(steps)
+    x, y = (first.x, first.y) if first else (0, 0)
+    return (f"{src}crop={layout.crop_width}:{layout.crop_height}:{x}:{y},"
+            f"scale={spec.width}:{spec.height}:flags=lanczos")
 
 
 def _two_speaker_chain(spec: RenderSpec, layout: LayoutPlan, src: str,
@@ -228,11 +194,22 @@ def _content_stack_chain(spec: RenderSpec, layout: LayoutPlan, src: str,
     )
 
 
-def _blurred_fit_chain(spec: RenderSpec, src: str, tag: str) -> str:
-    """Source at full width, centred over a blurred, darkened copy of itself."""
+def _blurred_fit_chain(spec: RenderSpec, src: str, tag: str,
+                       layout: LayoutPlan | None = None) -> str:
+    """A region at full output width, centred over a blurred copy of itself.
+
+    With no `layout` the region is the whole frame (`blurred_fit`). A `fit_crop`
+    layout passes a narrower region -- wide enough to hold the subject and any
+    graphic beside them -- which is cropped first, so the background is a blur
+    of that same region rather than of content the viewer cannot see.
+    """
     sigma = round(BACKGROUND_BLUR_SIGMA * spec.width / 1080, 1)
+    region = ""
+    if layout is not None and layout.keyframes:
+        kf = layout.keyframes[0]
+        region = f"crop={layout.crop_width}:{layout.crop_height}:{kf.x}:{kf.y},"
     return (
-        f"{src}split=2[bg{tag}][fg{tag}];"
+        f"{src}{region}split=2[bg{tag}][fg{tag}];"
         f"[bg{tag}]scale={spec.width}:{spec.height}:force_original_aspect_ratio=increase,"
         f"crop={spec.width}:{spec.height},gblur=sigma={sigma},"
         f"eq=brightness={BACKGROUND_DARKEN}[bgb{tag}];"

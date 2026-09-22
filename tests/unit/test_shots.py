@@ -89,7 +89,7 @@ class TestSplitIntoShots:
 def plan(per_sample, sample_times, cuts, duration, **kwargs):
     defaults = dict(
         src_w=FRAME_W, src_h=FRAME_H, out_w=1080, out_h=1920,
-        pan_smoothing=0.12, max_pan_speed=0.25, min_face_ratio=0.5,
+        min_face_ratio=0.5,
     )
     defaults.update(kwargs)
     return plan_per_shot(per_sample, sample_times, cuts,
@@ -144,18 +144,6 @@ class TestPlanPerShot:
         for a, b in pairwise(result.segments):
             assert a.end == b.start
 
-    def test_segment_keyframes_are_rebased_to_the_segment(self):
-        """A trajectory is applied after the segment's timestamps restart."""
-        per_sample = [[obs(i * 0.2, 960, w=440)] for i in range(40)]
-        per_sample += [[obs(8.0 + i * 0.2, 300 + i * 12, w=440)]
-                       for i in range(100)]
-        result = plan(per_sample, times(140), [8.0], 28.0)
-        if result.kind != "per_shot":
-            pytest.skip("this footage collapsed to a single framing")
-        for segment in result.segments:
-            for kf in segment.layout.keyframes:
-                assert 0.0 <= kf.t <= segment.duration + 0.5
-
     def test_describe_names_every_shot(self):
         per_sample = [[obs(i * 0.2, 500, w=180), obs(i * 0.2, 1540, w=180)]
                       for i in range(40)]
@@ -189,3 +177,58 @@ class TestDescribe:
         from clipper.models import LayoutPlan
 
         assert LayoutPlan(kind="blurred_fit").describe == "blurred_fit"
+
+
+class TestGraphicsSplitLongShots:
+    """A graphic on screen for part of a long shot widens only that part.
+
+    Measured on real footage: a 27-second close-up held two circular inserts
+    and a subtitle bar for about ten seconds of it. Widening the whole shot for
+    them would have letterboxed seventeen seconds that had nothing to make
+    room for.
+    """
+
+    @staticmethod
+    def card():
+        from clipper.render.overlays import OverlayBox
+
+        return OverlayBox(x=60, y=80, width=560, height=480, kind="card")
+
+    def test_the_graphic_interval_gets_its_own_framing(self):
+        per_sample = [[obs(i * 0.2, 1100, w=380)] for i in range(150)]  # 30s close-up
+        overlays = [[self.card()] if 50 <= i < 100 else [] for i in range(150)]
+        result = plan(per_sample, times(150), [], 30.0, overlays_per_sample=overlays)
+
+        assert result.kind == "per_shot"
+        kinds = [s.layout.kind for s in result.segments]
+        assert kinds == ["follow_crop", "fit_crop", "follow_crop"]
+        middle = result.segments[1]
+        assert middle.start == pytest.approx(10.0, abs=0.3)
+        assert middle.end == pytest.approx(20.0, abs=0.3)
+
+    def test_the_widened_part_holds_the_graphic(self):
+        per_sample = [[obs(i * 0.2, 1100, w=380)] for i in range(150)]
+        overlays = [[self.card()] if 50 <= i < 100 else [] for i in range(150)]
+        middle = plan(per_sample, times(150), [], 30.0,
+                      overlays_per_sample=overlays).segments[1].layout
+        assert middle.keyframes[0].x <= 60
+
+    def test_a_flickering_detection_does_not_chop_the_shot_up(self):
+        """Detection is intermittent; a card that drops out for a sample or two
+        has not left the screen."""
+        per_sample = [[obs(i * 0.2, 1100, w=380)] for i in range(150)]
+        overlays = [[self.card()] if 50 <= i < 100 and i % 3 else [] for i in range(150)]
+        result = plan(per_sample, times(150), [], 30.0, overlays_per_sample=overlays)
+        assert len(result.segments) == 3
+
+    def test_a_graphic_throughout_needs_no_split(self):
+        per_sample = [[obs(i * 0.2, 1100, w=380)] for i in range(150)]
+        overlays = [[self.card()] for _ in range(150)]
+        result = plan(per_sample, times(150), [], 30.0, overlays_per_sample=overlays)
+        assert result.kind == "fit_crop"
+
+    def test_a_short_shot_is_never_split(self):
+        per_sample = [[obs(i * 0.2, 1100, w=380)] for i in range(12)]  # 2.4s
+        overlays = [[self.card()] if i >= 6 else [] for i in range(12)]
+        result = plan(per_sample, times(12), [], 2.4, overlays_per_sample=overlays)
+        assert result.kind != "per_shot"

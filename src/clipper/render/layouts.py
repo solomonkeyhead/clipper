@@ -1,38 +1,56 @@
 """Turning a 16:9 source into a 9:16 frame.
 
-Three layouts, per BUILD_BRIEF.md section 11.1:
+Every framing is **static**: one position per shot, changing only where the
+source itself cuts (see `shots.py`). There is no panning camera. It was removed
+after it produced both of the worst failures seen on real footage -- shake from
+chasing small head movements, and a face half out of frame because the camera,
+speed-limited to avoid that shake, trailed a subject who leaned across the shot
+(measured: the face fully inside the crop in 12 of 27 samples).
 
-* **follow_crop** -- one dominant face. A tall crop tracks it, smoothed and
-  speed-limited so the camera never snaps.
-* **two_speaker_stack** -- two persistent faces, one above the other.
-* **blurred_fit** -- no reliable face. The source sits full-width over a blurred,
-  darkened copy of itself.
+The layouts:
+
+* **follow_crop** -- a 9:16 slice holding the subject(s). Fills the frame.
+* **fit_crop** -- a slice wider than 9:16, over a blurred copy of itself, used
+  when the subject's range or an on-screen graphic will not fit in 9:16. It
+  keeps everything in frame at the cost of blurred bars above and below.
+* **two_speaker_stack** -- two people far apart, one above the other.
+* **content_stack** -- screen-share content above the speaker's webcam.
+* **blurred_fit** -- the whole frame over a blurred copy of itself.
 
 This module is pure geometry and contains no FFmpeg calls, so every rule here
-(never crop outside the source, never exceed the pan speed limit, keep headroom
-above the face) is unit-testable without rendering anything.
+(never crop outside the source, always hold the whole face) is unit-testable
+without rendering anything.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..models import CropKeyframe, CropRect, LayoutPlan
+
+if TYPE_CHECKING:
+    from .overlays import OverlayBox
 
 # A face looks wrong dead-centre; the eyeline wants to sit above the middle.
 # 0.40 puts the face centre at 40% down the frame, leaving headroom above.
 FACE_VERTICAL_ANCHOR = 0.40
 
-# A detected face should occupy roughly this fraction of the crop's height.
-# Too tight is claustrophobic, too loose wastes the vertical frame.
-TARGET_FACE_HEIGHT_RATIO = 0.32
+# YuNet's box covers the face but not the hair or ears. The frame must hold the
+# head, so each side of the box is padded by this fraction of the face width.
+HEAD_PADDING_RATIO = 0.12
 
-# How far the subject may drift from where the camera is pointing before it
-# reframes, as a fraction of the crop's width. At 0.18 a face moving within the
-# middle third of the crop produces no camera movement at all -- which is the
-# common case for a seated speaker on a fixed webcam, where any movement is
-# shake rather than tracking.
-DEFAULT_DEADZONE_RATIO = 0.18
+# Space left between the subject and the frame edge, as a fraction of the crop.
+FRAME_MARGIN_RATIO = 0.03
+
+# The subject's range over a shot is trimmed by this much at each end before
+# the frame is sized to it. Enough to ignore a stray detection or two, not
+# enough to let the face leave the frame: an earlier 20% trim did exactly that,
+# measured at the face fully in frame in only 81-91% of samples on static crops.
+EXTENT_TRIM = 0.05
+
+# A frame needing at least this share of the source width shows all of it.
+WHOLE_FRAME_RATIO = 0.95
 
 # A face narrower than this fraction of the frame is an overlay inset rather
 # than the subject. Kept in step with `regions.PIP_FACE_WIDTH_RATIO`, which
@@ -115,150 +133,6 @@ def crop_origin_for_face(face_x: float, face_y: float, crop_w: int, crop_h: int,
     return clamp_crop_origin(x, y, crop_w, crop_h, src_w, src_h)
 
 
-def smooth_trajectory(
-    targets: list[tuple[float, float]],
-    *,
-    alpha: float,
-    max_step: float,
-    initial: float | None = None,
-    deadzone: float = 0.0,
-) -> list[float]:
-    """Smooth a sequence of target positions into a camera path.
-
-    Three stages, in this order, because order matters:
-
-    1. A **deadzone**: the camera does not move at all until the subject drifts
-       further than `deadzone` pixels from where it is already pointing.
-    2. An exponential moving average, which removes detector jitter.
-    3. A hard per-step cap, which removes the remaining fast swings.
-
-    The deadzone is what makes the result watchable. Without it the camera
-    chases every small head movement, and because the trajectory is applied as
-    discrete steps at the sampling rate (5 Hz by default), those small
-    corrections show up as visible shake rather than as motion. A real operator
-    holds the shot still and only reframes when the subject actually leaves the
-    frame; this reproduces that. On a fixed webcam it means no movement at all.
-
-    Doing the speed cap *after* the EMA means a genuine jump to a new speaker is
-    approached at a constant bounded rate rather than with the EMA's ease-out --
-    which reads as a deliberate camera move instead of a lurch.
-
-    `targets` is a list of (time, value); the return is one value per target.
-    """
-    if not targets:
-        return []
-    if not 0 < alpha <= 1:
-        raise ValueError("alpha must be in (0, 1]")
-    if deadzone < 0:
-        raise ValueError("deadzone must not be negative")
-
-    current = initial if initial is not None else targets[0][1]
-    out: list[float] = []
-    prev_t = targets[0][0]
-
-    for t, target in targets:
-        dt = max(0.0, t - prev_t)
-        error = target - current
-
-        if abs(error) <= deadzone:
-            # Inside the comfort zone: hold the shot completely still.
-            out.append(current)
-            prev_t = t
-            continue
-
-        # Outside it, aim for the edge of the deadzone rather than dead centre.
-        # Recentring fully would make the camera twitch back and forth every
-        # time the subject crosses the boundary.
-        aim = target - (deadzone if error > 0 else -deadzone)
-
-        smoothed = current + alpha * (aim - current)
-        limit = max_step * dt if dt > 0 else float("inf")
-        delta = smoothed - current
-        if abs(delta) > limit:
-            smoothed = current + (limit if delta > 0 else -limit)
-        out.append(smoothed)
-        current = smoothed
-        prev_t = t
-    return out
-
-
-def plan_follow_crop(
-    faces: list[FaceObservation],
-    *,
-    src_w: int,
-    src_h: int,
-    out_w: int,
-    out_h: int,
-    duration: float,
-    pan_smoothing: float,
-    max_pan_speed: float,
-    scene_cuts: list[float] | None = None,
-    deadzone_ratio: float = DEFAULT_DEADZONE_RATIO,
-) -> LayoutPlan:
-    """Plan a single-face follow crop over the clip's duration.
-
-    `faces` holds at most one observation per sampled instant -- the dominant
-    face, already chosen. `scene_cuts` are times where tracking should snap
-    instead of pan: easing across a hard cut looks like a mistake.
-    """
-    crop_w, crop_h = crop_size_for_aspect(src_w, src_h, out_w, out_h)
-    fallback = centered_crop(src_w, src_h, out_w, out_h)
-
-    if not faces:
-        return LayoutPlan(
-            kind="follow_crop",
-            crop_width=crop_w,
-            crop_height=crop_h,
-            keyframes=[CropKeyframe(t=0.0, x=fallback.x, y=fallback.y)],
-            face_ratio=0.0,
-            reason="no faces observed; holding a centred crop",
-        )
-
-    faces = sorted(faces, key=lambda f: f.t)
-    cuts = sorted(scene_cuts or [])
-
-    # Raw per-observation targets, before smoothing.
-    raw: list[tuple[float, float, float]] = []
-    for f in faces:
-        x, y = crop_origin_for_face(f.x, f.y, crop_w, crop_h, src_w, src_h)
-        raw.append((f.t, float(x), float(y)))
-
-    max_step = max_pan_speed * src_w  # pixels per second
-    deadzone_x = deadzone_ratio * crop_w
-    # Vertical drift is more noticeable than horizontal, and there is usually
-    # far less of it, so the vertical deadzone is proportionally larger.
-    deadzone_y = deadzone_ratio * crop_h * 1.5
-
-    # Smooth within each shot, restarting at every scene cut.
-    xs: list[float] = []
-    ys: list[float] = []
-    for segment in _split_at_cuts(raw, cuts):
-        xs += smooth_trajectory([(t, x) for t, x, _ in segment],
-                                alpha=pan_smoothing, max_step=max_step,
-                                deadzone=deadzone_x)
-        ys += smooth_trajectory([(t, y) for t, _, y in segment],
-                                alpha=pan_smoothing, max_step=max_step,
-                                deadzone=deadzone_y)
-
-    keyframes = []
-    for (t, _, _), x, y in zip(raw, xs, ys, strict=True):
-        cx, cy = clamp_crop_origin(x, y, crop_w, crop_h, src_w, src_h)
-        keyframes.append(CropKeyframe(t=round(max(0.0, t), 3), x=cx, y=cy))
-
-    keyframes = _dedupe_keyframes(keyframes)
-    if keyframes and keyframes[0].t > 0:
-        keyframes.insert(0, CropKeyframe(t=0.0, x=keyframes[0].x, y=keyframes[0].y))
-
-    return LayoutPlan(
-        kind="follow_crop",
-        crop_width=crop_w,
-        crop_height=crop_h,
-        keyframes=keyframes,
-        face_ratio=_face_ratio(faces, duration),
-        reason=f"one dominant face across {len(faces)} sampled frames",
-    )
-
-
 def plan_two_speaker_stack(
     top_face: FaceObservation,
     bottom_face: FaceObservation,
@@ -311,15 +185,14 @@ def choose_layout(
     src_h: int,
     out_w: int,
     out_h: int,
-    duration: float,
-    pan_smoothing: float,
-    max_pan_speed: float,
     min_face_ratio: float,
-    scene_cuts: list[float] | None = None,
-    deadzone_ratio: float = DEFAULT_DEADZONE_RATIO,
     min_subject_face_ratio: float = INSET_FACE_WIDTH_RATIO,
+    overlays: list[OverlayBox] | tuple[OverlayBox, ...] = (),
 ) -> LayoutPlan:
-    """Pick a layout from the sampled face detections.
+    """Pick a static layout for one shot from its sampled face detections.
+
+    `overlays` are graphics the source laid over the picture during this shot
+    (see `overlays.py`). Any framing that crops must keep them whole.
 
     The guiding rule, learned from real footage: **only crop when there is
     something unambiguous to crop to.** A 9:16 slice of a 16:9 frame keeps under
@@ -382,15 +255,28 @@ def choose_layout(
     others = [t for t in subjects[1:]
               if t.coverage(with_subject) >= SECONDARY_TRACK_COVERAGE]
 
+    face_ratio = with_subject / samples
+
     # Several subjects sitting close enough to share one crop: that fills the
     # frame *and* holds still, beating both letterboxing and picking one.
     if others:
         group = plan_group_crop(
             [primary, *others], src_w=src_w, src_h=src_h,
-            out_w=out_w, out_h=out_h, face_ratio=with_subject / samples,
+            out_w=out_w, out_h=out_h, face_ratio=face_ratio, overlays=overlays,
         )
         if group is not None:
             return group
+
+        # A stack shows two faces and nothing else, so it would drop any
+        # graphic on screen. With one present, frame everything instead.
+        if overlays:
+            wide = plan_group_crop(
+                [primary, *others], src_w=src_w, src_h=src_h, out_w=out_w,
+                out_h=out_h, face_ratio=face_ratio, overlays=overlays,
+                allow_wider=True,
+            )
+            if wide is not None:
+                return wide
 
         second = others[0]
         together = primary.co_presence(second)
@@ -399,7 +285,7 @@ def choose_layout(
             return plan_two_speaker_stack(
                 _track_median_face(left), _track_median_face(right),
                 src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
-                face_ratio=with_subject / samples,
+                face_ratio=face_ratio,
             )
 
         if together < CO_PRESENCE_FOR_STACK:
@@ -431,23 +317,15 @@ def choose_layout(
             ),
         )
 
-    # A seated speaker's whole range of motion usually fits inside the crop, and
-    # a shot that never moves beats one that keeps correcting. Panning is the
-    # fallback for a subject who genuinely travels, not the default.
-    static = plan_group_crop(
+    # One static frame sized to hold the subject's whole range of movement and
+    # any graphic beside them. It widens rather than cutting either.
+    framed = plan_group_crop(
         [primary], src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
-        face_ratio=with_subject / samples,
+        face_ratio=face_ratio, overlays=overlays, allow_wider=True,
     )
-    if static is not None:
-        return static
-
-    return plan_follow_crop(
-        primary.observations,
-        src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
-        duration=duration, pan_smoothing=pan_smoothing,
-        max_pan_speed=max_pan_speed, scene_cuts=scene_cuts,
-        deadzone_ratio=deadzone_ratio,
-    )
+    if framed is None:  # pragma: no cover - allow_wider always frames a subject
+        return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h)
+    return framed
 
 
 def _track_median_face(track: FaceTrack) -> FaceObservation:
@@ -470,98 +348,6 @@ def _track_median_face(track: FaceTrack) -> FaceObservation:
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
-
-
-def _dominant_face(faces: list[FaceObservation]) -> FaceObservation | None:
-    """The face most likely to be the speaker: biggest, tie-broken by confidence."""
-    if not faces:
-        return None
-    return max(faces, key=lambda f: (f.area, f.confidence))
-
-
-def _persistent_pair(
-    faces_per_sample: list[list[FaceObservation]], src_w: int
-) -> tuple[FaceObservation, FaceObservation] | None:
-    """Median positions of a left/right face pair, if one persists.
-
-    Returns None when the two largest faces are not clearly separated, which is
-    the usual sign of a double-detection on one person rather than a two-shot.
-    """
-    lefts: list[FaceObservation] = []
-    rights: list[FaceObservation] = []
-    for sample in faces_per_sample:
-        if len(sample) < 2:
-            continue
-        two = sorted(sample, key=lambda f: f.area, reverse=True)[:2]
-        a, b = sorted(two, key=lambda f: f.x)
-        if b.x - a.x < src_w * 0.15:
-            continue  # too close together to be two speakers
-        lefts.append(a)
-        rights.append(b)
-
-    if len(lefts) < 2:
-        return None
-    return _median_face(lefts), _median_face(rights)
-
-
-def _median_face(faces: list[FaceObservation]) -> FaceObservation:
-    """Element-wise median, which ignores the occasional wild detection."""
-    def med(values: list[float]) -> float:
-        s = sorted(values)
-        mid = len(s) // 2
-        return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2
-
-    return FaceObservation(
-        t=med([f.t for f in faces]),
-        x=med([f.x for f in faces]),
-        y=med([f.y for f in faces]),
-        width=med([f.width for f in faces]),
-        height=med([f.height for f in faces]),
-        confidence=med([f.confidence for f in faces]),
-    )
-
-
-def _face_ratio(faces: list[FaceObservation], duration: float) -> float:
-    """Rough fraction of the clip with a face, from observation spacing."""
-    if not faces or duration <= 0:
-        return 0.0
-    return min(1.0, len(faces) / max(1.0, duration * 5.0))
-
-
-def _split_at_cuts(
-    points: list[tuple[float, float, float]], cuts: list[float]
-) -> list[list[tuple[float, float, float]]]:
-    """Partition observations into per-shot runs at the scene cuts."""
-    if not cuts:
-        return [points]
-    segments: list[list[tuple[float, float, float]]] = []
-    current: list[tuple[float, float, float]] = []
-    cut_iter = iter(cuts)
-    next_cut = next(cut_iter, None)
-    for point in points:
-        while next_cut is not None and point[0] >= next_cut:
-            if current:
-                segments.append(current)
-                current = []
-            next_cut = next(cut_iter, None)
-        current.append(point)
-    if current:
-        segments.append(current)
-    return segments
-
-
-def _dedupe_keyframes(keyframes: list[CropKeyframe]) -> list[CropKeyframe]:
-    """Drop keyframes that repeat the previous position.
-
-    A static shot produces hundreds of identical entries; emitting them all
-    bloats the sendcmd script and makes it unreadable when debugging.
-    """
-    out: list[CropKeyframe] = []
-    for kf in keyframes:
-        if out and out[-1].x == kf.x and out[-1].y == kf.y:
-            continue
-        out.append(kf)
-    return out
 
 
 def plan_content_stack(
@@ -660,15 +446,14 @@ class FaceTrack:
     def median_width(self) -> float:
         return sorted(o.width for o in self.observations)[len(self.observations) // 2]
 
-    def extent(self, percentile: float = 0.2) -> tuple[float, float]:
-        """Horizontal span the subject typically occupies over time.
+    def extent(self, percentile: float = EXTENT_TRIM) -> tuple[float, float]:
+        """Horizontal span of the face box over time, lightly trimmed.
 
-        Trimmed at both ends, because the crop does not need to contain every
-        position the subject ever reached -- the deadzone absorbs the tail, and
-        demanding the full range makes an ordinary seated speaker look
-        un-framable. Measured on a real talking-head clip: the untrimmed span
-        was 784 px against a 511 px usable crop, while the 20%-trimmed span was
-        478 px and fits comfortably.
+        Trimmed only enough to ignore a stray detection. This used to trim 20%
+        from each end so that more subjects would squeeze into a 9:16 crop, with
+        a panning camera meant to absorb the rest; the effect on static crops was
+        a face partly out of frame in 3-19% of samples. The frame now widens
+        instead (`plan_group_crop`), so there is no reason to trim hard.
         """
         lefts = sorted(o.x - o.width / 2 for o in self.observations)
         rights = sorted(o.x + o.width / 2 for o in self.observations)
@@ -735,9 +520,11 @@ def build_tracks(
     return tracks
 
 
-# Breathing room left around a group of subjects, as a fraction of the crop
-# width, so faces are not jammed against the edge of the frame.
-GROUP_MARGIN_RATIO = 0.08
+def subject_span(track: FaceTrack, trim: float = EXTENT_TRIM) -> tuple[float, float]:
+    """Horizontal range the frame must hold for one subject: head, not just face."""
+    left, right = track.extent(trim)
+    pad = track.median_width * HEAD_PADDING_RATIO
+    return left - pad, right + pad
 
 
 def plan_group_crop(
@@ -748,47 +535,73 @@ def plan_group_crop(
     out_w: int,
     out_h: int,
     face_ratio: float = 1.0,
+    overlays: list[OverlayBox] | tuple[OverlayBox, ...] = (),
+    allow_wider: bool = False,
 ) -> LayoutPlan | None:
-    """A single static crop holding every subject, or None if they do not fit.
+    """One static frame holding every subject and every on-screen graphic.
 
-    This is the answer for two or more people who happen to sit close together
-    -- a sofa interview, a desk two-shot. It fills the output frame, unlike
-    letterboxing the whole picture, and it holds perfectly still, unlike
-    following one of them.
+    The frame is sized to the content rather than the other way round. If it all
+    fits a 9:16 slice, that slice fills the output (`follow_crop`). If not, and
+    `allow_wider` is set, the slice widens just enough (`fit_crop`) and sits over
+    a blurred copy of itself -- up to the whole frame (`blurred_fit`). Without
+    `allow_wider`, content that does not fit returns None so the caller can try
+    another arrangement, such as stacking two people.
 
-    It exists because the interesting failure was not that subjects did not fit:
-    on real footage two people spanned 462 px inside a 608 px crop, comfortably.
-    The camera swung between them only because the target was recomputed per
-    frame. Framing the group settles that by construction -- there is one
-    target and it does not move.
+    Widening, not trimming, is the point. Every earlier version of this chose a
+    9:16 slice and accepted whatever fell outside it; measured across every
+    cropped shot of a real clip set, the face was fully in frame in only 84% of
+    samples, and graphics beside the speaker were routinely cut in half.
     """
-    if not tracks:
+    if not tracks and not overlays:
         return None
 
     crop_w, crop_h = crop_size_for_aspect(src_w, src_h, out_w, out_h)
+    spans = [subject_span(t) for t in tracks]
+    spans += [(o.x, o.right) for o in overlays]
+    left = max(0.0, min(lo for lo, _ in spans))
+    right = min(float(src_w), max(hi for _, hi in spans))
+    margin = crop_w * FRAME_MARGIN_RATIO
+    needed = (right - left) + 2 * margin
+    centre_x = (left + right) / 2
 
-    extents = [t.extent() for t in tracks]
-    left = min(e[0] for e in extents)
-    right = max(e[1] for e in extents)
-    margin = crop_w * GROUP_MARGIN_RATIO
-    span = (right - left) + 2 * margin
-    if span > crop_w:
+    subjects = ("one subject" if len(tracks) == 1
+                else f"{len(tracks)} subjects" if tracks else "no subject")
+    graphics = f" and {len(overlays)} on-screen graphic(s)" if overlays else ""
+
+    if needed <= crop_w:
+        x, y = clamp_crop_origin(centre_x - crop_w / 2, 0, crop_w, crop_h, src_w, src_h)
+        return LayoutPlan(
+            kind="follow_crop",
+            crop_width=crop_w,
+            crop_height=crop_h,
+            keyframes=[CropKeyframe(t=0.0, x=x, y=y)],
+            face_ratio=face_ratio,
+            reason=(f"{subjects}{graphics} spanning {right - left:.0f}px fit a "
+                    f"{crop_w}px crop; holding one static frame"),
+        )
+
+    if not allow_wider:
         return None
 
-    centre_x = (left + right) / 2
-    centre_y = sum(t.observations[len(t.observations) // 2].y for t in tracks) / len(tracks)
-    x, y = crop_origin_for_face(centre_x, centre_y, crop_w, crop_h, src_w, src_h)
+    width = min(_make_even(int(needed) + 1), _make_even(src_w))
+    # Within a few percent of the full width, a crop only shaves slivers off the
+    # edges; show the whole frame instead.
+    if width >= src_w * WHOLE_FRAME_RATIO:
+        plan = plan_blurred_fit(
+            src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+            reason=(f"{subjects}{graphics} span {right - left:.0f}px, the whole "
+                    "frame; keeping all of it"),
+        )
+        return plan.model_copy(update={"face_ratio": face_ratio})
 
-    people = ("one subject" if len(tracks) == 1
-              else f"{len(tracks)} subjects")
+    height = _make_even(src_h)
+    x, y = clamp_crop_origin(centre_x - width / 2, 0, width, height, src_w, src_h)
     return LayoutPlan(
-        kind="follow_crop",
-        crop_width=crop_w,
-        crop_height=crop_h,
+        kind="fit_crop",
+        crop_width=width,
+        crop_height=height,
         keyframes=[CropKeyframe(t=0.0, x=x, y=y)],
         face_ratio=face_ratio,
-        reason=(
-            f"{people} spanning {right - left:.0f}px fit inside a {crop_w}px crop; "
-            "holding a single static frame on the group"
-        ),
+        reason=(f"{subjects}{graphics} span {right - left:.0f}px, wider than a "
+                f"{crop_w}px crop; framing {width}px so nothing is cut"),
     )

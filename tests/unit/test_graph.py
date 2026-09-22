@@ -17,7 +17,6 @@ from clipper.render.graph import (
     RenderSpec,
     build_audio_filter,
     build_command,
-    build_sendcmd_script,
     build_video_filter,
     output_size,
 )
@@ -50,7 +49,11 @@ def make_spec(layout: LayoutPlan, **kwargs) -> RenderSpec:
 
 FOLLOW = LayoutPlan(
     kind="follow_crop", crop_width=608, crop_height=1080,
-    keyframes=[CropKeyframe(t=0.0, x=100, y=0), CropKeyframe(t=1.0, x=200, y=0)],
+    keyframes=[CropKeyframe(t=0.0, x=100, y=0)],
+)
+FIT = LayoutPlan(
+    kind="fit_crop", crop_width=900, crop_height=1080,
+    keyframes=[CropKeyframe(t=0.0, x=300, y=0)],
 )
 STACK = LayoutPlan(
     kind="two_speaker_stack", crop_width=1215, crop_height=1080,
@@ -60,27 +63,6 @@ STACK = LayoutPlan(
 BLURRED = LayoutPlan(kind="blurred_fit", crop_width=1920, crop_height=1080)
 
 
-class TestSendcmdScript:
-    def test_emits_x_and_y_per_keyframe(self):
-        script = build_sendcmd_script(FOLLOW)
-        assert script.count("crop x") == 2
-        assert script.count("crop y") == 2
-
-    def test_lines_end_with_a_semicolon(self):
-        for line in build_sendcmd_script(FOLLOW).strip().splitlines():
-            assert line.endswith(";")
-
-    def test_times_are_ascending(self):
-        times = [
-            float(line.split()[0])
-            for line in build_sendcmd_script(FOLLOW).strip().splitlines()
-        ]
-        assert times == sorted(times)
-
-    def test_empty_plan_yields_an_empty_script(self):
-        assert build_sendcmd_script(LayoutPlan(kind="follow_crop")) == ""
-
-
 class TestVideoFilter:
     def test_follow_crop_has_crop_scale_and_output_label(self):
         vf = build_video_filter(make_spec(FOLLOW))
@@ -88,16 +70,21 @@ class TestVideoFilter:
         assert "scale=1080:1920" in vf
         assert vf.endswith("[v]")
 
-    def test_follow_crop_includes_sendcmd_upstream_of_crop(self):
-        """sendcmd must precede the filter it drives or the commands go nowhere."""
-        vf = build_video_filter(make_spec(FOLLOW, sendcmd_path=Path("C:/w/cmds.txt")))
-        assert vf.index("sendcmd") < vf.index("crop=")
+    def test_framing_never_moves(self):
+        """Framing is static per shot: no trajectory, no per-frame commands."""
+        for layout in (FOLLOW, FIT):
+            assert "sendcmd" not in build_video_filter(make_spec(layout))
 
-    def test_single_keyframe_needs_no_sendcmd(self):
-        static = LayoutPlan(kind="follow_crop", crop_width=608, crop_height=1080,
-                            keyframes=[CropKeyframe(t=0.0, x=50, y=0)])
-        vf = build_video_filter(make_spec(static, sendcmd_path=Path("C:/w/c.txt")))
-        assert "sendcmd" not in vf
+    def test_fit_crop_crops_the_region_before_blurring(self):
+        """The background is a blur of the framed region, not the whole frame."""
+        vf = build_video_filter(make_spec(FIT))
+        assert vf.index("crop=900:1080:300:0") < vf.index("split=2")
+        assert "gblur" in vf
+        assert "overlay=(W-w)/2:(H-h)/2" in vf
+
+    def test_blurred_fit_does_not_crop_the_region(self):
+        vf = build_video_filter(make_spec(BLURRED))
+        assert vf.startswith("[0:v]split=2")
 
     def test_stack_produces_two_panes_and_a_vstack(self):
         vf = build_video_filter(make_spec(STACK))
@@ -255,6 +242,7 @@ def per_shot(*kinds: str) -> LayoutPlan:
     built = {
         "follow_crop": FOLLOW,
         "two_speaker_stack": STACK,
+        "fit_crop": FIT,
         "blurred_fit": LayoutPlan(kind="blurred_fit", crop_width=1920,
                                   crop_height=1080),
     }
@@ -304,21 +292,6 @@ class TestPerShotGraph:
         assert graph.count("ass=") == 1
         assert graph.index("concat=") < graph.index("ass=")
 
-    def test_a_trajectory_file_is_used_only_where_one_is_given(self):
-        spec = make_spec(
-            per_shot("blurred_fit", "follow_crop"),
-            segment_sendcmd_paths=(None, Path("C:/work/clip.shot01.cmds.txt")),
-        )
-        graph = build_video_filter(spec)
-        assert graph.count("sendcmd=") == 1
-        assert "clip.shot01.cmds.txt" in graph
-
-    def test_mismatched_trajectory_paths_are_rejected(self):
-        spec = make_spec(per_shot("blurred_fit", "follow_crop"),
-                         segment_sendcmd_paths=(None,))
-        with pytest.raises(ValueError, match="must match"):
-            build_video_filter(spec)
-
     def test_no_segments_is_rejected(self):
         with pytest.raises(ValueError, match="no segments"):
             build_video_filter(make_spec(LayoutPlan(kind="per_shot")))
@@ -329,3 +302,10 @@ class TestPerShotGraph:
         assert graph.startswith("[0:v]")
         assert "trim=" not in graph
         assert "concat=" not in graph
+
+
+    def test_a_fit_crop_shot_joins_a_follow_crop_shot(self):
+        graph = build_video_filter(make_spec(per_shot("fit_crop", "follow_crop")))
+        assert "[cut0]crop=900:1080:300:0,split=2[bgs0][fgs0]" in graph
+        assert "[cut1]crop=608:1080:100:0" in graph
+        assert "[seg0][seg1]concat=n=2" in graph

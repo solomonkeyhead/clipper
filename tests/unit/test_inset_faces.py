@@ -25,6 +25,10 @@ from clipper.render.layouts import (
 
 FRAME_W, FRAME_H = 1920, 1080
 
+# A face big enough to be the subject gets a 9:16 crop if its head fits one, or
+# a slightly wider frame if not -- both mean "framed as the subject".
+SUBJECT_FRAMINGS = ("follow_crop", "fit_crop")
+
 
 def samples(count: int, faces_per_frame: list[tuple[float, float, float]]):
     """Build `count` identical samples, each holding the given faces."""
@@ -37,8 +41,7 @@ def samples(count: int, faces_per_frame: list[tuple[float, float, float]]):
 
 def choose(per_sample, **kwargs):
     defaults = dict(
-        src_w=FRAME_W, src_h=FRAME_H, out_w=1080, out_h=1920, duration=25.0,
-        pan_smoothing=0.12, max_pan_speed=0.25, min_face_ratio=0.5,
+        src_w=FRAME_W, src_h=FRAME_H, out_w=1080, out_h=1920, min_face_ratio=0.5,
     )
     defaults.update(kwargs)
     return choose_layout(per_sample, **defaults)
@@ -56,10 +59,10 @@ class TestInsetFacesAreNotTheSubject:
         per_sample = samples(100, [(1600, 400, 130)])
         assert choose(per_sample).kind == "blurred_fit"
 
-    def test_a_normal_talking_head_still_follow_crops(self):
+    def test_a_normal_talking_head_is_still_framed_as_the_subject(self):
         """The rule must not break the ordinary case."""
         per_sample = samples(100, [(960, 450, FRAME_W * 0.25)])
-        assert choose(per_sample).kind == "follow_crop"
+        assert choose(per_sample).kind in SUBJECT_FRAMINGS
 
     def test_a_genuine_two_shot_still_stacks(self):
         per_sample = samples(100, [(500, 450, FRAME_W * 0.18),
@@ -74,7 +77,7 @@ class TestInsetFacesAreNotTheSubject:
     @pytest.mark.parametrize("ratio", [0.15, 0.20, 0.30])
     def test_anything_over_the_threshold_is_the_subject(self, ratio):
         per_sample = samples(80, [(960, 400, FRAME_W * ratio)])
-        assert choose(per_sample).kind == "follow_crop"
+        assert choose(per_sample).kind in SUBJECT_FRAMINGS
 
     def test_the_threshold_matches_the_screen_share_detector(self):
         """The two gates must agree, or a source can fall between them."""
