@@ -753,3 +753,96 @@ the spike into its own baseline. This does not affect clip selection, because
 candidate generation already discards the first and last 20 s of any source over
 five minutes. It **will** skew the Phase 5 eval harness unless that harness
 applies the same exclusion.
+
+---
+
+## 2026-09-22 — Second real source: a 32-minute reaction video
+
+Source: a 31m56s 1080p YouTube video, 265 MB. Processed locally for technical
+verification only, per the same campaign config as the first.
+
+This is the first source in the brief's stated 30-60 minute acceptance range.
+
+### Result: 5 clips accepted, 0 rejected
+
+| Clip | Start | Duration | Composite | Layout | QA |
+|---|---|---|---|---|---|
+| 001 | 14m19s | 28 s | 0.871 | follow_crop | pass (13) |
+| 002 | 22m58s | 35 s | 0.758 | follow_crop | pass (13) |
+| 003 | 12m27s | 54 s | 0.750 | follow_crop | pass (13) |
+| 004 | 6m17s | 36 s | 0.735 | follow_crop | pass (13) |
+| 005 | 26m25s | 37 s | 0.660 | blurred_fit | pass (12) |
+
+### Timings — measured on a 30-60 minute source
+
+| Stage | Wall clock |
+|---|---|
+| Transcribe (`large-v3`) | 235.7 s — **8.1x realtime**, 6293 words |
+| Score (60 candidates, real Gemini) | 397 s |
+| Render + QA, 5 clips | 174 s |
+| **Total** | **571 s (9m31s)** |
+
+**This satisfies the Phase 4 acceptance criterion directly**, without
+extrapolation: a real source in the 30-60 minute range, five QA-passing clips,
+9m31s against a 25-minute budget. Transcription held at 8.1x realtime on a
+source nine times longer than the earlier fixture, so that rate is now measured
+across two very different real inputs rather than inferred from one.
+
+Scoring is the largest stage and is roughly flat in source length, because
+candidates are capped at 60 regardless. A 60-minute source should land near 17
+minutes, still inside budget.
+
+### A layout failure this source exposed, and the fix
+
+The video composites **two small circular reaction cams** over footage that
+fills the frame. Measured: the dominant face is 6.3-8.2% of frame width, and
+2+ faces are visible in 74-100% of sampled frames.
+
+The screen-share detector correctly found nothing -- there is no *separate*
+content region, because the footage is the whole frame. But the fallback then
+saw two persistent faces and chose `two_speaker_stack`, which would have blown
+two tiny circular avatars up to fill the output and discarded the entire
+subject of the clip. Worse than the problem it was meant to solve.
+
+Fixed by the rule in docs/DECISIONS.md D31: a face below
+`render.min_subject_face_ratio` with no separate content region means the whole
+frame is the content, so `blurred_fit` keeps all of it.
+
+Only clip 005 changed. Clips 001-004 stayed `follow_crop` and inspection
+confirms that is correct -- the video cuts to full-screen studio shots for those
+moments, where the speaker genuinely is the subject and fills the frame.
+
+### What I could not separate, stated plainly
+
+Clip 005 is a genuine **wide two-shot**, not an overlay. It now gets
+`blurred_fit` when a stacked treatment would arguably have been more engaging.
+I tried to distinguish the two cases and the obvious signals do not separate
+them:
+
+| | face width | distance to nearest frame edge |
+|---|---|---|
+| Wide two-shot (clip 005) | 7.4% / 8.7% | 0.29 / 0.22 |
+| Reaction-cam overlays | 6.5-7.7% | 0.10-0.21 |
+
+The ranges overlap on both axes. Doing this properly means detecting that a
+region is *composited* -- a hard circular or rectangular boundary whose contents
+are unrelated to the surrounding pixels -- which was not attempted.
+
+So the rule is deliberately conservative, and the cost is asymmetric: letterboxing
+a two-shot that could have been stacked loses a little engagement, while cropping
+to an overlay avatar loses the content entirely. `render.min_subject_face_ratio`
+exposes the line for tuning.
+
+### Other observations
+
+- **No heatmap again**, despite 2.6M views and three weeks since upload. Two
+  real sources, neither with heatmap data. The signal degrades cleanly both
+  times (weights renormalised to llm 0.62 / audio 0.19 / text 0.19), but its
+  practical availability on recent uploads now looks doubtful enough to matter
+  for Phase 5, which depends on it entirely.
+- **45% of candidates hard-dropped** for needing prior context (27 of 60),
+  against 77% on the chess source. Lower, as expected for a narrative reaction
+  format, and still substantial.
+- 9714 windows enumerated, 8467 surviving filters, capped to 60 — so the cheap
+  pre-score again chose the final set from **99.3%** more candidates than the
+  LLM ever saw.

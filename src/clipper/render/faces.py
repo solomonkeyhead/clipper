@@ -260,6 +260,7 @@ def plan_layout_for(
     deadzone_ratio: float = 0.18,
     content_pane_share: float = 0.58,
     detect_screen_share: bool = True,
+    min_subject_face_ratio: float = 0.13,
 ):
     """Scan a clip and return the `LayoutPlan` for it.
 
@@ -311,6 +312,7 @@ def plan_layout_for(
         min_face_ratio=min_face_ratio,
         scene_cuts=result.scene_cuts,
         deadzone_ratio=deadzone_ratio,
+        min_subject_face_ratio=min_subject_face_ratio,
     )
     # `choose_layout` estimates the ratio from observation spacing; the scan
     # knows it exactly, so prefer the measured value for the QA check.

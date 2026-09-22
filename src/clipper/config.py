@@ -194,6 +194,13 @@ class RenderConfig(StrictModel):
     content_pane_share: Unit = 0.58
     # Set false to always crop to the face, even on screen-share footage.
     detect_screen_share: bool = True
+    # A face narrower than this fraction of the frame is treated as an overlay
+    # inset rather than the subject, and the whole frame is kept instead of
+    # cropping to it. Lower it if genuine wide two-shots are being letterboxed
+    # when you would rather they were stacked; raise it if reaction-cam overlays
+    # are being blown up. See docs/DECISIONS.md D31 for why this is one number
+    # rather than a cleverer test.
+    min_subject_face_ratio: Unit = 0.13
     draft_width: int = Field(default=540, gt=0)
     draft_height: int = Field(default=960, gt=0)
 

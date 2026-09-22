@@ -34,6 +34,12 @@ TARGET_FACE_HEIGHT_RATIO = 0.32
 # shake rather than tracking.
 DEFAULT_DEADZONE_RATIO = 0.18
 
+# A face narrower than this fraction of the frame is an overlay inset rather
+# than the subject. Kept in step with `regions.PIP_FACE_WIDTH_RATIO`, which
+# gates the screen-share detector that runs first. Defined here, above its use
+# as a default argument, because Python evaluates defaults at definition time.
+INSET_FACE_WIDTH_RATIO = 0.13
+
 
 @dataclass(frozen=True)
 class FaceObservation:
@@ -311,6 +317,7 @@ def choose_layout(
     min_face_ratio: float,
     scene_cuts: list[float] | None = None,
     deadzone_ratio: float = DEFAULT_DEADZONE_RATIO,
+    min_subject_face_ratio: float = INSET_FACE_WIDTH_RATIO,
 ) -> LayoutPlan:
     """Pick a layout from the sampled face detections.
 
@@ -326,6 +333,26 @@ def choose_layout(
     if samples == 0:
         return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
                                 reason="no frames sampled")
+
+    # A face small enough to be an inset is not the subject of the video, and
+    # must not drive the framing. Reaching here means the screen-share detector
+    # already looked for a separate content region and found none -- so the
+    # content is the *whole frame*, and any face-centric crop would discard it.
+    #
+    # This is not hypothetical: on a reaction video with two small circular
+    # reaction cams over full-frame footage, the two-speaker rule fired and
+    # would have blown those two cams up to fill the output, throwing away
+    # everything the clip was about.
+    inset = _inset_face_ratio(faces_per_sample, src_w,
+                              threshold=min_subject_face_ratio)
+    if inset is not None:
+        return plan_blurred_fit(
+            src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+            reason=(
+                f"faces are inset overlays ({inset:.0%} of frame width) with no "
+                "separate content region, so the whole frame is the content"
+            ),
+        )
 
     with_any = sum(1 for s in faces_per_sample if s)
     with_two = sum(1 for s in faces_per_sample if len(s) >= 2)
@@ -509,3 +536,27 @@ def plan_content_stack(
             f"webcam {webcam.width}x{webcam.height}, split {content_height}/{webcam_height}"
         ),
     )
+
+
+
+def _inset_face_ratio(
+    faces_per_sample: list[list[FaceObservation]], src_w: int,
+    *, threshold: float = INSET_FACE_WIDTH_RATIO,
+) -> float | None:
+    """Median width of the dominant face, if every face is an inset overlay.
+
+    Returns None when the faces are large enough to be the subject, which is
+    the normal talking-head case.
+    """
+    if src_w <= 0:
+        return None
+    widths = [
+        face.width
+        for sample in faces_per_sample
+        if (face := _dominant_face(sample)) is not None
+    ]
+    if not widths:
+        return None
+    median = sorted(widths)[len(widths) // 2]
+    ratio = median / src_w
+    return ratio if ratio < threshold else None

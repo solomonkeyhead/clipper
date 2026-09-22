@@ -283,3 +283,124 @@ Not from the accepted-clip rank. Reusing the rank after a rejection made two
 rejected files collide on both id and filename, so one silently overwrote the
 other's reason file. The accepted clips still read `001`, `002`, ... in order
 when nothing fails, which is the common case.
+
+---
+
+## Reframing fixes (post-Phase 4, from real-footage feedback)
+
+### D25. Camera movement has a deadzone
+
+The follow-crop chased every small head movement, and because the trajectory is
+applied as discrete steps at the 5 Hz sampling rate those corrections read as
+*shake* rather than as motion. The camera now holds completely still until the
+subject drifts past `render.pan_deadzone` (default 18%) of the crop width.
+
+When it does move it aims for the **edge** of the deadzone, not dead centre.
+Recentring fully would make it twitch back and forth every time the subject
+crossed the boundary.
+
+Measured by replaying a real clip's face path: 57 camera moves became 0. A
+seated speaker on a fixed webcam now yields a genuinely fixed crop, which is
+the correct output for that input.
+
+### D26. `content_stack`: a fourth layout for screen-share sources
+
+BUILD_BRIEF.md section 11.1 lists three layouts, all of which assume the face is
+the subject. That assumption fails for screen-share content -- gameplay, a board,
+a slide deck, a code editor -- where the webcam is a small inset and the subject
+of the video is elsewhere on screen. On the first real test source a 9:16 crop
+centred on the face captured the webcam and the move list and cut the chess
+board out entirely.
+
+`content_stack` puts the content above the speaker, each pane scaled to cover
+and centre-cropped. The split follows the content's own aspect ratio rather than
+a fixed ratio, clamped so neither pane collapses, with the **webcam** absorbing
+the slack: a webcam crops gracefully because its subject is centred with slack
+around it, whereas cropping a board or a slide loses information.
+
+`render.detect_screen_share: false` disables it entirely.
+
+### D27. Content is found by distance from the background tone, not by motion
+
+The first detector used temporal variance and edge density -- "content is what
+moves and has structure". It found nothing on real footage, because a chess
+board is *static* between moves and its flat squares carry few edges at grid
+resolution. The activity map spread thinly across the whole frame.
+
+What actually separates content from background is how far a region sits from
+the frame's dominant background tone. That found the board as a single blob of
+1120x1080 (aspect 1.04 -- the board exactly) and the webcam as a separate
+740x480 blob. Temporal variance is retained at a quarter weight so a moving
+element on a background-toned surface is not missed entirely.
+
+### D28. Regions are identified by which one contains the face
+
+Rather than inferring a webcam box from a margin around the face. The margin
+approach had to guess how far a webcam extends beyond its occupant, and got it
+badly wrong: from a 138x182 face it inferred a 685x802 box that masked out most
+of the frame and left no content to find.
+
+Taking the blob *containing* the face as the webcam, and the largest blob that
+does not as the content, needs no such guess.
+
+### D29. Blob bounding boxes have their sparse edges trimmed
+
+Connected-component boxes are generous. At grid resolution a bright overlay
+title bridged to the chess board and dragged its box from 1120 out to 1320 wide,
+which put a sliver of title graphic in the content pane and a band of title text
+above the webcam. Boundary rows and columns that are less than 55% filled are
+now trimmed away.
+
+### D30. The background tone comes from the frame border
+
+Not from the whole frame. The global mode inverts the detection whenever the
+content area is large and flat-toned: it wins the histogram, gets classified as
+background, and the actual background is then treated as content.
+
+Real footage hid this -- a chess board's alternating squares spread across
+several histogram bins while the black surround concentrated in one, so the mode
+happened to land correctly. A synthetic test with a uniformly-toned content
+block caught it. A plain slide or a solid-colour game background would have
+triggered it in production.
+
+Background is by definition what *surrounds* the content, so the outer ring of
+the frame is a far stronger prior. The mode of the border rather than its mean,
+because a border that is half dark surround and half bright content would land
+between the two and match neither.
+
+### D31. A face too small to be the subject means "keep the whole frame"
+
+The screen-share detector (D26) handles a webcam inset *beside* separable
+content. A second real source exposed the other half of the problem: a reaction
+video with two small circular reaction cams composited over full-frame footage,
+where there is no separate content region because the footage **is** the whole
+frame.
+
+The old rule chose `two_speaker_stack` there and would have blown two tiny
+circular avatars up to fill the output, discarding everything the clip was
+about. So: when the dominant face is below `render.min_subject_face_ratio`
+(default 13% of frame width) and no separate content region was found, the
+layout falls back to `blurred_fit`, which preserves the entire frame.
+
+**This is deliberately a blunt rule, because the sharp one does not exist.** The
+obvious refinement is to distinguish a composited overlay from a genuine wide
+two-shot, and the obvious signals do not separate them. Measured on the same
+video:
+
+| | face width | distance to nearest edge |
+|---|---|---|
+| Genuine wide two-shot | 7.4% / 8.7% | 0.29 / 0.22 |
+| Reaction-cam overlays | 6.5-7.7% | 0.10-0.21 |
+
+Neither size nor position separates the two cases -- the ranges overlap. Telling
+them apart properly means detecting that a region is *composited* (a hard
+circular or rectangular boundary whose contents are unrelated to the surrounding
+pixels), which is a real piece of work and was not attempted here.
+
+Given that, the conservative choice is right: when it is unclear whether small
+faces are the subject or an overlay, keep the whole frame. Letterboxing a wide
+two-shot that could have been stacked costs a little engagement. Cropping to an
+overlay avatar throws the content away entirely.
+
+The threshold is exposed as `render.min_subject_face_ratio` so it can be tuned
+per source type rather than argued about in the abstract.

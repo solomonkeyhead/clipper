@@ -27,7 +27,11 @@ HD = (1920, 1080)
 VERTICAL = (1080, 1920)
 
 
-def face_at(t: float, x: float, y: float = 480, size: float = 200) -> FaceObservation:
+# 320px in a 1920-wide frame is 16.7%, comfortably above the threshold below
+# which a face is treated as an overlay inset rather than the subject. The
+# earlier default of 200px (10.4%) now reads as an inset, which is correct
+# behaviour but not what these tests are about.
+def face_at(t: float, x: float, y: float = 480, size: float = 320) -> FaceObservation:
     return FaceObservation(t=t, x=x, y=y, width=size, height=size)
 
 
