@@ -1185,3 +1185,54 @@ looked like a misheard name; nudged toward "O'Toole", Whisper still heard
 "O'Salley" twice, so it was left alone.
 
 871 passed, 2 skipped; ruff clean.
+
+## 2026-09-23 — Scripted TV: scene boundaries, clip edges, framing (FX Adults S2)
+
+Reported on the FX clips: the wrong person framed, split screens showing one
+shot twice, the speaker out of frame, a flash of another scene at a clip's
+start or end, context missing, and clips ending mid-exchange. See D49.
+
+**Framing.** Scripted sources frame everyone in each shot (no speaker
+following, no stacks). All 14 clips render as per-shot `fit_crop` /
+`follow_crop` / `blurred_fit`, with no `two_speaker_stack`.
+
+**Scenes.** Checked by eye with frames either side of every boundary on
+episode 201. The first version (LLM only) was unstable and missed the move
+from the dinner table to the kitchen at 8:07. What each rule fixed, found on
+real clips:
+
+- LLM boundaries cutting through a running exchange (0.06s between lines,
+  same room) → kept only in a 1s+ pause or at a visually distinct cut.
+- A fade to black inside a clip (QA rejected it for 2.5s of black) → fades
+  are boundaries.
+- A return from a 4s insert read as a change of place → shots overlapping
+  the 8s window count, not only those starting in it.
+- Office → home with a short pause, missed → cuts with likeness under 0.7 are
+  boundaries when there is a real pause. Every such cut in the five sources
+  was checked by eye and changes place.
+- 17s of promo end card in the 205 clip → no speech on one side counts as
+  unlimited silence.
+- A scene opening on a sign lost its first 2.3s to wordless-lead trimming,
+  and the clip began mid-line → a clip opening with its scene keeps the cut.
+- Endings with the reply under a second later ("What is it doing?" / "No,
+  don't eat that.") → ending needs a 1.2s pause (starting still 0.7s).
+- "a threesome on my bed?" after 13s of no words: Whisper large-v3 with VAD
+  dropped "why the fuck were you having" (confirmed by re-transcribing that
+  stretch without VAD) → no window starts on a lower-case fragment.
+
+**Final run** (all five sources, `--force scenes`, then `--force render`):
+14 clips, all 1080x1920, 32-118s, QA and compliance pass. Per source: 201: 3,
+204: 3, 205 scene: 1, 207: 3, 208: 4. Fewer than the 16 before: most
+windows scoring below the quality bar are no longer offset by windows that
+crossed scene edges. Every clip's first and last frames were compared with
+the source frames 0.4s outside it.
+
+**Caption fixes.** "Issa." → "It's a." passed the audio check but Issa is a
+character (19 lines in 204) → a word capitalised mid-sentence twice or more
+in the source is a name and is not replaced. "Cup? → Cope?" (sperm bank) was
+added to `rejected_caption_fixes`.
+
+**Known limits.** 207 opens on a one-second boardroom shot under "What did you
+say?", followed 0.08s later by the friends at home. The clip keeps it: cutting
+there clips the next word. Whisper still drops some speech under VAD; those
+words have no captions.

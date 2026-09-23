@@ -62,6 +62,16 @@ class CandidatesConfig(StrictModel):
     # Sources shorter than this keep their head and tail as fair game.
     edge_trim_min_source_seconds: float = Field(default=300.0, ge=0)
     dedupe_iou: Unit = 0.8
+    # Scripted TV: windows stay inside one scene (see candidates/scenes.py),
+    # and start or end mid-scene only on a beat -- a pause at least `beat_gap`
+    # long -- never in the middle of an exchange.
+    scene_aware: bool = False
+    beat_gap: float = Field(default=0.7, ge=0)
+    # Ending needs a longer pause than starting. At 0.7s, clips ended on
+    # "What is it doing?" with "No, don't eat that." 0.85s later, and on
+    # "Thanks, guys." with "I love you." 0.75s later -- a reply, not a beat.
+    # Across four episodes 1.2s still leaves 26-46 end points each.
+    beat_end_gap: float = Field(default=1.2, ge=0)
 
     @model_validator(mode="after")
     def _check_bounds(self) -> CandidatesConfig:
@@ -240,6 +250,9 @@ class RenderConfig(StrictModel):
     # source already cuts. Set false to pick one framing for the whole clip,
     # which is wrong for any clip whose composition changes part-way through.
     per_shot_framing: bool = True
+    # Scripted TV: every person on screen stays in frame -- no stacks, no
+    # picking the speaker. Set from a campaign's `scripted`.
+    keep_everyone_in_frame: bool = False
     # Shots shorter than this are merged into a neighbour rather than given
     # their own framing, and no clip gets more segments than `max_shots`.
     min_shot_seconds: float = Field(default=1.5, gt=0)

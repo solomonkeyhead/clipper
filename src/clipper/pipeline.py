@@ -19,6 +19,7 @@ from .llm.base import create as create_backend
 from .llm.cache import LLMCache
 from .models import (
     Candidates,
+    Scenes,
     Scored,
     Sentences,
     Signals,
@@ -65,6 +66,7 @@ def prepare(
     *,
     cache: StageCache | None = None,
     force: set[str] | None = None,
+    backend_override: str | None = None,
 ) -> tuple[SourceInfo, Transcript, Sentences, Candidates, TranscribeStats | None]:
     """Run ingest -> transcribe -> segment -> candidates, reusing what it can."""
     info = run_ingest(source, force=bool(force and "ingest" in force))
@@ -82,17 +84,39 @@ def prepare(
         sentences = run_segment(transcript)
         sentences.save(sentences_path)
 
+    scenes = None
+    if config.candidates.scene_aware:
+        scenes = _scenes(info, sentences, config, cache, backend_override)
+
     candidates_path = work / "candidates.json"
     if cache.is_fresh("candidates", "candidates.json"):
         candidates = Candidates.load(candidates_path)
         log.info("reusing %d cached candidates", len(candidates.candidates))
     else:
         candidates = generate_candidates(
-            transcript, sentences, config.candidates, source_duration=info.media.duration
+            transcript, sentences, config.candidates, source_duration=info.media.duration,
+            scenes=scenes,
         )
         candidates.save(candidates_path)
 
     return info, transcript, sentences, candidates, stats
+
+
+def _scenes(info: SourceInfo, sentences: Sentences, config: Config, cache: StageCache,
+            backend_override: str | None) -> Scenes:
+    """Scene boundaries for scripted sources (see candidates/scenes.py), cached."""
+    from .candidates import scenes as scene_mod
+
+    path = work_dir(info.source_id) / "scenes.json"
+    if cache.is_fresh("scenes", "scenes.json"):
+        return Scenes.load(path)
+    scan = scene_mod.scan_cuts(Path(info.media.path))
+    proposals = scene_mod.propose_scene_starts(
+        sentences.sentences, build_backend(config, override=backend_override),
+        cache=LLMCache())
+    scenes = scene_mod.build_scenes(info.source_id, sentences.sentences, proposals, scan)
+    scenes.save(path)
+    return scenes
 
 
 def build_backend(config: Config, *, override: str | None = None) -> LLMBackend:
@@ -196,7 +220,8 @@ def score(
 ) -> ScoreOutcome:
     """Run the whole scoring half: ingest through combine."""
     force = force or set()
-    info, transcript, sentences, candidates, stats = prepare(source, config, force=force)
+    info, transcript, sentences, candidates, stats = prepare(
+        source, config, force=force, backend_override=backend_override)
 
     work = work_dir(info.source_id)
     cache = StageCache(work, forced=force)

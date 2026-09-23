@@ -59,6 +59,7 @@ llm:
   rejected_caption_fixes:
     - bot -> bite          # "leishmaniasis from the bot": said, even if "bite" is what's true
     - pickies -> piques    # "pickies" is the speaker's word
+    - cup -> cope          # "Cup? Cup?" at a sperm bank
   use_few_shot_examples: false
   few_shot_count: 3
   rubric_weights:

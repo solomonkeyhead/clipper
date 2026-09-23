@@ -13,6 +13,7 @@ A reserve is only ever a candidate that already cleared the quality gate
 
 from __future__ import annotations
 
+import dataclasses
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,7 +34,7 @@ from .render.clip import render_clip
 from .render.faces import plan_layout_for
 from .render.graph import output_size
 from .select.pick import Pick
-from .transcribe.correct import WordFix, correct_words
+from .transcribe.correct import WordFix, correct_words, names_in
 from .transcribe.recheck import AudioRecheck
 from .utils.cache import slugify
 from .utils.logging import get_logger
@@ -159,7 +160,12 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
     candidate_updates = {
         "min_seconds": low, "max_seconds": high,
         "target_seconds": (target_low, target_high),
+        "scene_aware": config.candidates.scene_aware or campaign.scripted,
     }
+    if campaign.scripted:
+        # The head/tail trim skips podcast intros and outros. An edited sitcom
+        # episode opens straight into a scene, often its best one.
+        candidate_updates["edge_trim_seconds"] = 0.0
     if campaign.scripted:
         # Silence here means gaps between spoken words. Scripted TV is full of
         # non-dialogue beats -- reactions, physical comedy, music -- often the
@@ -172,6 +178,9 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
     candidates = config.candidates.model_copy(update=candidate_updates)
     render = config.render.model_copy(update={
         "show_hook_text": config.render.show_hook_text and campaign.hook_overlay,
+        "keep_everyone_in_frame": config.render.keep_everyone_in_frame or campaign.scripted,
+        # A TV set or window in a scene is not a screen share.
+        "detect_screen_share": config.render.detect_screen_share and not campaign.scripted,
     })
     llm = config.llm.model_copy(update={
         "drop_needs_prior_context":
@@ -295,6 +304,7 @@ def _produce_one(
         content_pane_share=config.render.content_pane_share,
         detect_screen_share=config.render.detect_screen_share,
         min_subject_face_ratio=config.render.min_subject_face_ratio,
+        keep_everyone=config.render.keep_everyone_in_frame,
         per_shot_framing=config.render.per_shot_framing,
         min_shot_seconds=config.render.min_shot_seconds,
         max_shots=config.render.max_shots,
@@ -384,6 +394,25 @@ def _build_plan(
         log.info("%s dropped during refinement: %s", candidate.candidate_id,
                  bounds.drop_reason)
         return None
+    if candidate.scene_start is not None and candidate.scene_end is not None:
+        # Refinement pads and snaps edges; for scripted TV that must never
+        # reach into the neighbouring scene -- the "unrelated scene at the
+        # beginning or end" reported on real clips.
+        start = max(bounds.start, candidate.scene_start)
+        end = min(bounds.end, candidate.scene_end)
+        # A window that opens or closes with its scene keeps the scene's cut.
+        # Refinement trims wordless lead-ins, which here cut 2.3s off a scene
+        # opening on a sign reading "I don't just want to have sex with you",
+        # so the clip began mid-line on "just want to...".
+        if candidate.start <= candidate.scene_start + 0.05:
+            start = candidate.scene_start
+        if candidate.end >= candidate.scene_end - 0.05:
+            end = candidate.scene_end
+        if end - start < campaign.duration.min_seconds:
+            log.info("%s dropped: only %.1fs once kept inside its scene",
+                     candidate.candidate_id, end - start)
+            return None
+        bounds = dataclasses.replace(bounds, start=start, end=end)
 
     values = next((v for v in outcome.signals.values
                    if v.candidate_id == candidate.candidate_id), None)
@@ -478,7 +507,7 @@ def _corrected_words(words: list[Word], plan: ClipPlan,
         before=words[max(0, lo - CORRECTION_CONTEXT_WORDS):lo],
         after=words[hi:hi + CORRECTION_CONTEXT_WORDS],
         backend=corrector, cache=LLMCache(), recheck=recheck,
-        rejected=rejected,
+        rejected=rejected, names=names_in(words),
     )
     if not fixes:
         return words, []

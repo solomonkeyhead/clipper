@@ -19,6 +19,7 @@ from clipper.transcribe.correct import (
     _Edit,
     apply_edits,
     correct_words,
+    names_in,
     sounds_alike,
 )
 
@@ -160,6 +161,22 @@ class TestCorrectWords:
         out, fixes = correct_words(CLIP, before=[], after=[], backend=backend, recheck=None)
         assert (out, fixes) == (CLIP, [])
         assert backend.calls == [], "no point asking when nothing can be verified"
+
+    def test_a_name_is_never_replaced(self):
+        """"Issa" (a character) was "fixed" to "It's a"; the audio check passed
+        it because the two sound the same."""
+        episode = words("Thank you, Issa. Wait, Issa, did you read this? Issa. Issa.")
+        names = names_in(episode)
+        assert "issa" in names
+        clip = words("Issa. Issa. It's so simple.")
+        proposal = [{"index": 0, "original": "Issa.", "replacement": "It's a.", "reason": "x"}]
+        ears = Ears("It's a.")
+        _, fixes = correct_words(clip, before=[], after=[], backend=mock(proposal),
+                                 recheck=ears, names=names)
+        assert fixes == [] and ears.asked == []
+
+    def test_words_capitalised_only_at_sentence_starts_are_not_names(self):
+        assert "cup" not in names_in(words("Cup? Cup? No. Cup. What cup?"))
 
     def test_a_rejected_fix_is_never_applied_or_checked(self):
         ears = Ears("pitcher")

@@ -192,6 +192,9 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
             (plan.rank - 1) % len(campaign.fallback_captions)].strip()
     required = campaign.required_caption_text.strip()
     if required and required.lower() not in caption.lower():
+        # "That escalated quickly Watch Adults season 2..." read as one sentence.
+        if caption and not caption.endswith((".", "!", "?", "…", ":")):
+            caption += "."
         caption = f"{caption} {required}".strip()
     credit = campaign.required_credit_text.strip()
     if credit and not campaign.burn_credit_in_video and credit.lower() not in caption.lower():

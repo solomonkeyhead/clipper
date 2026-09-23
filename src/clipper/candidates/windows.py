@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 
 from ..config import CandidatesConfig
-from ..models import Candidate, Candidates, Sentence, Sentences, Transcript
+from ..models import Candidate, Candidates, Scene, Scenes, Sentence, Sentences, Transcript
 from ..utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -71,6 +71,7 @@ def generate(
     cfg: CandidatesConfig,
     *,
     source_duration: float,
+    scenes: Scenes | None = None,
 ) -> Candidates:
     """Produce the candidate set for one source."""
     items = sentences.sentences
@@ -80,6 +81,11 @@ def generate(
 
     raw = list(_enumerate_windows(items, cfg))
     log.debug("enumerated %d raw windows", len(raw))
+    if scenes is not None and scenes.scenes:
+        before = len(raw)
+        raw = _within_scenes(raw, items, scenes, cfg)
+        log.info("scene-aware: %d of %d windows lie within one scene and start "
+                 "and end on a scene edge or a beat", len(raw), before)
 
     kept, dropped = _apply_hard_filters(raw, items, transcript, cfg,
                                         source_duration=source_duration)
@@ -134,6 +140,56 @@ def _enumerate_windows(sentences: list[Sentence], cfg: CandidatesConfig):
             )
 
 
+def _within_scenes(windows: list[Candidate], sentences: list[Sentence],
+                   scenes: Scenes, cfg: CandidatesConfig) -> list[Candidate]:
+    """Keep windows inside one scene that start and end on a natural edge.
+
+    A window may begin at its scene's first line or at a line after a pause of
+    at least `beat_gap`, and end at the scene's last line or before a longer
+    one (`beat_end_gap`) -- never mid-exchange, the "ends weirdly in the middle of a scene"
+    reported on real clips. At a scene's own edges the window snaps to the
+    scene's camera cut, so a scene's opening (often wordless) is included and
+    nothing of the neighbouring scene is.
+    """
+    by_sentence: dict[int, Scene] = {}
+    for scene in scenes.scenes:
+        for i in range(scene.first_sentence, scene.last_sentence + 1):
+            by_sentence[i] = scene
+
+    kept: list[Candidate] = []
+    for window in windows:
+        lo, hi = window.sentence_indices
+        scene = by_sentence.get(lo)
+        if scene is None or by_sentence.get(hi - 1) is not scene:
+            continue
+        opens = lo == scene.first_sentence
+        closes = hi - 1 == scene.last_sentence
+        if not opens and sentences[lo].gap_before < cfg.beat_gap:
+            continue
+        if not opens and _continues(sentences[lo].text):
+            # "a threesome on my bed?" after 13s with no words: the
+            # transcription missed "why the fuck were you having", which is
+            # still in the audio. Starting there begins mid-sentence.
+            continue
+        if not closes and hi < len(sentences) and sentences[hi].gap_before < cfg.beat_end_gap:
+            continue
+        start = scene.start if opens else window.start
+        end = scene.end if closes else window.end
+        if not cfg.min_seconds <= end - start <= cfg.max_seconds:
+            continue
+        kept.append(window.model_copy(update={
+            "start": start, "end": end,
+            "scene_start": scene.start, "scene_end": scene.end,
+        }))
+    return kept
+
+
+def _continues(text: str) -> bool:
+    """A line starting in lower case continues something said before it."""
+    first = text.lstrip(" \"'([-—….")[:1]
+    return first.islower()
+
+
 def _apply_hard_filters(
     candidates: list[Candidate],
     sentences: list[Sentence],
@@ -173,13 +229,16 @@ def _apply_hard_filters(
         kept.append(candidate)
 
     # Windows starting mid-sentence are impossible by construction here, since
-    # every window begins at a sentence's own start index. Asserted rather than
+    # every window begins at a sentence's own start index -- or, for scripted
+    # TV, at its scene's opening or closing camera cut. Asserted rather than
     # filtered, so a future change to enumeration cannot break the invariant
     # silently.
     for candidate in kept:
         lo, hi = candidate.sentence_indices
-        assert candidate.start == sentences[lo].start, "window does not start on a sentence"
-        assert candidate.end == sentences[hi - 1].end, "window does not end on a sentence"
+        assert candidate.start in (sentences[lo].start, candidate.scene_start), (
+            "window does not start on a sentence or a scene edge")
+        assert candidate.end in (sentences[hi - 1].end, candidate.scene_end), (
+            "window does not end on a sentence or a scene edge")
 
     return kept, dropped
 

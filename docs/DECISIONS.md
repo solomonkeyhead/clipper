@@ -767,3 +767,55 @@ into every clip (`required_credit_text`, `burn_credit_in_video`).
 See VERIFIED.md 2026-09-22 (late). Sponsor-read and high-policy-risk drops spread
 to candidates sharing at least half their duration with a dropped one.
 "Needs prior context" does not spread: a longer window can supply the context.
+
+### D49. Scripted TV: frame everyone, and never let a clip leave its scene
+
+Reported on FX clips: the camera cut to the wrong speaker, split screens showed
+one shot duplicated, the speaker was sometimes out of frame, and clips opened or
+closed on a flash of another scene or stopped mid-exchange.
+
+**Framing.** Speaker detection was built for podcasts, where one person talks at
+a time to a fixed camera. In a sitcom the editor already cuts to whoever
+matters, several people react in the same shot, and a two-shot stacked into
+two panes repeats the same picture. With `campaign.scripted`, each shot is
+framed to keep every person who is a real part of it (face at least 5% of the
+frame width, seen in at least 15% of samples), widening into `fit_crop` when
+they do not fit a 9:16 crop. No stacks, no speaker following. Faces falling
+outside the frame dropped from up to 20% of samples to 5% or less.
+
+**Scenes.** A `scenes` stage runs for scripted sources. Boundaries are the union
+of two signals, each required to land on a real camera cut:
+
+- every fade to black;
+- the LLM splitting the transcript into scenes, snapped to the most dissimilar
+  cut near its first line -- kept only if that cut is itself among the most
+  dissimilar or falls in a pause of 1s or more. The LLM also marks story
+  beats inside one room; three of those cut through a running exchange and
+  produced clips opening on "Do it!" or ending 0.06s before the reply;
+- a cut among the 5% most visually dissimilar in the episode (best colour
+  match between any shot overlapping the 8s either side) with 2.5s or more of
+  silence across it;
+- a cut unlike anything within 8s either side (likeness below 0.7), in any
+  real pause (0.15s or more). Every such cut in the five FX sources was
+  checked by eye and changes place. A line running across the cut vetoes it:
+  one episode opens on a one-second office flash under the friends at home
+  asking "What did you say?" -- splitting there started the clip mid-word.
+
+Counting only shots that *start* within 8s was a bug: a return from a 4s
+insert (someone elsewhere, then the library conversation again) read as a
+change of place because the first library shot began earlier, and the clip
+ended just before the reply "Of course."
+
+Neither alone was good enough on episode 201: the LLM's split was unstable
+between runs and missed the move from the dinner table to the kitchen at 8:07;
+colour alone flagged changes of camera angle mid-conversation. The rule errs
+towards splitting, because a missed boundary puts another scene in a clip,
+while an extra one only removes some candidate windows.
+
+Candidates must lie inside one scene. They start at the scene's opening
+or after a pause of at least 0.7s, and end at the scene's close or before a
+pause of at least 1.2s. At 0.7s, clips ended on a line with the reply under a
+second later ("What is it doing?" / "No, don't eat that."). At a scene's own edges they snap to its camera cuts. Boundary
+refinement is clamped to the scene afterwards, and a clip that opens or closes
+with its scene keeps the scene's cut: refinement had trimmed a 2.3s wordless
+opening, so a clip began mid-line.

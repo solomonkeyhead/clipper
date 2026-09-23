@@ -33,6 +33,7 @@ Every applied edit is reported, so a wrong one can be spotted and undone.
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from dataclasses import dataclass
@@ -123,6 +124,7 @@ def correct_words(
     recheck: AudioRecheck | None,
     cache: LLMCache | None = None,
     rejected: frozenset[tuple[str, str]] = frozenset(),
+    names: frozenset[str] = frozenset(),
 ) -> tuple[list[Word], list[WordFix]]:
     """Return `words` with misheard words fixed, plus a list of what changed.
 
@@ -135,7 +137,8 @@ def correct_words(
     nothing is applied -- every text-only judge tried (five variants, on the
     real proposals) let a factual "correction" through in some runs, and
     captions must show what was said. `rejected` holds fixes the user has
-    ruled wrong; they are never applied.
+    ruled wrong; they are never applied. `names` (see `names_in`) are never
+    replaced.
 
     Any failure -- no backend, a network error, an unparseable reply -- returns
     the words unchanged. A caption with one wrong word is better than no clip.
@@ -153,6 +156,10 @@ def correct_words(
     for edit in _parse(text):
         if _rejection(words, edit):
             continue
+        if _bare(edit.original) in names:
+            log.info("caption fix not applied, %r is a name in this source: %r -> %r",
+                     edit.original, edit.original, edit.replacement)
+            continue
         if (_bare(edit.original), _bare(edit.replacement)) in rejected:
             log.info("caption fix is on the rejected list: %r -> %r",
                      edit.original, edit.replacement)
@@ -168,6 +175,23 @@ def correct_words(
             log.info("caption fix not applied, the audio says %r: %r -> %r",
                      words[edit.index].text.strip(), edit.original, edit.replacement)
     return apply_edits(words, heard)
+
+
+def names_in(words: list[Word], *, min_count: int = 2) -> frozenset[str]:
+    """Words the transcript capitalises mid-sentence at least `min_count` times.
+
+    Those are names, and a name that sounds like a phrase is still the name:
+    "Issa" (a character, 19 lines in one episode) was "fixed" to "It's a", and
+    the audio check passed it because the two sound the same.
+    """
+    counts: dict[str, int] = {}
+    for prev, word in itertools.pairwise(words):
+        text = word.text.strip()
+        bare = _bare(text)
+        if (text[:1].isupper() and bare not in {"i", "i'm", "i'll", "i've", "i'd"}
+                and not prev.text.strip().endswith((".", "?", "!", "…"))):
+            counts[bare] = counts.get(bare, 0) + 1
+    return frozenset(w for w, n in counts.items() if n >= min_count)
 
 
 def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,

@@ -320,6 +320,12 @@ class TestBriefRequirements:
         assert self.TUNE_IN in out.suggested_caption
         assert out.suggested_caption.startswith("Every friend group")
 
+    def test_an_unpunctuated_caption_is_ended_before_the_required_text(self):
+        out = compliance.apply_campaign_caption(
+            plan(suggested_caption="That escalated quickly"),
+            campaign(required_caption_text=self.TUNE_IN))
+        assert out.suggested_caption.startswith(f"That escalated quickly. {self.TUNE_IN}")
+
     def test_the_required_caption_text_is_not_duplicated(self):
         out = compliance.apply_campaign_caption(
             plan(suggested_caption=f"Chaos. {self.TUNE_IN}"),

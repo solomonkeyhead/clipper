@@ -68,7 +68,7 @@ class StageCache:
     """
 
     ORDER: tuple[str, ...] = (
-        "ingest", "transcribe", "segment", "candidates",
+        "ingest", "transcribe", "segment", "scenes", "candidates",
         "signals", "combine", "select", "render",
     )
 

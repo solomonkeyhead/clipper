@@ -181,6 +181,10 @@ class Candidate(Artifact):
     word_count: int = 0
     silence_ratio: float = 0.0
     pre_score: float = 0.0  # cheap ranking used to cap the LLM batch
+    # Scripted TV: the scene this window lies in. A clip is never extended
+    # past it, so it cannot pick up a moment of the neighbouring scene.
+    scene_start: float | None = None
+    scene_end: float | None = None
 
     @property
     def duration(self) -> float:
@@ -194,6 +198,28 @@ class Candidate(Artifact):
         inter = max(0.0, min(self.end, other.end) - max(self.start, other.start))
         union = (self.duration + other.duration) - inter
         return inter / union if union > 0 else 0.0
+
+
+class Scene(Artifact):
+    """One scene of scripted TV: from the camera cut that opens it to the next."""
+
+    index: int
+    start: float
+    end: float
+    first_sentence: int
+    last_sentence: int  # inclusive
+    summary: str = ""
+
+    @property
+    def duration(self) -> float:
+        return self.end - self.start
+
+
+class Scenes(Artifact):
+    """``scenes.json``."""
+
+    source_id: str
+    scenes: list[Scene] = Field(default_factory=list)
 
 
 class Candidates(Artifact):

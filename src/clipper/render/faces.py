@@ -351,6 +351,7 @@ def plan_layout_for(
     content_pane_share: float = 0.58,
     detect_screen_share: bool = True,
     min_subject_face_ratio: float = 0.13,
+    keep_everyone: bool = False,
     per_shot_framing: bool = True,
     min_shot_seconds: float = 1.5,
     max_shots: int = 8,
@@ -402,6 +403,7 @@ def plan_layout_for(
         out_h=out_height,
         min_face_ratio=min_face_ratio,
         min_subject_face_ratio=min_subject_face_ratio,
+        keep_everyone=keep_everyone,
     )
     overlays = result.overlays or [[] for _ in result.per_sample]
     if per_shot_framing:

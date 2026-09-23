@@ -193,8 +193,13 @@ def choose_layout(
     min_face_ratio: float,
     min_subject_face_ratio: float = INSET_FACE_WIDTH_RATIO,
     overlays: list[OverlayBox] | tuple[OverlayBox, ...] = (),
+    keep_everyone: bool = False,
 ) -> LayoutPlan:
     """Pick a static layout for one shot from its sampled face detections.
+
+    `keep_everyone` is for scripted TV: every person on screen stays in frame,
+    and there is no stacking and no picking the one who is talking (see
+    `_frame_everyone`).
 
     `overlays` are graphics the source laid over the picture during this shot
     (see `overlays.py`). Any framing that crops must keep them whole.
@@ -225,6 +230,10 @@ def choose_layout(
                                 reason="no frames sampled")
 
     tracks = build_tracks(faces_per_sample, src_w)
+    if keep_everyone:
+        return _frame_everyone(tracks, samples, src_w=src_w, src_h=src_h, out_w=out_w,
+                               out_h=out_h, min_face_ratio=min_face_ratio,
+                               overlays=overlays)
     subjects = [t for t in tracks
                 if t.median_width / src_w >= min_subject_face_ratio]
     subjects += _companions(tracks, subjects, src_w)
@@ -345,6 +354,51 @@ def choose_layout(
         face_ratio=face_ratio, overlays=overlays, allow_wider=True,
     )
     if framed is None:  # pragma: no cover - allow_wider always frames a subject
+        return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h)
+    return framed
+
+
+# Scripted TV: a face at least this wide, seen in at least this share of a
+# shot's samples, is a person on screen who must stay in frame. Smaller or
+# rarer faces are background extras or stray detections.
+SCRIPTED_PERSON_WIDTH = 0.05
+SCRIPTED_PERSON_COVERAGE = 0.15
+
+
+def _frame_everyone(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h: int,
+                    out_w: int, out_h: int, min_face_ratio: float,
+                    overlays) -> LayoutPlan:
+    """Keep every person in shot, widening as far as it takes.
+
+    The podcast rules failed on a real sitcom, measured on the 16 clips of the
+    FX campaign:
+
+    * A two-person stack uses full-height panes 1,214px wide, so unless the two
+      sit at opposite edges both panes show the same footage -- 42-74% of each
+      pane was shared in every stacked shot. It read as the picture duplicated.
+    * Framing the person whose mouth moves most holds them while the other
+      answers, and faces under 13% of frame width were treated as overlays --
+      in TV wide shots they are the cast. Up to 20% of face-time was cropped out.
+
+    TV is already composed for its frame, and the clips the user liked were
+    mostly wide or whole frames. So: no stack, no choosing, everyone in.
+    """
+    people = [t for t in tracks
+              if t.median_width / src_w >= SCRIPTED_PERSON_WIDTH
+              and t.coverage(samples) >= SCRIPTED_PERSON_COVERAGE]
+    if not people:
+        return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+                                reason="no one consistently on screen; keeping the whole frame")
+    seen = {o.t for t in people for o in t.observations}
+    face_ratio = len(seen) / samples
+    if face_ratio < min_face_ratio:
+        return plan_blurred_fit(
+            src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+            reason=(f"people on screen in only {face_ratio:.0%} of frames; "
+                    "keeping the whole frame"))
+    framed = plan_group_crop(people, src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+                             face_ratio=face_ratio, overlays=overlays, allow_wider=True)
+    if framed is None:  # pragma: no cover - allow_wider always frames people
         return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h)
     return framed
 
