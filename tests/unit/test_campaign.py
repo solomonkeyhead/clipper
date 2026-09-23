@@ -391,3 +391,18 @@ class TestCaptionRestrictions:
             plan(suggested_caption="Never invite these friends to dinner."),
             campaign(fallback_captions=("Example",)))
         assert out.suggested_caption.startswith("Never invite")
+
+
+class TestHashtagsInCaptionText:
+    def test_hashtags_written_into_the_caption_are_removed_too(self):
+        out = compliance.apply_campaign_caption(
+            plan(suggested_caption="Stolen jewelry leads to an unexpected encounter. "
+                                   "#comedy #funny #skits"),
+            campaign(required_hashtags=("#AdultsFX",), only_required_hashtags=True))
+        assert "#comedy" not in out.suggested_caption
+        assert out.suggested_caption.startswith("Stolen jewelry leads")
+
+    def test_they_are_left_alone_when_not_restricted(self):
+        out = compliance.apply_campaign_caption(
+            plan(suggested_caption="Wild. #comedy"), campaign())
+        assert "#comedy" in out.suggested_caption

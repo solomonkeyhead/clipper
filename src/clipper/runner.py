@@ -219,14 +219,16 @@ def _render_with_replacement(
             rank=rank, attempt=attempt, corrector=corrector, recheck=recheck,
         )
         if record is None:
-            if spare:
-                queue.append(spare.pop(0))
+            reserve = _next_reserve(spare, result, queue, config.candidates.min_gap_seconds)
+            if reserve is not None:
+                queue.append(reserve)
             continue
 
         if record.qa.status == "fail" or record.compliance.status == "fail":
             _reject(record, rejected_dir, result)
-            if spare:
-                replacement = spare.pop(0)
+            replacement = _next_reserve(spare, result, queue,
+                                        config.candidates.min_gap_seconds)
+            if replacement is not None:
                 log.info(
                     "replacing %s with reserve %s",
                     record.plan.clip_id, replacement.candidate.candidate_id,
@@ -241,6 +243,24 @@ def _render_with_replacement(
 
         result.accepted.append(record)
         log.info("%s accepted: %s", record.plan.clip_id, summarize(record.qa))
+
+
+def _next_reserve(spare: list[Pick], result: RunResult, queue: list[Pick],
+                  min_gap: float) -> Pick | None:
+    """The best remaining reserve that does not clash with a kept or queued clip.
+
+    Reserves used to be taken in order with no check. Selection spaces clips
+    at least `min_gap` apart, but a reserve standing in for a rejected clip can
+    sit on top of one already accepted -- measured on two real episodes: clips
+    sharing 45s and 35s of footage, near-duplicates on one account.
+    """
+    taken = [(r.plan.start, r.plan.end) for r in result.accepted]
+    taken += [(p.candidate.start, p.candidate.end) for p in queue]
+    for i, pick in enumerate(spare):
+        start, end = pick.candidate.start, pick.candidate.end
+        if all(end + min_gap <= a or b + min_gap <= start for a, b in taken):
+            return spare.pop(i)
+    return None
 
 
 def _produce_one(

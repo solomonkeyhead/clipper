@@ -183,6 +183,10 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
         tags.append(cleaned)
 
     caption = plan.suggested_caption.strip()
+    if campaign.only_required_hashtags:
+        # The LLM also writes hashtags into the caption text itself -- seen on
+        # a real clip: "...unexpected encounter. #comedy #funny #skits".
+        caption = " ".join(w for w in caption.split() if not w.startswith("#"))
     if not caption and campaign.fallback_captions:
         caption = campaign.fallback_captions[
             (plan.rank - 1) % len(campaign.fallback_captions)].strip()
