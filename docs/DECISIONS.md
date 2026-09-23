@@ -715,3 +715,40 @@ is rejected with a 400, verified).
 
 Every applied fix is listed per clip in `report.md` and in the manifest's
 `caption_fixes` column, so a wrong one can be found and reverted.
+
+### D46. A caption fix must be heard in the audio, not just make sense
+
+Superseded the text-only verification in D45. On review the user ruled two fixes
+the stronger model made wrong: "leishmaniasis from the *bot*" -> "bite" and
+"the *pickies*" -> "piques". Both sound like the original, so the sound-alike
+check passed them, and the model confirmed them because they are more
+*accurate*: its own reason for "bite" was that leishmaniasis comes from sand
+flies, not bot flies. Captions must show what was said, not what is true.
+
+Five text-only judges were then tried on the real proposals, and none held up:
+
+| judge | failure on the real proposals |
+|---|---|
+| A-vs-B comparison | preferred the accurate word ("bite", "piques") |
+| A-vs-B, "caption what was said, not what is true" | flash-lite still accepted "bite" 3/3 |
+| blind "could A have been said?" | "bot" and "pickies" flipped between runs |
+| blind, 3 unanimous votes | "bite" 3/3 when batched with other items |
+| "why would it change?" classifier | "pickies" swung from "unusual" to applied when framed differently |
+
+A text judge cannot tell *misheard* from *misspoken*: both look wrong on the page.
+The audio can. Whisper re-transcribes 2.0s before to 1.5s after the word, nudged
+toward the replacement; the fix applies only if the replacement took the
+original's place. Stable across repeated runs on the real cases: allows
+picture -> pitcher and clap -> cramp; vetoes bot -> bite, there -> their,
+does -> do, through -> to and rode -> rowed. It cannot separate words that sound
+nearly identical ("pickies"/"piques"), so fixes the user rules wrong go in
+`llm.rejected_caption_fixes` and are never applied again.
+
+Without audio, nothing is applied.
+
+**The stronger model is on.** Verified free: its 429 names the quota
+`generate_content_free_tier_requests` /
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20 per day for
+gemini-3-flash-preview. A free-tier key is refused past its quota, not billed.
+One request per clip; past the quota, or when the model is overloaded, the fast
+model proposes instead.

@@ -165,6 +165,31 @@ class LLMConfig(StrictModel):
     # Seconds to wait on `correction_model` before falling back. Gemini's API
     # refuses deadlines under 10s.
     correction_timeout: float = Field(default=30.0, ge=10)
+    # Caption fixes ruled wrong, as "heard -> replacement"; never applied.
+    rejected_caption_fixes: list[str] = Field(default_factory=list)
+
+    @field_validator("rejected_caption_fixes")
+    @classmethod
+    def _check_rejected(cls, value: list[str]) -> list[str]:
+        for entry in value:
+            if entry.count("->") != 1 or not all(p.strip() for p in entry.split("->")):
+                raise ValueError(
+                    f"rejected_caption_fixes entry {entry!r} must look like "
+                    "'heard -> replacement'")
+        return value
+
+    @property
+    def rejected_fix_pairs(self) -> frozenset[tuple[str, str]]:
+        """The rejected fixes, normalised the way caption words are compared."""
+        import re
+
+        def bare(text: str) -> str:
+            return re.sub(r"[^\w']", "", text.lower())
+
+        return frozenset(
+            (bare(a), bare(b))
+            for a, b in (entry.split("->") for entry in self.rejected_caption_fixes)
+        )
 
 
 class SafeArea(StrictModel):

@@ -17,6 +17,16 @@ the words it believes were misheard. It is **not** trusted to rewrite anything:
   something he did not say.
 * At most `MAX_FIX_SHARE` of a clip's words can change. A response wanting to
   change more than that is rewriting, and none of it is applied.
+* Whisper re-listens to the audio around the word (`recheck.py`); the fix
+  applies only if the replacement is what was said. Captions must show what
+  was said, not what is true: "from the bot" stays, even though "bite" is the
+  medically correct word.
+* Fixes the user has ruled wrong are listed in the config and never applied.
+
+What was tried and dropped, measured on the real proposals (docs/VERIFIED.md):
+five text-only judges -- comparing the two sentences, a blind "could this have
+been said?" vote, and a "why would it change?" classifier -- each let a wrong
+fix through or missed a right one depending on how the question was framed.
 
 Every applied edit is reported, so a wrong one can be spotted and undone.
 """
@@ -34,10 +44,11 @@ from ..llm.base import LLMBackend, LLMRequest
 from ..llm.cache import LLMCache
 from ..models import Word
 from ..utils.logging import get_logger
+from .recheck import AudioRecheck
 
 log = get_logger(__name__)
 
-PROMPT_VERSION = "correct-v2"
+PROMPT_VERSION = "correct-v6"
 """Bump on any edit to the prompt below; it is part of the cache key."""
 
 # Sound-alike thresholds, chosen on 20 real homophone pairs against 15 content
@@ -62,8 +73,14 @@ nearly the same as what was said but is wrong in context -- "picture" for
 Your only job is to find those misheard words.
 
 Rules:
-- Only flag a word if the context makes it clearly wrong AND the correct word
-  sounds like it. If you are not sure, leave it.
+- Only flag a word if, as transcribed, the sentence does not make sense as
+  something a person would say, AND a word that sounds like it would make it
+  make sense. If you are not sure, leave it.
+- Caption what was SAID, not what is true. Speakers get facts wrong, misname
+  things and misremember; a sentence that makes sense but is factually wrong is
+  not a transcription error. Never change a word to make a statement accurate.
+- Never replace an unfamiliar word, nickname, slang, local or foreign term with
+  a more familiar one. If the speaker used an odd word, keep it.
 - Never fix grammar, word order, dialect, slang, filler words or style. People
   speak informally and some speakers are not native English speakers: "monkey
   every day bananas" is how that person talks, not a transcription error.
@@ -78,23 +95,6 @@ Return a JSON array (possibly empty). Each element:
   original     string, that word exactly as shown
   replacement  string, what the speaker actually said
   reason       string, a few words on the context that shows it"""
-
-
-VERIFY_SYSTEM = """You check proposed corrections to a speech-recognition transcript. For each
-numbered item you get the sentence twice: version A as transcribed, version B
-with one word changed. Decide which one the speaker actually said.
-
-Answer "B" only if B is clearly right and A is clearly wrong in context.
-Answer "A" if the transcription was already right, including when B is merely
-an alternative spelling or a grammatical "improvement" the speaker did not say.
-Answer "unsure" if either could be right -- the text alone cannot settle it.
-
-Return a JSON array; each element: {"item": <number>, "choice": "A" | "B" | "unsure"}."""
-
-
-class _Verdict(BaseModel):
-    item: int
-    choice: str
 
 
 class _Edit(BaseModel):
@@ -120,32 +120,54 @@ def correct_words(
     before: list[Word],
     after: list[Word],
     backend: LLMBackend | list[LLMBackend],
+    recheck: AudioRecheck | None,
     cache: LLMCache | None = None,
+    rejected: frozenset[tuple[str, str]] = frozenset(),
 ) -> tuple[list[Word], list[WordFix]]:
     """Return `words` with misheard words fixed, plus a list of what changed.
 
     `backend` may be a list, tried in order: a stronger model first and the
     default as a fallback, since the stronger free-tier models are often
-    overloaded or out of quota. Whichever answers the first question also
-    answers the verification, so one model's proposals are not judged by
-    another's standards.
+    overloaded or out of quota.
+
+    Every proposal must then be *heard*: `recheck` re-listens to the audio and
+    the fix applies only if the replacement is what was said. Without audio
+    nothing is applied -- every text-only judge tried (five variants, on the
+    real proposals) let a factual "correction" through in some runs, and
+    captions must show what was said. `rejected` holds fixes the user has
+    ruled wrong; they are never applied.
 
     Any failure -- no backend, a network error, an unparseable reply -- returns
     the words unchanged. A caption with one wrong word is better than no clip.
     """
-    if not words:
+    if not words or recheck is None:
         return words, []
     backends = backend if isinstance(backend, list) else [backend]
     answered = _ask(backends, SYSTEM, _prompt(words, before, after), list[_Edit],
                     cache=cache, prompt_key=PROMPT_VERSION)
     if answered is None:
         return words, []
-    text, used = answered
+    text, _ = answered
 
-    edits = [e for e in _parse(text) if not _rejection(words, e)]
-    if edits:
-        edits = _verified(words, edits, backend=used, cache=cache)
-    return apply_edits(words, edits)
+    edits = []
+    for edit in _parse(text):
+        if _rejection(words, edit):
+            continue
+        if (_bare(edit.original), _bare(edit.replacement)) in rejected:
+            log.info("caption fix is on the rejected list: %r -> %r",
+                     edit.original, edit.replacement)
+            continue
+        edits.append(edit)
+
+    context = [*before, *words, *after]
+    heard = []
+    for edit in edits:
+        if recheck.said(words[edit.index], edit.replacement, context):
+            heard.append(edit)
+        else:
+            log.info("caption fix not applied, the audio says %r: %r -> %r",
+                     words[edit.index].text.strip(), edit.original, edit.replacement)
+    return apply_edits(words, heard)
 
 
 def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
@@ -170,50 +192,6 @@ def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
             cache.put(key, text=response.text, model=response.model)
         return response.text, backend
     return None
-
-
-def _verified(words: list[Word], edits: list[_Edit], *, backend: LLMBackend,
-              cache: LLMCache | None) -> list[_Edit]:
-    """Keep only the edits a second, focused question confirms.
-
-    The first pass reads the whole clip and over-proposes. Measured on real
-    clips with the default model: it changed "lay bot flies on *there*" (on the
-    shirt -- already right) to "their". The sound-alike check cannot stop that;
-    a true homophone passes by definition. Asking about each swap on its own,
-    with both versions of the sentence side by side and an explicit "unsure",
-    is what catches it. Anything but a clear "B" keeps the original: a missed
-    fix costs less than a wrong one.
-    """
-    items = []
-    for n, edit in enumerate(edits):
-        lo, hi = max(0, edit.index - 12), min(len(words), edit.index + 13)
-        before = [w.text.strip() for w in words[lo:hi]]
-        after = list(before)
-        after[edit.index - lo] = _carry_form(words[edit.index].text, edit.replacement).strip()
-        items.append(f"[{n}]\nA: {' '.join(before)}\nB: {' '.join(after)}")
-    answered = _ask([backend], VERIFY_SYSTEM, "\n\n".join(items), list[_Verdict],
-                    cache=cache, prompt_key=PROMPT_VERSION + ":verify")
-    if answered is None:
-        return []  # unverified edits are not applied
-    text, _ = answered
-
-    confirmed: set[int] = set()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return []
-    for item in data if isinstance(data, list) else []:
-        try:
-            verdict = _Verdict.model_validate(item)
-        except ValidationError:
-            continue
-        if verdict.choice.strip().upper() == "B":
-            confirmed.add(verdict.item)
-    for n, edit in enumerate(edits):
-        if n not in confirmed:
-            log.info("caption fix not confirmed, kept original: %r -> %r",
-                     edit.original, edit.replacement)
-    return [e for n, e in enumerate(edits) if n in confirmed]
 
 
 def apply_edits(words: list[Word], edits: list[_Edit]) -> tuple[list[Word], list[WordFix]]:

@@ -121,75 +121,122 @@ def mock(*replies) -> MockBackend:
     return MockBackend(responses=[json.dumps(r) for r in replies])
 
 
+class Ears:
+    """A stand-in for the audio recheck: says yes to the replacements given."""
+
+    def __init__(self, *heard: str):
+        self.heard = set(heard)
+        self.asked: list[tuple[str, str]] = []
+
+    def said(self, word, replacement, context):
+        self.asked.append((word.text.strip(), replacement))
+        return replacement in self.heard
+
+
 PROPOSAL = [{"index": 3, "original": "picture", "replacement": "pitcher",
              "reason": "baseball"}]
 
 
+def run(backend, ears, **kwargs):
+    return correct_words(CLIP, before=[], after=[], backend=backend, recheck=ears, **kwargs)
+
+
 class TestCorrectWords:
-    def test_a_confirmed_fix_is_applied(self):
-        backend = mock(PROPOSAL, [{"item": 0, "choice": "B"}])
-        out, fixes = correct_words(CLIP, before=[], after=[], backend=backend)
+    def test_a_fix_the_audio_confirms_is_applied(self):
+        out, fixes = run(mock(PROPOSAL), Ears("pitcher"))
         assert out[3].text == " pitcher"
         assert len(fixes) == 1
 
-    @pytest.mark.parametrize("choice", ["A", "unsure", "b-ish"])
-    def test_anything_but_a_clear_yes_keeps_the_original(self, choice):
-        """The real case: 'lay bot flies on there' was changed to 'their' by the
-        first pass. The second question is what stops it."""
-        backend = mock(PROPOSAL, [{"item": 0, "choice": choice}])
-        out, fixes = correct_words(CLIP, before=[], after=[], backend=backend)
+    def test_a_fix_the_audio_does_not_confirm_is_not_applied(self):
+        """The real case: "from the bot" was changed to "bite" -- true, but not
+        said. Every text-only check let it through in some runs; Whisper,
+        nudged toward "bite", still heard "bot"."""
+        out, fixes = run(mock(PROPOSAL), Ears())
         assert fixes == []
         assert out[3].text == " picture"
 
-    def test_the_verification_sees_both_versions(self):
-        backend = mock(PROPOSAL, [{"item": 0, "choice": "B"}])
-        correct_words(CLIP, before=[], after=[], backend=backend)
-        verify = backend.calls[1].user
-        assert "A: I heard the picture" in verify
-        assert "B: I heard the pitcher" in verify
-
-    def test_no_proposals_means_no_second_call(self):
-        backend = mock([])
-        out, fixes = correct_words(CLIP, before=[], after=[], backend=backend)
+    def test_without_audio_nothing_is_applied(self):
+        backend = mock(PROPOSAL)
+        out, fixes = correct_words(CLIP, before=[], after=[], backend=backend, recheck=None)
         assert (out, fixes) == (CLIP, [])
-        assert len(backend.calls) == 1
+        assert backend.calls == [], "no point asking when nothing can be verified"
 
-    def test_blocked_proposals_are_not_sent_for_verification(self):
-        backend = mock([{"index": 18, "original": "bananas.", "replacement": "apples",
-                         "reason": "x"}])
-        correct_words(CLIP, before=[], after=[], backend=backend)
-        assert len(backend.calls) == 1
+    def test_a_rejected_fix_is_never_applied_or_checked(self):
+        ears = Ears("pitcher")
+        _, fixes = run(mock(PROPOSAL), ears,
+                       rejected=frozenset({("picture", "pitcher")}))
+        assert fixes == []
+        assert ears.asked == []
+
+    def test_rejection_ignores_case_and_punctuation(self):
+        text = words("They get it from the Bot.")
+        proposal = [{"index": 5, "original": "Bot.", "replacement": "bite.", "reason": "x"}]
+        _, fixes = correct_words(text, before=[], after=[], backend=mock(proposal),
+                                 recheck=Ears("bite."),
+                                 rejected=frozenset({("bot", "bite")}))
+        assert fixes == []
+
+    def test_only_proposals_passing_the_code_checks_reach_the_audio(self):
+        ears = Ears("apples", "pitcher")
+        proposals = [*PROPOSAL, {"index": 18, "original": "bananas.",
+                                 "replacement": "apples", "reason": "x"}]
+        _, fixes = run(mock(proposals), ears)
+        assert ears.asked == [("picture", "pitcher")]
+        assert [f.replacement for f in fixes] == ["pitcher"]
+
+    def test_no_proposals_means_no_audio_check(self):
+        ears = Ears()
+        out, fixes = run(mock([]), ears)
+        assert (out, fixes) == (CLIP, [])
+        assert ears.asked == []
 
     def test_a_failing_backend_leaves_the_words_alone(self):
-        backend = MockBackend(fail_times=99, max_retries=0)
-        out, fixes = correct_words(CLIP, before=[], after=[], backend=backend)
+        out, fixes = run(MockBackend(fail_times=99, max_retries=0), Ears("pitcher"))
         assert (out, fixes) == (CLIP, [])
 
-    def test_the_fallback_answers_when_the_preferred_model_fails(self):
-        """Measured: the stronger free models return 503 and 429 often."""
+    def test_the_fallback_proposes_when_the_preferred_model_fails(self):
+        """Measured: the stronger free model returned 503, 504 and 429."""
         preferred = MockBackend(fail_times=99, max_retries=0)
-        fallback = mock(PROPOSAL, [{"item": 0, "choice": "B"}])
-        out, _ = correct_words(CLIP, before=[], after=[],
-                               backend=[preferred, fallback])
+        out, _ = run([preferred, mock(PROPOSAL)], Ears("pitcher"))
         assert out[3].text == " pitcher"
-        assert len(fallback.calls) == 2
 
     def test_the_preferred_model_is_asked_first(self):
-        preferred = mock(PROPOSAL, [{"item": 0, "choice": "B"}])
-        fallback = mock([])
-        correct_words(CLIP, before=[], after=[], backend=[preferred, fallback])
-        assert len(preferred.calls) == 2
+        preferred, fallback = mock(PROPOSAL), mock([])
+        run([preferred, fallback], Ears("pitcher"))
+        assert len(preferred.calls) == 1
         assert fallback.calls == []
 
     def test_an_unparseable_reply_leaves_the_words_alone(self):
-        backend = MockBackend(responses=["this is not json"])
-        out, fixes = correct_words(CLIP, before=[], after=[], backend=backend)
+        out, fixes = run(MockBackend(responses=["this is not json"]), Ears("pitcher"))
         assert (out, fixes) == (CLIP, [])
 
     def test_context_is_shown_but_marked_as_not_editable(self):
         backend = mock([])
         correct_words(CLIP, before=words("we were talking about baseball"),
-                      after=words("and then"), backend=backend)
+                      after=words("and then"), backend=backend, recheck=Ears())
         prompt = backend.calls[0].user
         assert "CONTEXT BEFORE (do not flag):\nwe were talking about baseball" in prompt
         assert "[3]picture" in prompt
+
+
+class TestRejectedConfig:
+    def test_entries_are_parsed_and_normalised(self):
+        from clipper.config import LLMConfig
+
+        cfg = LLMConfig(rejected_caption_fixes=["Bot. -> bite", " pickies ->piques "])
+        assert cfg.rejected_fix_pairs == {("bot", "bite"), ("pickies", "piques")}
+
+    def test_a_malformed_entry_is_refused(self):
+        from pydantic import ValidationError
+
+        from clipper.config import LLMConfig
+
+        with pytest.raises(ValidationError, match="heard -> replacement"):
+            LLMConfig(rejected_caption_fixes=["bot bite"])
+
+    def test_the_default_config_rejects_the_reported_fixes(self):
+        from clipper.config import Config
+
+        pairs = Config.load().llm.rejected_fix_pairs
+        assert ("bot", "bite") in pairs
+        assert ("pickies", "piques") in pairs

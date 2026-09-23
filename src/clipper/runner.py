@@ -34,6 +34,7 @@ from .render.faces import plan_layout_for
 from .render.graph import output_size
 from .select.pick import Pick
 from .transcribe.correct import WordFix, correct_words
+from .transcribe.recheck import AudioRecheck
 from .utils.cache import slugify
 from .utils.logging import get_logger
 from .utils.timecode import to_slug_timestamp
@@ -94,18 +95,23 @@ def run(
     work = ensure(out_dir / "work")
 
     corrector = None
+    recheck = None
     if config.llm.correct_captions:
         try:
             corrector = _correction_backends(config, backend_override)
         except Exception as exc:  # no key, backend not installed, ...
             log.warning("caption correction disabled: %s", exc)
+        audio = Path(outcome.info.audio_path) if outcome.info.audio_path else None
+        if corrector and audio and audio.exists():
+            # Loads Whisper only if some proposal survives the text checks.
+            recheck = AudioRecheck(audio, config.transcription)
 
     render_started = time.perf_counter()
     _render_with_replacement(
         selection.picks, selection.reserves, outcome,
         config=config, campaign=campaign, clips_dir=clips_dir,
         rejected_dir=rejected_dir, work=work, draft=draft,
-        limit=limit, result=result, corrector=corrector,
+        limit=limit, result=result, corrector=corrector, recheck=recheck,
     )
     timings["render_and_qa"] = time.perf_counter() - render_started
 
@@ -147,6 +153,7 @@ def _render_with_replacement(
     limit: int,
     result: RunResult,
     corrector: list[LLMBackend] | None = None,
+    recheck: AudioRecheck | None = None,
 ) -> None:
     """Render, QA, and pull a reserve for each failure until the quota is met."""
     queue = list(picks)
@@ -168,7 +175,7 @@ def _render_with_replacement(
         record = _produce_one(
             pick, outcome, config=config, campaign=campaign,
             clips_dir=clips_dir, work=work, draft=draft,
-            rank=rank, attempt=attempt, corrector=corrector,
+            rank=rank, attempt=attempt, corrector=corrector, recheck=recheck,
         )
         if record is None:
             if spare:
@@ -207,6 +214,7 @@ def _produce_one(
     rank: int,
     attempt: int,
     corrector: list[LLMBackend] | None = None,
+    recheck: AudioRecheck | None = None,
 ) -> ClipRecord | None:
     """Refine, reframe, render and check one candidate. None if it was dropped."""
     plan = _build_plan(pick, outcome, config=config, campaign=campaign,
@@ -231,7 +239,8 @@ def _produce_one(
         max_shots=config.render.max_shots,
     )})
 
-    words, fixes = _corrected_words(outcome.transcript.words, plan, corrector)
+    words, fixes = _corrected_words(outcome.transcript.words, plan, corrector, recheck,
+                                    config.llm.rejected_fix_pairs)
 
     slug = slugify(plan.hook_text or plan.text, max_length=40)
     output = clips_dir / f"{plan.clip_id}_{slug}.mp4"
@@ -386,7 +395,10 @@ def _correction_backends(config: Config, override: str | None) -> list[LLMBacken
 
 
 def _corrected_words(words: list[Word], plan: ClipPlan,
-                     corrector: list[LLMBackend] | None) -> tuple[list[Word], list[WordFix]]:
+                     corrector: list[LLMBackend] | None,
+                     recheck: AudioRecheck | None = None,
+                     rejected: frozenset[tuple[str, str]] = frozenset(),
+                     ) -> tuple[list[Word], list[WordFix]]:
     """The transcript with this clip's misheard words fixed, and what changed.
 
     Only the clip's own words can change; the rest of the transcript is passed
@@ -402,7 +414,8 @@ def _corrected_words(words: list[Word], plan: ClipPlan,
         words[lo:hi],
         before=words[max(0, lo - CORRECTION_CONTEXT_WORDS):lo],
         after=words[hi:hi + CORRECTION_CONTEXT_WORDS],
-        backend=corrector, cache=LLMCache(),
+        backend=corrector, cache=LLMCache(), recheck=recheck,
+        rejected=rejected,
     )
     if not fixes:
         return words, []

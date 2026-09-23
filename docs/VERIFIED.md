@@ -1076,3 +1076,45 @@ The fix appears in the rendered captions ("PITCHER FROM LOS", 5.7s) and in the
 report's "Caption corrections" list.
 
 846 passed, 2 skipped; ruff clean.
+
+---
+
+## 2026-09-22 (night) — Audio-checked caption fixes
+
+### Free tier, verified
+
+A 429 from gemini-3-flash-preview reported
+`quotaMetric: generativelanguage.googleapis.com/generate_content_free_tier_requests`,
+`quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier`, `quotaValue: 20`.
+The key is on the free tier. Earlier today the same model answered in ~87s or
+returned 503/504; today's 20 were used up in testing.
+
+### Labelled cases
+
+User verdicts: picture -> pitcher (right), clap -> cramp (right),
+bot -> bite (wrong), pickies -> piques (wrong); there -> their wrong from context.
+
+The stronger model's real proposals (from the earlier run's cache), replayed
+through the final code path with real audio, twice:
+
+| proposal | verdict | outcome | decided by |
+|---|---|---|---|
+| picture -> pitcher | right | applied | audio heard "I heard the pitcher from" |
+| clap -> cramp | right | applied | audio heard "Monkey never cramp." |
+| bot -> bite | wrong | kept | audio heard "...from the sand flies"; no "bite" |
+| pickies -> piques | wrong | kept | rejected list; audio could not tell them apart |
+| does -> do | -- | kept | audio kept "does" |
+| through -> to | -- | kept | audio kept "through" |
+| rode -> rowed | -- | kept | audio kept "rode" |
+
+Same result on both runs. Audio window 1.2s/0.8s was tried first and sent Whisper
+into a repetition loop ("Los Angeles Dodgers" thirty times) on the "clap" case;
+2.0s/1.5s did not.
+
+### End-to-end
+
+Default config, stronger model out of quota: it failed immediately each clip and
+the fast model proposed. Applied picture -> pitcher; the audio refused there ->
+their. 5/5 clips accepted, 4m01s total (3m20s without correction).
+
+858 passed, 2 skipped; ruff clean.

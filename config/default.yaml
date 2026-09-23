@@ -48,11 +48,17 @@ llm:
   use_second_opinion: true   # prompt B; disabling halves LLM calls
   disagreement_penalty: 0.25
   correct_captions: true     # fix misheard caption words from context (sound-alike swaps only)
-  # A stronger model to try first, e.g. gemini-3-flash-preview: it caught "clap" -> "cramp"
-  # where the default did not, but on the free tier it took ~90s per call (a 5-clip run
-  # went from 3 to 22 minutes). Unset = the fast scoring model only.
-  correction_model: null
+  # Tried first to propose caption fixes; the scoring model is the fallback and always
+  # does the verification. Free tier, verified 2026-09-22: 20 requests/day for this
+  # model (quota GenerateRequestsPerDayPerProjectPerModel-FreeTier), one per clip, and
+  # often overloaded -- past the quota or the timeout it just falls back. null = off.
+  correction_model: gemini-3-flash-preview
   correction_timeout: 30   # seconds before giving up on correction_model and falling back
+  # Caption fixes ruled wrong on review ("heard -> replacement"); never applied again.
+  # Every applied fix is listed per clip in report.md -- add a bad one here.
+  rejected_caption_fixes:
+    - bot -> bite          # "leishmaniasis from the bot": said, even if "bite" is what's true
+    - pickies -> piques    # "pickies" is the speaker's word
   use_few_shot_examples: false
   few_shot_count: 3
   rubric_weights:
