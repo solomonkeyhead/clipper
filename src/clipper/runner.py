@@ -22,14 +22,18 @@ from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
 from .candidates.boundaries import refine
 from .config import CampaignConfig, Config
 from .ingest.probe import probe
-from .models import ClipPlan, Sentences, SourceInfo, Transcript
+from .llm.base import LLMBackend
+from .llm.base import create as create_backend
+from .llm.cache import LLMCache
+from .models import ClipPlan, Sentences, SourceInfo, Transcript, Word
 from .paths import ensure
-from .pipeline import ScoreOutcome, choose, score
+from .pipeline import ScoreOutcome, build_backend, choose, score
 from .qa.checks import QAContext, check_clip, summarize
 from .render.clip import render_clip
 from .render.faces import plan_layout_for
 from .render.graph import output_size
 from .select.pick import Pick
+from .transcribe.correct import WordFix, correct_words
 from .utils.cache import slugify
 from .utils.logging import get_logger
 from .utils.timecode import to_slug_timestamp
@@ -89,12 +93,19 @@ def run(
     rejected_dir = out_dir / "rejected"
     work = ensure(out_dir / "work")
 
+    corrector = None
+    if config.llm.correct_captions:
+        try:
+            corrector = _correction_backends(config, backend_override)
+        except Exception as exc:  # no key, backend not installed, ...
+            log.warning("caption correction disabled: %s", exc)
+
     render_started = time.perf_counter()
     _render_with_replacement(
         selection.picks, selection.reserves, outcome,
         config=config, campaign=campaign, clips_dir=clips_dir,
         rejected_dir=rejected_dir, work=work, draft=draft,
-        limit=limit, result=result,
+        limit=limit, result=result, corrector=corrector,
     )
     timings["render_and_qa"] = time.perf_counter() - render_started
 
@@ -135,6 +146,7 @@ def _render_with_replacement(
     draft: bool,
     limit: int,
     result: RunResult,
+    corrector: list[LLMBackend] | None = None,
 ) -> None:
     """Render, QA, and pull a reserve for each failure until the quota is met."""
     queue = list(picks)
@@ -156,7 +168,7 @@ def _render_with_replacement(
         record = _produce_one(
             pick, outcome, config=config, campaign=campaign,
             clips_dir=clips_dir, work=work, draft=draft,
-            rank=rank, attempt=attempt,
+            rank=rank, attempt=attempt, corrector=corrector,
         )
         if record is None:
             if spare:
@@ -194,6 +206,7 @@ def _produce_one(
     draft: bool,
     rank: int,
     attempt: int,
+    corrector: list[LLMBackend] | None = None,
 ) -> ClipRecord | None:
     """Refine, reframe, render and check one candidate. None if it was dropped."""
     plan = _build_plan(pick, outcome, config=config, campaign=campaign,
@@ -218,6 +231,8 @@ def _produce_one(
         max_shots=config.render.max_shots,
     )})
 
+    words, fixes = _corrected_words(outcome.transcript.words, plan, corrector)
+
     slug = slugify(plan.hook_text or plan.text, max_length=40)
     output = clips_dir / f"{plan.clip_id}_{slug}.mp4"
 
@@ -225,7 +240,7 @@ def _produce_one(
         source=source_path,
         media=outcome.info.media,
         plan=plan,
-        words=outcome.transcript.words,
+        words=words,
         config=config,
         work_dir=work,
         output=output,
@@ -239,7 +254,7 @@ def _produce_one(
     rendered = probe(output)
     context = QAContext(
         plan=plan,
-        words=outcome.transcript.words,
+        words=words,
         ass_text=render.ass_path.read_text(encoding="utf-8") if render.ass_path else "",
         duration_bounds=(campaign.duration.min_seconds, campaign.duration.max_seconds),
         expected_width=width,
@@ -266,6 +281,7 @@ def _produce_one(
         llm_a_total=values.llm_a.total(weights) if values and values.llm_a else None,
         llm_b_total=values.llm_b.total(weights) if values and values.llm_b else None,
         rendered_duration=rendered.duration,
+        caption_fixes=fixes,
     )
 
 
@@ -344,3 +360,50 @@ def _reject(record: ClipRecord, rejected_dir: Path, result: RunResult) -> None:
     log.warning("%s rejected: %s", record.plan.clip_id,
                 summarize(record.qa) if record.qa.status == "fail"
                 else record.compliance.summary())
+
+
+# Words either side of a clip shown to the corrector as context. About a
+# sentence each way: enough to know the topic, cheap enough to send per clip.
+CORRECTION_CONTEXT_WORDS = 30
+
+
+def _correction_backends(config: Config, override: str | None) -> list[LLMBackend]:
+    """The preferred correction model, then the scoring model as a fallback.
+
+    The preferred model gets no retries and a short timeout: the stronger free
+    models were measured taking ~90s per call and returning 503 "high demand"
+    and 429 quota errors. Waiting through that for every clip turned a 3-minute
+    run into 22; falling back promptly keeps the run fast.
+    """
+    default = build_backend(config, override=override)
+    preferred = config.llm.correction_model
+    if not preferred or preferred == default.model:
+        return [default]
+    strong = create_backend(default.name, model=preferred, max_retries=0,
+                            requests_per_minute=config.llm.requests_per_minute,
+                            timeout=config.llm.correction_timeout)
+    return [strong, default]
+
+
+def _corrected_words(words: list[Word], plan: ClipPlan,
+                     corrector: list[LLMBackend] | None) -> tuple[list[Word], list[WordFix]]:
+    """The transcript with this clip's misheard words fixed, and what changed.
+
+    Only the clip's own words can change; the rest of the transcript is passed
+    through untouched, so the fix cannot leak into another clip's captions.
+    """
+    if corrector is None:
+        return words, []
+    inside = [i for i, w in enumerate(words) if plan.start <= (w.start + w.end) / 2 < plan.end]
+    if not inside:
+        return words, []
+    lo, hi = inside[0], inside[-1] + 1
+    fixed, fixes = correct_words(
+        words[lo:hi],
+        before=words[max(0, lo - CORRECTION_CONTEXT_WORDS):lo],
+        after=words[hi:hi + CORRECTION_CONTEXT_WORDS],
+        backend=corrector, cache=LLMCache(),
+    )
+    if not fixes:
+        return words, []
+    return [*words[:lo], *fixed, *words[hi:]], fixes

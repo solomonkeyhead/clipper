@@ -48,6 +48,10 @@ MODEL_PREFERENCE: tuple[str, ...] = (
 _RATE_LIMIT_MARKERS = ("429", "resource_exhausted", "rate limit", "quota")
 
 
+# Shortest request deadline the Gemini API accepts (verified 2026-09-22).
+MIN_DEADLINE_SECONDS = 10.0
+
+
 @register
 class GeminiBackend(LLMBackend):
     name: ClassVar[str] = "gemini"
@@ -76,7 +80,18 @@ class GeminiBackend(LLMBackend):
                     f"the google-genai SDK is not installed: {exc}\n"
                     '  uv pip install -e ".[dev]"'
                 ) from exc
-            self._client = genai.Client(api_key=self.api_key)
+            from google.genai import types
+
+            # The backend's `timeout` was never passed on, so a call to an
+            # overloaded model could wait indefinitely -- measured at 87s before
+            # a 503. The SDK takes milliseconds (google-genai 2.24.0), and the
+            # API rejects anything under 10s with a 400 ("Minimum allowed
+            # deadline is 10s"), so shorter values are raised to that.
+            deadline = max(MIN_DEADLINE_SECONDS, self.timeout)
+            self._client = genai.Client(
+                api_key=self.api_key,
+                http_options=types.HttpOptions(timeout=int(deadline * 1000)),
+            )
         return self._client
 
     def list_models(self) -> list[str]:

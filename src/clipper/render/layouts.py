@@ -25,9 +25,10 @@ without rendering anything.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ..models import CropKeyframe, CropRect, LayoutPlan
+from .speakers import clear_talker
 
 if TYPE_CHECKING:
     from .overlays import OverlayBox
@@ -69,6 +70,10 @@ class FaceObservation:
     width: float
     height: float
     confidence: float = 1.0
+    # Normalised mouth and eye patches, for telling who is talking (see
+    # `speakers.py`). Opaque data, left out of comparison and repr.
+    mouth: Any = field(default=None, compare=False, repr=False)
+    eyes: Any = field(default=None, compare=False, repr=False)
 
     @property
     def area(self) -> float:
@@ -222,6 +227,8 @@ def choose_layout(
     tracks = build_tracks(faces_per_sample, src_w)
     subjects = [t for t in tracks
                 if t.median_width / src_w >= min_subject_face_ratio]
+    subjects += _companions(tracks, subjects, src_w)
+    subjects.sort(key=lambda t: -len(t.observations))
 
     if not subjects:
         detected = sum(1 for s in faces_per_sample if s) / samples
@@ -266,6 +273,20 @@ def choose_layout(
         )
         if group is not None:
             return group
+
+        # Everyone does not fit one frame. If one of them is clearly the one
+        # talking, frame them: that is who the viewer is listening to.
+        talker = clear_talker([primary, *others])
+        if talker is not None:
+            speaker, score, runner_up = talker
+            framed = plan_group_crop(
+                [speaker], src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+                face_ratio=face_ratio, overlays=overlays, allow_wider=True,
+            )
+            if framed is not None:
+                return framed.model_copy(update={"reason": (
+                    f"framing the person talking (mouth movement {score:.2f} vs "
+                    f"{runner_up:.2f}); {framed.reason}")})
 
         # A stack shows two faces and nothing else, so it would drop any
         # graphic on screen. With one present, frame everything instead.
@@ -326,6 +347,27 @@ def choose_layout(
     if framed is None:  # pragma: no cover - allow_wider always frames a subject
         return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h)
     return framed
+
+
+def _companions(tracks: list[FaceTrack], subjects: list[FaceTrack],
+                src_w: int) -> list[FaceTrack]:
+    """Faces just under the subject size that are on screen *with* a subject.
+
+    The size threshold separates people from reaction-cam overlays, measured at
+    6.5-7.7% of frame width. But on a real b-roll interview the player answering
+    measured 12.5% beside an interviewer at 13.6%, so the size line alone threw
+    out the one person talking. Two similar-sized faces sharing the screen are a
+    two-shot, not an inset and a subject.
+    """
+    if not subjects:
+        return []
+    return [
+        t for t in tracks
+        if t not in subjects
+        and t.median_width / src_w >= COMPANION_MIN_WIDTH_RATIO
+        and any(t.median_width >= COMPANION_SIZE_MATCH * s.median_width
+                and t.co_presence(s) >= CO_PRESENCE_FOR_STACK for s in subjects)
+    ]
 
 
 def _track_median_face(track: FaceTrack) -> FaceObservation:
@@ -421,6 +463,12 @@ PRIMARY_TRACK_COVERAGE = 0.85
 
 # A second track present in at least this share is "also a subject".
 SECONDARY_TRACK_COVERAGE = 0.25
+
+# A face under the subject size still counts if it is at least this wide and
+# at least COMPANION_SIZE_MATCH the width of a subject it shares the screen with.
+# Overlay cams measured 6.5-7.7%; a real interviewee beside an interviewer 12.5%.
+COMPANION_MIN_WIDTH_RATIO = 0.09
+COMPANION_SIZE_MATCH = 0.75
 
 # Two subjects must share this share of frames before they are stacked as a
 # two-shot. Tracks that never overlap in time are one person filmed from two

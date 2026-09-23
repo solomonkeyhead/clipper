@@ -152,6 +152,19 @@ class LLMConfig(StrictModel):
     # Penalty on |A - B| disagreement, in rubric-total points.
     disagreement_penalty: float = Field(default=0.25, ge=0.0, le=1.0)
     rubric_weights: RubricWeights = RubricWeights()
+    # Ask the LLM which caption words speech recognition misheard ("picture"
+    # for "pitcher") and fix them. Only sound-alike swaps are applied; see
+    # clipper/transcribe/correct.py.
+    correct_captions: bool = True
+    # Model for caption correction, tried first; the scoring model is the
+    # fallback when it is slow, overloaded or out of quota. On real clips the
+    # default free model found "picture" -> "pitcher" but missed "clap" ->
+    # "cramp", which gemini-3-flash-preview caught -- at ~90s per call on the
+    # free tier. None uses the scoring model only.
+    correction_model: str | None = None
+    # Seconds to wait on `correction_model` before falling back. Gemini's API
+    # refuses deadlines under 10s.
+    correction_timeout: float = Field(default=30.0, ge=10)
 
 
 class SafeArea(StrictModel):

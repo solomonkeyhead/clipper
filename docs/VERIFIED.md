@@ -1042,3 +1042,37 @@ several frames and a framing change inside the smear is not visible.
 ### Tests
 
 774 passed, 2 skipped; ruff clean.
+
+---
+
+## 2026-09-22 (evening) — Speaker framing and caption correction
+
+### Speaker framing
+
+Clip 001's stadium interview (8.78-13.95s) now plans as
+`follow_crop ... framing the person talking (mouth movement 1.25 vs 0.61)`, and
+the rendered frames at 9.1, 11.0 and 13.0s show the player -- the one speaking --
+with the interviewer out of shot. Previously the interviewer was framed.
+
+### Caption correction, per model, on the five real clips
+
+| model | latency/call | proposals that survived both guards |
+|---|---|---|
+| gemini-flash-lite-latest (default) | 0.7s | picture -> pitcher |
+| gemini-3.1-flash-lite | 2.5s | picture -> pitcher |
+| gemini-3-flash-preview | ~87s, often 503/429 | picture -> pitcher, clap -> cramp, pickies -> piques, bot -> bite, through -> to |
+| gemini-flash-latest | 503 on 3 of 5 clips, then 429 | (rode -> rowed on one clip) |
+
+Blocked by the sound-alike check: river -> jungle, pickies -> chiggers.
+Refused by verification: there -> their (the original was right), rode -> rowed
+(ambiguous), does -> do.
+
+End-to-end, default settings: 5/5 clips accepted, 3m43s total (was 3m20s
+without correction). With gemini-3-flash-preview preferred and no timeout: 22m.
+A 10s timeout on that model was confirmed to give up at 8.8s and 4.5s instead of
+hanging; the Gemini API rejects deadlines under 10s with a 400.
+
+The fix appears in the rendered captions ("PITCHER FROM LOS", 5.7s) and in the
+report's "Caption corrections" list.
+
+846 passed, 2 skipped; ruff clean.

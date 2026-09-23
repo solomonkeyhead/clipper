@@ -27,6 +27,7 @@ from ..utils.logging import get_logger
 from .layouts import FaceObservation
 from .overlays import OverlayBox, detect_overlays
 from .regions import ActivityAccumulator, ContentMap
+from .speakers import face_patches
 
 log = get_logger(__name__)
 
@@ -288,6 +289,7 @@ def _detect(detector, frame, *, min_confidence: float, frame_height: int,
         score = float(row[-1])
         if score < min_confidence or h < minimum_height:
             continue
+        mouth, eyes = face_patches(frame, x, y, w, h)
         faces.append(FaceObservation(
             t=t,
             x=(x + w / 2) * upscale,
@@ -295,6 +297,8 @@ def _detect(detector, frame, *, min_confidence: float, frame_height: int,
             width=w * upscale,
             height=h * upscale,
             confidence=score,
+            mouth=mouth,
+            eyes=eyes,
         ))
     return faces
 

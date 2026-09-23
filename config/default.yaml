@@ -47,6 +47,12 @@ llm:
   requests_per_minute: 10    # client-side limiter; keep under the free-tier RPM
   use_second_opinion: true   # prompt B; disabling halves LLM calls
   disagreement_penalty: 0.25
+  correct_captions: true     # fix misheard caption words from context (sound-alike swaps only)
+  # A stronger model to try first, e.g. gemini-3-flash-preview: it caught "clap" -> "cramp"
+  # where the default did not, but on the free tier it took ~90s per call (a 5-clip run
+  # went from 3 to 22 minutes). Unset = the fast scoring model only.
+  correction_model: null
+  correction_timeout: 30   # seconds before giving up on correction_model and falling back
   use_few_shot_examples: false
   few_shot_count: 3
   rubric_weights:

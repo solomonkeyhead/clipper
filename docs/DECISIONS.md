@@ -650,3 +650,68 @@ the start of a shot. The frames in between are already decoded during the scan,
 so on a detected cut they are compared and the cut is moved to the frame where
 the picture changes, minus half a frame so the render's `trim` boundary falls
 between two frames. Cost is only paid at cuts: at most five small histograms each.
+
+### D44. When two people share a shot and do not fit one frame, frame the one talking
+
+Reported: in clip 001's b-roll interview, the player answered ("monkey never
+cramp...") while the frame held the interviewer. Unlike D42 the speaker was in
+the picture, so this was fixable.
+
+Two causes, both measured on that shot:
+
+1. **The player was never a candidate.** His face measured 12.5% of frame width,
+   just under the 13% line separating people from reaction-cam overlays
+   (6.5-7.7%). A face now also counts if it is at least 9% wide and at least
+   0.75x the size of a subject it shares the screen with: two similar faces on
+   screen together are a two-shot, not an inset.
+2. **Nothing asked who was talking.** The score is mouth change between samples
+   divided by eye change, from fixed bands of the face box. The first version --
+   mouth change alone, centred on YuNet's mouth landmarks -- picked the
+   *interviewer* (0.71 vs 0.38) because he was in profile and profile landmarks
+   jitter. Dividing by the eyes cancels head movement and jitter; box bands
+   instead of landmarks removed the jitter at source.
+
+| shot | who talks | talker | other |
+|---|---|---|---|
+| stadium interview | player | **1.10** | 0.64 |
+| studio two-shot | Paul | **1.11** | 0.91 |
+
+Two labelled shots is thin, so it only acts when the leader beats everyone by
+1.2x; otherwise the layout shows both as before. It is consulted only when the
+people do not fit one frame together -- if they fit, showing both is still right.
+
+### D45. Caption words misheard by speech recognition are fixed from context
+
+Reported: "I heard the *picture* from Los Angeles Dodgers" (a pitcher). Whisper
+writes what things sound like; which homophone was meant is only clear from
+context. Each clip's words go to the LLM with ~30 words of context either side.
+
+The LLM is not trusted to rewrite. Every guard below was added because of a
+proposal actually seen on the real clips:
+
+| guard | real proposal it stopped |
+|---|---|
+| returns edits (index, original, replacement), never text; the original must match the word at that index | -- (a miscounted index would otherwise change the wrong word) |
+| replacement must sound like the original: spelling or consonant-skeleton similarity >= 0.5, same opening sound (or spelling >= 0.8) | "river" -> "jungle"; "pickies" -> "chiggers" |
+| a second, focused question per edit: sentence A vs B, answer "B" / "A" / "unsure"; only "B" applies | "lay bot flies on *there*" -> "their" (it was right); "rode" -> "rowed" (text cannot settle it) |
+| at most 10% of a clip's words (min 2) may change, or nothing applies | -- |
+
+The sound-alike rule was set on 20 real homophone pairs against 15 meaning
+changes: all 20 pass, all 15 fail, including the rhyme "pitcher" -> "catcher"
+that similarity alone let through (hence the opening-sound rule).
+
+**Model choice, measured.** The default free model (gemini-flash-lite-latest,
+0.7s per call) fixes "picture" -> "pitcher" but misses "clap" -> "cramp", which
+needs knowing bananas prevent cramps. gemini-3-flash-preview catches both -- but
+on the free tier it took ~87s per call or returned 503/429, and a 5-clip run went
+from 3m20s to 22m. So the stronger model is opt-in (`llm.correction_model`), tried
+first with no retries and a timeout (`llm.correction_timeout`, 30s) before
+falling back. With the default the run takes 3m43s, 23s more than without
+correction.
+
+The Gemini backend's `timeout` had never been passed to the SDK, so a call could
+wait indefinitely; it is now, raised to the API's 10s minimum (a shorter deadline
+is rejected with a 400, verified).
+
+Every applied fix is listed per clip in `report.md` and in the manifest's
+`caption_fixes` column, so a wrong one can be found and reverted.

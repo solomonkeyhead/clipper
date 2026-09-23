@@ -20,6 +20,7 @@ from pathlib import Path
 from ..campaign.compliance import ComplianceReport, full_caption
 from ..config import CampaignConfig
 from ..models import ClipPlan, QAReport, SourceInfo
+from ..transcribe.correct import WordFix
 from ..utils.logging import get_logger
 from ..utils.timecode import format_duration, to_ffmpeg
 
@@ -30,6 +31,7 @@ MANIFEST_COLUMNS = [
     "composite", "llm_a", "llm_b", "audio", "heatmap", "text",
     "layout", "caption_style", "hook_text", "suggested_caption", "hashtags",
     "credit_text", "qa_status", "compliance_status", "file", "created_at",
+    "caption_fixes",
 ]
 
 PERFORMANCE_COLUMNS = [
@@ -51,6 +53,8 @@ class ClipRecord:
     llm_a_total: float | None = None
     llm_b_total: float | None = None
     rendered_duration: float | None = None
+    # Words the transcript correction changed in this clip's captions.
+    caption_fixes: list[WordFix] = field(default_factory=list)
 
     @property
     def duration(self) -> float:
@@ -155,6 +159,8 @@ def _row(record: ClipRecord, *, info: SourceInfo, campaign: CampaignConfig,
         "compliance_status": record.compliance.status,
         "file": record.file.name,
         "created_at": created_at,
+        "caption_fixes": "; ".join(f"{f.original} -> {f.replacement}"
+                                   for f in record.caption_fixes),
     }
 
 
@@ -252,6 +258,13 @@ def _render_report(
         add("")
         add(f"> {plan.text}")
         add("")
+        if record.caption_fixes:
+            add("**Caption corrections** (misheard words fixed from context)")
+            add("")
+            for fix in record.caption_fixes:
+                add(f"- {fix.time - plan.start:.1f}s: *{fix.original}* -> "
+                    f"**{fix.replacement}** ({fix.reason})")
+            add("")
 
     if rejected:
         add(f"## {len(rejected)} rejected")
