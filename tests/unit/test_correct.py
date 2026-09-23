@@ -240,3 +240,14 @@ class TestRejectedConfig:
         pairs = Config.load().llm.rejected_fix_pairs
         assert ("bot", "bite") in pairs
         assert ("pickies", "piques") in pairs
+
+
+class TestNoOpProposals:
+    def test_a_same_word_proposal_never_reaches_the_audio(self):
+        """Seen on a real clip: "smokes" -> "smokes" cost a Whisper re-listen."""
+        ears = Ears("picture")
+        proposal = [{"index": 3, "original": "picture", "replacement": "Picture",
+                     "reason": "x"}]
+        _, fixes = run(mock(proposal), ears)
+        assert fixes == []
+        assert ears.asked == []

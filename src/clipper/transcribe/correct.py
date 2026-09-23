@@ -237,6 +237,9 @@ def _rejection(words: list[Word], edit: _Edit) -> str:
     replacement = edit.replacement.strip()
     if not replacement or len(replacement.split()) > MAX_REPLACEMENT_WORDS:
         return "replacement is empty or too long"
+    if _bare(replacement) == _bare(edit.original):
+        # Seen on a real clip ("smokes" -> "smokes"); not worth re-listening to.
+        return "replacement is the same word"
     if not sounds_alike(edit.original, replacement):
         return "does not sound alike"
     return ""

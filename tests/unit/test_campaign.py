@@ -360,3 +360,34 @@ class TestBriefRequirements:
         assert "loudnorm" not in build_audio_filter(spec)
         assert "loudnorm" in build_audio_filter(
             spec.__class__(**{**spec.__dict__, "normalize_audio": True}))
+
+
+class TestCaptionRestrictions:
+    def test_only_required_hashtags_drops_the_llms_suggestions(self):
+        """Brief: no hashtags 'not affiliated with this campaign'. Real output
+        carried #comedy, #awkward and #skit."""
+        out = compliance.apply_campaign_caption(
+            plan(hashtags=["#comedy", "#skit", "#AdultsFX"]),
+            campaign(required_hashtags=("#AdultsFX", "#fxpartner"),
+                     only_required_hashtags=True))
+        assert out.hashtags == ["#AdultsFX", "#fxpartner"]
+
+    def test_suggestions_are_kept_by_default(self):
+        out = compliance.apply_campaign_caption(
+            plan(hashtags=["#comedy"]), campaign(required_hashtags=("#AdultsFX",)))
+        assert out.hashtags == ["#AdultsFX", "#comedy"]
+
+    def test_a_clip_with_no_caption_gets_a_brief_supplied_one(self):
+        examples = ("First example", "Second example")
+        first = compliance.apply_campaign_caption(
+            plan(suggested_caption="", rank=1), campaign(fallback_captions=examples))
+        second = compliance.apply_campaign_caption(
+            plan(suggested_caption="", rank=2), campaign(fallback_captions=examples))
+        assert first.suggested_caption.startswith("First example")
+        assert second.suggested_caption.startswith("Second example")
+
+    def test_an_llm_caption_is_not_replaced(self):
+        out = compliance.apply_campaign_caption(
+            plan(suggested_caption="Never invite these friends to dinner."),
+            campaign(fallback_captions=("Example",)))
+        assert out.suggested_caption.startswith("Never invite")

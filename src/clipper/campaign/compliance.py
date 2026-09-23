@@ -170,7 +170,8 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
     """
     tags: list[str] = []
     seen: set[str] = set()
-    for tag in list(campaign.required_hashtags) + list(plan.hashtags):
+    suggested = [] if campaign.only_required_hashtags else list(plan.hashtags)
+    for tag in list(campaign.required_hashtags) + suggested:
         cleaned = tag.strip()
         if not cleaned:
             continue
@@ -182,6 +183,9 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
         tags.append(cleaned)
 
     caption = plan.suggested_caption.strip()
+    if not caption and campaign.fallback_captions:
+        caption = campaign.fallback_captions[
+            (plan.rank - 1) % len(campaign.fallback_captions)].strip()
     required = campaign.required_caption_text.strip()
     if required and required.lower() not in caption.lower():
         caption = f"{caption} {required}".strip()

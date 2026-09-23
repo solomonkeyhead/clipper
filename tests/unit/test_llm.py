@@ -545,3 +545,47 @@ class TestCacheAcrossRuns:
                 raise LLMError("no network")
 
         assert Offline().cache_model() == "auto"
+
+
+class RefusesOne(MockBackend):
+    """Refuses any batch containing the candidate whose text holds `trigger`."""
+
+    def __init__(self, trigger: str, **kwargs):
+        super().__init__(**kwargs)
+        self.trigger = trigger
+
+    def _complete(self, request):
+        from clipper.llm.base import ContentBlocked
+
+        self.calls.append(request)
+        if self.trigger in request.user:
+            raise ContentBlocked("prompt blocked: PROHIBITED_CONTENT")
+        return super()._complete(request)
+
+
+class TestRefusedBatches:
+    """Measured on a sitcom: Gemini refused a batch of eight as
+    PROHIBITED_CONTENT, all eight went unscored, and the run retried the
+    refusal five times first."""
+
+    CFG = LLMConfig(use_second_opinion=False, batch_size=8)
+
+    def _items(self):
+        items = candidates(8)
+        items[5] = items[5].model_copy(update={"text": "REFUSE-ME " + items[5].text})
+        return items
+
+    def test_only_the_refused_candidate_goes_unscored(self, tmp_path):
+        result = score_candidates(self._items(), RefusesOne("REFUSE-ME"), self.CFG,
+                                  cache=LLMCache(tmp_path))
+        scored = set(result.totals) | set(result.drops)
+        assert "c005" not in scored
+        assert len(scored) == 7
+
+    def test_a_refusal_is_not_retried(self):
+        from clipper.llm.base import ContentBlocked
+
+        backend = RefusesOne("x", max_retries=5)
+        with pytest.raises(ContentBlocked):
+            backend.complete(LLMRequest(system="s", user="x"))
+        assert len(backend.calls) == 1

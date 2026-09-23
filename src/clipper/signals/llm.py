@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field, ValidationError
 
 from ..config import LLMConfig
-from ..llm.base import LLMBackend, LLMConfigError, LLMError, LLMRequest
+from ..llm.base import ContentBlocked, LLMBackend, LLMConfigError, LLMError, LLMRequest
 from ..llm.cache import LLMCache
 from ..llm.prompts import PROMPT_A, PROMPT_B, REPAIR_SYSTEM, PromptVariant, build_user_message
 from ..models import Candidate, RubricScores
@@ -315,6 +315,19 @@ def _score_batch(
         # A missing key or a malformed request will fail identically for every
         # remaining batch, so stop rather than logging the same warning N times.
         raise
+    except ContentBlocked as exc:
+        # One candidate the provider refuses takes the whole batch down with
+        # it. Measured on a sitcom episode: eight candidates lost to one block.
+        # Halve and retry, so only the refused candidate goes unscored.
+        if len(batch) == 1:
+            log.warning("prompt %s: %s was refused by the model and is left "
+                        "unscored (%s)", variant.key, batch[0].candidate_id, exc)
+            return {}
+        middle = len(batch) // 2
+        log.info("prompt %s: a batch of %d was refused; scoring it in halves",
+                 variant.key, len(batch))
+        return {**_score_batch(batch[:middle], backend, cfg, variant, examples=examples),
+                **_score_batch(batch[middle:], backend, cfg, variant, examples=examples)}
     except LLMError as exc:
         log.warning("prompt %s failed for a batch of %d: %s", variant.key, len(batch), exc)
         return {}

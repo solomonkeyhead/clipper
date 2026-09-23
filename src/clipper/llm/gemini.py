@@ -21,6 +21,7 @@ from typing import ClassVar
 
 from ..utils.logging import get_logger
 from .base import (
+    ContentBlocked,
     LLMBackend,
     LLMConfigError,
     LLMError,
@@ -194,9 +195,12 @@ class GeminiBackend(LLMBackend):
         latency = time.perf_counter() - started
         text = response.text or ""
         if not text.strip():
+            reason = _finish_reason(response)
+            if reason.startswith("prompt blocked"):
+                raise ContentBlocked(f"Gemini refused the input ({reason})")
             raise LLMError(
                 f"Gemini returned an empty response (finish reason: "
-                f"{_finish_reason(response)}). This usually means a safety filter fired."
+                f"{reason}). This usually means a safety filter fired."
             )
 
         usage = getattr(response, "usage_metadata", None)
@@ -215,6 +219,13 @@ def _looks_rate_limited(message: str) -> bool:
 
 
 def _finish_reason(response) -> str:
+    """Why a response is empty. A blocked *prompt* returns no candidates at all
+    and reports its reason only in `prompt_feedback`, which this used to ignore
+    -- every such block was logged as "unknown"."""
+    feedback = getattr(response, "prompt_feedback", None)
+    block = getattr(feedback, "block_reason", None) if feedback else None
+    if block:
+        return f"prompt blocked: {block}"
     try:
         return str(response.candidates[0].finish_reason)
     except (AttributeError, IndexError, TypeError):

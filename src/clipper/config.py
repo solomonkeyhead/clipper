@@ -389,6 +389,12 @@ class CampaignConfig(StrictModel):
     hook_overlay: bool = True
     # Scripted TV: do not drop scenes for needing earlier context.
     scripted: bool = False
+    # Use only `required_hashtags`, dropping the LLM's suggestions. For briefs
+    # banning hashtags "not affiliated with this campaign".
+    only_required_hashtags: bool = False
+    # Captions supplied by the brief, used (in rotation) for a clip the LLM
+    # gave no caption.
+    fallback_captions: tuple[str, ...] = ()
     notes: str = ""
 
     @field_validator("source_authorization")

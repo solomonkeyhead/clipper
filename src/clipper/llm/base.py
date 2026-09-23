@@ -35,6 +35,15 @@ class LLMConfigError(LLMError):
     """The backend is missing a key, model, or server. Not retryable."""
 
 
+class ContentBlocked(LLMError):
+    """The provider refused the input itself. Retrying cannot change that.
+
+    Seen on real sitcom transcripts: Gemini blocked a batch of eight candidates
+    as PROHIBITED_CONTENT -- a category its safety settings cannot relax -- and
+    the run retried it five times with backoff before giving up.
+    """
+
+
 class RateLimited(LLMError):
     """The provider refused for quota reasons. Retryable with backoff."""
 
@@ -180,8 +189,8 @@ class LLMBackend(ABC):
                 response = self._complete(request)
                 self.usage.record(response)
                 return response
-            except LLMConfigError:
-                raise  # a missing key will not fix itself
+            except (LLMConfigError, ContentBlocked):
+                raise  # a missing key, or a refused input, will not fix itself
             except RateLimited as exc:
                 last = exc
                 delay = exc.retry_after if exc.retry_after else self._backoff(attempt)

@@ -35,6 +35,18 @@ burn_credit_in_video: true
 credit_position: top_left
 required_caption_text: "Watch Adults season 2 on FX | Hulu @adultsfx"
 required_hashtags: ["#AdultsFX", "#fxpartner"]   # required + FTC disclosure
+# Brief: "Do not use any logos, hashtags, or content that is not affiliated with
+# this campaign" -- so none of the LLM's #comedy / #skit suggestions.
+only_required_hashtags: true
+# The brief's own example captions ("Here are some examples to use"), for any
+# clip the LLM gave no caption.
+fallback_captions:
+  - "Just a group of adults who have absolutely no idea what they're doing 😭"
+  - "Being an adult is really just figuring it out as you go"
+  - "Every friend group has at least one person like this 💀"
+  - "This is exactly why the group chat can never get leaked 😭"
+  - "Nobody prepares you for how unserious adulthood actually is"
+  - "Just friends enabling each other's worst decisions 💀"
 
 # Brief: "Do not change the audio of the clip."
 keep_original_audio: true
