@@ -49,6 +49,8 @@ class RenderSpec:
     audio_bitrate: str
     audio_rate: int
     has_audio: bool = True
+    #: False leaves levels exactly as delivered (a brief forbidding audio edits).
+    normalize_audio: bool = True
 
 
 def build_video_filter(spec: RenderSpec) -> str:
@@ -219,7 +221,14 @@ def _blurred_fit_chain(spec: RenderSpec, src: str, tag: str,
 
 
 def build_audio_filter(spec: RenderSpec) -> str:
-    """Loudness normalisation to the configured target, ending in ``[a]``."""
+    """Loudness normalisation to the configured target, ending in ``[a]``.
+
+    With `normalize_audio` off, only the sample format changes -- the levels
+    and content are exactly what the source delivered.
+    """
+    if not spec.normalize_audio:
+        return (f"[0:a]aresample={spec.audio_rate}:resampler=soxr,"
+                f"aformat=sample_fmts=fltp:channel_layouts=stereo[a]")
     return (
         f"[0:a]loudnorm=I={spec.loudness_lufs}:TP={spec.true_peak_dbtp}:LRA=11,"
         f"aresample={spec.audio_rate}:resampler=soxr,"

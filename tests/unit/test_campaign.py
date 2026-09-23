@@ -304,3 +304,59 @@ class TestRejectionReason:
         path = write_rejection_reason(record(), tmp_path / "001.reason.json")
         data = json.loads(path.read_text(encoding="utf-8"))
         assert "raised prices" in data["text"]
+
+
+class TestBriefRequirements:
+    """Options added for a real brief (FX "Adults" S2 on Vyro): a required
+    tune-in line in the caption, audio that must not be changed, a 30s-2min
+    length window, and no edits that could misrepresent a scene."""
+
+    TUNE_IN = "Watch Adults season 2 on FX | Hulu"
+
+    def test_the_required_caption_text_is_added(self):
+        out = compliance.apply_campaign_caption(
+            plan(suggested_caption="Every friend group has one of these"),
+            campaign(required_caption_text=self.TUNE_IN))
+        assert self.TUNE_IN in out.suggested_caption
+        assert out.suggested_caption.startswith("Every friend group")
+
+    def test_the_required_caption_text_is_not_duplicated(self):
+        out = compliance.apply_campaign_caption(
+            plan(suggested_caption=f"Chaos. {self.TUNE_IN}"),
+            campaign(required_caption_text=self.TUNE_IN))
+        assert out.suggested_caption.count(self.TUNE_IN) == 1
+
+    def test_the_campaign_window_shapes_the_candidates(self):
+        """It used to be checked only after rendering: nothing between 55s and
+        2 minutes could be made, and short clips were rendered to be rejected."""
+        from clipper.config import Config, DurationBounds
+        from clipper.runner import campaign_config
+
+        cfg = campaign_config(Config(), campaign(
+            duration=DurationBounds(min_seconds=30, max_seconds=120)))
+        assert (cfg.candidates.min_seconds, cfg.candidates.max_seconds) == (30, 120)
+        low, high = cfg.candidates.target_seconds
+        assert 30 <= low <= high <= 120
+
+    def test_the_hook_overlay_can_be_turned_off(self):
+        from clipper.config import Config
+        from clipper.runner import campaign_config
+
+        assert campaign_config(Config(), campaign(hook_overlay=True)).render.show_hook_text
+        assert not campaign_config(Config(), campaign(hook_overlay=False)).render.show_hook_text
+
+    def test_original_audio_skips_loudness_normalisation(self):
+        from pathlib import Path
+
+        from clipper.render.graph import RenderSpec, build_audio_filter
+
+        spec = RenderSpec(
+            source=Path("s.mov"), output=Path("o.mp4"), start=0, duration=30,
+            layout=LayoutPlan(kind="blurred_fit"), ass_path=None, fonts_dir=None,
+            width=1080, height=1920, fps=30, encoder="libx264", loudness_lufs=-14,
+            true_peak_dbtp=-1.5, crf=20, nvenc_cq=23, x264_preset="veryfast",
+            audio_bitrate="192k", audio_rate=48_000, normalize_audio=False,
+        )
+        assert "loudnorm" not in build_audio_filter(spec)
+        assert "loudnorm" in build_audio_filter(
+            spec.__class__(**{**spec.__dict__, "normalize_audio": True}))

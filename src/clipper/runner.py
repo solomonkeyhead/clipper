@@ -74,6 +74,7 @@ def run(
     """Ingest through manifest for one source."""
     started = time.perf_counter()
     timings: dict[str, float] = {}
+    config = campaign_config(config, campaign)
 
     score_started = time.perf_counter()
     outcome = score(source, config, backend_override=backend_override, force=force)
@@ -137,6 +138,29 @@ def run(
         len(result.accepted), len(result.rejected), timings["total"],
     )
     return result
+
+
+def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
+    """The run's config with the campaign's own limits applied.
+
+    The campaign's clip-length window used to be checked only after rendering,
+    while candidates were cut to the global 20-55s. Under a brief requiring
+    30s-2min, most candidates would have been rendered only to be rejected, and
+    nothing between 55s and 2 minutes could ever be made. The window now shapes
+    the candidates themselves.
+    """
+    low, high = campaign.duration.min_seconds, campaign.duration.max_seconds
+    t_low, t_high = config.candidates.target_seconds
+    target_low = min(max(t_low, low), high)
+    target_high = max(min(t_high, high), target_low)
+    candidates = config.candidates.model_copy(update={
+        "min_seconds": low, "max_seconds": high,
+        "target_seconds": (target_low, target_high),
+    })
+    render = config.render.model_copy(update={
+        "show_hook_text": config.render.show_hook_text and campaign.hook_overlay,
+    })
+    return config.model_copy(update={"candidates": candidates, "render": render})
 
 
 def _render_with_replacement(
@@ -258,6 +282,7 @@ def _produce_one(
                          if campaign.burn_credit_in_video else ""),
         credit_position=campaign.credit_position,
         mask_profanity=campaign.mask_profanity_in_captions,
+        normalize_audio=not campaign.keep_original_audio,
     )
 
     rendered = probe(output)
@@ -270,6 +295,7 @@ def _produce_one(
         expected_height=height,
         expected_fps=config.render.fps,
         pre_roll=config.refine.pre_roll,
+        audio_untouched=campaign.keep_original_audio,
     )
     qa = check_clip(output, context, config.qa, config.render)
     rules = compliance.check_clip(plan, campaign, duration=rendered.duration)

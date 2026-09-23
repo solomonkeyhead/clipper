@@ -53,6 +53,9 @@ class QAContext:
     #: limit is measured on top of this -- penalising padding we asked for would
     #: reject every clip.
     pre_roll: float = 0.0
+    #: The campaign kept the source audio as delivered, so there is no
+    #: loudness target to hold it to.
+    audio_untouched: bool = False
 
 
 def check_clip(path: Path, context: QAContext, qa: QAConfig,
@@ -78,7 +81,11 @@ def check_clip(path: Path, context: QAContext, qa: QAConfig,
                             silence_min_gap=qa.silence_min_gap,
                             freeze_min_duration=qa.freeze_min_duration)
 
-    if media.has_audio:
+    if media.has_audio and context.audio_untouched:
+        checks.append(QACheck(name="loudness", status="pass",
+                              detail="original audio kept as the campaign requires; "
+                                     "loudness not normalised"))
+    elif media.has_audio:
         checks.append(_check_loudness(path, qa))
         checks.append(_check_silence_ratio(detections.silence, media.duration, qa))
         checks.append(_check_lead_silence(detections.silence, qa, context.pre_roll))

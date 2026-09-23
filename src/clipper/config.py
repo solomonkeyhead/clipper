@@ -375,6 +375,14 @@ class CampaignConfig(StrictModel):
     brand_mentions: BrandMentions = BrandMentions()
     language: str = "en"
     max_clips_per_source: int = Field(default=8, ge=1)
+    # Text the post caption must contain, e.g. a tune-in line a brief requires.
+    required_caption_text: str = ""
+    # Leave the audio exactly as delivered: no loudness normalisation. For
+    # briefs that forbid changing a clip's audio.
+    keep_original_audio: bool = False
+    # The LLM-written title shown over a clip's first seconds. Off for briefs
+    # that forbid edits which could misrepresent the source.
+    hook_overlay: bool = True
     notes: str = ""
 
     @field_validator("source_authorization")

@@ -46,6 +46,7 @@ def render_clip(
     campaign_credit: str = "",
     credit_position: str = "top_left",
     mask_profanity: bool = False,
+    normalize_audio: bool = True,
 ) -> RenderResult:
     """Render one `ClipPlan` to an MP4.
 
@@ -104,6 +105,7 @@ def render_clip(
         audio_bitrate=rc.audio_bitrate,
         audio_rate=rc.audio_rate,
         has_audio=media.has_audio,
+        normalize_audio=normalize_audio,
     )
 
     command = build_command(spec)

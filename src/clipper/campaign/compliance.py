@@ -182,6 +182,9 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
         tags.append(cleaned)
 
     caption = plan.suggested_caption.strip()
+    required = campaign.required_caption_text.strip()
+    if required and required.lower() not in caption.lower():
+        caption = f"{caption} {required}".strip()
     credit = campaign.required_credit_text.strip()
     if credit and not campaign.burn_credit_in_video and credit.lower() not in caption.lower():
         caption = f"{caption} {credit}".strip()
