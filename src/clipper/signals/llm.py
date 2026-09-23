@@ -118,7 +118,8 @@ def score_candidates(
             result.unscored.append(cid)
             continue
 
-        drop = _hard_drop_reason(a, b, single_opinion=not cfg.use_second_opinion)
+        drop = _hard_drop_reason(a, b, single_opinion=not cfg.use_second_opinion,
+                                 drop_context=cfg.drop_needs_prior_context)
         if drop:
             result.drops[cid] = drop
             continue
@@ -193,7 +194,8 @@ def combine_totals(
 
 
 def _hard_drop_reason(
-    a: RubricScores | None, b: RubricScores | None, *, single_opinion: bool
+    a: RubricScores | None, b: RubricScores | None, *, single_opinion: bool,
+    drop_context: bool = True,
 ) -> str:
     """Section 9.1's hard drops.
 
@@ -211,6 +213,8 @@ def _hard_drop_reason(
     if any(s.policy_risk == "high" for s in opinions):
         return "high policy risk"
 
+    if not drop_context:
+        return ""
     if single_opinion or len(opinions) == 1:
         if opinions[0].needs_prior_context:
             return "needs prior context (single opinion)"

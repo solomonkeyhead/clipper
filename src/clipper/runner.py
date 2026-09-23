@@ -140,6 +140,9 @@ def run(
     return result
 
 
+SCRIPTED_MAX_SILENCE = 0.55
+
+
 def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
     """The run's config with the campaign's own limits applied.
 
@@ -153,14 +156,28 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
     t_low, t_high = config.candidates.target_seconds
     target_low = min(max(t_low, low), high)
     target_high = max(min(t_high, high), target_low)
-    candidates = config.candidates.model_copy(update={
+    candidate_updates = {
         "min_seconds": low, "max_seconds": high,
         "target_seconds": (target_low, target_high),
-    })
+    }
+    if campaign.scripted:
+        # Silence here means gaps between spoken words. Scripted TV is full of
+        # non-dialogue beats -- reactions, physical comedy, music -- often the
+        # funny part. Measured: sitcom windows run a median 38-41% without
+        # dialogue against 13-18% in podcasts; at the default 25% cut-off only
+        # 4-10% of an episode survived, all from its few talky stretches.
+        # 55% keeps about 90% and still drops stretches with next to no speech.
+        candidate_updates["max_silence_ratio"] = max(
+            config.candidates.max_silence_ratio, SCRIPTED_MAX_SILENCE)
+    candidates = config.candidates.model_copy(update=candidate_updates)
     render = config.render.model_copy(update={
         "show_hook_text": config.render.show_hook_text and campaign.hook_overlay,
     })
-    return config.model_copy(update={"candidates": candidates, "render": render})
+    llm = config.llm.model_copy(update={
+        "drop_needs_prior_context":
+            config.llm.drop_needs_prior_context and not campaign.scripted,
+    })
+    return config.model_copy(update={"candidates": candidates, "render": render, "llm": llm})
 
 
 def _render_with_replacement(

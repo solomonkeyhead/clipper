@@ -94,7 +94,7 @@ def generate(
     deduped = dedupe(kept, cfg.dedupe_iou)
     log.debug("dedupe kept %d of %d", len(deduped), len(kept))
 
-    capped = sorted(deduped, key=lambda c: c.pre_score, reverse=True)[: cfg.max_candidates]
+    capped = spread_cap(deduped, cfg.max_candidates, MAX_COVERAGE)
     capped.sort(key=lambda c: c.start)
 
     for position, candidate in enumerate(capped):
@@ -250,6 +250,53 @@ def pre_score(candidate: Candidate, transcript: Transcript) -> float:
     score += 0.4 * (sum(w.probability for w in words) / len(words))
 
     return round(score, 4)
+
+
+# No instant of the source may be covered by more than this many candidates.
+MAX_COVERAGE = 3
+
+
+def spread_cap(candidates: list[Candidate], limit: int, max_coverage: int) -> list[Candidate]:
+    """The best `limit` candidates by pre-score, spread across the source.
+
+    A plain top-`limit` by pre-score let near-duplicates of one strong stretch
+    take the whole budget. Measured on a 13-minute TV episode: 43 of 48
+    candidates were variations of one two-minute scene, the LLM never saw the
+    other eleven minutes, and one clip came out of a request for four. Dedupe
+    at IoU 0.8 does not prevent it -- windows sharing a start sentence overlap
+    heavily without crossing that line.
+
+    So candidates are taken in pre-score order, skipping any that would put a
+    moment under more than `max_coverage` candidates. A few boundary variants
+    of each moment survive, which is what the LLM needs to choose the best
+    cut; the rest of the budget goes elsewhere. Anything skipped fills in
+    afterwards if the budget is not yet spent.
+    """
+    ordered = sorted(candidates, key=lambda c: c.pre_score, reverse=True)
+    chosen: list[Candidate] = []
+    skipped: list[Candidate] = []
+    for candidate in ordered:
+        if len(chosen) >= limit:
+            break
+        if _peak_coverage(candidate, chosen) < max_coverage:
+            chosen.append(candidate)
+        else:
+            skipped.append(candidate)
+    for candidate in skipped:
+        if len(chosen) >= limit:
+            break
+        chosen.append(candidate)
+    return chosen
+
+
+def _peak_coverage(candidate: Candidate, chosen: list[Candidate]) -> int:
+    """Most chosen candidates overlapping any single instant of `candidate`."""
+    overlapping = [c for c in chosen if c.start < candidate.end and candidate.start < c.end]
+    if not overlapping:
+        return 0
+    # Coverage only changes at window edges, so checking those is exact.
+    points = {max(candidate.start, c.start) for c in overlapping} | {candidate.start}
+    return max(sum(1 for c in overlapping if c.start <= t < c.end) for t in points)
 
 
 def dedupe(candidates: list[Candidate], iou_threshold: float) -> list[Candidate]:

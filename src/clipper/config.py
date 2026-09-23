@@ -165,6 +165,10 @@ class LLMConfig(StrictModel):
     # Seconds to wait on `correction_model` before falling back. Gemini's API
     # refuses deadlines under 10s.
     correction_timeout: float = Field(default=30.0, ge=10)
+    # Hard-drop candidates both prompts say need earlier context. Off for
+    # scripted TV, where nearly every scene "needs context" by that standard
+    # yet works as a clip: on a sitcom episode 26 of 48 were dropped for it.
+    drop_needs_prior_context: bool = True
     # Caption fixes ruled wrong, as "heard -> replacement"; never applied.
     rejected_caption_fixes: list[str] = Field(default_factory=list)
 
@@ -383,6 +387,8 @@ class CampaignConfig(StrictModel):
     # The LLM-written title shown over a clip's first seconds. Off for briefs
     # that forbid edits which could misrepresent the source.
     hook_overlay: bool = True
+    # Scripted TV: do not drop scenes for needing earlier context.
+    scripted: bool = False
     notes: str = ""
 
     @field_validator("source_authorization")

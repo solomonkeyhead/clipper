@@ -10,8 +10,10 @@ name: fx-adults-s2
 #
 # The brief also says AI tools used on FX Content must not train on user input.
 # Transcription, face detection and the audio check run locally. The LLM steps
-# must use a backend that does not train on input -- NOT the free Gemini tier,
-# whose terms say submitted content is used to improve Google's models.
+# (scoring, caption fixes) send transcript text to Gemini. On 2026-09-23 the
+# user chose to run them on the free Gemini tier, whose terms say submitted
+# content is used to improve Google's models -- i.e. not what the brief asks
+# for. The compliant alternatives are a paid Gemini key or a local model.
 source_authorization: >-
   Vyro campaign "FX: Adults | S2": FX's limited, revocable licence to create
   derivative works from the FX-provided Adults S2 content for this campaign
@@ -40,6 +42,10 @@ keep_original_audio: true
 # Brief: "Edits should not misrepresent the original scene" and "Do not
 # extrapolate or ideate new plots". An LLM-written title over the clip risks both.
 hook_overlay: false
+
+# A sitcom: nearly every scene "needs context" by the podcast rubric's standard
+# (26 of 48 candidates on episode 201 were dropped for it), yet works as a clip.
+scripted: true
 
 # Vyro's content requirements ban "self-harm" content.
 forbidden_terms: ["suicide", "suicidal", "kill myself", "killing myself", "self-harm", "self harm"]

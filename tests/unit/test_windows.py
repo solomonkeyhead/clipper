@@ -292,3 +292,103 @@ class TestIou:
         a = Candidate(candidate_id="a", start=0, end=30, sentence_indices=(0, 1), text="")
         b = Candidate(candidate_id="b", start=15, end=45, sentence_indices=(0, 1), text="")
         assert a.overlaps(b) and a.iou(b) > 0
+
+
+class TestSpreadCap:
+    """The LLM budget must reach the whole source, not one strong stretch.
+
+    Measured on a 13-minute TV episode: 43 of 48 candidates were variations of
+    one two-minute scene, and a request for four clips produced one.
+    """
+
+    @staticmethod
+    def _cand(start: float, end: float, score: float):
+        from clipper.models import Candidate
+
+        c = Candidate(candidate_id="x", start=start, end=end, sentence_indices=(0, 1), text="x")
+        c.pre_score = score
+        return c
+
+    def _hot_scene_and_the_rest(self):
+        # Twenty strong variations of one scene at 200-320s, then weaker
+        # windows spread over the rest of a 780s episode.
+        hot = [self._cand(200 + i, 260 + i * 3, 0.9 - i * 0.001) for i in range(20)]
+        rest = [self._cand(t, t + 50, 0.3) for t in range(0, 780, 60) if not 150 <= t <= 330]
+        return hot, rest
+
+    def test_the_budget_reaches_beyond_the_strongest_scene(self):
+        from clipper.candidates.windows import spread_cap
+
+        hot, rest = self._hot_scene_and_the_rest()
+        chosen = spread_cap(hot + rest, 10, 3)
+        outside = [c for c in chosen if not 150 <= c.start <= 330]
+        assert len(outside) >= 5, "most of the budget went to one scene"
+
+    def test_the_strongest_scene_still_gets_several_cuts(self):
+        """The LLM needs a few boundary variants to pick the best cut."""
+        from clipper.candidates.windows import spread_cap
+
+        hot, rest = self._hot_scene_and_the_rest()
+        chosen = spread_cap(hot + rest, 10, 3)
+        assert sum(1 for c in chosen if 150 <= c.start <= 330) >= 2
+
+    def test_no_instant_is_over_covered_while_there_is_budget_elsewhere(self):
+        from clipper.candidates.windows import _peak_coverage, spread_cap
+
+        hot, rest = self._hot_scene_and_the_rest()
+        chosen = spread_cap(hot + rest, 10, 3)
+        for c in chosen:
+            others = [o for o in chosen if o is not c]
+            assert _peak_coverage(c, others) < 3
+
+    def test_unused_budget_is_filled(self):
+        from clipper.candidates.windows import spread_cap
+
+        hot, _ = self._hot_scene_and_the_rest()
+        assert len(spread_cap(hot, 10, 3)) == 10
+
+    def test_the_limit_is_respected(self):
+        from clipper.candidates.windows import spread_cap
+
+        hot, rest = self._hot_scene_and_the_rest()
+        assert len(spread_cap(hot + rest, 7, 3)) == 7
+
+
+class TestScriptedCampaign:
+    """Sitcom windows run a median 38-41% without dialogue (podcasts 13-18%);
+    at the default 25% cut-off only 4-10% of an episode survived."""
+
+    def test_scripted_relaxes_the_dialogue_gap_filter(self):
+        from clipper.config import CampaignConfig, Config
+        from clipper.runner import SCRIPTED_MAX_SILENCE, campaign_config
+
+        base = dict(name="t", source_authorization="Authorized for this test campaign.")
+        tv = campaign_config(Config(), CampaignConfig(**base, scripted=True))
+        pod = campaign_config(Config(), CampaignConfig(**base))
+        assert tv.candidates.max_silence_ratio == SCRIPTED_MAX_SILENCE
+        assert pod.candidates.max_silence_ratio == Config().candidates.max_silence_ratio
+
+    def test_scripted_keeps_scenes_that_need_context(self):
+        from clipper.config import CampaignConfig, Config
+        from clipper.models import RubricScores
+        from clipper.runner import campaign_config
+        from clipper.signals.llm import _hard_drop_reason
+
+        base = dict(name="t", source_authorization="Authorized for this test campaign.")
+        cfg = campaign_config(Config(), CampaignConfig(**base, scripted=True))
+        needs = RubricScores(hook_strength=6, standalone_clarity=4, payoff=6,
+                             emotional_intensity=6, quotability=6, ending_completeness=6,
+                             needs_prior_context=True)
+        assert not cfg.llm.drop_needs_prior_context
+        assert _hard_drop_reason(needs, needs, single_opinion=False,
+                                 drop_context=cfg.llm.drop_needs_prior_context) == ""
+        assert _hard_drop_reason(needs, needs, single_opinion=False) != ""
+
+    def test_scripted_still_drops_ads_and_high_risk(self):
+        from clipper.models import RubricScores
+        from clipper.signals.llm import _hard_drop_reason
+
+        risky = RubricScores(hook_strength=6, standalone_clarity=6, payoff=6,
+                             emotional_intensity=6, quotability=6, ending_completeness=6,
+                             policy_risk="high")
+        assert _hard_drop_reason(risky, risky, single_opinion=False, drop_context=False)
