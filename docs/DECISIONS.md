@@ -752,3 +752,18 @@ Without audio, nothing is applied.
 gemini-3-flash-preview. A free-tier key is refused past its quota, not billed.
 One request per clip; past the quota, or when the model is overloaded, the fast
 model proposes instead.
+
+### D47. Test sources chosen by Claude must be Creative Commons, from the owner
+
+When the user asked Claude to research and pick a test video, the constraint
+from BUILD_BRIEF.md ("authorized source material only") was applied strictly:
+YouTube's CC-BY licence *as set by the show's own channel*, verified from the
+video's metadata. A CC label on a re-upload grants nothing, and the search
+results were full of those. The attribution the licence requires is burned
+into every clip (`required_credit_text`, `burn_credit_in_video`).
+
+### D48. A drop about what is said applies to every window that contains it
+
+See VERIFIED.md 2026-09-22 (late). Sponsor-read and high-policy-risk drops spread
+to candidates sharing at least half their duration with a dropped one.
+"Needs prior context" does not spread: a longer window can supply the context.

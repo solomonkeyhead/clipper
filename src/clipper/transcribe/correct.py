@@ -176,7 +176,7 @@ def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
     for backend in backends:
         key = None
         if cache is not None:
-            key = cache.key(backend=backend.name, model=backend.model or "auto",
+            key = cache.key(backend=backend.name, model=backend.cache_model(),
                             prompt_key=prompt_key, payload=user)
             entry = cache.get(key)
             if entry is not None:

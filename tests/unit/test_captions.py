@@ -255,3 +255,42 @@ class TestParseEventTimes:
 def _style_font_size(ass: str) -> int:
     line = next(ln for ln in ass.splitlines() if ln.startswith("Style: Caption,"))
     return int(line.split(",")[2])
+
+
+class TestCreditPlacement:
+    """The attribution credit must sit inside the safe area.
+
+    Measured on a real render: it used the side margin as its top margin and
+    landed about 100px from the top of a 1920px frame, where the platform's own
+    top bar covers it. For a Creative Commons Attribution source, a hidden
+    credit is a licence problem, not a cosmetic one.
+    """
+
+    SAFE = SafeArea(top=220, bottom=320, side=90)
+
+    def _ass(self, **kwargs) -> str:
+        return build_ass(speech(6), style=get_style("bold_pop"), width=1080, height=1920,
+                         safe_area=self.SAFE, duration=5.0,
+                         credit_text="Blocks Podcast w/ Neal Brennan (CC BY)", **kwargs)
+
+    @staticmethod
+    def _margin_v(ass: str, style_name: str) -> int:
+        line = next(row for row in ass.splitlines()
+                    if row.startswith("Dialogue:") and f",{style_name}," in row)
+        return int(line.split(",")[7])
+
+    def test_a_top_credit_is_below_the_top_safe_margin(self):
+        assert self._margin_v(self._ass(), "Credit") >= 220
+
+    def test_a_bottom_credit_is_above_the_bottom_safe_margin(self):
+        assert self._margin_v(self._ass(credit_position="bottom_right"), "Credit") >= 320
+
+    def test_the_hook_goes_below_a_top_credit(self):
+        ass = self._ass(hook_text="The Christmas morning", hook_seconds=2.0)
+        assert self._margin_v(ass, "Hook") > self._margin_v(ass, "Credit")
+
+    def test_without_a_credit_the_hook_keeps_its_place(self):
+        ass = build_ass(speech(6), style=get_style("bold_pop"), width=1080, height=1920,
+                        safe_area=self.SAFE, duration=5.0,
+                        hook_text="The Christmas morning", hook_seconds=2.0)
+        assert self._margin_v(ass, "Hook") == 220

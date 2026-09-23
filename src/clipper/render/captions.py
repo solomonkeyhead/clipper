@@ -244,17 +244,27 @@ def build_ass(
 
     events: list[str] = []
 
-    if hook_text and hook_seconds > 0:
-        events.append(_hook_event(
-            hook_text, hook_seconds, style=style,
-            top_margin=_scaled(safe_area.top, width, style),
-            font_size=round(font_size * 0.85),
-        ))
-
+    # The credit sits inside the safe area like everything else. It used to use
+    # the side margin as its top margin, which put it about 100px from the top
+    # of a 1920px frame -- under the platform's own top bar, measured on a real
+    # render. A credit nobody can see does not meet an attribution licence.
+    credit_size = max(18, round(font_size * 0.32))
+    top_safe = _scaled(safe_area.top, width, style)
+    credit_on_top = bool(credit_text) and credit_position.startswith("top")
     if credit_text:
+        edge = top_safe if credit_on_top else _scaled(safe_area.bottom, width, style)
         events.append(_credit_event(
             credit_text, duration=duration, position=credit_position,
-            font_size=max(18, round(font_size * 0.32)),
+            font_size=credit_size, margin_v=edge,
+        ))
+
+    if hook_text and hook_seconds > 0:
+        # Below the credit when both are at the top, not on top of it.
+        hook_top = top_safe + (round(credit_size * 1.8) if credit_on_top else 0)
+        events.append(_hook_event(
+            hook_text, hook_seconds, style=style,
+            top_margin=hook_top,
+            font_size=round(font_size * 0.85),
         ))
 
     shifted = _shift_words(words, clip_start, duration)
@@ -361,11 +371,12 @@ def _hook_event(text: str, seconds: float, *, style: CaptionStyle,
 
 
 def _credit_event(text: str, *, duration: float | None, position: str,
-                  font_size: int) -> str:
+                  font_size: int, margin_v: int = 0) -> str:
     alignment = _CREDIT_ALIGNMENT.get(position, ALIGN_TOP_LEFT)
     end = duration if duration is not None else 3600.0
     body = escape_ass_text(text.strip())
-    return _dialogue(0.0, end, "Credit", f"{{\\an{alignment}\\fs{font_size}}}{body}", layer=2)
+    return _dialogue(0.0, end, "Credit", f"{{\\an{alignment}\\fs{font_size}}}{body}",
+                     layer=2, margin_v=margin_v)
 
 
 def write_ass(content: str, path: Path) -> Path:

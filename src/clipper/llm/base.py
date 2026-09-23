@@ -149,6 +149,27 @@ class LLMBackend(ABC):
     def describe(self) -> str:
         return f"{self.name}:{self.model or 'auto'}"
 
+    def resolve_model(self) -> str:
+        """The concrete model this backend will call. Runtime-choosing backends override."""
+        return self.model
+
+    def cache_model(self) -> str:
+        """The model name to put in a cache key.
+
+        Resolved *before* use. Keys used to be built from `self.model`, which a
+        backend that picks its model at runtime leaves empty until its first
+        call -- so every lookup, made before any call, used "auto", while every
+        entry, written after one, used the real name. Measured: the key for a
+        cached candidate missed before resolution and hit after it. The cache
+        had never served a scoring request, so each run re-scored everything
+        (15 minutes and repeated quota errors on an 84-minute source) and the
+        ratings changed from run to run.
+        """
+        try:
+            return self.resolve_model() or "auto"
+        except Exception:  # offline, no key: the key must still be computable
+            return self.model or "auto"
+
     def complete(self, request: LLMRequest) -> LLMResponse:
         """Call the provider, retrying transient failures with backoff."""
         self.usage.rate_limit_waits += self.limiter.acquire()

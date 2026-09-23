@@ -435,3 +435,113 @@ class TestRubricItemConversion:
                    "emotional_intensity": 0.0, "quotability": 0.0,
                    "ending_completeness": 0.0}
         assert rubric(hook_strength=9).total(weights) == pytest.approx(9.0)
+
+
+class TestContentDropsSpread:
+    """A drop about what is *said* holds for every window containing it.
+
+    Measured on a real source: four overlapping windows of one story about a
+    suicide attempt. Three were rated high policy risk by one prompt and
+    dropped; the fourth, trimmed by a few seconds, was rated low by both and
+    was selected first.
+    """
+
+    @staticmethod
+    def _candidate(cid: str, start: float, end: float):
+        from clipper.models import Candidate
+
+        return Candidate(candidate_id=cid, start=start, end=end,
+                         sentence_indices=(0, 1), text="x")
+
+    def _run(self, drops: dict[str, str]):
+        from clipper.signals.llm import LLMSignalResult, _spread_content_drops
+
+        cands = [self._candidate("c013", 1699.2, 1730.5),
+                 self._candidate("c016", 1705.8, 1730.5),
+                 self._candidate("c040", 1728.0, 1790.0),
+                 self._candidate("c099", 3000.0, 3040.0)]
+        result = LLMSignalResult()
+        for c in cands:
+            if c.candidate_id not in drops:
+                result.totals[c.candidate_id] = 7.0
+        result.drops.update(drops)
+        _spread_content_drops(cands, result)
+        return result
+
+    def test_the_measured_case_the_trimmed_window_is_dropped_too(self):
+        result = self._run({"c013": "high policy risk"})
+        assert "c016" in result.drops
+        assert "c016" not in result.totals
+        assert "same material as c013" in result.drops["c016"]
+
+    def test_a_window_barely_touching_it_survives(self):
+        """c040 shares 2.5s of its 62s with the flagged window."""
+        assert "c040" in self._run({"c013": "high policy risk"}).totals
+
+    def test_unrelated_windows_survive(self):
+        assert "c099" in self._run({"c013": "high policy risk"}).totals
+
+    def test_sponsor_reads_spread_the_same_way(self):
+        result = self._run({"c013": "flagged as a sponsor read or advertisement"})
+        assert "c016" in result.drops
+
+    def test_needs_prior_context_does_not_spread(self):
+        """A longer or shifted window can supply the missing context."""
+        result = self._run({"c013": "both prompts agree it needs prior context"})
+        assert "c016" in result.totals
+
+    def test_the_reason_is_not_mistaken_for_a_placement_clash(self):
+        """The selection summary files anything containing "overlaps" under
+        clip placement; a content drop must not land there."""
+        result = self._run({"c013": "high policy risk"})
+        assert "overlaps" not in result.drops["c016"]
+
+
+class LateNaming(MockBackend):
+    """Picks its model name on the first call, as the Gemini backend does."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.model = ""
+
+    def resolve_model(self) -> str:
+        if not self.model:
+            self.model = "resolved-1"
+        return self.model
+
+    def _complete(self, request):
+        self.resolve_model()
+        return super()._complete(request)
+
+
+class TestCacheAcrossRuns:
+    """The regression: keys were built from the model name before it was known.
+
+    Every lookup used "auto" and every entry was written under the real name,
+    so the scoring cache never served a request -- each run re-scored every
+    candidate, and the ratings changed from run to run.
+    """
+
+    CFG = LLMConfig(use_second_opinion=False, batch_size=8)
+
+    def test_a_second_run_is_served_from_the_cache(self, tmp_path):
+        items = candidates(4)
+        cache = LLMCache(tmp_path)
+        first = LateNaming()
+        score_candidates(items, first, self.CFG, cache=cache)
+        assert first.calls, "the first run must call the model"
+
+        second = LateNaming()
+        score_candidates(items, second, self.CFG, cache=cache)
+        assert second.calls == [], "the second run must not"
+
+    def test_the_cache_key_uses_the_resolved_name(self):
+        backend = LateNaming()
+        assert backend.cache_model() == "resolved-1"
+
+    def test_a_backend_that_cannot_resolve_still_yields_a_key(self):
+        class Offline(LateNaming):
+            def resolve_model(self):
+                raise LLMError("no network")
+
+        assert Offline().cache_model() == "auto"

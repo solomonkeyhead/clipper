@@ -1118,3 +1118,70 @@ the fast model proposed. Applied picture -> pitcher; the audio refused there ->
 their. 5/5 clips accepted, 4m01s total (3m20s without correction).
 
 858 passed, 2 skipped; ruff clean.
+
+---
+
+## 2026-09-22 (late) — Third source, chosen by research: a Creative Commons podcast
+
+### How it was chosen
+
+Searched YouTube with its own Creative Commons + over-20-minutes filters across
+five conversational queries. YouTube's CC label is set by whoever uploaded the
+video, and many results were re-uploads of other people's shows, so only uploads
+from the show's own channel were kept. Every survivor was checked with yt-dlp
+for licence, heatmap, resolution and captions; heatmap shape was measured
+(peaks over 1.5x the median, and max/median); frames at the replay peaks were
+inspected.
+
+| candidate | licence | heatmap | shape | why not / why |
+|---|---|---|---|---|
+| **Craig Ferguson, Blocks w/ Neal Brennan** | CC BY, owner | 100 | 17 peaks, 7.6x | **chosen**: multi-camera studio podcast, sponsor reads with promo banners at the top replay peak, comic storytelling |
+| Zuckerberg & Harari | CC BY, owner | 100 | 49.8x (one spike) | runner-up; one dominant moment, long answers |
+| Robby Hoffman / Jason Biggs / Scott Galloway, Blocks | CC BY, owner | 100 | 6.9-16.4x | same format as the pick |
+| AC/DC, Let There Be Talk | CC BY, owner | 100 | 7.4x | Zoom call, pillarboxed |
+| Stephen King, UMass Lowell | CC BY, owner | 100 | 41.2x | 720p stage event |
+
+Heatmap availability was checked first: the Doctor Mike source still has none
+with Node supplied as yt-dlp's JS runtime, while six popular long videos all
+did. Heatmaps exist; not every video gets one.
+
+### Run results
+
+Source 84.6 min, 1920x1080, heatmap captured (100 segments) -- the first time.
+Signals: llm 0.5, heatmap 0.2, audio 0.15, text 0.15. 5/5 clips accepted.
+Transcription 9m01s (9.4x realtime). Every clip full-frame on the speaker,
+cutting with the source; the editor's b-roll photo shown whole. Credit burned in
+and legible.
+
+**Sponsor trap:** the top replay peak (27:54) is where a sponsor read ends; the
+top clip starts at 28:25, the story after it. No selected clip contains an ad.
+
+### Bugs found by this run
+
+1. **The LLM scoring cache had never hit.** Keys were built from the model
+   name before the Gemini backend had resolved it (lookups under "auto",
+   entries written under "gemini-flash-lite-latest"). Measured: the key for a
+   cached candidate missed before resolution and hit after. Each run re-scored
+   all 120 prompts: scoring took 15m20s with five 429s. Fixed: scoring 6.8s,
+   "60 cached, 0 to score" for both prompts, total run 1m59s. A regression test
+   fails against the old key and passes against the new.
+2. **High-risk content escaped through a sibling window.** A story about a
+   suicide attempt was scored as four overlapping windows. In the first run
+   one prompt rated three of them high risk (dropped); the fourth, trimmed by a
+   few seconds, was rated low by both and ranked first. Content drops (high
+   policy risk, sponsor reads) now spread to windows sharing at least half
+   their duration with a dropped one.
+   **Not solved by that:** on the next, uncached run the same story's windows
+   were all rated low -- the model's safety rating of this material flips
+   between runs. The cache now freezes whichever verdict was last written.
+   `forbidden_terms` in the campaign is the deterministic control.
+3. **The credit sat under the platform's top bar** (~100px from the top of a
+   1920px frame, inside the 220px safe margin). Now placed at the safe margin,
+   with the hook moved below it when both are at the top.
+
+Caption fixes: "passes" -> "passers" and "driver" -> "driving" ("after the first
+drink ... someone else's driving"), both audio-confirmed. "Peter O'Salley"
+looked like a misheard name; nudged toward "O'Toole", Whisper still heard
+"O'Salley" twice, so it was left alone.
+
+871 passed, 2 skipped; ruff clean.

@@ -1,0 +1,42 @@
+# Pipeline test on a Creative Commons source, chosen 2026-09-22.
+name: cc-blocks
+
+# Verified from the video's own metadata (yt-dlp `license` field) on 2026-09-22:
+# "Creative Commons Attribution license (reuse allowed)", uploaded by the show's
+# official channel (Neal Brennan), not a re-upload. That licence permits reuse
+# with attribution, which is why the credit below is burned into every clip.
+source_authorization: >-
+  YouTube Creative Commons Attribution licence (reuse allowed), as set by the
+  rights holder's official channel "Neal Brennan" on video wBoEsrpnPHA, "Craig
+  Ferguson: The TRUTH about Late Night | FULL EPISODE", checked 2026-09-22.
+  Attribution to Blocks Podcast w/ Neal Brennan is required and is burned in.
+  Run locally as a pipeline test.
+
+platform_targets: [tiktok, youtube_shorts, instagram_reels]
+
+duration:
+  min_seconds: 15
+  max_seconds: 60
+
+required_hashtags: []
+required_credit_text: "Blocks Podcast w/ Neal Brennan (CC BY)"
+burn_credit_in_video: true
+credit_position: top_left
+
+forbidden_terms: []
+mask_profanity_in_captions: true
+
+brand_mentions:
+  required: false
+  terms: []
+
+language: en
+max_clips_per_source: 5
+
+notes: |
+  Chosen for: a Creative Commons licence from the owner's channel; the
+  multi-camera studio format this tool targets; a YouTube "Most replayed"
+  heatmap with 17 distinct peaks (the first real heatmap test -- neither
+  earlier source had one); and sponsor reads with on-screen promo banners,
+  one at the largest replay peak (27:54), which the ad filter should keep
+  out of the selection.

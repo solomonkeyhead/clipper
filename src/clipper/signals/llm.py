@@ -125,6 +125,8 @@ def score_candidates(
 
         result.totals[cid] = combine_totals(a, b, weights, cfg.disagreement_penalty)
 
+    _spread_content_drops(candidates, result)
+
     if result.unscored:
         log.warning(
             "%d of %d candidates could not be scored by the LLM and will be "
@@ -132,6 +134,41 @@ def score_candidates(
             len(result.unscored), len(candidates), ", ".join(result.unscored[:8]),
         )
     return result
+
+
+# A candidate sharing at least this share of its own duration with a window
+# dropped for its *content* is dropped too.
+CONTENT_DROP_OVERLAP = 0.5
+
+# Drops that are about what is said, and so hold for any window containing it.
+# "Needs prior context" is deliberately absent: a longer window can supply the
+# missing context, so that verdict belongs to the window, not the content.
+CONTENT_DROPS = ("high policy risk", "flagged as a sponsor read or advertisement")
+
+
+def _spread_content_drops(candidates: list[Candidate], result: LLMSignalResult) -> None:
+    """Drop every window that mostly overlaps one dropped for its content.
+
+    The raters judge each window separately, and their verdict on the *same*
+    material shifts with where the window starts and stops. Measured on a real
+    source: four overlapping windows of one story about a suicide attempt, all
+    containing the word; three were rated high policy risk by one prompt and
+    dropped, the fourth -- trimmed by a few seconds -- was rated low by both,
+    survived, and was selected first. The risk is in the story, not the window.
+    """
+    by_id = {c.candidate_id: c for c in candidates}
+    flagged = [(by_id[cid], reason) for cid, reason in result.drops.items()
+               if reason in CONTENT_DROPS and cid in by_id]
+    if not flagged:
+        return
+    for cid in list(result.totals):
+        candidate = by_id[cid]
+        for source, reason in flagged:
+            shared = min(candidate.end, source.end) - max(candidate.start, source.start)
+            if shared >= CONTENT_DROP_OVERLAP * candidate.duration:
+                del result.totals[cid]
+                result.drops[cid] = f"{reason} (same material as {source.candidate_id})"
+                break
 
 
 def combine_totals(
@@ -236,7 +273,7 @@ def _cache_key(backend: LLMBackend, variant: PromptVariant, candidate: Candidate
     prompt_key = variant.cache_key + (":fs" if cfg.use_few_shot_examples else "")
     return cache.key(
         backend=backend.name,
-        model=backend.model or "auto",
+        model=backend.cache_model(),
         prompt_key=prompt_key,
         payload=candidate.text.strip(),
     )
