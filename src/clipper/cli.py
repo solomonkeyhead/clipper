@@ -659,6 +659,39 @@ def render(
     _not_implemented("render", "Phase 4")
 
 
+@app.command()
+def watch(
+    test_push: Annotated[bool, typer.Option("--test-push", help="Send one test push and exit.")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Judge new mail and print the verdicts; push nothing, remember nothing.")] = False,
+    verbose: VerboseOpt = False,
+) -> None:
+    """Check the campaign mailbox once and push new campaigns that fit you."""
+    setup_logging(verbose)
+    from .config import Config
+    from .pipeline import build_backend
+    from .watch import mailbox, notify, watcher
+
+    cfg = Config.load()
+    try:
+        if test_push:
+            watcher.test_push(cfg.watch)
+            console.print("[green]Test push sent.[/green] Check your phone.")
+            return
+        result = watcher.run_pass(cfg.watch, build_backend(cfg), dry_run=dry_run)
+    except (watcher.WatchConfigError, mailbox.MailboxError, notify.PushError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    label = "would push" if dry_run else "pushed"
+    console.print(f"{result.read} new message(s), {result.campaigns} campaign(s), "
+                  f"{len(result.pushed)} {label}, {result.failed} to retry.")
+    for v in result.pushed:
+        console.print(f"  [green]{label}[/green] {v.source}: {v.name} ({v.rate}) -- {v.why}")
+    for v, reason in result.skipped:
+        if v.is_new_campaign:
+            console.print(f"  [dim]skipped {v.source}: {v.name} -- {reason}[/dim]")
+
+
 @app.command(name="eval")
 def eval_cmd(
     videos: Annotated[Path, typer.Option("--videos")] = Path("eval/videos.yaml"),

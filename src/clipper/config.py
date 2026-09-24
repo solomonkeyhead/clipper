@@ -327,6 +327,27 @@ class QAConfig(StrictModel):
         return self
 
 
+class WatchConfig(StrictModel):
+    """The campaign watcher (`clipper watch`). Secrets live in .env."""
+
+    imap_host: str = "imap.gmail.com"
+    # Gmail can file forwarded mail as spam; reading it is harmless (read-only).
+    folders: list[str] = ["INBOX", "[Gmail]/Spam"]
+    lookback_days: int = Field(default=14, ge=1, le=90)
+    # Who the campaigns are for; the judge reads this verbatim.
+    profile: str = (
+        "TikTok clips account (@solomonkeyclips) for TV and movie comedy: sitcom "
+        "and film scenes. Also open to creators clipping their own long-form "
+        "videos (podcasts, streams, YouTube) where the funny or dramatic moments "
+        "stand alone. Not interested in product ads, supplements, AI tools, "
+        "crypto or gambling.")
+    platforms: list[str] = ["tiktok"]
+    # Skip campaigns paying less than this per 1,000 views (when a rate is stated).
+    min_rate_per_1k: float = Field(default=1.0, ge=0)
+    notify_maybe: bool = True
+    ntfy_server: str = "https://ntfy.sh"
+
+
 class Config(StrictModel):
     """The whole of `config/default.yaml`."""
 
@@ -338,6 +359,7 @@ class Config(StrictModel):
     render: RenderConfig = RenderConfig()
     refine: RefineConfig = RefineConfig()
     qa: QAConfig = QAConfig()
+    watch: WatchConfig = WatchConfig()
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:

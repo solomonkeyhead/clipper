@@ -125,3 +125,21 @@ qa:
   max_lead_silence: 0.3
   max_trail_silence: 1.5
   caption_sync_tolerance: 0.25
+
+# Campaign watcher (`clipper watch`): reads forwarded Vyro/Whop campaign emails
+# from a dedicated mailbox and pushes the ones that fit to your phone via ntfy.
+# Mailbox login and the ntfy topic are secrets and live in .env.
+watch:
+  imap_host: imap.gmail.com
+  folders: ["INBOX", "[Gmail]/Spam"]
+  lookback_days: 14
+  profile: >-
+    TikTok clips account (@solomonkeyclips) for TV and movie comedy: sitcom and
+    film scenes. Also open to creators clipping their own long-form videos
+    (podcasts, streams, YouTube) where the funny or dramatic moments stand
+    alone. Not interested in product ads, supplements, AI tools, crypto or
+    gambling.
+  platforms: ["tiktok"]
+  min_rate_per_1k: 1.0       # skip campaigns paying less per 1,000 views
+  notify_maybe: true         # also push "maybe" fits, marked with a ?
+  ntfy_server: https://ntfy.sh
