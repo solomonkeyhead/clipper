@@ -766,6 +766,65 @@ def learn(
         console.print(f"Best-watched clips saved as examples in {examples}.")
 
 
+tiktok_app = typer.Typer(help="Your TikTok posts' stats, via TikTok's official Display API.",
+                         no_args_is_help=True)
+app.add_typer(tiktok_app, name="tiktok")
+
+
+@tiktok_app.command("login")
+def tiktok_login(verbose: VerboseOpt = False) -> None:
+    """Connect your TikTok account once (opens TikTok's consent page)."""
+    setup_logging(verbose)
+    from .tiktok import api
+
+    console.print("Opening TikTok in your browser. Approve access there; this waits up "
+                  "to 5 minutes.")
+    try:
+        api.login()
+    except api.TikTokError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print("[green]Connected.[/green] Run `clipper tiktok sync` to fill the "
+                  "performance log.")
+
+
+@tiktok_app.command("sync")
+def tiktok_sync(
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would change; write nothing.")] = False,
+    verbose: VerboseOpt = False,
+) -> None:
+    """Fill the performance log with each posted video's current stats."""
+    setup_logging(verbose)
+    from .learn import log as perf
+    from .tiktok import api, sync
+
+    try:
+        videos = api.list_videos(api.access_token())
+    except api.TikTokError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    rows = perf.read()
+    result = sync.apply(videos, rows)
+    for caption, filled in result.matched:
+        console.print(f"  {caption}...  [dim]{filled}[/dim]")
+    for video in result.unmatched:
+        console.print(f"  [dim]not in the log: {video.caption[:60]!r}[/dim]")
+    for video in result.ambiguous:
+        console.print(f"  [yellow]several rows share the caption {video.caption[:60]!r}; "
+                      "skipped[/yellow]")
+    console.print(f"{len(videos)} video(s) on TikTok, {len(result.matched)} matched to the log.")
+    if dry_run:
+        console.print("Dry run: nothing written.")
+        return
+    try:
+        perf.write(rows)
+    except PermissionError as exc:
+        console.print(f"[red]{perf.log_path().name} is open in Excel; close it and run this "
+                      "again.[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Updated {perf.log_path()}[/green]")
+
+
 def _print_performance(joined) -> None:
     def pct(value):
         return "" if value is None else f"{value * 100:.0f}%"
@@ -776,12 +835,13 @@ def _print_performance(joined) -> None:
     ranked = sorted(joined, key=lambda j: j.scores.get("composite", 0.0), reverse=True)
     table = Table(title="Posted clips, in the order the tool ranked them", box=None,
                   header_style="bold", pad_edge=False)
-    for col in ("clip", "length", "views 24h", "views 7d", "watch-through", "full",
-                "engagement", "tool score"):
+    for col in ("clip", "length", "views 24h", "views 7d", "views now", "watch-through",
+                "full", "engagement", "tool score"):
         table.add_column(col, justify="left" if col == "clip" else "right")
     for j in ranked:
         table.add_row(j.label, f"{j.duration:.0f}s" if j.duration else "",
-                      num(j.get("views_24h")), num(j.get("views_7d")), pct(j.watch_through),
+                      num(j.get("views_24h")), num(j.get("views_7d")),
+                      num(j.get("views_latest")), pct(j.watch_through),
                       pct(j.watched_full), pct(j.engagement),
                       f"{j.scores.get('composite', 0.0):.2f}")
     console.print(table)

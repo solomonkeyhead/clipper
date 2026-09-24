@@ -28,21 +28,26 @@ log = get_logger(__name__)
 
 #: Column order as the user sees it: caption to match on, then the numbers in
 #: the order TikTok Studio shows them, then what the tool needs to join back.
-RESULT_COLUMNS = ["url", "posted_at", "views_24h", "views_7d", "views_30d",
+RESULT_COLUMNS = ["url", "posted_at", "views_24h", "views_7d", "views_30d", "views_latest",
                   "likes", "comments", "shares", "saves",
                   "avg_watch_s", "watched_full_pct", "new_followers",
                   "verified_views", "payout_usd", "notes"]
 ID_COLUMNS = ["platform", "account", "duration_s", "campaign", "source_title", "file",
-              "source_id", "clip_id", "candidate_id"]
+              "source_id", "clip_id", "candidate_id", "video_id", "synced_at"]
 COLUMNS = ["caption", *RESULT_COLUMNS, *ID_COLUMNS]
-NUMERIC = ["views_24h", "views_7d", "views_30d", "likes", "comments", "shares", "saves",
-           "avg_watch_s", "watched_full_pct", "new_followers", "verified_views", "payout_usd"]
+NUMERIC = ["views_24h", "views_7d", "views_30d", "views_latest", "likes", "comments", "shares",
+           "saves", "avg_watch_s", "watched_full_pct", "new_followers", "verified_views",
+           "payout_usd"]
+#: Filled by `clipper tiktok sync`; the rest of the yellow columns are the user's.
+SYNCED = {"url", "posted_at", "views_24h", "views_7d", "views_30d", "views_latest",
+          "likes", "comments", "shares"}
 
 #: Hover notes on the header cells.
 HINTS = {
     "caption": "The caption as posted. Find the post in TikTok Studio by this text.",
     "views_24h": "Video views about a day after posting.",
     "views_7d": "Video views about a week after posting.",
+    "views_latest": "Views at the last `clipper tiktok sync` (see synced_at).",
     "avg_watch_s": "Average watch time, in seconds (e.g. 9.8s). The most useful number: "
                    "it shows whether people who saw the clip stayed.",
     "watched_full_pct": "Watched full video, as a percentage (e.g. 12%).",
@@ -153,12 +158,15 @@ def _write_xlsx(rows: list[dict[str, str]], columns: list[str], path: Path) -> N
             values.append(n if n is not None and text else text)
         ws.append(values)
 
-    fill = PatternFill("solid", fgColor="FFF2CC")
+    fill = PatternFill("solid", fgColor="FFF2CC")      # typed in by the user
+    synced = PatternFill("solid", fgColor="DDEBF7")    # filled by `clipper tiktok sync`
     for i, name in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=i)
         cell.font = Font(bold=True)
-        if name in NUMERIC or name in ("url", "posted_at", "notes"):
-            cell.fill = fill  # the columns the user fills in
+        if name in SYNCED:
+            cell.fill = synced
+        elif name in NUMERIC or name == "notes":
+            cell.fill = fill
         if name in HINTS:
             cell.comment = Comment(HINTS[name], "clipper")
         longest = max([len(name)] + [len(str(row.get(name, "") or "")) for row in rows])

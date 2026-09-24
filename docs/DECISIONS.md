@@ -845,3 +845,20 @@ With more, it reports Spearman correlations with bootstrap intervals and
 proposes signal weights moved 20% of the way toward each signal's share of
 positive correlation with watch-through; `--apply` writes them (keeping the
 YAML's comments) and appends `config/weights_history.json`.
+
+### D51. Post stats come from TikTok's official Display API, never from Studio pages
+
+Copying numbers from TikTok Studio by hand is tedious, but scraping Studio (or
+driving a browser through it) breaks TikTok's terms and puts the account at
+risk. TikTok Studio's own export covers only account-wide daily totals, not
+individual posts. The Display API is the sanctioned route: `clipper tiktok
+login` runs TikTok's desktop OAuth (localhost redirect, PKCE with the hex
+SHA-256 challenge TikTok specifies), with the app in sandbox mode so no app
+review is needed for the user's own account. `clipper tiktok sync` then fills
+the performance log's views, likes, comments and shares, read-only.
+
+It does not provide watch time or completion; those need the Business API,
+which needs a Business account and loses non-commercial sounds, a real reach
+cost for a clips account. So `avg_watch_s` and `watched_full_pct` stay manual.
+View snapshots are only taken inside their window (24h: 1-3 days after
+posting; 7d: 7-10 days) so a late sync never mislabels an older count.
