@@ -34,3 +34,6 @@ desktop.ini
 .DS_Store
 .vscode/
 .idea/
+
+# Base Python for .venv, kept outside AppData so Task Scheduler can run it
+.python/
