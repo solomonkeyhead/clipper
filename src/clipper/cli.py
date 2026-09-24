@@ -282,7 +282,7 @@ def _print_run_summary(result, format_duration) -> None:
     ))
     if result.outputs:
         console.print(f"\nOutputs in [bold]{result.outputs['report_md'].parent}[/bold]")
-        for key in ("report_md", "manifest_csv", "performance_csv"):
+        for key in ("report_md", "manifest_csv", "performance_log"):
             if key in result.outputs:
                 console.print(f"  {result.outputs[key].name}")
 
@@ -705,7 +705,7 @@ def eval_cmd(
 @app.command()
 def learn(
     performance: Annotated[Path | None, typer.Option(
-        "--performance", help="The performance log (default: data/performance.csv).")] = None,
+        "--performance", help="The performance log (default: data/performance.xlsx).")] = None,
     apply: Annotated[bool, typer.Option("--apply", help="Write the proposed weights to config.")] = False,
     verbose: VerboseOpt = False,
 ) -> None:

@@ -4,7 +4,7 @@ Three files with three audiences (BUILD_BRIEF.md section 13):
 
 * `manifest.csv` / `manifest.json` -- machine-readable, one row per clip, with
   every sub-score so `clipper learn` can correlate them against real views later.
-* the performance log (`data/performance.csv`, see learn/log.py) -- one row
+* the performance log (`data/performance.xlsx`, see learn/log.py) -- one row
   per clip across all runs, which the user fills in after posting. Its
   `candidate_id` joins back to the scores.
 * `report.md` -- for a human deciding what to post.
@@ -104,11 +104,11 @@ def write_outputs(
         encoding="utf-8",
     )
 
-    performance_csv = perf.add_clips([
+    performance_log = perf.add_clips([
         perf.NewClip(source_id=info.source_id, clip_id=r.plan.clip_id,
                      candidate_id=r.plan.candidate_id, campaign=campaign.name,
                      source_title=info.title or "", file=r.file.name,
-                     duration_s=r.duration)
+                     duration_s=r.duration, caption=full_caption(r.plan))
         for r in records])
 
     report_md = out_dir / "report.md"
@@ -124,7 +124,7 @@ def write_outputs(
     return {
         "manifest_csv": manifest_csv,
         "manifest_json": manifest_json,
-        "performance_csv": performance_csv,
+        "performance_log": performance_log,
         "report_md": report_md,
     }
 
@@ -270,7 +270,7 @@ def _render_report(
     add("## Next step")
     add("")
     add("Post the clips you like, then fill in their rows in the performance log "
-        "(`data/performance.csv`) -- views, and above all average watch time -- and run:")
+        "(`data/performance.xlsx`) -- views, and above all average watch time -- and run:")
     add("")
     add("```powershell")
     add("clipper learn")

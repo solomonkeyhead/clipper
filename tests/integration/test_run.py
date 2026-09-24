@@ -69,7 +69,7 @@ class TestRun:
     def test_produces_clips_and_every_output_file(self, standard_run):
         result = standard_run
         assert result.clip_count >= 1
-        for key in ("manifest_csv", "manifest_json", "performance_csv", "report_md"):
+        for key in ("manifest_csv", "manifest_json", "performance_log", "report_md"):
             assert result.outputs[key].is_file(), key
         for record in result.accepted:
             assert record.file.is_file()
@@ -116,10 +116,14 @@ class TestRun:
         data = json.loads(standard_run.outputs["manifest_json"].read_text(encoding="utf-8"))
         assert data["source_authorization"] == campaign.source_authorization
 
-    def test_the_performance_template_joins_back_to_the_manifest(self, standard_run):
-        rows = list(csv.DictReader(
-            standard_run.outputs["performance_csv"].open(encoding="utf-8")))
-        assert {r["clip_id"] for r in rows} == {r.plan.clip_id for r in standard_run.accepted}
+    def test_the_performance_log_joins_back_to_the_manifest(self, standard_run):
+        from clipper.learn import log as perf
+
+        rows = perf.read(standard_run.outputs["performance_log"])
+        mine = [r for r in rows if r["source_id"] == standard_run.info.source_id]
+        assert {r["clip_id"] for r in mine} == {r.plan.clip_id for r in standard_run.accepted}
+        assert {r["candidate_id"] for r in mine} == {
+            r.plan.candidate_id for r in standard_run.accepted}
 
     def test_timings_are_recorded(self, standard_run):
         assert standard_run.timings["total"] > 0

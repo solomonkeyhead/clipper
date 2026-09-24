@@ -216,7 +216,7 @@ class TestManifestOutputs:
     def test_writes_every_file(self, tmp_path):
         outputs = write_outputs([record()], info=source(), campaign=campaign(),
                                 out_dir=tmp_path)
-        for key in ("manifest_csv", "manifest_json", "performance_csv", "report_md"):
+        for key in ("manifest_csv", "manifest_json", "performance_log", "report_md"):
             assert outputs[key].is_file(), key
 
     def test_manifest_columns_match_the_brief(self, tmp_path):
@@ -240,26 +240,28 @@ class TestManifestOutputs:
     def test_each_clip_gets_a_row_in_the_performance_log(self, tmp_path):
         outputs = write_outputs([record(), record(plan=plan(clip_id="002"))],
                                 info=source(), campaign=campaign(), out_dir=tmp_path)
-        assert outputs["performance_csv"] == self.data_root / "performance.csv"
-        rows = perf.read(outputs["performance_csv"])
+        assert outputs["performance_log"] == self.data_root / "performance.xlsx"
+        rows = perf.read(outputs["performance_log"])
         assert [r["clip_id"] for r in rows] == ["001", "002"]
         assert all(r["candidate_id"] and r["views_24h"] == "" for r in rows)
 
-    def test_performance_log_columns(self, tmp_path):
+    def test_the_log_leads_with_the_caption_as_posted(self, tmp_path):
+        """TikTok Studio lists posts by caption, so that is what rows are matched on."""
         outputs = write_outputs([record()], info=source(), campaign=campaign(), out_dir=tmp_path)
-        with outputs["performance_csv"].open(encoding="utf-8") as handle:
-            assert next(csv.reader(handle)) == perf.COLUMNS
+        (row,) = perf.read(outputs["performance_log"])
+        assert next(iter(row)) == "caption"
+        assert row["caption"].startswith("The ones who left were the loudest.")
 
     def test_a_rerun_keeps_logged_results_and_adds_only_new_clips(self, tmp_path):
         """Overwriting would destroy numbers typed in by hand; the old per-run
         templates went stale instead, still listing clips a re-run had replaced."""
         outputs = write_outputs([record()], info=source(), campaign=campaign(), out_dir=tmp_path)
-        rows = perf.read(outputs["performance_csv"])
+        rows = perf.read(outputs["performance_log"])
         rows[0]["views_24h"] = "12345"
-        perf.write(rows, outputs["performance_csv"])
+        perf.write(rows, outputs["performance_log"])
         write_outputs([record(), record(plan=plan(clip_id="002"))], info=source(),
                       campaign=campaign(), out_dir=tmp_path)
-        rows = perf.read(outputs["performance_csv"])
+        rows = perf.read(outputs["performance_log"])
         assert [(r["clip_id"], r["views_24h"]) for r in rows] == [("001", "12345"), ("002", "")]
 
     def test_the_json_manifest_records_the_authorization(self, tmp_path):

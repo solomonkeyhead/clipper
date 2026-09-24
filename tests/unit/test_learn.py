@@ -42,7 +42,8 @@ def rows_for(sid, n, *, watch_of=lambda i: 10.0 + i, views_of=lambda i: 300 + 10
 class TestNumbers:
     @pytest.mark.parametrize("typed, value", [
         ("1,234", 1234.0), ("45%", 45.0), ("1.2K", 1200.0), ("3M", 3_000_000.0),
-        ("$12.50", 12.5), ("", None), ("n/a", None), (None, None)])
+        ("$12.50", 12.5), ("9.8s", 9.8), ("1m 5s", 65.0), ("0:09", 9.0),
+        ("", None), ("n/a", None), (None, None)])
     def test_what_people_type_is_read(self, typed, value):
         assert perf.number(typed) == value
 
@@ -63,10 +64,54 @@ class TestLog:
         assert [(r["clip_id"], r["views_24h"]) for r in rows] == [("001", "500"), ("002", "")]
         assert rows[0]["duration_s"] == "46.3"
 
-    def test_excel_byte_order_mark_is_tolerated(self, data_root):
-        perf.log_path().write_text("﻿" + ",".join(perf.COLUMNS) + "\n", encoding="utf-8")
+    def test_an_older_csv_log_is_converted_keeping_its_numbers(self, data_root):
+        legacy = data_root / "performance.csv"
+        legacy.write_text("﻿source_id,clip_id,candidate_id,views_24h\ns0,000,c9,777\n",
+                          encoding="utf-8")  # with the byte-order mark Excel adds
         perf.add_clips([perf.NewClip("s1", "001", "c0", "FX", "", "f", 30)])
-        assert perf.read()[0]["source_id"] == "s1"
+        rows = perf.read()
+        assert [(r["source_id"], r["views_24h"]) for r in rows] == [("s0", "777"), ("s1", "")]
+        assert not legacy.exists() and (data_root / "performance.csv.old").exists()
+
+    def test_clips_wait_while_the_log_is_open_in_excel(self, data_root, monkeypatch):
+        perf.add_clips([perf.NewClip("s1", "001", "c0", "FX", "", "f", 30)])
+        real = perf._write_xlsx
+
+        def locked(*a, **k):
+            raise PermissionError("in use")
+        monkeypatch.setattr(perf, "_write_xlsx", locked)
+        perf.add_clips([perf.NewClip("s1", "002", "c1", "FX", "", "f", 30)])  # no crash
+        assert [r["clip_id"] for r in perf.read()] == ["001"]
+        monkeypatch.setattr(perf, "_write_xlsx", real)
+        perf.add_clips([perf.NewClip("s1", "003", "c2", "FX", "", "f", 30)])
+        assert [r["clip_id"] for r in perf.read()] == ["001", "002", "003"]
+        assert not (data_root / "performance.pending.json").exists()
+
+    def test_the_spreadsheet_is_readable_at_a_glance(self, data_root):
+        from openpyxl import load_workbook
+
+        perf.add_clips([perf.NewClip("s1", "001", "c0", "FX", "", "f", 30,
+                                     caption="A long caption " * 8)])
+        ws = load_workbook(perf.log_path()).active
+        assert ws.freeze_panes == "B2", "header and caption stay in view"
+        assert ws.column_dimensions["A"].width == 60, "long captions wrap at a fixed width"
+        assert ws.cell(1, 1).value == "caption"
+        assert ws["A1"].font.bold
+
+    def test_a_percentage_typed_in_excel_reads_as_percent(self, data_root):
+        from openpyxl import load_workbook
+
+        perf.add_clips([perf.NewClip("s1", "001", "c0", "FX", "", "f", 30)])
+        wb = load_workbook(perf.log_path())
+        ws = wb.active
+        col = perf.COLUMNS.index("watched_full_pct") + 1
+        ws.cell(2, col).value = 0.12   # what Excel stores when you type 12%
+        ws.cell(2, col).number_format = "0%"
+        ws.cell(2, perf.COLUMNS.index("avg_watch_s") + 1).value = "9.8s"
+        wb.save(perf.log_path())
+        (row,) = perf.read()
+        assert perf.number(row["watched_full_pct"]) == pytest.approx(12.0)
+        assert perf.number(row["avg_watch_s"]) == pytest.approx(9.8)
 
 
 class TestFewRows:

@@ -831,9 +831,14 @@ it is the primary target; views are still logged and reported.
 
 The per-source `performance.csv` templates were written once and never
 refreshed, so after a re-run they listed clips that no longer existed. They are
-replaced by one log, `data/performance.csv`, that every run appends its clips
+replaced by one log, `data/performance.xlsx`, that every run appends its clips
 to (never rewriting a row the user has filled in). The manifest now records
-`candidate_id`, which joins a posted clip back to every score behind it.
+`candidate_id`, which joins a posted clip back to every score behind it. It is an Excel
+file rather than CSV so it keeps column widths and a frozen header, and it
+leads with the caption as posted -- TikTok Studio lists posts by caption, so the
+user fills it in from Studio alone. It reads what Studio shows as typed ("9.8s",
+"12%", "1.2K"). If the file is open in Excel when a run ends, the run's clips
+wait in a side file and are added next time instead of failing the run.
 
 Unchanged from the brief: under 20 clips with results, `learn` only describes.
 With more, it reports Spearman correlations with bootstrap intervals and
