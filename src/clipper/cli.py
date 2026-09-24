@@ -704,13 +704,91 @@ def eval_cmd(
 
 @app.command()
 def learn(
-    performance: Annotated[Path, typer.Option("--performance", help="Your filled-in performance.csv.")],
+    performance: Annotated[Path | None, typer.Option(
+        "--performance", help="The performance log (default: data/performance.csv).")] = None,
     apply: Annotated[bool, typer.Option("--apply", help="Write the proposed weights to config.")] = False,
     verbose: VerboseOpt = False,
 ) -> None:
-    """Propose new signal weights from logged view counts."""
+    """Compare how posted clips did with how the tool scored them."""
     setup_logging(verbose)
-    _not_implemented("learn", "Phase 6")
+    from .config import DEFAULT_CONFIG_PATH, Config
+    from .learn import analyze
+    from .learn import log as perf
+
+    path = performance or perf.log_path()
+    rows = perf.read(path)
+    if not rows:
+        console.print(f"[red]No performance log at {path}.[/red] Each `clipper run` adds its "
+                      "clips there; fill in the numbers for the ones you post.")
+        raise typer.Exit(code=1)
+    cfg = Config.load()
+    result = analyze.analyse(rows, cfg.weights.as_dict())
+    if not result.joined:
+        console.print(f"No results logged yet in {path}. Fill in views and average watch "
+                      "time for the clips you posted, then run this again.")
+        return
+
+    _print_performance(result.joined)
+    for row in result.unmatched:
+        console.print(f"[yellow]Could not find the scores for {row.get('source_id', '?')} "
+                      f"{row.get('clip_id', '?')}; left out.[/yellow]")
+    if result.note:
+        console.print(f"\n{result.note}")
+        console.print("[dim]With this few clips, differences between them are mostly chance "
+                      "and account reach, not evidence about what works.[/dim]")
+        return
+
+    table = Table(title="Rank correlation with watch-through (95% interval)", box=None,
+                  header_style="bold", pad_edge=False)
+    for col in ("score", "n", "rho", "interval"):
+        table.add_column(col, justify="left" if col == "score" else "right")
+    for c in result.correlations:
+        if c.target == "watch_through":
+            table.add_row(c.name, str(c.n), f"{c.rho:+.2f}", f"{c.low:+.2f} .. {c.high:+.2f}")
+    console.print(table)
+
+    if result.proposal is None:
+        console.print("No weight change proposed: the evidence does not favour any signal.")
+        return
+    console.print("\nProposed signal weights (a small step toward the evidence):")
+    for key, new in result.proposal.proposed.items():
+        old = result.proposal.current.get(key, 0.0)
+        if abs(new - old) >= 0.0005:
+            console.print(f"  {key}: {old:.3f} -> {new:.3f}")
+    if not apply:
+        console.print("\nNothing written. Run again with --apply to use these weights.")
+        return
+    analyze.apply(result.proposal, DEFAULT_CONFIG_PATH, n=len(result.joined))
+    examples = analyze.write_examples(result.joined)
+    console.print(f"[green]Weights written to {DEFAULT_CONFIG_PATH.name}; history in "
+                  f"{analyze.HISTORY.name}.[/green]")
+    if examples:
+        console.print(f"Best-watched clips saved as examples in {examples}.")
+
+
+def _print_performance(joined) -> None:
+    def pct(value):
+        return "" if value is None else f"{value * 100:.0f}%"
+
+    def num(value):
+        return "" if value is None else f"{value:,.0f}"
+
+    ranked = sorted(joined, key=lambda j: j.scores.get("composite", 0.0), reverse=True)
+    table = Table(title="Posted clips, in the order the tool ranked them", box=None,
+                  header_style="bold", pad_edge=False)
+    for col in ("clip", "length", "views 24h", "views 7d", "watch-through", "full",
+                "engagement", "tool score"):
+        table.add_column(col, justify="left" if col == "clip" else "right")
+    for j in ranked:
+        table.add_row(j.label, f"{j.duration:.0f}s" if j.duration else "",
+                      num(j.get("views_24h")), num(j.get("views_7d")), pct(j.watch_through),
+                      pct(j.watched_full), pct(j.engagement),
+                      f"{j.scores.get('composite', 0.0):.2f}")
+    console.print(table)
+    wt = [j.watch_through for j in joined if j.watch_through is not None]
+    if wt:
+        console.print(f"Average watch-through: {sum(wt) / len(wt) * 100:.0f}% of each clip "
+                      f"({len(wt)} clip(s)). Above 100% means people rewatched.")
 
 
 def main() -> None:

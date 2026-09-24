@@ -819,3 +819,24 @@ second later ("What is it doing?" / "No, don't eat that."). At a scene's own edg
 refinement is clamped to the scene afterwards, and a clip that opens or closes
 with its scene keeps the scene's cut: refinement had trimmed a 2.3s wordless
 opening, so a clip began mid-line.
+
+### D50. One performance log; watch-through, not views, is what `learn` optimises
+
+Section 14.2 asks `clipper learn` to correlate sub-scores with views at 24h and
+7d. On the first real posts (a brand-new TikTok account, FX Adults S2) views
+mostly measured the account: TikTok shows a new account's posts to a small
+test audience whatever the clip. Average watch time over clip length
+("watch-through") measures what the people who did see a clip did with it, so
+it is the primary target; views are still logged and reported.
+
+The per-source `performance.csv` templates were written once and never
+refreshed, so after a re-run they listed clips that no longer existed. They are
+replaced by one log, `data/performance.csv`, that every run appends its clips
+to (never rewriting a row the user has filled in). The manifest now records
+`candidate_id`, which joins a posted clip back to every score behind it.
+
+Unchanged from the brief: under 20 clips with results, `learn` only describes.
+With more, it reports Spearman correlations with bootstrap intervals and
+proposes signal weights moved 20% of the way toward each signal's share of
+positive correlation with watch-through; `--apply` writes them (keeping the
+YAML's comments) and appends `config/weights_history.json`.

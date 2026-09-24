@@ -4,8 +4,9 @@ Three files with three audiences (BUILD_BRIEF.md section 13):
 
 * `manifest.csv` / `manifest.json` -- machine-readable, one row per clip, with
   every sub-score so `clipper learn` can correlate them against real views later.
-* `performance.csv` -- a blank template the user fills in by hand after posting.
-  Its `clip_id` column joins back to the manifest.
+* the performance log (`data/performance.csv`, see learn/log.py) -- one row
+  per clip across all runs, which the user fills in after posting. Its
+  `candidate_id` joins back to the scores.
 * `report.md` -- for a human deciding what to post.
 """
 
@@ -19,6 +20,7 @@ from pathlib import Path
 
 from ..campaign.compliance import ComplianceReport, full_caption
 from ..config import CampaignConfig
+from ..learn import log as perf
 from ..models import ClipPlan, QAReport, SourceInfo
 from ..transcribe.correct import WordFix
 from ..utils.logging import get_logger
@@ -27,16 +29,11 @@ from ..utils.timecode import format_duration, to_ffmpeg
 log = get_logger(__name__)
 
 MANIFEST_COLUMNS = [
-    "clip_id", "source_id", "source_title", "campaign", "start", "end", "duration",
+    "clip_id", "candidate_id", "source_id", "source_title", "campaign", "start", "end", "duration",
     "composite", "llm_a", "llm_b", "audio", "heatmap", "text",
     "layout", "caption_style", "hook_text", "suggested_caption", "hashtags",
     "credit_text", "qa_status", "compliance_status", "file", "created_at",
     "caption_fixes",
-]
-
-PERFORMANCE_COLUMNS = [
-    "clip_id", "platform", "url", "posted_at",
-    "views_24h", "views_7d", "views_30d", "verified_views", "payout_usd", "notes",
 ]
 
 
@@ -107,12 +104,12 @@ def write_outputs(
         encoding="utf-8",
     )
 
-    performance_csv = out_dir / "performance.csv"
-    if not performance_csv.exists():
-        _write_performance_template(performance_csv, records)
-    else:
-        log.info("keeping the existing %s so logged results are not overwritten",
-                 performance_csv.name)
+    performance_csv = perf.add_clips([
+        perf.NewClip(source_id=info.source_id, clip_id=r.plan.clip_id,
+                     candidate_id=r.plan.candidate_id, campaign=campaign.name,
+                     source_title=info.title or "", file=r.file.name,
+                     duration_s=r.duration)
+        for r in records])
 
     report_md = out_dir / "report.md"
     report_md.write_text(
@@ -137,6 +134,7 @@ def _row(record: ClipRecord, *, info: SourceInfo, campaign: CampaignConfig,
     plan = record.plan
     return {
         "clip_id": plan.clip_id,
+        "candidate_id": plan.candidate_id,
         "source_id": info.source_id,
         "source_title": info.title,
         "campaign": campaign.name,
@@ -166,15 +164,6 @@ def _row(record: ClipRecord, *, info: SourceInfo, campaign: CampaignConfig,
 
 def _round(value: float | None, digits: int = 5) -> str:
     return "" if value is None else str(round(value, digits))
-
-
-def _write_performance_template(path: Path, records: list[ClipRecord]) -> None:
-    """A blank row per clip, so the user only fills in the numbers."""
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=PERFORMANCE_COLUMNS)
-        writer.writeheader()
-        for record in records:
-            writer.writerow({"clip_id": record.plan.clip_id})
 
 
 def _render_report(
@@ -280,11 +269,11 @@ def _render_report(
 
     add("## Next step")
     add("")
-    add("Post the clips you like, then record what happened in `performance.csv` "
-        "and run:")
+    add("Post the clips you like, then fill in their rows in the performance log "
+        "(`data/performance.csv`) -- views, and above all average watch time -- and run:")
     add("")
     add("```powershell")
-    add("clipper learn --performance performance.csv")
+    add("clipper learn")
     add("```")
     add("")
     add("With fewer than about 20 logged clips it will only report descriptive "

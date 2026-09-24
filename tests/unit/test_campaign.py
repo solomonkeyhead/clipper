@@ -10,12 +10,12 @@ import pytest
 from clipper.campaign import compliance
 from clipper.campaign.manifest import (
     MANIFEST_COLUMNS,
-    PERFORMANCE_COLUMNS,
     ClipRecord,
     write_outputs,
     write_rejection_reason,
 )
 from clipper.config import CampaignConfig
+from clipper.learn import log as perf
 from clipper.models import ClipPlan, LayoutPlan, MediaInfo, QACheck, QAReport, SourceInfo
 
 
@@ -208,6 +208,11 @@ class TestComplianceReport:
 
 
 class TestManifestOutputs:
+    @pytest.fixture(autouse=True)
+    def _own_data_dir(self, data_root):
+        """The performance log lives under the data root; never touch the real one."""
+        self.data_root = data_root
+
     def test_writes_every_file(self, tmp_path):
         outputs = write_outputs([record()], info=source(), campaign=campaign(),
                                 out_dir=tmp_path)
@@ -232,24 +237,30 @@ class TestManifestOutputs:
         assert row["heatmap"] == ""
         assert row["audio"] != ""
 
-    def test_the_performance_template_is_prefilled_with_clip_ids(self, tmp_path):
-        write_outputs([record(), record(plan=plan(clip_id="002"))],
-                      info=source(), campaign=campaign(), out_dir=tmp_path)
-        rows = list(csv.DictReader((tmp_path / "performance.csv").open(encoding="utf-8")))
+    def test_each_clip_gets_a_row_in_the_performance_log(self, tmp_path):
+        outputs = write_outputs([record(), record(plan=plan(clip_id="002"))],
+                                info=source(), campaign=campaign(), out_dir=tmp_path)
+        assert outputs["performance_csv"] == self.data_root / "performance.csv"
+        rows = perf.read(outputs["performance_csv"])
         assert [r["clip_id"] for r in rows] == ["001", "002"]
-        assert all(r["views_24h"] == "" for r in rows)
+        assert all(r["candidate_id"] and r["views_24h"] == "" for r in rows)
 
-    def test_performance_columns_match_the_brief(self, tmp_path):
-        write_outputs([record()], info=source(), campaign=campaign(), out_dir=tmp_path)
-        with (tmp_path / "performance.csv").open(encoding="utf-8") as handle:
-            assert next(csv.reader(handle)) == PERFORMANCE_COLUMNS
+    def test_performance_log_columns(self, tmp_path):
+        outputs = write_outputs([record()], info=source(), campaign=campaign(), out_dir=tmp_path)
+        with outputs["performance_csv"].open(encoding="utf-8") as handle:
+            assert next(csv.reader(handle)) == perf.COLUMNS
 
-    def test_an_existing_performance_file_is_not_overwritten(self, tmp_path):
-        """Overwriting would destroy view counts the user typed in by hand."""
-        existing = tmp_path / "performance.csv"
-        existing.write_text("clip_id,views_24h\n001,12345\n", encoding="utf-8")
-        write_outputs([record()], info=source(), campaign=campaign(), out_dir=tmp_path)
-        assert "12345" in existing.read_text(encoding="utf-8")
+    def test_a_rerun_keeps_logged_results_and_adds_only_new_clips(self, tmp_path):
+        """Overwriting would destroy numbers typed in by hand; the old per-run
+        templates went stale instead, still listing clips a re-run had replaced."""
+        outputs = write_outputs([record()], info=source(), campaign=campaign(), out_dir=tmp_path)
+        rows = perf.read(outputs["performance_csv"])
+        rows[0]["views_24h"] = "12345"
+        perf.write(rows, outputs["performance_csv"])
+        write_outputs([record(), record(plan=plan(clip_id="002"))], info=source(),
+                      campaign=campaign(), out_dir=tmp_path)
+        rows = perf.read(outputs["performance_csv"])
+        assert [(r["clip_id"], r["views_24h"]) for r in rows] == [("001", "12345"), ("002", "")]
 
     def test_the_json_manifest_records_the_authorization(self, tmp_path):
         c = campaign(source_authorization="Whop campaign 'Alpha', content bank")
