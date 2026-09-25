@@ -825,6 +825,75 @@ def tiktok_sync(
     console.print(f"[green]Updated {perf.log_path()}[/green]")
 
 
+@tiktok_app.command("collect")
+def tiktok_collect(
+    file: Annotated[Path | None, typer.Option("--file", help="Read one saved page instead of watching the clipboard.")] = None,
+    minutes: Annotated[int, typer.Option("--minutes", help="Stop after this long without a new page.")] = 15,
+    verbose: VerboseOpt = False,
+) -> None:
+    """Fill watch time, completion, saves and followers from copied TikTok Studio pages.
+
+    Open a post's analytics in TikTok Studio, press Ctrl+A then Ctrl+C. Only
+    text that is a TikTok Studio analytics page is read; nothing else you copy
+    is kept or shown.
+    """
+    setup_logging(verbose)
+    import time as _time
+
+    from .tiktok import studio
+
+    def handle(text: str) -> None:
+        stats = studio.parse(text)
+        if stats is None:
+            console.print("[yellow]That looks like TikTok Studio but not a post's analytics "
+                          "page; open the post's analytics and copy again.[/yellow]")
+            return
+        from .learn import log as perf
+
+        rows = perf.read()
+        index, _changed = studio.fill(stats, rows)
+        name = stats.caption[:50]
+        if index is None:
+            console.print(f"[yellow]No single row in the log has the caption {name!r}.[/yellow]")
+            return
+        try:
+            perf.write(rows)
+        except PermissionError:
+            console.print(f"[red]{perf.log_path().name} is open in Excel; close it and copy "
+                          "the page again.[/red]")
+            return
+        if stats.views == 0:
+            note = "no views yet, so no watch time to record"
+        else:
+            note = (f"avg watch {stats.avg_watch_s:g}s, full {stats.watched_full_pct:g}%"
+                    + (f", most left at {stats.drop_off_s:g}s" if stats.drop_off_s is not None else ""))
+        console.print(f"[green]Saved[/green] {name}...  [dim]{note}[/dim]")
+
+    if file is not None:
+        handle(file.read_text(encoding="utf-8"))
+        return
+
+    console.print("Watching the clipboard. For each post: open its analytics in TikTok "
+                  "Studio, press Ctrl+A then Ctrl+C.")
+    console.print(f"[dim]Stops after {minutes} minutes without a new page, or press Ctrl+C.[/dim]")
+    last = studio.clipboard_sequence()
+    deadline = _time.monotonic() + minutes * 60
+    try:
+        while _time.monotonic() < deadline:
+            _time.sleep(0.4)
+            seq = studio.clipboard_sequence()
+            if seq == last:
+                continue
+            last = seq
+            _, text = studio.read_clipboard()
+            if studio.looks_like_studio(text):
+                handle(text)
+                deadline = _time.monotonic() + minutes * 60
+    except KeyboardInterrupt:
+        pass
+    console.print("Stopped watching the clipboard.")
+
+
 def _print_performance(joined) -> None:
     def pct(value):
         return "" if value is None else f"{value * 100:.0f}%"

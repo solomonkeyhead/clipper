@@ -862,3 +862,12 @@ which needs a Business account and loses non-commercial sounds, a real reach
 cost for a clips account. So `avg_watch_s` and `watched_full_pct` stay manual.
 View snapshots are only taken inside their window (24h: 1-3 days after
 posting; 7d: 7-10 days) so a late sync never mislabels an older count.
+
+The rest (watch time, completion, saves, new followers, and where most viewers
+stopped) comes from `clipper tiktok collect`: the user opens a post's
+analytics in TikTok Studio and copies the page (Ctrl+A, Ctrl+C); the command
+watches the clipboard only while it runs, ignores anything that is not a
+Studio analytics page, and parses the page's fixed layout -- no LLM needed.
+A post with no views gets no watch time recorded ("0s" there is not a result).
+The first real page showed most viewers leaving at 0:01 on a clip that opens
+on a wordless establishing shot, which is what `drop_off_s` is there to test.

@@ -30,14 +30,16 @@ log = get_logger(__name__)
 #: the order TikTok Studio shows them, then what the tool needs to join back.
 RESULT_COLUMNS = ["url", "posted_at", "views_24h", "views_7d", "views_30d", "views_latest",
                   "likes", "comments", "shares", "saves",
-                  "avg_watch_s", "watched_full_pct", "new_followers",
+                  "avg_watch_s", "watched_full_pct", "drop_off_s", "new_followers",
                   "verified_views", "payout_usd", "notes"]
 ID_COLUMNS = ["platform", "account", "duration_s", "campaign", "source_title", "file",
-              "source_id", "clip_id", "candidate_id", "video_id", "synced_at"]
+              "source_id", "clip_id", "candidate_id", "video_id", "synced_at", "studio_at"]
 COLUMNS = ["caption", *RESULT_COLUMNS, *ID_COLUMNS]
 NUMERIC = ["views_24h", "views_7d", "views_30d", "views_latest", "likes", "comments", "shares",
-           "saves", "avg_watch_s", "watched_full_pct", "new_followers", "verified_views",
-           "payout_usd"]
+           "saves", "avg_watch_s", "watched_full_pct", "drop_off_s", "new_followers",
+           "verified_views", "payout_usd"]
+#: Filled by `clipper tiktok collect` from a copied TikTok Studio page.
+COLLECTED = {"avg_watch_s", "watched_full_pct", "drop_off_s", "saves", "new_followers"}
 #: Filled by `clipper tiktok sync`; the rest of the yellow columns are the user's.
 SYNCED = {"url", "posted_at", "views_24h", "views_7d", "views_30d", "views_latest",
           "likes", "comments", "shares"}
@@ -52,6 +54,8 @@ HINTS = {
                    "it shows whether people who saw the clip stayed.",
     "watched_full_pct": "Watched full video, as a percentage (e.g. 12%).",
     "saves": "Saves / favorites.",
+    "drop_off_s": "Where most viewers stopped watching, in seconds (TikTok Studio: "
+                  "'Most viewers stopped watching at 0:01').",
     "new_followers": "New followers from this post.",
     "verified_views": "Views the campaign counted (e.g. on Vyro).",
     "payout_usd": "What the campaign paid for this post.",
@@ -160,11 +164,14 @@ def _write_xlsx(rows: list[dict[str, str]], columns: list[str], path: Path) -> N
 
     fill = PatternFill("solid", fgColor="FFF2CC")      # typed in by the user
     synced = PatternFill("solid", fgColor="DDEBF7")    # filled by `clipper tiktok sync`
+    collected = PatternFill("solid", fgColor="E2EFDA")  # filled by `clipper tiktok collect`
     for i, name in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=i)
         cell.font = Font(bold=True)
         if name in SYNCED:
             cell.fill = synced
+        elif name in COLLECTED:
+            cell.fill = collected
         elif name in NUMERIC or name == "notes":
             cell.fill = fill
         if name in HINTS:
