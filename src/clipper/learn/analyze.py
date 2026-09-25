@@ -49,6 +49,10 @@ class Joined:
 
     @property
     def label(self) -> str:
+        """The start of the caption: how the user knows the post (and how Studio lists it)."""
+        caption = " ".join((self.row.get("caption") or "").split())
+        if caption:
+            return caption if len(caption) <= 26 else caption[:24].rstrip() + ".."
         return f"{self.row.get('source_title') or self.row.get('source_id', '')[:8]} {self.row.get('clip_id', '')}".strip()
 
     @property

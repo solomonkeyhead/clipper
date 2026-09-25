@@ -904,9 +904,9 @@ def _print_performance(joined) -> None:
     ranked = sorted(joined, key=lambda j: j.scores.get("composite", 0.0), reverse=True)
     table = Table(title="Posted clips, in the order the tool ranked them", box=None,
                   header_style="bold", pad_edge=False)
-    for col in ("clip", "length", "views 24h", "views 7d", "views now", "watch-through",
-                "full", "engagement", "tool score"):
-        table.add_column(col, justify="left" if col == "clip" else "right")
+    # Short headers: the table must fit an 80-column terminal without wrapping.
+    for col in ("post", "len", "24h", "7d", "now", "watched", "full", "engaged", "score"):
+        table.add_column(col, justify="left" if col == "post" else "right", no_wrap=True)
     for j in ranked:
         table.add_row(j.label, f"{j.duration:.0f}s" if j.duration else "",
                       num(j.get("views_24h")), num(j.get("views_7d")),
@@ -914,6 +914,9 @@ def _print_performance(joined) -> None:
                       pct(j.watched_full), pct(j.engagement),
                       f"{j.scores.get('composite', 0.0):.2f}")
     console.print(table)
+    console.print("[dim]24h/7d/now: views. watched: average share of the clip watched. "
+                  "full: watched to the end. engaged: likes+comments+shares+saves per view. "
+                  "score: the tool's own rating when it picked the clip.[/dim]")
     wt = [j.watch_through for j in joined if j.watch_through is not None]
     if wt:
         console.print(f"Average watch-through: {sum(wt) / len(wt) * 100:.0f}% of each clip "
