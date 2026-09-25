@@ -188,6 +188,8 @@ def _add_padding(bounds: RefinedBounds, transcript: Transcript, cfg: RefineConfi
 
     # Post-roll may not reach forward into the next word's start.
     tailroom = after[0].start - bounds.end if after else source_duration - bounds.end
+    if after:
+        tailroom -= cfg.tail_guard
     post = max(0.0, min(cfg.post_roll, tailroom))
 
     if pre > 0:

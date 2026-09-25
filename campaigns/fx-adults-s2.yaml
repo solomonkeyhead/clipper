@@ -52,8 +52,11 @@ fallback_captions:
 keep_original_audio: true
 
 # Brief: "Edits should not misrepresent the original scene" and "Do not
-# extrapolate or ideate new plots". An LLM-written title over the clip risks both.
-hook_overlay: false
+# extrapolate or ideate new plots". The hook line is now written to describe
+# only the situation on screen -- no invented outcomes (llm/prompts.py
+# HOOK_TEXT_RULES) -- and all three first posts lost most viewers at 0:01 with
+# nothing on screen to hold them. On; check each clip's hook against the scene.
+hook_overlay: true
 
 # A sitcom: nearly every scene "needs context" by the podcast rubric's standard
 # (26 of 48 candidates on episode 201 were dropped for it), yet works as a clip.

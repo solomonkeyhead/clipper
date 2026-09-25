@@ -258,6 +258,63 @@ def propose(current: dict[str, float], evidence: list[Correlation]) -> Proposal 
     return Proposal(current=dict(current), proposed=proposed, evidence=list(present.values()))
 
 
+# ---- comparing openings -------------------------------------------------------------
+
+
+@dataclass
+class Arm:
+    """Posts sharing one value of one setting, and how they held viewers."""
+
+    value: str
+    n: int
+    watch_through: float
+    drop_off: float | None  # median second where most viewers left
+
+
+def _lead_in(j: Joined) -> str | None:
+    value = perf.number(j.row.get("lead_in_s"))
+    return None if value is None else ("0.5s or less" if value <= 0.5 else "over 0.5s")
+
+
+def _hook(j: Joined) -> str | None:
+    if not j.row.get("opening"):  # logged before the tool recorded openings
+        return None
+    return "yes" if (j.row.get("hook") or "").strip() else "no"
+
+
+#: The retention changes of D52, each compared across posts that did and did
+#: not have it (the research's advice: one variable at a time, 5+ posts a side).
+COMPARISONS = [
+    ("opening framing", lambda j: j.row.get("opening") or None),
+    ("hook on screen", _hook),
+    ("silent lead-in", _lead_in),
+    ("length", lambda j: None if not j.duration else
+     ("45s or less" if j.duration <= 45 else "over 45s")),
+]
+
+
+def compare(joined: list[Joined]) -> list[tuple[str, list[Arm]]]:
+    """For each setting with posts on both sides, mean watch-through per value."""
+    out = []
+    for name, key in COMPARISONS:
+        groups: dict[str, list[Joined]] = {}
+        for j in joined:
+            value = key(j)
+            if value is not None and j.watch_through is not None:
+                groups.setdefault(value, []).append(j)
+        if len(groups) < 2:
+            continue
+        arms = []
+        for value, members in sorted(groups.items()):
+            drops = sorted(d for m in members
+                           if (d := perf.number(m.row.get("drop_off_s"))) is not None)
+            arms.append(Arm(value=value, n=len(members),
+                            watch_through=sum(m.watch_through or 0.0 for m in members) / len(members),
+                            drop_off=drops[len(drops) // 2] if drops else None))
+        out.append((name, arms))
+    return out
+
+
 # ---- applying ----------------------------------------------------------------------
 
 

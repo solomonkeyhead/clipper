@@ -419,6 +419,10 @@ class ClipPlan(Artifact):
     layout: LayoutPlan | None = None
     # How refinement moved the boundaries, for `explain` and debugging.
     refine_notes: list[str] = Field(default_factory=list)
+    # What the opening looked like, so the performance log can compare posts
+    # that did and did not have each retention change (see learn/log.py).
+    lead_in: float | None = None  # seconds before the first word
+    hook_shown: bool = False
 
     @property
     def duration(self) -> float:

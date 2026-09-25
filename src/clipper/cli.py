@@ -922,6 +922,20 @@ def _print_performance(joined) -> None:
         console.print(f"Average watch-through: {sum(wt) / len(wt) * 100:.0f}% of each clip "
                       f"({len(wt)} clip(s)). Above 100% means people rewatched.")
 
+    from .learn import analyze
+
+    comparisons = analyze.compare(joined)
+    if comparisons:
+        console.print("\n[bold]Posts with and without each retention change[/bold]")
+        for name, arms in comparisons:
+            parts = [f"{a.value}: {a.watch_through * 100:.0f}% watched"
+                     + (f", most left at {a.drop_off:g}s" if a.drop_off is not None else "")
+                     + f" (n={a.n})" for a in arms]
+            console.print(f"  {name}: " + " | ".join(parts))
+        if min(a.n for _, arms in comparisons for a in arms) < 5:
+            console.print("[dim]  Fewer than 5 posts on a side: read these as hints, "
+                          "not results.[/dim]")
+
 
 def main() -> None:
     # Load .env before any command reads an API key. override=False so a key

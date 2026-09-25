@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v3"
 """Bump on ANY edit below. It is part of the cache key."""
 
 SCHEMA_DESCRIPTION = """\
@@ -39,14 +39,28 @@ Each object must contain exactly these keys:
 # told very explicitly not to -- observed on gemini-3.5-flash-lite during Phase 0
 # verification. Hence the emphatic wording and the worked example.
 HOOK_TEXT_RULES = """\
-hook_text is an ORIGINAL on-screen caption of AT MOST 10 words. It is NOT a
-quote and NOT a copy of the transcript. Write it as a title someone would put on
-screen. It must be faithful to the clip and must not invent facts, numbers or
-claims that are not in the transcript.
+hook_text is an ORIGINAL on-screen line of 3-8 words (at most 40 characters),
+shown from the first frame to give a scrolling viewer a reason to stay. It is
+NOT a quote and NOT a copy of the transcript. Describe the situation, the
+stakes, or a relatable identity ("When your boss asks for honesty"), or ask a
+question -- and never promise an outcome the clip does not deliver. It must be
+faithful to the clip and must not invent facts, numbers or claims that are not
+in the transcript. Name only people, places and things the transcript itself
+mentions: a party scene is not a "group chat", a dinner is not a "meeting".
   Transcript: "I lost forty thousand dollars in one afternoon because I ignored
                the one rule I had written down myself."
   Good hook_text: "The $40,000 rule he ignored"
   Bad  hook_text: "I lost forty thousand dollars in one afternoon" (a quote)\
+"""
+
+# Scenes from scripted TV or film are judged for viewers who have never seen
+# the show; which moments travel comes from short-form retention research
+# (docs/DECISIONS.md D52).
+SCRIPTED_RULES = """\
+If a clip is a scene from a TV show or film: favour conflict with a clear
+winner, awkward or cringe situations, quick one-liners and roasts, and
+relatable work, family or dating moments. Judge standalone_clarity for a viewer
+who has never seen the show: the premise must be clear from the first line.\
 """
 
 POLICY_RULES = """\
@@ -64,6 +78,8 @@ that are exceptional. Judge only the text given. Do not invent context.
 
 {HOOK_TEXT_RULES}
 
+{SCRIPTED_RULES}
+
 {POLICY_RULES}
 
 Return ONLY a JSON array, one object per candidate, in the order given.
@@ -78,6 +94,8 @@ you watch to the end and send it to a friend. Penalize slow starts, missing
 context, rambling, and endings that cut off mid-thought.
 
 {HOOK_TEXT_RULES}
+
+{SCRIPTED_RULES}
 
 {POLICY_RULES}
 

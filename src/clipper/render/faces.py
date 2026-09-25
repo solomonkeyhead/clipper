@@ -355,6 +355,7 @@ def plan_layout_for(
     per_shot_framing: bool = True,
     min_shot_seconds: float = 1.5,
     max_shots: int = 8,
+    opening_seconds: float = 0.0,
 ):
     """Scan a clip and return the `LayoutPlan` for it.
 
@@ -412,7 +413,8 @@ def plan_layout_for(
         plan = plan_per_shot(
             result.per_sample, result.sample_times, result.scene_cuts,
             overlays_per_sample=overlays, duration=duration,
-            min_shot_seconds=min_shot_seconds, max_shots=max_shots, **common,
+            min_shot_seconds=min_shot_seconds, max_shots=max_shots,
+            opening_seconds=opening_seconds, **common,
         )
     else:
         plan = choose_layout(

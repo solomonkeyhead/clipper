@@ -871,3 +871,40 @@ Studio analytics page, and parses the page's fixed layout -- no LLM needed.
 A post with no views gets no watch time recorded ("0s" there is not a result).
 The first real page showed most viewers leaving at 0:01 on a clip that opens
 on a wordless establishing shot, which is what `drop_off_s` is there to test.
+
+### D52. Scripted clips are built for the first second
+
+The first three FX posts with views all lost most viewers at 0:01 (TikTok
+Studio: "Most viewers stopped watching at 0:01"), with 8-31% average
+watch-through. Two opened on a 16:9 picture over blurred bars (faces a third
+of their full-screen size), one on a wordless establishing shot, none with text
+on screen. A research pass on short-form retention (TikTok's creative guidance:
+land the proposition in the first 3 seconds; TikTok says finishing a video is
+weighted strongly; larger third-party datasets on length) pointed the same way.
+For `scripted` campaigns:
+
+- **Open on dialogue.** At most 0.5s of silence before the first word, even
+  where the scene's own cut starts earlier (replacing D49's "keep the scene's
+  cut" at the start). End a beat after the last line: about 1s of reaction held
+  (stopping 0.15s short of the next word), never more than 1.5s of silence.
+- **Fill the screen for the first 3 seconds.** The opening shot frames the
+  speaker (`clear_talker`, else the most prominent face) full-screen, widening
+  to at most 4:5 (70% of the screen's height) for whoever is beside them. A long
+  wide first shot is split at 3s so only its opening is tight; later shots
+  keep everyone in frame as before.
+- **A factual hook line on screen for 3 seconds**, 3-8 words: the situation,
+  stakes, an identity or a question, never an outcome the clip doesn't deliver
+  (prompt v2). Per campaign (`hook_overlay`); briefs may count added text as
+  modifying their content.
+- **20-45s by default, 90s at most**: candidates past 45s are scored down 1%
+  per 2s over (at most 25%), so long clips win only when they score clearly
+  better.
+- **Scene choice**: the rubric favours conflict, awkwardness, one-liners and
+  relatable situations that read without knowing the show.
+- **Safe zone**: captions keep above y=1520 (bottom margin 400) and clear of
+  the right-hand button rail (right margin 180).
+
+Most of the numbers are practitioner consensus, not measured (the research
+labels them weak). So each clip's opening framing, silent lead-in and hook go
+into the performance log, and `clipper learn` compares posts with and without
+each change on watch-through and the drop-off second.

@@ -88,8 +88,9 @@ render:
   hook_text_seconds: 2.0
   safe_area:                 # keep captions clear of platform UI
     top: 220
-    bottom: 320
+    bottom: 400                # username, description and sound ticker
     side: 90
+    right: 180                 # the like/comment/share rail
   face_sample_fps: 5.0
   detect_screen_share: true  # stack content over the speaker for screen-share sources
   content_pane_share: 0.58   # target share of height for the content pane

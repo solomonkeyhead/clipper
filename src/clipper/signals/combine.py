@@ -120,8 +120,26 @@ def soft_penalties(values: SignalValues) -> tuple[float, list[str]]:
     return round(factor, 4), reasons
 
 
-def combine(signals: Signals, config: Config) -> Scored:
-    """Turn raw signal values into ranked composites."""
+def length_penalty(duration: float | None, target_high: float) -> tuple[float, str]:
+    """A mild penalty for running past the target length (-1% per 2s, at most -25%).
+
+    Scripted campaigns only (`candidates.prefer_target_length`). On the first
+    real posts the 34s clip held viewers for 31% of its length, the 64s and
+    118s ones for 8% and 14%; larger studies point the same way for completion.
+    """
+    if duration is None or duration <= target_high:
+        return 1.0, ""
+    cut = min(0.25, (duration - target_high) / 2 / 100)
+    return round(1 - cut, 4), f"{duration:.0f}s, over the {target_high:.0f}s target (-{cut:.0%})"
+
+
+def combine(signals: Signals, config: Config, *,
+            durations: dict[str, float] | None = None) -> Scored:
+    """Turn raw signal values into ranked composites.
+
+    `durations` (candidate id -> seconds) enables the length preference when the
+    config asks for it.
+    """
     values = {v.candidate_id: v for v in signals.values}
     if not values:
         return Scored(source_id=signals.source_id, weights_used={}, scored=[])
@@ -174,6 +192,11 @@ def combine(signals: Signals, config: Config) -> Scored:
         base = sum(local_weights.get(n, 0.0) * c for n, c in present.items())
 
         penalty, reasons = soft_penalties(value)
+        if config.candidates.prefer_target_length and durations:
+            factor, why = length_penalty(durations.get(cid), config.candidates.target_seconds[1])
+            if why:
+                penalty = round(penalty * factor, 4)
+                reasons.append(why)
         scored.append(ScoredCandidate(
             candidate_id=cid,
             composite=round(base * penalty, 5),

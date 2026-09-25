@@ -194,12 +194,14 @@ def choose_layout(
     min_subject_face_ratio: float = INSET_FACE_WIDTH_RATIO,
     overlays: list[OverlayBox] | tuple[OverlayBox, ...] = (),
     keep_everyone: bool = False,
+    opening: bool = False,
 ) -> LayoutPlan:
     """Pick a static layout for one shot from its sampled face detections.
 
     `keep_everyone` is for scripted TV: every person on screen stays in frame,
     and there is no stacking and no picking the one who is talking (see
-    `_frame_everyone`).
+    `_frame_everyone`). With `opening`, the shot is a clip's first seconds and
+    must fill the screen instead (see `_frame_opening`).
 
     `overlays` are graphics the source laid over the picture during this shot
     (see `overlays.py`). Any framing that crops must keep them whole.
@@ -230,6 +232,9 @@ def choose_layout(
                                 reason="no frames sampled")
 
     tracks = build_tracks(faces_per_sample, src_w)
+    if keep_everyone and opening:
+        return _frame_opening(tracks, samples, src_w=src_w, src_h=src_h,
+                              out_w=out_w, out_h=out_h)
     if keep_everyone:
         return _frame_everyone(tracks, samples, src_w=src_w, src_h=src_h, out_w=out_w,
                                out_h=out_h, min_face_ratio=min_face_ratio,
@@ -401,6 +406,51 @@ def _frame_everyone(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h:
     if framed is None:  # pragma: no cover - allow_wider always frames people
         return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h)
     return framed
+
+
+#: The widest picture a clip's opening may show, as width/height: 4:5 fills 70%
+#: of a 9:16 screen. A 16:9 picture over blurred bars fills 32%, with faces a
+#: third of their full-screen size -- two of the first three FX posts opened
+#: that way, and all three lost most viewers at 0:01.
+OPENING_MAX_ASPECT = 4 / 5
+
+
+def _frame_opening(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h: int,
+                   out_w: int, out_h: int) -> LayoutPlan:
+    """Fill the screen for a clip's first seconds, on the person talking.
+
+    The rest of a scripted clip keeps everyone in frame (`_frame_everyone`),
+    zooming out when it must. The opening may not: the first frame decides
+    whether a viewer stays. So it frames the speaker full-screen, widening to at
+    most 4:5 to take in whoever is beside them, and accepts that someone further
+    away is out of shot for these seconds.
+    """
+    people = [t for t in tracks
+              if t.median_width / src_w >= SCRIPTED_PERSON_WIDTH
+              and t.coverage(samples) >= SCRIPTED_PERSON_COVERAGE]
+    limit = _make_even(int(src_h * OPENING_MAX_ASPECT))
+    if not people:
+        x, y = clamp_crop_origin((src_w - limit) / 2, 0, limit, src_h, src_w, src_h)
+        return LayoutPlan(kind="fit_crop", crop_width=limit, crop_height=_make_even(src_h),
+                          keyframes=[CropKeyframe(t=0.0, x=x, y=y)], face_ratio=0.0,
+                          reason="opening with no one in shot: centre, 4:5 at most")
+    talker = clear_talker(people) if len(people) > 1 else None
+    primary = talker[0] if talker else max(
+        people, key=lambda t: (t.median_width, len(t.observations)))
+    group = [primary]
+    for other in sorted(people, key=lambda t: -t.median_width):
+        if other is primary:
+            continue
+        spans = [subject_span(t) for t in (*group, other)]
+        width = max(hi for _, hi in spans) - min(lo for lo, _ in spans)
+        if width + 2 * src_h * (9 / 16) * FRAME_MARGIN_RATIO <= limit:
+            group.append(other)
+    seen = {o.t for t in group for o in t.observations}
+    plan = plan_group_crop(group, src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
+                           face_ratio=len(seen) / samples, allow_wider=True, max_width=limit)
+    assert plan is not None  # a group always frames with allow_wider
+    who = "the speaker" if talker else "the most prominent person"
+    return plan.model_copy(update={"reason": f"opening: {who} full-screen; {plan.reason}"})
 
 
 def _companions(tracks: list[FaceTrack], subjects: list[FaceTrack],
@@ -639,6 +689,7 @@ def plan_group_crop(
     face_ratio: float = 1.0,
     overlays: list[OverlayBox] | tuple[OverlayBox, ...] = (),
     allow_wider: bool = False,
+    max_width: int | None = None,
 ) -> LayoutPlan | None:
     """One static frame holding every subject and every on-screen graphic.
 
@@ -686,6 +737,8 @@ def plan_group_crop(
         return None
 
     width = min(_make_even(int(needed) + 1), _make_even(src_w))
+    if max_width is not None:
+        width = min(width, max_width)
     # Within a few percent of the full width, a crop only shaves slivers off the
     # edges; show the whole frame instead.
     if width >= src_w * WHOLE_FRAME_RATIO:

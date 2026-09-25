@@ -32,7 +32,8 @@ RESULT_COLUMNS = ["url", "posted_at", "views_24h", "views_7d", "views_30d", "vie
                   "likes", "comments", "shares", "saves",
                   "avg_watch_s", "watched_full_pct", "drop_off_s", "new_followers",
                   "verified_views", "payout_usd", "notes"]
-ID_COLUMNS = ["platform", "account", "duration_s", "campaign", "source_title", "file",
+ID_COLUMNS = ["platform", "account", "duration_s", "opening", "lead_in_s", "hook",
+              "campaign", "source_title", "file",
               "source_id", "clip_id", "candidate_id", "video_id", "synced_at", "studio_at"]
 COLUMNS = ["caption", *RESULT_COLUMNS, *ID_COLUMNS]
 NUMERIC = ["views_24h", "views_7d", "views_30d", "views_latest", "likes", "comments", "shares",
@@ -58,6 +59,9 @@ HINTS = {
                   "'Most viewers stopped watching at 0:01').",
     "new_followers": "New followers from this post.",
     "verified_views": "Views the campaign counted (e.g. on Vyro).",
+    "opening": "How the clip's first shot was framed (filled in by the tool).",
+    "lead_in_s": "Seconds of silence before the first word (filled in by the tool).",
+    "hook": "The hook line shown on screen at the start, if any (filled in by the tool).",
     "payout_usd": "What the campaign paid for this post.",
 }
 _WIDE = {"caption": 60, "notes": 40, "url": 40}
@@ -79,6 +83,12 @@ class NewClip:
     file: str
     duration_s: float
     caption: str = ""
+    # How the clip opened, for comparing posts with and without each change:
+    # "full-screen", "fit 4:5", "fit wide" or "letterbox"; seconds of silence
+    # before the first word; the hook line shown on screen ("" for none).
+    opening: str = ""
+    lead_in_s: float | None = None
+    hook: str = ""
 
 
 def read(path: Path | None = None) -> list[dict[str, str]]:
@@ -232,7 +242,9 @@ def _add(clips: list[NewClip], path: Path) -> Path:
         rows.append({"caption": clip.caption, "source_id": clip.source_id,
                      "clip_id": clip.clip_id, "candidate_id": clip.candidate_id,
                      "campaign": clip.campaign, "source_title": clip.source_title,
-                     "file": clip.file, "duration_s": f"{clip.duration_s:.1f}"})
+                     "file": clip.file, "duration_s": f"{clip.duration_s:.1f}",
+                     "opening": clip.opening, "hook": clip.hook,
+                     "lead_in_s": "" if clip.lead_in_s is None else f"{clip.lead_in_s:.2f}"})
         known.add((clip.source_id, clip.clip_id))
     return write(rows, path)
 

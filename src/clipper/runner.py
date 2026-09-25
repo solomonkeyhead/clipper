@@ -142,6 +142,13 @@ def run(
 
 
 SCRIPTED_MAX_SILENCE = 0.55
+# TikTok's creative guidance: land the proposition in the first 3 seconds.
+SCRIPTED_OPENING_SECONDS = 3.0
+SCRIPTED_TARGET = (20.0, 45.0)
+SCRIPTED_MAX_SECONDS = 90.0
+SCRIPTED_MAX_LEAD_IN = 0.5    # silence before the first word
+SCRIPTED_REACTION_TAIL = 1.0  # held after the last line, into silence only
+SCRIPTED_MAX_TAIL = 1.5       # never more silence than this at the end
 
 
 def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
@@ -175,10 +182,31 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         # 55% keeps about 90% and still drops stretches with next to no speech.
         candidate_updates["max_silence_ratio"] = max(
             config.candidates.max_silence_ratio, SCRIPTED_MAX_SILENCE)
+    refine = config.refine
+    if campaign.scripted:
+        # Short-form retention research (docs/DECISIONS.md D52): one bit per
+        # clip, 20-45s by default, never more than 90s; open on dialogue and
+        # end on the reaction, a beat after the last line.
+        cap = max(low + 1, min(high, SCRIPTED_MAX_SECONDS))
+        target_low = min(max(SCRIPTED_TARGET[0], low), cap)
+        candidate_updates.update({
+            "max_seconds": cap,
+            "target_seconds": (target_low, max(min(SCRIPTED_TARGET[1], cap), target_low)),
+            "prefer_target_length": True,
+        })
+        refine = refine.model_copy(update={
+            "post_roll": SCRIPTED_REACTION_TAIL, "tail_guard": 0.15,
+            "max_lead_in": SCRIPTED_MAX_LEAD_IN, "max_tail": SCRIPTED_MAX_TAIL})
     candidates = config.candidates.model_copy(update=candidate_updates)
     render = config.render.model_copy(update={
         "show_hook_text": config.render.show_hook_text and campaign.hook_overlay,
+        # Held through the first 3 seconds, where viewers decide to stay.
+        "hook_text_seconds": (max(config.render.hook_text_seconds, SCRIPTED_OPENING_SECONDS)
+                              if campaign.scripted else config.render.hook_text_seconds),
         "keep_everyone_in_frame": config.render.keep_everyone_in_frame or campaign.scripted,
+        # The first seconds decide whether a viewer stays: fill the screen then.
+        "opening_full_screen_seconds": (SCRIPTED_OPENING_SECONDS if campaign.scripted
+                                        else config.render.opening_full_screen_seconds),
         # A TV set or window in a scene is not a screen share.
         "detect_screen_share": config.render.detect_screen_share and not campaign.scripted,
     })
@@ -186,7 +214,8 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         "drop_needs_prior_context":
             config.llm.drop_needs_prior_context and not campaign.scripted,
     })
-    return config.model_copy(update={"candidates": candidates, "render": render, "llm": llm})
+    return config.model_copy(update={"candidates": candidates, "render": render, "llm": llm,
+                                     "refine": refine})
 
 
 def _render_with_replacement(
@@ -306,6 +335,7 @@ def _produce_one(
         min_subject_face_ratio=config.render.min_subject_face_ratio,
         keep_everyone=config.render.keep_everyone_in_frame,
         per_shot_framing=config.render.per_shot_framing,
+        opening_seconds=config.render.opening_full_screen_seconds,
         min_shot_seconds=config.render.min_shot_seconds,
         max_shots=config.render.max_shots,
     )})
@@ -408,6 +438,11 @@ def _build_plan(
             start = candidate.scene_start
         if candidate.end >= candidate.scene_end - 0.05:
             end = candidate.scene_end
+        # ...but not a long silent stretch: the first three FX posts all lost
+        # most viewers at 0:01, one opening on a wordless shot of a house.
+        start, end = trim_silent_edges(start, end, transcript.words,
+                                       lead=config.refine.max_lead_in,
+                                       tail=config.refine.max_tail)
         if end - start < campaign.duration.min_seconds:
             log.info("%s dropped: only %.1fs once kept inside its scene",
                      candidate.candidate_id, end - start)
@@ -436,8 +471,28 @@ def _build_plan(
         hashtags=list(scores.hashtags) if scores else [],
         caption_style=config.render.caption_style,
         refine_notes=bounds.notes,
+        lead_in=next((round(w.start - bounds.start, 2) for w in transcript.words
+                      if bounds.start - 0.05 <= w.start < bounds.end), None),
+        hook_shown=bool(config.render.show_hook_text and scores and scores.hook_text),
     )
     return compliance.apply_campaign_caption(plan, campaign)
+
+
+def trim_silent_edges(start: float, end: float, words: list[Word], *,
+                      lead: float | None, tail: float | None) -> tuple[float, float]:
+    """Cut silence before the first word to `lead` and after the last to `tail`.
+
+    `None` leaves that edge alone. Words are the clip's own: the first starting
+    at or after `start`, the last ending at or before `end`.
+    """
+    inside = [w for w in words if w.start >= start - 0.05 and w.end <= end + 0.05]
+    if not inside:
+        return start, end
+    if lead is not None and inside[0].start - start > lead:
+        start = inside[0].start - lead
+    if tail is not None and end - inside[-1].end > tail:
+        end = inside[-1].end + tail
+    return start, end
 
 
 def _reject(record: ClipRecord, rejected_dir: Path, result: RunResult) -> None:

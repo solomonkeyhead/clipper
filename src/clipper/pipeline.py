@@ -246,7 +246,8 @@ def score(
     if cache.is_fresh("combine", "scored.json") and cache.is_fresh("signals", "signals.json"):
         scored = Scored.load(scored_path)
     else:
-        scored = combine(signals, config)
+        scored = combine(signals, config, durations={
+            c.candidate_id: c.duration for c in candidates.candidates})
         scored.save(scored_path)
 
     return ScoreOutcome(

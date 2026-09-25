@@ -54,6 +54,9 @@ class CandidatesConfig(StrictModel):
     min_seconds: float = Field(default=20.0, gt=0)
     max_seconds: float = Field(default=55.0, gt=0)
     target_seconds: tuple[float, float] = (25.0, 45.0)
+    # Score candidates longer than target_seconds[1] slightly down (see
+    # signals/combine.py `length_penalty`). Scripted campaigns turn it on.
+    prefer_target_length: bool = False
     max_candidates: int = Field(default=60, ge=1)
     min_gap_seconds: float = Field(default=30.0, ge=0)
     # Hard filters (section 8).
@@ -210,8 +213,12 @@ class SafeArea(StrictModel):
     """Pixels of the 1080x1920 frame kept clear of platform UI."""
 
     top: int = Field(default=220, ge=0)
-    bottom: int = Field(default=320, ge=0)
+    # TikTok's username, description and sound ticker: the conservative safe
+    # zone keeps text above y=1520 on a 1920-high frame.
+    bottom: int = Field(default=400, ge=0)
     side: int = Field(default=90, ge=0)
+    # The like/comment/share rail on the right needs more room than the left.
+    right: int = Field(default=180, ge=0)
 
 
 class RenderConfig(StrictModel):
@@ -253,6 +260,10 @@ class RenderConfig(StrictModel):
     # Scripted TV: every person on screen stays in frame -- no stacks, no
     # picking the speaker. Set from a campaign's `scripted`.
     keep_everyone_in_frame: bool = False
+    # With keep_everyone_in_frame: frame this many opening seconds full-screen
+    # on the speaker (at most 4:5) instead of zooming out. 0 = off. Scripted
+    # campaigns use 3s.
+    opening_full_screen_seconds: float = Field(default=0.0, ge=0)
     # Shots shorter than this are merged into a neighbour rather than given
     # their own framing, and no clip gets more segments than `max_shots`.
     min_shot_seconds: float = Field(default=1.5, gt=0)
@@ -275,6 +286,13 @@ class RefineConfig(StrictModel):
 
     pre_roll: float = Field(default=0.15, ge=0)
     post_roll: float = Field(default=0.35, ge=0)
+    # Post-roll stops this far short of the next word, so its first sound is
+    # never heard. Matters once post_roll is long (scripted: a reaction beat).
+    tail_guard: float = Field(default=0.0, ge=0)
+    # Scripted TV: the most silence allowed before a clip's first word and
+    # after its last, even where a scene's own cut would allow more. None = off.
+    max_lead_in: float | None = Field(default=None, ge=0)
+    max_tail: float | None = Field(default=None, ge=0)
     filler_window: float = Field(default=1.5, ge=0)
     max_extend_seconds: float = Field(default=8.0, ge=0)
     filler_words: tuple[str, ...] = (

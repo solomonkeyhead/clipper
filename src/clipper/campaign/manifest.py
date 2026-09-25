@@ -108,7 +108,9 @@ def write_outputs(
         perf.NewClip(source_id=info.source_id, clip_id=r.plan.clip_id,
                      candidate_id=r.plan.candidate_id, campaign=campaign.name,
                      source_title=info.title or "", file=r.file.name,
-                     duration_s=r.duration, caption=full_caption(r.plan))
+                     duration_s=r.duration, caption=full_caption(r.plan),
+                     opening=opening_label(r.plan.layout), lead_in_s=r.plan.lead_in,
+                     hook=r.plan.hook_text if r.plan.hook_shown else "")
         for r in records])
 
     report_md = out_dir / "report.md"
@@ -127,6 +129,20 @@ def write_outputs(
         "performance_log": performance_log,
         "report_md": report_md,
     }
+
+
+def opening_label(layout) -> str:
+    """How a clip's first shot is framed, in words for the performance log."""
+    if layout is None:
+        return ""
+    first = layout.segments[0].layout if layout.kind == "per_shot" and layout.segments else layout
+    if first.kind == "follow_crop":
+        return "full-screen"
+    if first.kind == "fit_crop" and first.crop_height:
+        return "fit 4:5" if first.crop_width / first.crop_height <= 0.81 else "fit wide"
+    if first.kind == "blurred_fit":
+        return "letterbox"
+    return first.kind
 
 
 def _row(record: ClipRecord, *, info: SourceInfo, campaign: CampaignConfig,

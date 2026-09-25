@@ -142,6 +142,7 @@ def plan_per_shot(
     overlays_per_sample: list[list[OverlayBox]] | None = None,
     min_shot_seconds: float = MIN_SHOT_SECONDS,
     max_shots: int = MAX_SHOTS,
+    opening_seconds: float = 0.0,
     **layout_kwargs,
 ) -> LayoutPlan:
     """Frame each shot separately, or fall back to one framing for the clip.
@@ -150,6 +151,10 @@ def plan_per_shot(
     hold one shot, or when every shot independently reaches the same framing --
     there is no reason to pay for a segmented filter graph to render what is in
     fact one composition.
+
+    With `opening_seconds` (scripted TV), the clip's first seconds are framed
+    by the opening rule -- full-screen on the speaker -- and a long first shot
+    is split there, so only its opening is tight.
     """
     overlays = overlays_per_sample or [[] for _ in faces_per_sample]
     shots = split_into_shots(sample_times, scene_cuts, duration,
@@ -165,14 +170,16 @@ def plan_per_shot(
         shots = split_into_shots(sample_times, sorted([*scene_cuts, *extra]), duration,
                                  min_seconds=min_shot_seconds, max_shots=max_shots)
 
-    def frame(first: int, last: int) -> LayoutPlan:
+    def frame(first: int, last: int, *, opening: bool = False) -> LayoutPlan:
         return choose_layout(
             faces_per_sample[first:last], src_w=src_w, src_h=src_h,
             out_w=out_w, out_h=out_h,
-            overlays=persistent_regions(overlays[first:last]), **layout_kwargs,
+            overlays=persistent_regions(overlays[first:last]), opening=opening,
+            **layout_kwargs,
         )
 
-    if len(shots) <= 1:
+    tight_opening = opening_seconds > 0 and layout_kwargs.get("keep_everyone")
+    if len(shots) <= 1 and not tight_opening:
         return frame(0, len(faces_per_sample))
 
     segments = [
@@ -180,8 +187,12 @@ def plan_per_shot(
                       layout=frame(shot.first, shot.last))
         for shot in shots
     ]
+    if tight_opening and shots:
+        segments = _with_opening(segments, shots[0], sample_times, frame,
+                                 opening_seconds=opening_seconds,
+                                 min_shot_seconds=min_shot_seconds)
     if _all_identical(segments):
-        return frame(0, len(faces_per_sample))
+        return segments[0].layout if len(segments) == 1 else frame(0, len(faces_per_sample))
 
     face_ratio = sum(s.layout.face_ratio * (s.end - s.start) for s in segments)
     plan = LayoutPlan(
@@ -243,6 +254,22 @@ def _close_gaps(flags: list[bool], gap: int) -> list[bool]:
             for i in range(a + 1, b):
                 out[i] = True
     return out
+
+
+def _with_opening(segments: list[LayoutSegment], first: Shot, sample_times: list[float],
+                  frame, *, opening_seconds: float,
+                  min_shot_seconds: float) -> list[LayoutSegment]:
+    """Reframe the clip's first shot, or just its first seconds, to the opening rule."""
+    cut = min(first.end, opening_seconds)
+    upto = max(first.first + 1, min(first.last, _first_index_at_or_after(sample_times, cut)))
+    opening = frame(first.first, upto, opening=True)
+    head = segments[0]
+    if first.end - opening_seconds >= min_shot_seconds:
+        # A long first shot: tight for the opening, then its own framing.
+        return [LayoutSegment(start=head.start, end=round(opening_seconds, 3), layout=opening),
+                LayoutSegment(start=round(opening_seconds, 3), end=head.end, layout=head.layout),
+                *segments[1:]]
+    return [head.model_copy(update={"layout": opening}), *segments[1:]]
 
 
 def _all_identical(segments: list[LayoutSegment]) -> bool:

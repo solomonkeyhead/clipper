@@ -1236,3 +1236,27 @@ added to `rejected_caption_fixes`.
 say?", followed 0.08s later by the friends at home. The clip keeps it: cutting
 there clips the next word. Whisper still drops some speech under VAD; those
 words have no captions.
+
+## 2026-09-24 — Retention changes (D52), re-run on two FX episodes
+
+Episodes 201 and 208 re-run with the new scripted rules (prompt v3, output in
+data/out/retention-test/, not posted):
+
+- 7 clips, all QA-pass, 36-53s (the posted set ran 34-118s).
+- Every clip opens on a face filling the screen, dialogue within 0.23s of the
+  first frame, the hook line at the top for 3s; later shots still widen where
+  the scene needs it. Checked by eye on frames at 0.1/1/2.5/4s.
+- Hooks: the first pass (prompt v2) wrote "When the group chat gets unhinged"
+  over a party scene with no group chat; after tightening (v3, "name only
+  people, places and things the transcript mentions") all 7 hooks match their
+  scene's dialogue. A 50-character hook ran off both edges (captions never
+  wrap); hooks over 28 characters now break into two balanced lines.
+
+Correction to the diagnosis: the posted clips' silent lead-ins were already
+0-0.18s ("That escalated quickly" has dialogue from frame 0, over the house
+exterior). Silence did not cause the 0:01 drop; the picture is the likelier
+cause -- small letterboxed frames, one of them a faceless exterior. The
+performance log now records each post's opening framing, lead-in and hook so
+posts can be compared on exactly this.
+
+Full suite green; ruff clean.
