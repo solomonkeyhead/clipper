@@ -235,9 +235,19 @@ def _save_pending(path: Path, clips: list[NewClip]) -> None:
 
 def _add(clips: list[NewClip], path: Path) -> Path:
     rows = read(path)
-    known = {(r.get("source_id", ""), r.get("clip_id", "")) for r in rows}
+    index = {(r.get("source_id", ""), r.get("clip_id", "")): r for r in rows}
+    known = set(index)
     for clip in clips:
         if (clip.source_id, clip.clip_id) in known:
+            row = index.get((clip.source_id, clip.clip_id))
+            if row is not None and not has_results(row) and not (row.get("url") or "").strip():
+                # Not posted yet: a re-render changed the clip, so the tool's
+                # own description of it must follow (it said "letterbox" for
+                # clips re-rendered to open full-screen).
+                row.update({"caption": clip.caption, "file": clip.file,
+                            "duration_s": f"{clip.duration_s:.1f}", "opening": clip.opening,
+                            "hook": clip.hook,
+                            "lead_in_s": "" if clip.lead_in_s is None else f"{clip.lead_in_s:.2f}"})
             continue
         rows.append({"caption": clip.caption, "source_id": clip.source_id,
                      "clip_id": clip.clip_id, "candidate_id": clip.candidate_id,

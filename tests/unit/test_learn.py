@@ -180,3 +180,20 @@ class TestEnoughRows:
         assert set(first) >= {"text", "hook", "views"}
         assert first["text"] == "transcript 23", "best watch-through first"
         assert isinstance(first["views"], int)
+
+
+class TestRerender:
+    def test_an_unposted_rows_description_follows_a_rerender(self, data_root):
+        perf.add_clips([perf.NewClip("s1", "001", "c0", "x", "", "a.mp4", 30, opening="letterbox")])
+        perf.add_clips([perf.NewClip("s1", "001", "c0", "x", "", "a.mp4", 31, opening="full-screen")])
+        (row,) = perf.read()
+        assert row["opening"] == "full-screen" and perf.number(row["duration_s"]) == 31
+
+    def test_a_posted_row_is_left_alone(self, data_root):
+        perf.add_clips([perf.NewClip("s1", "001", "c0", "x", "", "a.mp4", 30, opening="letterbox")])
+        rows = perf.read()
+        rows[0]["views_24h"] = "500"
+        perf.write(rows)
+        perf.add_clips([perf.NewClip("s1", "001", "c0", "x", "", "a.mp4", 31, opening="full-screen")])
+        (row,) = perf.read()
+        assert row["opening"] == "letterbox" and row["views_24h"] == "500"
