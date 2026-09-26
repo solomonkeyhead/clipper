@@ -232,7 +232,7 @@ def choose_layout(
                                 reason="no frames sampled")
 
     tracks = build_tracks(faces_per_sample, src_w)
-    if keep_everyone and opening:
+    if opening:
         return _frame_opening(tracks, samples, src_w=src_w, src_h=src_h,
                               out_w=out_w, out_h=out_h)
     if keep_everyone:

@@ -152,7 +152,7 @@ def plan_per_shot(
     there is no reason to pay for a segmented filter graph to render what is in
     fact one composition.
 
-    With `opening_seconds` (scripted TV), the clip's first seconds are framed
+    With `opening_seconds` (short-form campaigns), the first seconds are framed
     by the opening rule -- full-screen on the speaker -- and a long first shot
     is split there, so only its opening is tight.
     """
@@ -178,7 +178,7 @@ def plan_per_shot(
             **layout_kwargs,
         )
 
-    tight_opening = opening_seconds > 0 and layout_kwargs.get("keep_everyone")
+    tight_opening = opening_seconds > 0
     if len(shots) <= 1 and not tight_opening:
         return frame(0, len(faces_per_sample))
 

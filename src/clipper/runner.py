@@ -204,11 +204,13 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         "show_hook_text": config.render.show_hook_text and campaign.hook_overlay,
         # Held through the first 3 seconds, where viewers decide to stay.
         "hook_text_seconds": (max(config.render.hook_text_seconds, SCRIPTED_OPENING_SECONDS)
-                              if campaign.scripted else config.render.hook_text_seconds),
+                              if campaign.scripted or campaign.short_form_timing
+                              else config.render.hook_text_seconds),
         "keep_everyone_in_frame": config.render.keep_everyone_in_frame or campaign.scripted,
         # The first seconds decide whether a viewer stays: fill the screen then.
-        "opening_full_screen_seconds": (SCRIPTED_OPENING_SECONDS if campaign.scripted
-                                        else config.render.opening_full_screen_seconds),
+        "opening_full_screen_seconds": (
+            SCRIPTED_OPENING_SECONDS if campaign.scripted or campaign.short_form_timing
+            else config.render.opening_full_screen_seconds),
         # A TV set or window in a scene is not a screen share.
         "detect_screen_share": config.render.detect_screen_share and not campaign.scripted,
     })

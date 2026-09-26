@@ -175,3 +175,16 @@ class TestHookText:
         for variant in (PROMPT_A, PROMPT_B):
             assert "3-8 words" in variant.system and "group chat" in variant.system
             assert "never seen the show" in variant.system
+
+
+class TestOpeningForAnySource:
+    def test_a_podcast_group_shot_opens_full_screen_too(self):
+        """85 South: four hosts on a couch opened as a small letterbox in 4 of 5
+        clips, because only scripted campaigns had the opening rule."""
+        times = [t / 5 for t in range(50)]
+        couch = [[face(t, x, 120) for x in (300, 700, 1150, 1600)] for t in times]
+        plan = plan_per_shot(couch, times, [], duration=10.0, src_w=W, src_h=H,
+                             out_w=1080, out_h=1920, min_face_ratio=0.02, opening_seconds=3.0)
+        first = plan.segments[0].layout if plan.kind == "per_shot" else plan
+        assert first.kind in ("follow_crop", "fit_crop")
+        assert first.crop_width / first.crop_height <= OPENING_MAX_ASPECT + 0.01
