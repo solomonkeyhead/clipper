@@ -32,6 +32,25 @@ class IngestError(RuntimeError):
     """The source could not be fetched, read, or understood."""
 
 
+def probe_rights(url: str) -> dict[str, str]:
+    """The license, channel name and channel id a video's own listing states.
+
+    Read before downloading, so a campaign that requires a license can refuse
+    the video without fetching it. Values are "" when the listing has none.
+    """
+    import yt_dlp
+
+    try:
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True,
+                               "skip_download": True}) as ydl:
+            meta = ydl.extract_info(url, download=False) or {}
+    except Exception as exc:  # yt-dlp raises many types
+        raise IngestError(f"could not read the listing for {url}: {exc}") from exc
+    if "entries" in meta:
+        meta = (meta.get("entries") or [{}])[0] or {}
+    return {key: str(meta.get(key) or "") for key in ("license", "channel", "channel_id", "title")}
+
+
 def is_url(source: str) -> bool:
     """Whether `source` looks like a URL rather than a path.
 

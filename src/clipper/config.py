@@ -421,6 +421,15 @@ class CampaignConfig(StrictModel):
 
     name: str
     source_authorization: str
+    # Open-licence campaigns (e.g. Creative Commons): refuse any video whose own
+    # listing does not state this licence -- checked before downloading.
+    require_license: str | None = None
+    # ...or whose uploader is not one of these channels (name or channel id). A
+    # CC label on someone else's re-upload grants nothing.
+    allowed_channels: list[str] = Field(default_factory=list)
+    # Short-form timing for non-scripted sources: prefer 20-45s, open on the
+    # first word, end a beat after the last (scripted campaigns always get it).
+    short_form_timing: bool = False
     platform_targets: tuple[str, ...] = ("tiktok", "youtube_shorts", "instagram_reels")
     duration: DurationBounds = DurationBounds()
     required_hashtags: tuple[str, ...] = ()

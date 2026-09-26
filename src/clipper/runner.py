@@ -22,6 +22,7 @@ from .campaign import compliance
 from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
 from .candidates.boundaries import refine
 from .config import CampaignConfig, Config
+from .ingest.download import IngestError, is_url, probe_rights
 from .ingest.probe import probe
 from .llm.base import LLMBackend
 from .llm.base import create as create_backend
@@ -76,6 +77,7 @@ def run(
     started = time.perf_counter()
     timings: dict[str, float] = {}
     config = campaign_config(config, campaign)
+    check_rights(source, campaign)
 
     score_started = time.perf_counter()
     outcome = score(source, config, backend_override=backend_override, force=force)
@@ -183,7 +185,7 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         candidate_updates["max_silence_ratio"] = max(
             config.candidates.max_silence_ratio, SCRIPTED_MAX_SILENCE)
     refine = config.refine
-    if campaign.scripted:
+    if campaign.scripted or campaign.short_form_timing:
         # Short-form retention research (docs/DECISIONS.md D52): one bit per
         # clip, 20-45s by default, never more than 90s; open on dialogue and
         # end on the reaction, a beat after the last line.
@@ -476,6 +478,40 @@ def _build_plan(
         hook_shown=bool(config.render.show_hook_text and scores and scores.hook_text),
     )
     return compliance.apply_campaign_caption(plan, campaign)
+
+
+class RightsError(IngestError):
+    """The source does not carry the licence or come from the channel a campaign requires."""
+
+
+def check_rights(source: str, campaign: CampaignConfig, *, probe_fn=None) -> None:
+    """Refuse a source a campaign's licence rules do not cover, before any download.
+
+    Only campaigns with `require_license` or `allowed_channels` are checked; the
+    others rely on `source_authorization` (a campaign brief, a creator's
+    permission) as before.
+    """
+    if not campaign.require_license and not campaign.allowed_channels:
+        return
+    if not is_url(source):
+        raise RightsError(
+            f"campaign {campaign.name!r} requires a verified licence, which a local file "
+            "cannot show. Run it on the video's URL so its listing can be checked.")
+    rights = (probe_fn or probe_rights)(source)
+    need = (campaign.require_license or "").lower()
+    if need and need not in rights["license"].lower():
+        raise RightsError(
+            f"{rights['title'] or source}: its listing says licence "
+            f"{rights['license'] or 'none (standard YouTube licence)'!r}, but campaign "
+            f"{campaign.name!r} requires {campaign.require_license!r}. Not clipping it.")
+    allowed = {c.strip().lower() for c in campaign.allowed_channels if c.strip()}
+    if allowed and not ({rights["channel"].lower(), rights["channel_id"].lower()} & allowed):
+        raise RightsError(
+            f"{rights['title'] or source}: uploaded by {rights['channel'] or 'unknown'!r}, "
+            f"not the owner channel(s) campaign {campaign.name!r} allows. A licence on "
+            "someone else's re-upload grants nothing. Not clipping it.")
+    log.info("licence checked: %r on %r (%s)", rights["license"], rights["channel"],
+             rights["channel_id"])
 
 
 def trim_silent_edges(start: float, end: float, words: list[Word], *,
