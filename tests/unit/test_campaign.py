@@ -461,3 +461,10 @@ class TestBriefSuppliedText:
 
         cfg = campaign_config(Config(), campaign(selection_focus="Ricky + Russ only"))
         assert cfg.llm.campaign_focus == "Ricky + Russ only"
+
+    def test_no_stray_full_stop_or_repeated_tag(self):
+        c = campaign(fallback_captions=("they knew #chadpowers @chadpowershulu",),
+                     fixed_captions=True, required_caption_text="#ad",
+                     required_hashtags=["#chadpowers", "#hulu"], only_required_hashtags=True)
+        text = compliance.full_caption(compliance.apply_campaign_caption(plan(), c))
+        assert text == "they knew #chadpowers @chadpowershulu #ad  #hulu"

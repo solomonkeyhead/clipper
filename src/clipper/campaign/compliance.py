@@ -195,7 +195,9 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
     required = campaign.required_caption_text.strip()
     if required and required.lower() not in caption.lower():
         # "That escalated quickly Watch Adults season 2..." read as one sentence.
-        if caption and not caption.endswith((".", "!", "?", "…", ":")):
+        last = caption.split()[-1] if caption else ""
+        if (caption and not caption.endswith((".", "!", "?", "…", ":"))
+                and not last.startswith(("#", "@"))):  # "...@chadpowershulu." reads wrong
             caption += "."
         caption = f"{caption} {required}".strip()
     credit = campaign.required_credit_text.strip()
@@ -207,7 +209,11 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
 
 def full_caption(plan: ClipPlan) -> str:
     """The caption as the user would paste it, hashtags included."""
-    parts = [plan.suggested_caption.strip()]
-    if plan.hashtags:
-        parts.append(" ".join(plan.hashtags))
+    caption = plan.suggested_caption.strip()
+    in_text = {w.lower().rstrip(".,!?") for w in caption.split() if w.startswith("#")}
+    # A brief's own caption may already carry a required tag (#chadpowers).
+    tags = [t for t in plan.hashtags if t.lower() not in in_text]
+    parts = [caption]
+    if tags:
+        parts.append(" ".join(tags))
     return "  ".join(p for p in parts if p).strip()
