@@ -122,6 +122,22 @@ class PromptVariant:
         return f"{PROMPT_VERSION}:{self.key}"
 
 
+def with_focus(variant: PromptVariant, focus: str) -> PromptVariant:
+    """`variant` with a campaign's own focus appended, keyed apart in the cache."""
+    import hashlib
+
+    focus = " ".join(focus.split())
+    if not focus:
+        return variant
+    digest = hashlib.sha256(focus.encode()).hexdigest()[:10]
+    return PromptVariant(f"{variant.key}:focus-{digest}", variant.system + f"""
+
+CAMPAIGN FOCUS -- this overrides the general preferences above:
+{focus}
+A clip that does not fit the focus gets hook_strength and payoff of 0-2, however
+good it is otherwise.""")
+
+
 PROMPT_A = PromptVariant("a", PROMPT_A_SYSTEM)
 PROMPT_B = PromptVariant("b", PROMPT_B_SYSTEM)
 VARIANTS = {"a": PROMPT_A, "b": PROMPT_B}

@@ -25,7 +25,14 @@ from pydantic import BaseModel, Field, ValidationError
 from ..config import LLMConfig
 from ..llm.base import ContentBlocked, LLMBackend, LLMConfigError, LLMError, LLMRequest
 from ..llm.cache import LLMCache
-from ..llm.prompts import PROMPT_A, PROMPT_B, REPAIR_SYSTEM, PromptVariant, build_user_message
+from ..llm.prompts import (
+    PROMPT_A,
+    PROMPT_B,
+    REPAIR_SYSTEM,
+    PromptVariant,
+    build_user_message,
+    with_focus,
+)
 from ..models import Candidate, RubricScores
 from ..utils.logging import get_logger
 
@@ -99,11 +106,13 @@ def score_candidates(
         return result
 
     cache = cache if cache is not None else LLMCache()
-    variants = [PROMPT_A] + ([PROMPT_B] if cfg.use_second_opinion else [])
+    variants = [with_focus(v, cfg.campaign_focus)
+                for v in [PROMPT_A] + ([PROMPT_B] if cfg.use_second_opinion else [])]
 
     per_variant: dict[str, dict[str, RubricScores]] = {}
     for variant in variants:
-        per_variant[variant.key] = _score_with_variant(
+        # Keyed by "a"/"b": a campaign focus lengthens the variant's own key.
+        per_variant[variant.key.split(":")[0]] = _score_with_variant(
             candidates, backend, cfg, variant, cache=cache, examples=examples,
         )
 

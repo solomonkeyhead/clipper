@@ -182,6 +182,8 @@ class LLMConfig(StrictModel):
     # scripted TV, where nearly every scene "needs context" by that standard
     # yet works as a clip: on a sitcom episode 26 of 48 were dropped for it.
     drop_needs_prior_context: bool = True
+    # A campaign's `selection_focus`, set per run (runner.campaign_config).
+    campaign_focus: str = ""
     # Caption fixes ruled wrong, as "heard -> replacement"; never applied.
     rejected_caption_fixes: list[str] = Field(default_factory=list)
 
@@ -455,8 +457,16 @@ class CampaignConfig(StrictModel):
     # banning hashtags "not affiliated with this campaign".
     only_required_hashtags: bool = False
     # Captions supplied by the brief, used (in rotation) for a clip the LLM
-    # gave no caption.
+    # gave no caption -- or for every clip, with `fixed_captions`.
     fallback_captions: tuple[str, ...] = ()
+    fixed_captions: bool = False
+    # On-screen hook lines supplied by the brief, used in rotation instead of
+    # the LLM's. Empty: the LLM writes them.
+    hook_texts: tuple[str, ...] = ()
+    # What this campaign wants clipped, in the brief's own terms. Added to the
+    # scoring prompt, overriding its general preferences: a romance campaign
+    # rejects the comedy clips the default rubric favours.
+    selection_focus: str = ""
     notes: str = ""
 
     @field_validator("source_authorization")

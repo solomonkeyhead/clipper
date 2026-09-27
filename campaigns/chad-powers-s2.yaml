@@ -1,0 +1,84 @@
+# Content Rewards (Whop) campaign "Chad Powers S2 | Ricky + Russ Edits", run by
+# Amplify Media, $2.50 per 1,000 views. Brief pasted 2026-09-26; the footage
+# link and its password stay in the brief, not here.
+name: chad-powers-s2
+
+source_authorization: >-
+  Amplify Media's campaign brief "Chad Powers — Season 2" on Content Rewards
+  (Whop), which supplies an official Season 2 footage folder and cites a studio
+  brief; clips may be posted to TikTok and Instagram Reels. Amplify Media is not
+  marked Verified or named as Hulu's agency: brief saved 2026-09-26. Only
+  footage from that folder may be used.
+
+platform_targets: [tiktok, instagram_reels]
+
+# "Please clip content with the aspect ratio (9:16) and be at least 7 seconds."
+# 20-45s preferred (D52); scenes may run to 60s.
+duration:
+  min_seconds: 12
+  max_seconds: 60
+
+scripted: true
+keep_original_audio: true   # brief allows original dialogue or a trending sound
+
+# Brief: Ricky + Russ only. "Football highlights and comedy-only clips will be
+# rejected."
+selection_focus: >-
+  This is a paid campaign for the romance in Chad Powers season 2 (Hulu). Russ
+  Holliday, a disgraced quarterback, lives disguised as "Chad Powers"; Ricky is
+  the woman he falls for. Select ONLY moments about Ricky and Russ: chemistry,
+  tension, banter, tenderness, jealousy or protectiveness, lingering looks,
+  almost-moments, Ricky softening toward Russ, Russ dropping the "Chad" facade
+  around her, and emotional scenes or dialogue that land without knowing the
+  plot. Priority lines: "incriminated", "we always figure it out" (their
+  possibly last night together), the laundry-room kiss and Ricky removing
+  Chad's prosthetics, and the Episode 4 field scene with the stadium lights
+  going down. Reject football play, comedy-only scenes, and anything without
+  Ricky and Russ together or talking about each other.
+
+# The brief's own captions ("use as is or adapt"); each mentions Chad Powers,
+# as required, by name, hashtag or the show's account.
+fixed_captions: true
+fallback_captions:
+  - "nobody told me Chad Powers season 2 was THIS good @chadpowershulu"
+  - "I started Chad Powers for football and somehow ended up here @chadpowershulu"
+  - "oh they knew EXACTLY what they were doing here #chadpowers @chadpowershulu"
+  - "you cannot convince me this was accidental #RICKYRUSS @chadpowershulu"
+  - "the Ricky/Russ agenda starts NOW @chadpowershulu"
+  - "the chemistry??? hello??? @chadpowershulu"
+  - "#RICKYRUSS hive rise @chadpowershulu"
+# "By participating you agree to make clear that this is a paid partnership by
+# including #ad" -- also turn on TikTok's content disclosure toggle.
+required_caption_text: "#ad"
+required_hashtags: ["#chadpowers", "#hulu", "#tvedits"]
+only_required_hashtags: true
+
+# The brief's own on-screen lines, instead of AI-written hooks.
+hook_overlay: true
+hook_texts:
+  - "wait… do I need to watch Chad Powers?"
+  - "the looks. the tension. the yearning."
+  - "POV: you came for football and stayed for Ricky + Russ"
+  - "this scene lives in my head rent free"
+  - "why did nobody warn me about this show"
+  - "you cannot convince me this was accidental"
+  - "the chemistry is insane"
+
+required_credit_text: ""
+burn_credit_in_video: false
+
+forbidden_terms: []
+mask_profanity_in_captions: true
+
+brand_mentions:
+  required: false
+  terms: []
+
+language: en
+max_clips_per_source: 4
+
+notes: |
+  Before joining: audience must be at least 50% Tier 1 countries (TikTok Studio
+  -> Analytics -> Viewers); engagement at least 0.20%; posts stay up 30 days;
+  one account per platform; no paid boosting. Use only the official footage
+  folder -- no ripped or outside clips. Contact: Amplify Media's Discord.

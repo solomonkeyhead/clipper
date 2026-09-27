@@ -215,6 +215,7 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         "detect_screen_share": config.render.detect_screen_share and not campaign.scripted,
     })
     llm = config.llm.model_copy(update={
+        "campaign_focus": campaign.selection_focus,
         "drop_needs_prior_context":
             config.llm.drop_needs_prior_context and not campaign.scripted,
     })
@@ -470,14 +471,16 @@ def _build_plan(
         end=bounds.end,
         text=text,
         composite=pick.scored.composite,
-        hook_text=scores.hook_text if scores else "",
+        hook_text=(campaign.hook_texts[(rank - 1) % len(campaign.hook_texts)]
+                   if campaign.hook_texts else (scores.hook_text if scores else "")),
         suggested_caption=scores.suggested_caption if scores else "",
         hashtags=list(scores.hashtags) if scores else [],
         caption_style=config.render.caption_style,
         refine_notes=bounds.notes,
         lead_in=next((round(w.start - bounds.start, 2) for w in transcript.words
                       if bounds.start - 0.05 <= w.start < bounds.end), None),
-        hook_shown=bool(config.render.show_hook_text and scores and scores.hook_text),
+        hook_shown=bool(config.render.show_hook_text
+                        and (campaign.hook_texts or (scores and scores.hook_text))),
     )
     return compliance.apply_campaign_caption(plan, campaign)
 

@@ -425,3 +425,39 @@ class TestHashtagsInCaptionText:
         out = compliance.apply_campaign_caption(
             plan(suggested_caption="Wild. #comedy"), campaign())
         assert "#comedy" in out.suggested_caption
+
+
+class TestBriefSuppliedText:
+    """Briefs that supply their own captions, on-screen lines and focus
+    (Chad Powers S2: romance only, "comedy-only clips will be rejected")."""
+
+    def test_fixed_captions_replace_the_llms(self):
+        c = campaign(fallback_captions=("nobody told me Chad Powers season 2 was THIS good",
+                                        "I started Chad Powers for football and somehow ended up here"),
+                     fixed_captions=True, required_caption_text="#ad")
+        first = compliance.apply_campaign_caption(plan(rank=1), c)
+        second = compliance.apply_campaign_caption(plan(rank=2), c)
+        assert first.suggested_caption.startswith("nobody told me Chad Powers")
+        assert second.suggested_caption.startswith("I started Chad Powers")
+        assert "The ones who left" not in first.suggested_caption
+        assert first.suggested_caption.rstrip().endswith("#ad")
+
+    def test_without_fixed_captions_the_llms_caption_stays(self):
+        c = campaign(fallback_captions=("brief caption",))
+        assert compliance.apply_campaign_caption(plan(), c).suggested_caption.startswith(
+            "The ones who left")
+
+    def test_the_focus_is_added_to_both_prompts_and_keyed_apart(self):
+        from clipper.llm.prompts import PROMPT_A, PROMPT_B, with_focus
+
+        focused = with_focus(PROMPT_A, "Only Ricky + Russ chemistry; no comedy-only clips.")
+        assert "CAMPAIGN FOCUS" in focused.system and "Ricky + Russ" in focused.system
+        assert focused.cache_key != PROMPT_A.cache_key
+        assert with_focus(PROMPT_B, "  ") is PROMPT_B, "no focus: the prompt is unchanged"
+
+    def test_the_runner_passes_the_focus_to_scoring(self):
+        from clipper.config import Config
+        from clipper.runner import campaign_config
+
+        cfg = campaign_config(Config(), campaign(selection_focus="Ricky + Russ only"))
+        assert cfg.llm.campaign_focus == "Ricky + Russ only"
