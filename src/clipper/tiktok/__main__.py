@@ -39,6 +39,29 @@ def main() -> int:
         return 1
     log.info("tiktok sync: %d video(s), %d matched, %d not in the log",
              len(videos), len(result.matched), len(result.unmatched))
+    # The same scheduled task syncs Instagram Reels once that is connected.
+    return _instagram(log)
+
+
+def _instagram(log) -> int:
+    from ..instagram import api, sync
+    from ..learn import log as perf
+
+    if not api.token_path().exists():
+        return 0
+    try:
+        reels = api.list_reels(api.access_token())
+        rows = perf.read()
+        result = sync.apply(reels, rows, account=api.username())
+        perf.write(rows)
+    except PermissionError:
+        log.warning("performance log is open in Excel; will sync Instagram next run")
+        return 0
+    except Exception:
+        log.exception("instagram sync failed")
+        return 1
+    log.info("instagram sync: %d reel(s), %d matched, %d not in the log",
+             len(reels), len(result.matched), len(result.unmatched))
     return 0
 
 

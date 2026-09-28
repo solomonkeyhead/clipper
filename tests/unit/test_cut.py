@@ -87,10 +87,15 @@ class TestCampaignLinks:
             {"campaign": "fx-adults-s2", "caption": "c", "url": "https://t/3",
              "posted_at": "2026-09-22 12:00"},
         ]
-        assert [u for _, _, u in campaign_links(rows, "chad-powers-s2")] == [
-            "https://t/1", "https://t/2"]
-        assert [u for _, _, u in campaign_links(rows, "chad-powers-s2",
-                                                since="2026-09-29")] == ["https://t/2"]
+        rows.append({"campaign": "chad-powers-s2", "caption": "a", "platform": "instagram",
+                     "url": "https://www.instagram.com/reel/X/",
+                     "posted_at": "2026-09-28 19:00"})
+        assert [u for *_, u in campaign_links(rows, "chad-powers-s2")] == [
+            "https://t/1", "https://www.instagram.com/reel/X/", "https://t/2"]
+        assert [u for *_, u in campaign_links(rows, "chad-powers-s2",
+                                              since="2026-09-29")] == ["https://t/2"]
+        assert [u for *_, u in campaign_links(rows, "chad-powers-s2", platform="instagram")] == [
+            "https://www.instagram.com/reel/X/"]
 
 
 class TestCaptionHold:

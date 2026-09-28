@@ -97,7 +97,10 @@ def fill(stats: StudioStats, rows: list[dict[str, str]], *,
     complete. Counts shared with the sync only ever go up.
     """
     key = normalise(stats.caption)[:MATCH_CHARS]
-    hits = [i for i, r in enumerate(rows) if key and normalise(r.get("caption", ""))[:MATCH_CHARS] == key]
+    # A clip also posted as a Reel has an Instagram row with the same caption.
+    hits = [i for i, r in enumerate(rows)
+            if key and r.get("platform") != "instagram"
+            and normalise(r.get("caption", ""))[:MATCH_CHARS] == key]
     if len(hits) != 1:
         return None, []
     row = rows[hits[0]]

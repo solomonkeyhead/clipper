@@ -30,20 +30,22 @@ log = get_logger(__name__)
 #: the order TikTok Studio shows them, then what the tool needs to join back.
 RESULT_COLUMNS = ["url", "posted_at", "views_24h", "views_7d", "views_30d", "views_latest",
                   "likes", "comments", "shares", "saves",
-                  "avg_watch_s", "watched_full_pct", "drop_off_s", "new_followers",
-                  "verified_views", "payout_usd", "notes"]
+                  "avg_watch_s", "watched_full_pct", "drop_off_s", "skip_rate_pct",
+                  "new_followers", "verified_views", "payout_usd", "notes"]
 ID_COLUMNS = ["platform", "account", "duration_s", "opening", "lead_in_s", "hook",
               "campaign", "source_title", "file",
               "source_id", "clip_id", "candidate_id", "video_id", "synced_at", "studio_at"]
 COLUMNS = ["caption", *RESULT_COLUMNS, *ID_COLUMNS]
 NUMERIC = ["views_24h", "views_7d", "views_30d", "views_latest", "likes", "comments", "shares",
-           "saves", "avg_watch_s", "watched_full_pct", "drop_off_s", "new_followers",
-           "verified_views", "payout_usd"]
+           "saves", "avg_watch_s", "watched_full_pct", "drop_off_s", "skip_rate_pct",
+           "new_followers", "verified_views", "payout_usd"]
 #: Filled by `clipper tiktok collect` from a copied TikTok Studio page.
 COLLECTED = {"avg_watch_s", "watched_full_pct", "drop_off_s", "saves", "new_followers"}
-#: Filled by `clipper tiktok sync`; the rest of the yellow columns are the user's.
+#: Filled by `clipper tiktok sync` (and `clipper instagram sync`, which also
+#: fills saves, average watch time and skip rate on Instagram rows); the rest of
+#: the yellow columns are the user's.
 SYNCED = {"url", "posted_at", "views_24h", "views_7d", "views_30d", "views_latest",
-          "likes", "comments", "shares"}
+          "likes", "comments", "shares", "skip_rate_pct"}
 
 #: Hover notes on the header cells.
 HINTS = {
@@ -57,6 +59,10 @@ HINTS = {
     "saves": "Saves / favorites.",
     "drop_off_s": "Where most viewers stopped watching, in seconds (TikTok Studio: "
                   "'Most viewers stopped watching at 0:01').",
+    "skip_rate_pct": "Instagram only: share of plays skipped within the first 3 seconds "
+                     "(filled by `clipper instagram sync`).",
+    "platform": "Blank or tiktok for TikTok posts; instagram rows are added by "
+                "`clipper instagram sync`, one per Reel.",
     "new_followers": "New followers from this post.",
     "verified_views": "Views the campaign counted (e.g. on Vyro).",
     "opening": "How the clip's first shot was framed (filled in by the tool).",
@@ -91,24 +97,28 @@ class NewClip:
     hook: str = ""
 
 
-def campaign_links(rows: list[dict[str, str]], campaign: str, *,
-                   since: str | None = None) -> list[tuple[str, str, str]]:
-    """(posted_at, caption, url) of every posted clip of `campaign`, oldest first.
+def campaign_links(rows: list[dict[str, str]], campaign: str, *, since: str | None = None,
+                   platform: str | None = None) -> list[tuple[str, str, str, str]]:
+    """(posted_at, platform, caption, url) of every posted clip of `campaign`, oldest first.
 
     For pasting into a campaign's submission form instead of opening each post
     to copy its link. `since` is a YYYY-MM-DD date; posts before it are left out.
+    `platform` ("tiktok" or "instagram") keeps only that platform's posts.
     """
     out = []
     for row in rows:
         url = (row.get("url") or "").strip()
         if not url or (row.get("campaign") or "").strip() != campaign:
             continue
+        where = (row.get("platform") or "").strip() or "tiktok"
+        if platform and where != platform:
+            continue
         posted = (row.get("posted_at") or "").strip()
         if since and posted and posted[:10] < since:
             continue
         # The API's share_url carries ?utm_campaign=tt4d_open_api&utm_source=
         # <the app's client key>; the post's address is everything before it.
-        out.append((posted, (row.get("caption") or "").strip(), url.split("?", 1)[0]))
+        out.append((posted, where, (row.get("caption") or "").strip(), url.split("?", 1)[0]))
     return sorted(out)
 
 

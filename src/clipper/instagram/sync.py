@@ -1,0 +1,86 @@
+"""Fill the performance log from the account's Instagram Reels.
+
+A clip's log row is written when it is rendered and doubles as its TikTok row.
+The same clip posted as a Reel gets a row of its own (platform "instagram"),
+copied from the clip's row the first time the Reel is matched by caption, and
+found again by its media id after that. Filling rules follow `tiktok.sync`:
+one-time view snapshots in their age windows, counts that only go up, and
+nothing the user typed overwritten.
+"""
+
+from __future__ import annotations
+
+import time
+from datetime import datetime
+
+from ..learn import log as perf
+from ..tiktok.sync import MATCH_CHARS, WINDOWS, SyncResult, normalise
+from .api import Reel
+
+PLATFORM = "instagram"
+#: Copied from the clip's row onto its Instagram row.
+CARRIED = ["caption", "duration_s", "opening", "lead_in_s", "hook", "campaign",
+           "source_title", "file", "source_id", "clip_id", "candidate_id"]
+
+
+def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
+          now: float | None = None) -> SyncResult:
+    """Update `rows` in place (appending Instagram rows as needed) from `reels`."""
+    now = time.time() if now is None else now
+    result = SyncResult()
+    by_id = {r.get("video_id", ""): i for i, r in enumerate(rows)
+             if r.get("platform") == PLATFORM and r.get("video_id")}
+    for reel in reels:
+        index = by_id.get(reel.id)
+        if index is None:
+            key = normalise(reel.caption)[:MATCH_CHARS]
+            clips = {r.get("clip_id") or i: i for i, r in enumerate(rows)
+                     if key and r.get("platform") != PLATFORM
+                     and normalise(r.get("caption", ""))[:MATCH_CHARS] == key}
+            if len(clips) > 1:
+                result.ambiguous.append(reel)
+                continue
+            if not clips:
+                result.unmatched.append(reel)
+                continue
+            template = rows[next(iter(clips.values()))]
+            rows.append({**{c: template.get(c, "") for c in CARRIED},
+                         "platform": PLATFORM, "account": account, "video_id": reel.id})
+            index = len(rows) - 1
+            by_id[reel.id] = index
+        filled = _update(rows[index], reel, now)
+        result.matched.append((rows[index].get("caption", "")[:50],
+                               ", ".join(filled) or "no change"))
+    return result
+
+
+def _update(row: dict[str, str], reel: Reel, now: float) -> list[str]:
+    filled: list[str] = []
+
+    def put(column: str, value: str, *, only_if_empty: bool = True) -> None:
+        if only_if_empty and (row.get(column) or "").strip():
+            return
+        if (row.get(column) or "") != value:
+            row[column] = value
+            filled.append(column)
+
+    put("url", reel.url)
+    if reel.created:
+        put("posted_at", datetime.fromtimestamp(reel.created).strftime("%Y-%m-%d %H:%M"))
+    age = now - reel.created if reel.created else -1
+    for column, low, high in WINDOWS:
+        if low <= age < high:
+            put(column, str(reel.views))
+    for column, value in (("likes", reel.likes), ("comments", reel.comments),
+                          ("shares", reel.shares), ("saves", reel.saves)):
+        current = perf.number(row.get(column))
+        if current is None or value > current:
+            put(column, str(value), only_if_empty=False)
+    put("views_latest", str(reel.views), only_if_empty=False)
+    # Instagram measures these itself, so its latest figure is the right one.
+    if reel.avg_watch_s is not None:
+        put("avg_watch_s", f"{reel.avg_watch_s:g}", only_if_empty=False)
+    if reel.skip_rate_pct is not None:
+        put("skip_rate_pct", f"{reel.skip_rate_pct:g}", only_if_empty=False)
+    row["synced_at"] = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")
+    return filled

@@ -955,3 +955,22 @@ read ("probably double the time"), and the Ep 6 field scene missed whole lines.
   dialogue under crowd noise); the 36 seconds alone came out whole. VAD stays on
   so long wordless looks are not filled with hallucinated words, and nothing is
   conditioned on earlier text.
+
+### D55. Instagram Reels through Instagram's official API
+
+With a professional (Creator) account, Instagram's API with Instagram Login
+gives each Reel's permalink and insights -- no Facebook Page, no scraping.
+`clipper instagram login` takes a token generated in the Meta App Dashboard
+(entered at a hidden prompt, stored under data/instagram/, extended to a fresh
+60 days once it is 30 days old); `clipper instagram sync` and the existing
+6-hourly scheduled task fill the log.
+
+- **One row per Reel**, platform "instagram", copied from the clip's row the
+  first time a Reel's caption matches and found by media id after that. The
+  clip's own row stays its TikTok row; TikTok's sync and the Studio collector
+  skip Instagram rows.
+- Instagram reports average watch time itself (ms, stored as seconds) and
+  `reels_skip_rate`, the share of plays skipped within 3 seconds -- the hook's
+  own number -- in a new `skip_rate_pct` column.
+- `clipper links` lists both platforms (`--platform` to pick one).
+- Read-only: nothing is published through the API (no auto-posting stands).

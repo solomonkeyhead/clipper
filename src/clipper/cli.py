@@ -877,8 +877,10 @@ def links(
         help="Campaign name or its yaml, e.g. chad-powers-s2.")],
     since: Annotated[str | None, typer.Option(
         "--since", help="Only posts from this date on (YYYY-MM-DD).")] = None,
+    platform: Annotated[str | None, typer.Option(
+        "--platform", help="tiktok or instagram; both if omitted.")] = None,
     sync: Annotated[bool, typer.Option(
-        "--sync/--no-sync", help="Refresh from TikTok first.")] = True,
+        "--sync/--no-sync", help="Refresh from TikTok and Instagram first.")] = True,
     copy: Annotated[bool, typer.Option(
         "--copy/--no-copy", help="Copy the links to the clipboard, one per line.")] = True,
     verbose: VerboseOpt = False,
@@ -886,36 +888,112 @@ def links(
     """Your posted links for one campaign, ready to paste into its submission form."""
     setup_logging(verbose)
     from .learn import log as perf
-    from .tiktok import sync as tiktok_sync_mod
 
     name = Path(campaign).stem
     if sync:
-        from .tiktok import api
-
         try:
             rows = perf.read()
-            tiktok_sync_mod.apply(api.list_videos(api.access_token()), rows)
+            for problem in _sync_all(rows):
+                console.print(f"[yellow]{problem}; using the log as it is for it.[/yellow]")
             perf.write(rows)
-        except api.TikTokError as exc:
-            console.print(f"[yellow]Could not refresh from TikTok ({exc}); using the log "
-                          "as it is.[/yellow]")
         except PermissionError:
             console.print(f"[yellow]{perf.log_path().name} is open in Excel, so it was not "
                           "refreshed; close it to include posts from the last few hours."
                           "[/yellow]")
 
-    posts = perf.campaign_links(perf.read(), name, since=since)
+    posts = perf.campaign_links(perf.read(), name, since=since, platform=platform)
     if not posts:
-        console.print(f"No posted links for {name!r} in {perf.log_path().name} yet. TikTok "
-                      "posts appear once `clipper tiktok sync` has matched them.")
+        console.print(f"No posted links for {name!r} in {perf.log_path().name} yet. Posts "
+                      "appear once a sync has matched them to a clip by caption.")
         raise typer.Exit(code=1)
-    for posted, caption, url in posts:
-        console.print(f"{url}  [dim]{posted}  {caption[:50]}[/dim]")
+    for posted, where, caption, url in posts:
+        console.print(f"{url}  [dim]{where}  {posted}  {caption[:40]}[/dim]")
     if copy:
         from .utils.clipboard import copy_text
 
-        if copy_text("\n".join(url for _, _, url in posts)):
+        if copy_text("\n".join(url for *_, url in posts)):
             console.print(f"[green]{len(posts)} link(s) copied to the clipboard.[/green]")
+
+
+def _sync_all(rows: list[dict[str, str]]) -> list[str]:
+    """Sync `rows` from TikTok and, once connected, Instagram. Returns what failed."""
+    from .instagram import api as ig_api
+    from .instagram import sync as ig_sync
+    from .tiktok import api as tt_api
+    from .tiktok import sync as tt_sync
+
+    problems = []
+    try:
+        tt_sync.apply(tt_api.list_videos(tt_api.access_token()), rows)
+    except tt_api.TikTokError as exc:
+        problems.append(f"TikTok: {exc}")
+    if ig_api.token_path().exists():
+        try:
+            ig_sync.apply(ig_api.list_reels(ig_api.access_token()), rows,
+                          account=ig_api.username())
+        except ig_api.InstagramError as exc:
+            problems.append(f"Instagram: {exc}")
+    return problems
+
+
+instagram_app = typer.Typer(help="Your Instagram Reels' stats and links, via Instagram's "
+                                 "official API.", no_args_is_help=True)
+app.add_typer(instagram_app, name="instagram")
+
+
+@instagram_app.command("login")
+def instagram_login(verbose: VerboseOpt = False) -> None:
+    """Connect Instagram with a token from the Meta App Dashboard (asked for, not shown)."""
+    setup_logging(verbose)
+    from .instagram import api
+
+    console.print("In the Meta App Dashboard: Instagram -> API setup with Instagram business "
+                  "login -> Generate token. Copy it, then paste it here (it won't show).")
+    token = typer.prompt("Token", hide_input=True)
+    try:
+        username = api.login(token)
+    except api.InstagramError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Connected as @{username}.[/green] Run `clipper instagram sync` "
+                  "to fill the performance log.")
+
+
+@instagram_app.command("sync")
+def instagram_sync(
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would change; write nothing.")] = False,
+    verbose: VerboseOpt = False,
+) -> None:
+    """Fill the performance log with each Reel's link and current stats."""
+    setup_logging(verbose)
+    from .instagram import api, sync
+    from .learn import log as perf
+
+    try:
+        reels = api.list_reels(api.access_token())
+    except api.InstagramError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    rows = perf.read()
+    result = sync.apply(reels, rows, account=api.username())
+    for caption, filled in result.matched:
+        console.print(f"  {caption}...  [dim]{filled}[/dim]")
+    for reel in result.unmatched:
+        console.print(f"  [dim]not in the log: {reel.caption[:60]!r}[/dim]")
+    for reel in result.ambiguous:
+        console.print(f"  [yellow]several clips share the caption {reel.caption[:60]!r}; "
+                      "skipped[/yellow]")
+    console.print(f"{len(reels)} Reel(s) on Instagram, {len(result.matched)} matched to the log.")
+    if dry_run:
+        console.print("Dry run: nothing written.")
+        return
+    try:
+        perf.write(rows)
+    except PermissionError as exc:
+        console.print(f"[red]{perf.log_path().name} is open in Excel; close it and run this "
+                      "again.[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Updated {perf.log_path()}[/green]")
 
 
 @tiktok_app.command("collect")
