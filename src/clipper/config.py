@@ -476,6 +476,13 @@ class CampaignConfig(StrictModel):
     long_description: bool = False
     description_context: str = ""
     description_keywords: tuple[str, ...] = ()
+    # What the campaign pays, for the Control Center's earnings estimates: per
+    # 1,000 views, counted once a post passes the minimum, capped at the maximum.
+    reward_per_1k_usd: float | None = None
+    min_payout_usd: float | None = None
+    max_payout_usd: float | None = None
+    campaign_url: str = ""   # the campaign's page on Whop / Vyro
+    deadline: str = ""       # YYYY-MM-DD, if the brief gives one
     notes: str = ""
 
     @field_validator("source_authorization")

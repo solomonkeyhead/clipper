@@ -1017,3 +1017,46 @@ had "I love you" said by the wrong person. A stricter prompt (d2) cut the
 inventions but not the guessed speakers. Those five were written by hand
 from the verified frames and dialogue; automatic descriptions need a look in
 the Control Center before posting.
+
+### D58. The Control Center rebuilt to the UX research spec
+
+The user commissioned a research report on app UX (usability, visual design,
+motion, habit, performance, accessibility, stack) and asked for it to be
+followed. Built now, for everything that exists today:
+
+- **Stack** as specified: React 19 + Vite + TypeScript, Tailwind v4 reading the
+  report's OKLCH design tokens (dark default, light and system themes, 4px
+  spacing, motion durations/easings, reduced motion), Radix primitives,
+  TanStack Query + Router, Zustand, cmdk, sonner, lucide. Types are generated
+  from FastAPI's OpenAPI schema (`npm run gen:api`), so a backend rename breaks
+  the build. Source in `studio/web`; its build in `studio/static` is committed,
+  so running Clipper needs no Node. Initial JS 186 KB gzipped (budget 200).
+- **Pipeline sidebar** (Home, Campaigns, Clips, Queue, Submissions, Stats;
+  Accounts, Settings) with live count badges, collapsible with `[`; bottom tabs
+  on phones; deep links with filters in the URL.
+- **Keyboard first**: Ctrl+K palette (every page, action, campaign and clip,
+  with shortcuts shown; whole-word matching, titles ranked over captions), G+key
+  navigation, J/K/Enter/C/L/P/X on clip lists and in the clip sheet, `?` sheet,
+  single-key shortcuts off while typing and switchable off (WCAG 2.1.4).
+- **Undo, not confirm**: status and submitted changes are optimistic with a
+  5-second Undo toast.
+- **Honest numbers**: metrics TikTok's API lacks show "n/a" with the reason,
+  never 0; Instagram posts under 48 h are "settling", and their 0s watch time /
+  0% skip rate read as not yet reported. Estimated earnings (views/1000 x the
+  campaign's `reward_per_1k_usd`, after `min_payout_usd`, capped at
+  `max_payout_usd`) lead, in the money colour; each post shows x-median once a
+  platform+campaign has 3 posts.
+- **Live**: the server syncs TikTok + Instagram every 15 minutes while open
+  (setting), snapshots every post's numbers into SQLite for later growth
+  charts, and pushes events over SSE (one queue per page) so pages refresh
+  themselves; "Synced x ago" in the top bar; an offline banner.
+- **"Since you were last here"** counts from the end of the previous session
+  (last activity before a 30-minute gap), not from the last page load.
+- **User requests**: "Copy all links" is gone -- every post has its own
+  copy-link button on cards, in the sheet, in Submissions and in Stats;
+  submissions are tracked per link.
+- **Not built yet** (no backend for them): posting and its compliance form,
+  the render triage queue, notifications, streaks. The report's TikTok caveat
+  stands for posting: unaudited API clients post privately only, and a
+  single-team upload tool is outside TikTok's intended use -- so manual posting
+  and drafts must stay first-class paths.

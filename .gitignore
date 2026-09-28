@@ -28,6 +28,10 @@ assets/fonts/*
 assets/models/*
 !assets/models/.gitkeep
 
+# Control Center front end: dependencies are installed, not committed. Its
+# build (src/clipper/studio/static) IS committed, so running Clipper needs no Node.
+node_modules/
+
 # os / editor
 Thumbs.db
 desktop.ini

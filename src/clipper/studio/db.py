@@ -2,10 +2,12 @@
 
 It holds what used to live in folder names and file names -- which clips a
 campaign has, where each file is, and how far along it is (ready, posted,
-submitted, skipped) -- plus settings such as the auto-post toggle. Post links
-and stats stay in the performance log (data/performance.xlsx), which the
-TikTok and Instagram syncs fill; the Control Center joins the two on
-(campaign, source_id, clip_id).
+submitted, skipped) -- plus settings such as the auto-post toggle, which post
+links have been submitted to their campaign, and a snapshot of every post's
+numbers at each sync (for growth charts and "since you were last here").
+Post links and current stats stay in the performance log
+(data/performance.xlsx), which the TikTok and Instagram syncs fill; the Control
+Center joins the two on (campaign, source_id, clip_id).
 """
 
 from __future__ import annotations
@@ -47,6 +49,22 @@ CREATE TABLE IF NOT EXISTS settings (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS post_state (
+    url         TEXT PRIMARY KEY,     -- the post's link, without query string
+    submitted_at TEXT                 -- NULL: not yet submitted to its campaign
+);
+CREATE TABLE IF NOT EXISTS snapshots (
+    url         TEXT NOT NULL,
+    at          TEXT NOT NULL,        -- ISO time of the sync
+    views       INTEGER,
+    likes       INTEGER,
+    comments    INTEGER,
+    shares      INTEGER,
+    saves       INTEGER,
+    avg_watch_s REAL,
+    skip_rate_pct REAL,
+    PRIMARY KEY (url, at)
+);
 """
 
 #: Defaults for `settings`; stored values win.
@@ -55,6 +73,12 @@ DEFAULT_SETTINGS = {
     # every post waits in the review queue for a click; on, an approved clip
     # posts itself. Off until the user turns it on.
     "auto_post": "0",
+    # "Since you were last here": the end of the previous session (last activity
+    # before a 30-minute gap), and the latest activity in this one.
+    "last_visit": "",
+    "seen_at": "",
+    # Minutes between automatic syncs while the Control Center is open.
+    "sync_minutes": "15",
 }
 
 
@@ -66,7 +90,7 @@ def db_path() -> Path:
 def connect(path: Path | None = None):
     path = path or db_path()
     ensure(path.parent)
-    con = sqlite3.connect(path)
+    con = sqlite3.connect(path, timeout=10)
     con.row_factory = sqlite3.Row
     try:
         con.executescript(SCHEMA)
@@ -149,3 +173,38 @@ def set_setting(con: sqlite3.Connection, key: str, value: str) -> None:
         raise ValueError(f"unknown setting {key!r}")
     con.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
+
+
+def submitted(con: sqlite3.Connection) -> dict[str, str]:
+    """Post url -> when it was submitted to its campaign."""
+    return {r["url"]: r["submitted_at"] for r in
+            con.execute("SELECT url, submitted_at FROM post_state WHERE submitted_at IS NOT NULL")}
+
+
+def set_submitted(con: sqlite3.Connection, url: str, done: bool) -> None:
+    con.execute("INSERT INTO post_state (url, submitted_at) VALUES (?, ?) "
+                "ON CONFLICT(url) DO UPDATE SET submitted_at=excluded.submitted_at",
+                (url, now() if done else None))
+
+
+def add_snapshots(con: sqlite3.Connection, at: str, posts: list[dict]) -> None:
+    con.executemany(
+        "INSERT OR REPLACE INTO snapshots (url, at, views, likes, comments, shares, saves, "
+        "avg_watch_s, skip_rate_pct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [(p["url"], at, p.get("views_latest"), p.get("likes"), p.get("comments"),
+          p.get("shares"), p.get("saves"), p.get("avg_watch_s"), p.get("skip_rate_pct"))
+         for p in posts])
+
+
+def views_at(con: sqlite3.Connection, when: str) -> dict[str, int]:
+    """Each post's views at the last snapshot on or before `when`."""
+    rows = con.execute(
+        "SELECT url, views FROM snapshots s WHERE at = (SELECT MAX(at) FROM snapshots t "
+        "WHERE t.url = s.url AND t.at <= ?)", (when,))
+    return {r["url"]: int(r["views"] or 0) for r in rows}
+
+
+def history(con: sqlite3.Connection, url: str) -> list[dict]:
+    return [dict(r) for r in con.execute(
+        "SELECT at, views, avg_watch_s, skip_rate_pct FROM snapshots WHERE url=? ORDER BY at",
+        (url,))]
