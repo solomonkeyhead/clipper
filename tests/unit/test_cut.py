@@ -73,6 +73,26 @@ class TestRangeTranscript:
         assert with_range_transcript(episode, 10, 20, None) is episode
 
 
+class TestCampaignLinks:
+    def test_only_this_campaigns_posted_clips_oldest_first(self):
+        from clipper.learn.log import campaign_links
+
+        rows = [
+            {"campaign": "chad-powers-s2", "caption": "b",
+             "url": "https://t/2?utm_campaign=tt4d_open_api&utm_source=abc",
+             "posted_at": "2026-09-29 10:00"},
+            {"campaign": "chad-powers-s2", "caption": "a", "url": "https://t/1",
+             "posted_at": "2026-09-28 18:00"},
+            {"campaign": "chad-powers-s2", "caption": "unposted", "url": ""},
+            {"campaign": "fx-adults-s2", "caption": "c", "url": "https://t/3",
+             "posted_at": "2026-09-22 12:00"},
+        ]
+        assert [u for _, _, u in campaign_links(rows, "chad-powers-s2")] == [
+            "https://t/1", "https://t/2"]
+        assert [u for _, _, u in campaign_links(rows, "chad-powers-s2",
+                                                since="2026-09-29")] == ["https://t/2"]
+
+
 class TestCaptionHold:
     """Captions left the screen the instant their last word ended: too short to
     read in slow scripted dialogue."""

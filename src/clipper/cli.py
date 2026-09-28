@@ -871,6 +871,53 @@ def tiktok_sync(
     console.print(f"[green]Updated {perf.log_path()}[/green]")
 
 
+@app.command()
+def links(
+    campaign: Annotated[str, typer.Argument(
+        help="Campaign name or its yaml, e.g. chad-powers-s2.")],
+    since: Annotated[str | None, typer.Option(
+        "--since", help="Only posts from this date on (YYYY-MM-DD).")] = None,
+    sync: Annotated[bool, typer.Option(
+        "--sync/--no-sync", help="Refresh from TikTok first.")] = True,
+    copy: Annotated[bool, typer.Option(
+        "--copy/--no-copy", help="Copy the links to the clipboard, one per line.")] = True,
+    verbose: VerboseOpt = False,
+) -> None:
+    """Your posted links for one campaign, ready to paste into its submission form."""
+    setup_logging(verbose)
+    from .learn import log as perf
+    from .tiktok import sync as tiktok_sync_mod
+
+    name = Path(campaign).stem
+    if sync:
+        from .tiktok import api
+
+        try:
+            rows = perf.read()
+            tiktok_sync_mod.apply(api.list_videos(api.access_token()), rows)
+            perf.write(rows)
+        except api.TikTokError as exc:
+            console.print(f"[yellow]Could not refresh from TikTok ({exc}); using the log "
+                          "as it is.[/yellow]")
+        except PermissionError:
+            console.print(f"[yellow]{perf.log_path().name} is open in Excel, so it was not "
+                          "refreshed; close it to include posts from the last few hours."
+                          "[/yellow]")
+
+    posts = perf.campaign_links(perf.read(), name, since=since)
+    if not posts:
+        console.print(f"No posted links for {name!r} in {perf.log_path().name} yet. TikTok "
+                      "posts appear once `clipper tiktok sync` has matched them.")
+        raise typer.Exit(code=1)
+    for posted, caption, url in posts:
+        console.print(f"{url}  [dim]{posted}  {caption[:50]}[/dim]")
+    if copy:
+        from .utils.clipboard import copy_text
+
+        if copy_text("\n".join(url for _, _, url in posts)):
+            console.print(f"[green]{len(posts)} link(s) copied to the clipboard.[/green]")
+
+
 @tiktok_app.command("collect")
 def tiktok_collect(
     file: Annotated[Path | None, typer.Option("--file", help="Read one saved page instead of watching the clipboard.")] = None,

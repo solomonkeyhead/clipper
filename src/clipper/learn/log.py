@@ -91,6 +91,27 @@ class NewClip:
     hook: str = ""
 
 
+def campaign_links(rows: list[dict[str, str]], campaign: str, *,
+                   since: str | None = None) -> list[tuple[str, str, str]]:
+    """(posted_at, caption, url) of every posted clip of `campaign`, oldest first.
+
+    For pasting into a campaign's submission form instead of opening each post
+    to copy its link. `since` is a YYYY-MM-DD date; posts before it are left out.
+    """
+    out = []
+    for row in rows:
+        url = (row.get("url") or "").strip()
+        if not url or (row.get("campaign") or "").strip() != campaign:
+            continue
+        posted = (row.get("posted_at") or "").strip()
+        if since and posted and posted[:10] < since:
+            continue
+        # The API's share_url carries ?utm_campaign=tt4d_open_api&utm_source=
+        # <the app's client key>; the post's address is everything before it.
+        out.append((posted, (row.get("caption") or "").strip(), url.split("?", 1)[0]))
+    return sorted(out)
+
+
 def read(path: Path | None = None) -> list[dict[str, str]]:
     path = path or log_path()
     if not path.exists():
