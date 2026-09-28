@@ -974,3 +974,28 @@ gives each Reel's permalink and insights -- no Facebook Page, no scraping.
   own number -- in a new `skip_rate_pct` column.
 - `clipper links` lists both platforms (`--platform` to pick one).
 - Read-only: nothing is published through the API (no auto-posting stands).
+
+### D56. The Control Center, the clip library, and posting under a toggle
+
+The user's goal is one control center for research, clipping and posting, eventually
+a standalone app others can use; finding clips across run folders, "-ready"
+folders and file names like "POSTED1 bench..." was the daily pain.
+
+- **Library**: every accepted clip is copied to `data/library/<campaign>/` by the
+  run itself (`manifest.write_outputs` -> `studio.library.register`) and recorded
+  in `data/clipper.db` (SQLite). Run folders moved to `data/work/runs/` -- working
+  files. The old ready folders were imported (`clipper library import`) with
+  captions from POSTING.md / captions.txt and posted state from "POSTED" names,
+  then recycled; 32 clips.
+- **`clipper studio`** (desktop shortcut "Clipper Control Center") serves a local
+  page at 127.0.0.1:8765: campaigns with their rules, each clip with a playable
+  preview, hook, caption (copy button), status (ready / posted / submitted /
+  skipped), notes, and its TikTok and Instagram links and stats; "Copy all
+  links"; "Sync now"; archive. Post stats stay in performance.xlsx (the syncs'
+  store) and are joined on (campaign, source_id, clip_id); a clip with a live
+  post shows as posted.
+- **Stack**: FastAPI + uvicorn over a static page (no build step), so the same
+  API can later sit behind a hosted front end.
+- **BUILD_BRIEF amended by the user**: posting through official APIs only,
+  auto-post a setting (global + per campaign) that is off by default, several
+  accounts allowed. The toggle is stored now; posting itself is the next step.

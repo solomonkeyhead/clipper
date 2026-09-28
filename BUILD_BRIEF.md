@@ -29,7 +29,7 @@ The user is a college engineering student running paid clipping campaigns (per-1
 These are firm. If a task seems to require breaking one, stop and ask.
 
 * **Authorized source material only.** Every campaign config must include a `source_authorization` field (campaign name or URL, or a note that the creator explicitly permits clipping). The tool refuses to run without it and prints a one-line reminder that unauthorized reposting risks copyright claims and strikes.
-* **No auto-posting.** No TikTok, YouTube, or Instagram upload code, no browser automation of social sites, no account management, no multi-account features.
+* **Posting only through official APIs, under the user's control.** *(Amended 2026-09-28 by the user; was "no auto-posting, no multi-account features".)* Uploads go through each platform's official, documented API (TikTok Content Posting API, Instagram Content Publishing API, YouTube Data API, ...), never browser automation or scraping of social sites. Auto-posting is a setting (global, overridable per campaign) and is **off by default**: until the user turns it on, every post waits in a review queue for their click. Several accounts per platform are allowed, each connected with its own official login.
 * **No evasion features.** Nothing designed to defeat spam or bot detection, fingerprint matching, or duplicate detection.
 * **Variant renders** exist for A/B testing what performs (for example two caption styles of the same moment). They are not for reuploading the same clip repeatedly. Document this in the README.
 * **Secrets stay in `.env`**, which is git-ignored. Provide `.env.example`.

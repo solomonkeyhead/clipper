@@ -27,6 +27,9 @@ dependencies = [
     # llm backends
     "google-genai>=1.0",
     "httpx>=0.28",
+    # the Control Center (`clipper studio`): a local web app
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
 ]
 
 [project.optional-dependencies]

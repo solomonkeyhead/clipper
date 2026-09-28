@@ -59,8 +59,11 @@ def work_dir(source_id: str) -> Path:
     return data_root() / "work" / source_id
 
 
-def out_dir(source_id: str) -> Path:
-    return data_root() / "out" / source_id
+def runs_dir() -> Path:
+    """Where runs write their reports and renders by default. Working files: the
+    finished clips are filed in the library (studio/library.py), which is what
+    the user looks at."""
+    return data_root() / "work" / "runs"
 
 
 def logs_dir() -> Path:

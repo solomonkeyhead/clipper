@@ -184,7 +184,7 @@ def run(
     from .config import AUTHORIZATION_REMINDER, CampaignConfig, Config
     from .ingest.download import IngestError
     from .llm.base import LLMConfigError, LLMError
-    from .paths import data_root
+    from .paths import runs_dir
     from .transcribe.whisper import TranscriptionError
     from .utils.timecode import format_duration
 
@@ -200,7 +200,7 @@ def run(
     console.print(f"[bold]Authorization:[/bold] {campaign_cfg.source_authorization}")
     console.print(f"[dim]{AUTHORIZATION_REMINDER}[/dim]\n")
 
-    out_root = out or (data_root() / "out")
+    out_root = out or runs_dir()
     forced = {s.strip() for s in force.split(",")} if force else set()
 
     try:
@@ -245,7 +245,7 @@ def cut(
     from . import runner
     from .config import AUTHORIZATION_REMINDER, CampaignConfig, Config
     from .ingest.download import IngestError
-    from .paths import data_root
+    from .paths import runs_dir
     from .transcribe.whisper import TranscriptionError
     from .utils.timecode import format_duration
 
@@ -262,7 +262,7 @@ def cut(
 
     try:
         result = runner.cut(_resolve_source(source), spans, config=Config.load(),
-                            campaign=campaign_cfg, out_root=out or (data_root() / "out"),
+                            campaign=campaign_cfg, out_root=out or runs_dir(),
                             draft=draft, first_rank=first)
     except (IngestError, TranscriptionError) as exc:
         console.print(f"[red]{exc}[/red]")
@@ -916,24 +916,47 @@ def links(
 
 
 def _sync_all(rows: list[dict[str, str]]) -> list[str]:
-    """Sync `rows` from TikTok and, once connected, Instagram. Returns what failed."""
-    from .instagram import api as ig_api
-    from .instagram import sync as ig_sync
-    from .tiktok import api as tt_api
-    from .tiktok import sync as tt_sync
+    from .studio.stats import sync_all
 
-    problems = []
-    try:
-        tt_sync.apply(tt_api.list_videos(tt_api.access_token()), rows)
-    except tt_api.TikTokError as exc:
-        problems.append(f"TikTok: {exc}")
-    if ig_api.token_path().exists():
-        try:
-            ig_sync.apply(ig_api.list_reels(ig_api.access_token()), rows,
-                          account=ig_api.username())
-        except ig_api.InstagramError as exc:
-            problems.append(f"Instagram: {exc}")
-    return problems
+    return sync_all(rows)
+
+
+@app.command()
+def studio(
+    no_browser: Annotated[bool, typer.Option("--no-browser", help="Don't open a browser tab.")] = False,
+    port: Annotated[int, typer.Option("--port", help="Local port.")] = 8765,
+    verbose: VerboseOpt = False,
+) -> None:
+    """Open the Control Center: every campaign's clips, captions, links and stats."""
+    setup_logging(verbose)
+    from .studio import server
+
+    console.print(f"Control Center at [bold]http://127.0.0.1:{port}/[/bold]  "
+                  "(close this window to stop it)")
+    server.serve(open_browser=not no_browser, port=port)
+
+
+library_app = typer.Typer(help="The clip library (data/library) behind the Control Center.",
+                          no_args_is_help=True)
+app.add_typer(library_app, name="library")
+
+
+@library_app.command("import")
+def library_import(
+    folder: Annotated[Path, typer.Argument(help="A folder of finished clips, e.g. data/out/x-ready.")],
+    campaign: Annotated[str, typer.Option("--campaign", "-c", help="Campaign name, e.g. chad-powers-s2.")],
+    verbose: VerboseOpt = False,
+) -> None:
+    """Copy a folder of finished clips into the library, with captions and posted state."""
+    setup_logging(verbose)
+    from .learn import log as perf
+    from .studio import library
+
+    if not folder.is_dir():
+        console.print(f"[red]{folder} is not a folder[/red]")
+        raise typer.Exit(code=1)
+    ids = library.import_folder(folder, Path(campaign).stem, perf.read())
+    console.print(f"[green]{len(ids)} clip(s) filed under {Path(campaign).stem}.[/green]")
 
 
 instagram_app = typer.Typer(help="Your Instagram Reels' stats and links, via Instagram's "

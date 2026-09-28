@@ -113,6 +113,16 @@ def write_outputs(
                      hook=r.plan.hook_text if r.plan.hook_shown else "")
         for r in records])
 
+    # Every accepted clip is filed in the library (data/library/<campaign>/),
+    # which the Control Center shows; the run's own folder is only a work area.
+    if records:
+        from ..studio import library
+
+        try:
+            library.register(records, info=info, campaign=campaign)
+        except OSError as exc:
+            log.warning("could not file the clips in the library: %s", exc)
+
     report_md = out_dir / "report.md"
     report_md.write_text(
         _render_report(

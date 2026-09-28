@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipper Control Center</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#/">
+    <span class="logo">&#9654;</span>
+    <span><strong>Clipper</strong> <span class="muted">Control Center</span></span>
+  </a>
+  <div class="topbar-actions">
+    <span id="synced" class="muted small"></span>
+    <button id="sync-btn" class="btn" title="Fetch the latest links and stats from TikTok and Instagram">Sync now</button>
+    <button id="settings-btn" class="btn ghost" title="Settings" aria-haspopup="dialog">Settings</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" aria-label="Campaigns">
+    <div class="side-title">Campaigns</div>
+    <ul id="campaign-list" class="campaign-list"></ul>
+    <details id="archived-wrap" class="archived">
+      <summary>Archived</summary>
+      <ul id="archived-list" class="campaign-list"></ul>
+    </details>
+  </nav>
+  <main id="main" class="main"></main>
+</div>
+
+<dialog id="settings" class="dialog">
+  <form method="dialog">
+    <h2>Settings</h2>
+    <label class="toggle-row">
+      <input type="checkbox" id="auto-post-global">
+      <span>
+        <strong>Auto-post approved clips</strong>
+        <span class="muted small block">On: an approved clip posts itself through each platform's
+        official API. Off: every post waits for your click. Campaigns can override this.
+        Posting from the Control Center arrives in the next step; this choice is saved for it.</span>
+      </span>
+    </label>
+    <div class="dialog-actions"><button class="btn">Done</button></div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>
