@@ -908,3 +908,35 @@ Most of the numbers are practitioner consensus, not measured (the research
 labels them weak). So each clip's opening framing, silent lead-in and hook go
 into the performance log, and `clipper learn` compares posts with and without
 each change on watch-through and the drop-off second.
+
+### D53. Night scenes: hand-picked ranges, dark-cut detection, close-ups fill the screen
+
+The Chad Powers S2 brief names its moments, and the romance plays out in looks
+in dark scenes. Measured on the official Ep 4 and Ep 6 footage:
+
+- **Selection can't see a wordless scene.** Candidates are built from dialogue;
+  the Ep 4 ending (40s without a line) never became one, and with the brief's
+  focus applied nothing scored above 2.6. `clipper cut <source> -c <campaign>
+  -r 25:11.9-26:13.4 ...` renders exact ranges -- no refinement, scene clamp or
+  silence trim -- through the same framing, captions, QA and manifest.
+  `--first N` continues the campaign's hook and caption rotation across runs.
+- **Dark shots hid their cuts.** Tile histograms of a night frame are one
+  spike near black, so different shots correlate at 0.95-1.00: 2 of ~12 cuts
+  found. A second test compares z-normalised 32x18 thumbnails (a dip under
+  0.40, or under 0.65 with a stretched-contrast histogram or a 12%-of-width face
+  jump agreeing), and only counts a lone dip between two steady samples --
+  handheld crowd footage dips every sample. Ep 4's ending: 2 -> 10 cuts; a
+  podcast and a bright banquet: unchanged (+1 real cut).
+- **Merged shots letterboxed.** Scripted campaigns allow 32 separately framed
+  shots (was 8); the source decodes in order, so branches cost no buffering.
+- **Close-ups widened to keep hair.** One face at least half a 9:16 slice wide
+  that stays put (centre travel under 35% of the slice) is cropped full-screen.
+  A moving podcast host is still held by a wider frame.
+- **Faceless shots** in scripted campaigns get the opening's centred 4:5 frame
+  (70% of the screen) instead of the whole frame (32%); two small faces on
+  screen throughout (down to 3% of the width) now count as people.
+- **QA called night pictures black.** blackdetect's pixel threshold is 0.05
+  (was ffmpeg's 0.10): true black and fades still fail.
+- **The focus text made the LLM call clips ads** ("This is a paid campaign"):
+  12 of 60 dropped as sponsor reads. The focus now says it is never a reason to
+  set is_sponsor_or_ad (prompt v4).

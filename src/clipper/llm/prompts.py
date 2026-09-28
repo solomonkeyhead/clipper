@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-PROMPT_VERSION = "v3"
+PROMPT_VERSION = "v4"
 """Bump on ANY edit below. It is part of the cache key."""
 
 SCHEMA_DESCRIPTION = """\
@@ -135,7 +135,8 @@ def with_focus(variant: PromptVariant, focus: str) -> PromptVariant:
 CAMPAIGN FOCUS -- this overrides the general preferences above:
 {focus}
 A clip that does not fit the focus gets hook_strength and payoff of 0-2, however
-good it is otherwise.""")
+good it is otherwise. The focus says what the clips are for; it is never a reason
+to mark a clip is_sponsor_or_ad, which is about the clip's own content only.""")
 
 
 PROMPT_A = PromptVariant("a", PROMPT_A_SYSTEM)

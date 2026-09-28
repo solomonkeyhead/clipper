@@ -32,6 +32,55 @@ def two_far_apart(t: float) -> list[FaceObservation]:
     return [face(t, 360, 220), face(t, 1560, 150)]
 
 
+class TestWideShotOfTwo:
+    """Chad Powers Ep 6: two leads on a bench in a wide shot, faces 4.7% of the
+    width in every sample, fell back to the whole frame as a 16:9 strip."""
+
+    def test_small_faces_on_screen_throughout_are_framed(self):
+        faces = [[face(t / 5, 760, 90), face(t / 5, 1160, 90)] for t in range(40)]
+        plan = choose_layout(faces, src_w=W, src_h=H, out_w=1080, out_h=1920,
+                             min_face_ratio=0.3, keep_everyone=True)
+        assert plan.kind != "blurred_fit"
+        x = plan.keyframes[0].x
+        assert x <= 760 - 45 and x + plan.crop_width >= 1160 + 45
+
+    def test_a_small_face_seen_now_and_then_is_still_background(self):
+        faces = [[face(t / 5, 760, 90)] if t % 4 == 0 else [] for t in range(40)]
+        plan = choose_layout(faces, src_w=W, src_h=H, out_w=1080, out_h=1920,
+                             min_face_ratio=0.3, keep_everyone=True)
+        assert "no face found" in plan.reason  # framed as faceless, not around it
+
+
+class TestFacelessScriptedShots:
+    """A dark crowd under blue light, profiles in a kiss: no face found. The
+    whole frame there was a murky 16:9 strip over a third of the screen."""
+
+    def test_the_centre_fills_the_screen_up_to_4_5(self):
+        plan = choose_layout([[] for _ in range(30)], src_w=W, src_h=H, out_w=1080,
+                             out_h=1920, min_face_ratio=0.3, keep_everyone=True)
+        assert plan.kind == "fit_crop"
+        assert plan.crop_width / plan.crop_height <= OPENING_MAX_ASPECT + 0.01
+        assert plan.keyframes[0].x + plan.crop_width / 2 == pytest.approx(W / 2, abs=2)
+
+
+class TestCloseUps:
+    """Dark close-ups in the Chad Powers romance scenes (faces 30% of the frame
+    width) were widened to keep the whole head and came out letterboxed."""
+
+    def test_a_close_up_fills_the_screen_centred_on_the_face(self):
+        faces = [[face(t / 5, 1130, 576)] for t in range(30)]
+        plan = choose_layout(faces, src_w=W, src_h=H, out_w=1080, out_h=1920,
+                             min_face_ratio=0.3, keep_everyone=True)
+        assert plan.kind == "follow_crop"
+        assert plan.keyframes[0].x + plan.crop_width / 2 == pytest.approx(1130, abs=2)
+
+    def test_two_people_still_widen_to_keep_both(self):
+        faces = [[face(t / 5, 600, 400), face(t / 5, 1300, 400)] for t in range(30)]
+        plan = choose_layout(faces, src_w=W, src_h=H, out_w=1080, out_h=1920,
+                             min_face_ratio=0.3, keep_everyone=True)
+        assert plan.kind in ("fit_crop", "blurred_fit")
+
+
 class TestOpeningFraming:
     def test_the_opening_never_zooms_out_past_4_5(self):
         faces = [two_far_apart(t / 5) for t in range(15)]

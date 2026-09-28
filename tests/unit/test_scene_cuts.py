@@ -85,6 +85,87 @@ class TestTiledHistogram:
         assert 0.6 <= SCENE_CUT_CORRELATION <= 0.8
 
 
+def night(box: tuple[int, int, int, int], *, seed: int, grain: float = 2.0) -> np.ndarray:
+    """A night frame: near-black (luma ~8) with a dim subject (~40) and film grain."""
+    rng = np.random.default_rng(seed)
+    img = with_block(8, box, 40).astype(np.float32)
+    img += rng.normal(0, grain, img.shape)
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def look(img: np.ndarray):
+    from clipper.render.faces import _stretched_histogram, _thumbnail
+
+    return _stretched_histogram(img), _thumbnail(img)
+
+
+class TestDarkScenes:
+    """Chad Powers Ep 4's ending (mean luma ~20/255): the tile histograms found
+    2 of about 12 cuts, because every dark tile is one spike near black, and the
+    merged shots were letterboxed to fit every face in them."""
+
+    def cut(self, a, b) -> bool:
+        from clipper.render.faces import _is_dark_cut, _thumb_similarity
+
+        la, lb = look(a), look(b)
+        return _is_dark_cut(la, lb, _thumb_similarity(la[1], lb[1]))
+
+    def test_a_cut_between_two_dark_shots_is_found(self):
+        close_up = night((100, 20, 220, 170), seed=1)   # one face, centred
+        reverse = night((10, 60, 70, 120), seed=2)      # small figure, left
+        assert self.cut(close_up, reverse)
+
+    def test_grain_on_a_held_dark_shot_is_not_a_cut(self):
+        assert not self.cut(night((100, 20, 220, 170), seed=1),
+                            night((100, 20, 220, 170), seed=2, grain=4.0))
+
+    def test_a_small_movement_in_the_dark_is_not_a_cut(self):
+        assert not self.cut(night((100, 20, 220, 170), seed=1),
+                            night((106, 24, 226, 174), seed=2))
+
+    def test_a_face_jump_is_the_second_vote_on_a_moderate_dip(self):
+        """Shot/reverse-shot of two dark close-ups: the thumbnail dips to ~0.55,
+        the stretched histogram does not agree, the face leaps across the frame."""
+        from clipper.render.faces import (
+            THUMB_CUT,
+            THUMB_CUT_AGREED,
+            _face_jumped,
+            _is_dark_cut,
+        )
+        from clipper.render.layouts import FaceObservation
+
+        def at(x):
+            return [FaceObservation(t=0, x=x, y=500, width=620, height=620)]
+
+        assert _face_jumped(at(1130), at(770), 1920)       # 0.59 -> 0.40
+        assert not _face_jumped(at(770), at(800), 1920)    # a head turning
+        assert not _face_jumped([], at(770), 1920)
+        a = look(night((100, 20, 220, 170), seed=1))
+        moderate = (THUMB_CUT + THUMB_CUT_AGREED) / 2
+        steady = (a[0], a[1])
+        assert _is_dark_cut(steady, steady, moderate, face_jumped=True)
+        assert not _is_dark_cut(steady, steady, moderate, face_jumped=False)
+        assert not _is_dark_cut(steady, steady, 0.9, face_jumped=True)
+
+    def test_a_black_frame_has_no_layout(self):
+        from clipper.render.faces import _thumb_similarity, _thumbnail
+
+        black = _thumbnail(frame(0))
+        assert not black.any()
+        assert _thumb_similarity(black, _thumbnail(night((100, 20, 220, 170), seed=1))) == 0.0
+
+    def test_the_cut_is_placed_on_its_frame_by_thumbnail(self):
+        from clipper.render.faces import _refine_cut, _thumb_similarity, _thumbnail
+
+        old = night((100, 20, 220, 170), seed=1)
+        new = night((10, 60, 70, 120), seed=2)
+        between = [((i + 1) / 30.0, old if i + 1 < 4 else new) for i in range(5)]
+        t = _refine_cut(_thumbnail(old), between, _thumbnail(new), 6 / 30.0,
+                        size=(320, 180), fps=30.0,
+                        feature=_thumbnail, similarity=_thumb_similarity)
+        assert t == pytest.approx(3.5 / 30.0)
+
+
 class TestCutsFeedShots:
     @pytest.mark.parametrize("cut_at", [4.0, 9.0, 15.0])
     def test_a_detected_cut_becomes_a_shot_boundary(self, cut_at):

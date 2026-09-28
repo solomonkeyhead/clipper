@@ -58,6 +58,29 @@ SCENE_CUT_CORRELATION = 0.70
 SCENE_GRID = 4
 SCENE_HIST_BINS = 32
 
+# Night scenes defeat the histograms above: every tile of a dark frame is one
+# spike near black, so two different dark shots correlate at 0.95-1.00. On the
+# Chad Powers Ep 4 ending (mean luma ~20/255) they found 2 of about 12 cuts, and
+# the merged "shots" were framed wide enough to fit every face in them, i.e.
+# letterboxed. A second test compares 32x18 thumbnails, z-normalised so
+# brightness does not matter and small enough that grain averages out, backed by
+# histograms of the contrast-stretched frame. It fires on a clear thumbnail
+# change, or a moderate one both measures agree on.
+THUMB_SIZE = (32, 18)
+THUMB_CUT = 0.40
+THUMB_CUT_AGREED = 0.65
+STRETCHED_CUT = 0.60
+# ...and only on a lone dip between two steady pictures: handheld footage in a
+# strobe-lit crowd dips on every sample (54 "cuts" in a minute), a cut dips once.
+THUMB_STEADY = 0.65
+# The main face moving this share of the frame width between two samples 0.2s
+# apart also counts as agreement. Shot/reverse-shot of two dark close-ups (Ep 6's
+# bench scene) looks alike to both histograms: 3 cuts found in 62s, the merged
+# shots letterboxed to hold both faces. At the missed cut the face went from
+# x=0.59 to x=0.40; held shots move it 0.01-0.04 per sample. Alone it is not
+# enough -- the detector can lose one of two people in a two-shot.
+FACE_JUMP = 0.12
+
 # YuNet is trained at 320x320. Running it at the source resolution is far
 # slower for no accuracy gain on faces of any reasonable size, so frames are
 # downscaled to this width before detection and the boxes scaled back up.
@@ -172,6 +195,9 @@ def scan(
         overlays: list[list[OverlayBox]] = []
         between: list[tuple[float, np.ndarray]] = []
         previous_hist: list[np.ndarray] | None = None
+        previous_look: tuple[list[np.ndarray], np.ndarray] | None = None
+        previous_thumb_corr = 1.0
+        pending_cut: float | None = None  # a dark-scene cut awaiting a steady next sample
         activity = ActivityAccumulator(frame_width, frame_height)
 
         index = 0
@@ -201,11 +227,30 @@ def scan(
                 small, src_w=frame_width, src_h=frame_height))
 
             hist = _histogram(small)
+            look = (_stretched_histogram(small), _thumbnail(small))
+            thumb_corr = 1.0
+            if previous_look is not None:
+                thumb_corr = _thumb_similarity(previous_look[1], look[1])
+            if pending_cut is not None:
+                if thumb_corr >= THUMB_STEADY:
+                    scene_cuts.append(pending_cut)
+                pending_cut = None
             if previous_hist is not None and _is_cut(previous_hist, hist):
                 scene_cuts.append(_refine_cut(
                     previous_hist, between, hist, offset,
                     size=(detect_w, detect_h), fps=source_fps))
+            elif (previous_look is not None and previous_thumb_corr >= THUMB_STEADY
+                  and _is_dark_cut(previous_look, look, thumb_corr,
+                                   face_jumped=_face_jumped(
+                                       per_sample[-2] if len(per_sample) > 1 else [],
+                                       faces, frame_width))):
+                pending_cut = _refine_cut(
+                    previous_look[1], between, look[1], offset,
+                    size=(detect_w, detect_h), fps=source_fps,
+                    feature=_thumbnail, similarity=_thumb_similarity)
             previous_hist = hist
+            previous_look = look
+            previous_thumb_corr = thumb_corr
             between = []
 
             # Built from the frames already decoded, so this costs one pass
@@ -213,6 +258,8 @@ def scan(
             activity.add(small)
 
             index += 1
+        if pending_cut is not None:  # nothing after it to contradict it
+            scene_cuts.append(pending_cut)
     finally:
         capture.release()
 
@@ -234,7 +281,8 @@ def scan(
 
 
 def _refine_cut(previous_hist, between, current_hist, current_offset: float,
-                *, size: tuple[int, int], fps: float) -> float:
+                *, size: tuple[int, int], fps: float,
+                feature=None, similarity=None) -> float:
     """Place a detected cut on its exact frame, not on the sample that saw it.
 
     Cuts are found by comparing samples 0.2s apart, so the sample that detects
@@ -253,17 +301,19 @@ def _refine_cut(previous_hist, between, current_hist, current_offset: float,
     if not between:
         return max(0.0, current_offset - 0.5 / fps)
     width, height = size
+    feature = feature or _histogram
     chain = [previous_hist]
     for _, frame in between:
         small = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
-        chain.append(_histogram(small))
+        chain.append(feature(small))
     chain.append(current_hist)
     offsets = [t for t, _ in between] + [current_offset]
 
-    def similarity(a, b) -> float:
+    def hist_similarity(a, b) -> float:
         return float(np.mean([cv2.compareHist(x, y, cv2.HISTCMP_CORREL)
                               for x, y in zip(a, b, strict=True)]))
 
+    similarity = similarity or hist_similarity
     scores = [similarity(a, b) for a, b in pairwise(chain)]
     first_new = offsets[int(np.argmin(scores))]
     return max(0.0, first_new - 0.5 / fps)
@@ -303,11 +353,20 @@ def _detect(detector, frame, *, min_confidence: float, frame_height: int,
     return faces
 
 
-def _histogram(frame) -> list[np.ndarray]:
-    """One normalised luminance histogram per tile of a `SCENE_GRID` grid."""
+def _histogram(frame, *, stretch: bool = False) -> list[np.ndarray]:
+    """One normalised luminance histogram per tile of a `SCENE_GRID` grid.
+
+    `stretch` first maps the frame's 1st-99th luminance percentiles to 0-255,
+    so a dark frame's detail spreads over the bins instead of sitting in one.
+    """
     import cv2
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    if stretch:
+        low, high = np.percentile(gray, (1, 99))
+        if high - low > 1:
+            gray = np.clip((gray.astype(np.float32) - low) * (255.0 / (high - low)),
+                           0, 255).astype(np.uint8)
     height, width = gray.shape[:2]
     tiles: list[np.ndarray] = []
     for row in range(SCENE_GRID):
@@ -320,6 +379,54 @@ def _histogram(frame) -> list[np.ndarray]:
             cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
             tiles.append(hist)
     return tiles
+
+
+def _stretched_histogram(frame) -> list[np.ndarray]:
+    return _histogram(frame, stretch=True)
+
+
+def _thumbnail(frame) -> np.ndarray:
+    """A tiny grey thumbnail, z-normalised: layout without brightness or grain."""
+    import cv2
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    thumb = cv2.resize(gray, THUMB_SIZE, interpolation=cv2.INTER_AREA).astype(np.float32).ravel()
+    spread = float(thumb.std())
+    if spread < 1e-3:  # a flat frame (black) has no layout to compare
+        return np.zeros_like(thumb)
+    return (thumb - thumb.mean()) / spread
+
+
+def _thumb_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """Pearson correlation of two z-normalised thumbnails; 0 if either is flat."""
+    return float(np.mean(a * b))
+
+
+def _face_jumped(previous: list[FaceObservation], current: list[FaceObservation],
+                 frame_width: int) -> bool:
+    """Whether the largest face moved `FACE_JUMP` of the frame width in one sample."""
+    if not previous or not current or not frame_width:
+        return False
+    before = max(previous, key=lambda f: f.width)
+    after = max(current, key=lambda f: f.width)
+    return abs(after.x - before.x) / frame_width >= FACE_JUMP
+
+
+def _is_dark_cut(previous: tuple[list[np.ndarray], np.ndarray],
+                 current: tuple[list[np.ndarray], np.ndarray], thumb_corr: float,
+                 *, face_jumped: bool = False) -> bool:
+    """The second cut test (see `THUMB_SIZE`), for frames the histograms can't tell apart."""
+    import cv2
+
+    if thumb_corr < THUMB_CUT:
+        return True
+    if thumb_corr >= THUMB_CUT_AGREED:
+        return False
+    if face_jumped:
+        return True
+    stretched = float(np.mean([cv2.compareHist(a, b, cv2.HISTCMP_CORREL)
+                               for a, b in zip(previous[0], current[0], strict=True)]))
+    return stretched < STRETCHED_CUT
 
 
 def _is_cut(previous: list[np.ndarray], current: list[np.ndarray]) -> bool:

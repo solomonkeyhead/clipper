@@ -227,6 +227,52 @@ def run(
         raise typer.Exit(code=1)
 
 
+@app.command()
+def cut(
+    source: Annotated[str, typer.Argument(help="Local video file, or a URL you are authorized to clip.")],
+    campaign: Annotated[Path, typer.Option("--campaign", "-c", help="Path to campaigns/<name>.yaml.")],
+    ranges: Annotated[list[str], typer.Option(
+        "--range", "-r", help="Start-end to cut, e.g. 24:45-26:05. Repeat for more clips.")],
+    first: Annotated[int, typer.Option(
+        "--first", min=1, help="Number of the first clip, to continue the campaign's hook "
+                               "and caption rotation from an earlier cut.")] = 1,
+    out: Annotated[Path | None, typer.Option("--out", help="Output directory.")] = None,
+    draft: Annotated[bool, typer.Option("--draft", help="Fast 540x960 render for iteration.")] = False,
+    verbose: VerboseOpt = False,
+) -> None:
+    """Render exact time ranges, for moments a brief names that selection can't see."""
+    setup_logging(verbose)
+    from . import runner
+    from .config import AUTHORIZATION_REMINDER, CampaignConfig, Config
+    from .ingest.download import IngestError
+    from .paths import data_root
+    from .transcribe.whisper import TranscriptionError
+    from .utils.timecode import format_duration
+
+    try:
+        campaign_cfg = CampaignConfig.load(campaign)
+        spans = [runner.parse_range(r) for r in ranges]
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[bold]Campaign:[/bold] {campaign_cfg.name}")
+    console.print(f"[bold]Authorization:[/bold] {campaign_cfg.source_authorization}")
+    console.print(f"[dim]{AUTHORIZATION_REMINDER}[/dim]\n")
+
+    try:
+        result = runner.cut(_resolve_source(source), spans, config=Config.load(),
+                            campaign=campaign_cfg, out_root=out or (data_root() / "out"),
+                            draft=draft, first_rank=first)
+    except (IngestError, TranscriptionError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    _print_run_summary(result, format_duration)
+    if not result.accepted:
+        raise typer.Exit(code=1)
+
+
 def _print_run_summary(result, format_duration) -> None:
     from .campaign.compliance import full_caption
 

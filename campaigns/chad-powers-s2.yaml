@@ -13,10 +13,11 @@ source_authorization: >-
 platform_targets: [tiktok, instagram_reels]
 
 # "Please clip content with the aspect ratio (9:16) and be at least 7 seconds."
-# 20-45s preferred (D52); scenes may run to 60s.
+# 20-45s preferred (D52). Up to 75s: the romance plays out in long wordless
+# looks (the Ep 4 ending is 40s without a line) that a 60s cap would cut off.
 duration:
   min_seconds: 12
-  max_seconds: 60
+  max_seconds: 75
 
 scripted: true
 keep_original_audio: true   # brief allows original dialogue or a trending sound
@@ -24,7 +25,7 @@ keep_original_audio: true   # brief allows original dialogue or a trending sound
 # Brief: Ricky + Russ only. "Football highlights and comedy-only clips will be
 # rejected."
 selection_focus: >-
-  This is a paid campaign for the romance in Chad Powers season 2 (Hulu). Russ
+  Clips should sell the romance in Chad Powers season 2 (Hulu). Russ
   Holliday, a disgraced quarterback, lives disguised as "Chad Powers"; Ricky is
   the woman he falls for. Select ONLY moments about Ricky and Russ: chemistry,
   tension, banter, tenderness, jealousy or protectiveness, lingering looks,

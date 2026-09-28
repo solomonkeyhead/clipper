@@ -53,6 +53,14 @@ EXTENT_TRIM = 0.05
 # A frame needing at least this share of the source width shows all of it.
 WHOLE_FRAME_RATIO = 0.95
 
+# One face at least this share of a 9:16 slice's width is a close-up, cropped to
+# fill the screen rather than widened to keep every hair (`plan_group_crop`).
+CLOSE_UP_FACE_SHARE = 0.5
+# ...provided its centre moves less than this share of the slice width: a held
+# close-up drifts 0.01-0.04 of the frame per sample; a podcast host swinging
+# across 340px (test_layouts' 003 regression) is held by a wider frame instead.
+CLOSE_UP_MAX_TRAVEL = 0.35
+
 # A face narrower than this fraction of the frame is an overlay inset rather
 # than the subject. Kept in step with `regions.PIP_FACE_WIDTH_RATIO`, which
 # gates the screen-share detector that runs first. Defined here, above its use
@@ -368,6 +376,12 @@ def choose_layout(
 # rarer faces are background extras or stray detections.
 SCRIPTED_PERSON_WIDTH = 0.05
 SCRIPTED_PERSON_COVERAGE = 0.15
+# ...unless no one reaches that size: then faces down to this width that are on
+# screen through most of the shot are its people. A wide shot of two leads on a
+# bench (Chad Powers Ep 6, faces 4.7% of the width, in every sample) otherwise
+# fell back to the whole frame, a 16:9 strip across the middle of the screen.
+SCRIPTED_SMALL_PERSON_WIDTH = 0.03
+SCRIPTED_SMALL_PERSON_COVERAGE = 0.5
 
 
 def _frame_everyone(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h: int,
@@ -392,8 +406,16 @@ def _frame_everyone(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h:
               if t.median_width / src_w >= SCRIPTED_PERSON_WIDTH
               and t.coverage(samples) >= SCRIPTED_PERSON_COVERAGE]
     if not people:
-        return plan_blurred_fit(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
-                                reason="no one consistently on screen; keeping the whole frame")
+        people = [t for t in tracks
+                  if t.median_width / src_w >= SCRIPTED_SMALL_PERSON_WIDTH
+                  and t.coverage(samples) >= SCRIPTED_SMALL_PERSON_COVERAGE]
+    if not people:
+        # No face to keep, so nothing to lose by filling more of the screen. The
+        # whole frame here was a 16:9 strip over 32% of the screen -- in the dark
+        # Chad Powers romance scenes (a crowd under blue light, profiles in a
+        # kiss, where the detector finds no face) a murky band. 4:5 fills 70%.
+        return _centre_four_five(src_w=src_w, src_h=src_h,
+                                 reason="no face found in this shot: centre, 4:5 at most")
     seen = {o.t for t in people for o in t.observations}
     face_ratio = len(seen) / samples
     if face_ratio < min_face_ratio:
@@ -430,10 +452,8 @@ def _frame_opening(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h: 
               and t.coverage(samples) >= SCRIPTED_PERSON_COVERAGE]
     limit = _make_even(int(src_h * OPENING_MAX_ASPECT))
     if not people:
-        x, y = clamp_crop_origin((src_w - limit) / 2, 0, limit, src_h, src_w, src_h)
-        return LayoutPlan(kind="fit_crop", crop_width=limit, crop_height=_make_even(src_h),
-                          keyframes=[CropKeyframe(t=0.0, x=x, y=y)], face_ratio=0.0,
-                          reason="opening with no one in shot: centre, 4:5 at most")
+        return _centre_four_five(src_w=src_w, src_h=src_h,
+                                 reason="opening with no one in shot: centre, 4:5 at most")
     talker = clear_talker(people) if len(people) > 1 else None
     primary = talker[0] if talker else max(
         people, key=lambda t: (t.median_width, len(t.observations)))
@@ -451,6 +471,15 @@ def _frame_opening(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h: 
     assert plan is not None  # a group always frames with allow_wider
     who = "the speaker" if talker else "the most prominent person"
     return plan.model_copy(update={"reason": f"opening: {who} full-screen; {plan.reason}"})
+
+
+def _centre_four_five(*, src_w: int, src_h: int, reason: str) -> LayoutPlan:
+    """The centre of the frame at `OPENING_MAX_ASPECT`, over a blurred copy."""
+    limit = _make_even(int(src_h * OPENING_MAX_ASPECT))
+    x, y = clamp_crop_origin((src_w - limit) / 2, 0, limit, src_h, src_w, src_h)
+    return LayoutPlan(kind="fit_crop", crop_width=limit, crop_height=_make_even(src_h),
+                      keyframes=[CropKeyframe(t=0.0, x=x, y=y)], face_ratio=0.0,
+                      reason=reason)
 
 
 def _companions(tracks: list[FaceTrack], subjects: list[FaceTrack],
@@ -735,6 +764,31 @@ def plan_group_crop(
 
     if not allow_wider:
         return None
+
+    # A close-up: one face so large that the head, its movement and margins
+    # overflow the slice. The face *is* the picture, so fill the screen with it
+    # and let hair and shoulders go. Widening instead letterboxed every dark
+    # close-up of the Chad Powers romance scenes (faces 30% of the frame width).
+    # Only if the face stays put: a speaker swinging ~340px across the shot
+    # would leave a static slice (see CLOSE_UP_MAX_TRAVEL).
+    travel = 0.0
+    if len(tracks) == 1:
+        lo, hi = tracks[0].extent()
+        travel = (hi - lo) - tracks[0].median_width
+    if (len(tracks) == 1 and not overlays
+            and tracks[0].median_width >= crop_w * CLOSE_UP_FACE_SHARE
+            and travel <= crop_w * CLOSE_UP_MAX_TRAVEL):
+        x, y = clamp_crop_origin(tracks[0].median_x - crop_w / 2, 0, crop_w, crop_h,
+                                 src_w, src_h)
+        return LayoutPlan(
+            kind="follow_crop",
+            crop_width=crop_w,
+            crop_height=crop_h,
+            keyframes=[CropKeyframe(t=0.0, x=x, y=y)],
+            face_ratio=face_ratio,
+            reason=(f"close-up: a {tracks[0].median_width:.0f}px face fills the "
+                    f"{crop_w}px crop; centred on it"),
+        )
 
     width = min(_make_even(int(needed) + 1), _make_even(src_w))
     if max_width is not None:

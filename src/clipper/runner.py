@@ -143,6 +143,117 @@ def run(
     return result
 
 
+def cut(
+    source: str,
+    ranges: list[tuple[float, float]],
+    *,
+    config: Config,
+    campaign: CampaignConfig,
+    out_root: Path,
+    draft: bool = False,
+    backend_override: str | None = None,
+    first_rank: int = 1,
+) -> RunResult:
+    """Render exact, hand-picked ranges with the campaign's framing and captions.
+
+    `first_rank` continues the campaign's hook and caption rotation from an
+    earlier cut, so clips from two episodes don't open with the same line.
+
+    Selection works from dialogue, so it cannot see a scene that plays out in
+    looks: the Chad Powers brief's Episode 4 field scene is some 40 seconds
+    without a line, and never became a candidate. A brief that names its
+    moments gets them cut as given -- no refinement, no scene clamp, no silence
+    trim -- and still goes through the same render, QA and compliance checks.
+    """
+    from .pipeline import run_ingest, run_transcribe
+
+    started = time.perf_counter()
+    config = campaign_config(config, campaign)
+    check_rights(source, campaign)
+
+    info = run_ingest(source)
+    transcript, stats = run_transcribe(info, config.transcription)
+    result = RunResult(info=info, selection_note="ranges chosen by hand")
+
+    out_dir = ensure(out_root / info.source_id)
+    clips_dir = ensure(out_dir / "clips")
+    work = ensure(out_dir / "work")
+
+    corrector = None
+    recheck = None
+    if config.llm.correct_captions:
+        try:
+            corrector = _correction_backends(config, backend_override)
+        except Exception as exc:  # no key, backend not installed, ...
+            log.warning("caption correction disabled: %s", exc)
+        audio = Path(info.audio_path) if info.audio_path else None
+        if corrector and audio and audio.exists():
+            recheck = AudioRecheck(audio, config.transcription)
+
+    for attempt, (start, end) in enumerate(ranges, start=1):
+        start, end = max(0.0, start), min(end, info.media.duration)
+        plan = manual_plan(start, end, transcript.words, config=config, campaign=campaign,
+                           rank=first_rank + len(result.accepted), attempt=attempt)
+        record = _render_plan(plan, info, transcript.words, config=config, campaign=campaign,
+                              clips_dir=clips_dir, work=work, draft=draft,
+                              corrector=corrector, recheck=recheck)
+        if record.qa.status == "fail" or record.compliance.status == "fail":
+            _reject(record, out_dir / "rejected", result)
+            continue
+        result.accepted.append(record)
+        log.info("%s accepted: %s", record.plan.clip_id, summarize(record.qa))
+
+    if stats:
+        result.timings["transcribe"] = stats.wall_seconds
+    result.timings["total"] = time.perf_counter() - started
+    result.outputs = write_outputs(
+        result.accepted, info=info, campaign=campaign, out_dir=out_dir,
+        rejected=result.rejected, selection_note=result.selection_note,
+        timings=result.timings,
+    )
+    return result
+
+
+def manual_plan(start: float, end: float, words: list[Word], *, config: Config,
+                campaign: CampaignConfig, rank: int, attempt: int) -> ClipPlan:
+    """A plan for a hand-picked range, captioned the way the campaign asks."""
+    text = " ".join(w.text for w in words if start <= (w.start + w.end) / 2 < end).strip()
+    plan = ClipPlan(
+        clip_id=f"{attempt:03d}_{to_slug_timestamp(start)}",
+        candidate_id="manual",
+        rank=rank,
+        start=start,
+        end=end,
+        text=text,
+        hook_text=(campaign.hook_texts[(rank - 1) % len(campaign.hook_texts)]
+                   if campaign.hook_texts else ""),
+        caption_style=config.render.caption_style,
+        refine_notes=["range chosen by hand"],
+        lead_in=next((round(w.start - start, 2) for w in words
+                      if start - 0.05 <= w.start < end), None),
+        hook_shown=bool(config.render.show_hook_text and campaign.hook_texts),
+    )
+    return compliance.apply_campaign_caption(plan, campaign)
+
+
+def parse_range(text: str) -> tuple[float, float]:
+    """``"24:45-26:05"``, ``"1:02:03-1:02:40"`` or ``"1485-1560"`` as seconds."""
+    def seconds(part: str) -> float:
+        value = 0.0
+        for piece in part.strip().split(":"):
+            value = value * 60 + float(piece)
+        return value
+
+    try:
+        first, second = text.split("-")
+        start, end = seconds(first), seconds(second)
+    except ValueError as exc:
+        raise ValueError(f"not a time range: {text!r} (use e.g. 24:45-26:05)") from exc
+    if end <= start:
+        raise ValueError(f"range ends before it starts: {text!r}")
+    return start, end
+
+
 SCRIPTED_MAX_SILENCE = 0.55
 # TikTok's creative guidance: land the proposition in the first 3 seconds.
 SCRIPTED_OPENING_SECONDS = 3.0
@@ -151,6 +262,7 @@ SCRIPTED_MAX_SECONDS = 90.0
 SCRIPTED_MAX_LEAD_IN = 0.5    # silence before the first word
 SCRIPTED_REACTION_TAIL = 1.0  # held after the last line, into silence only
 SCRIPTED_MAX_TAIL = 1.5       # never more silence than this at the end
+SCRIPTED_MAX_SHOTS = 32       # separately framed shots per clip
 
 
 def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
@@ -213,6 +325,12 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
             else config.render.opening_full_screen_seconds),
         # A TV set or window in a scene is not a screen share.
         "detect_screen_share": config.render.detect_screen_share and not campaign.scripted,
+        # Shot/reverse-shot cuts every few seconds: at the default 8, a 60s
+        # Chad Powers scene had its close-ups merged in pairs, and a merged shot
+        # widens to hold both faces -- letterboxed. Branches cost no buffering
+        # (each trims to its own window of an in-order decode).
+        "max_shots": (max(config.render.max_shots, SCRIPTED_MAX_SHOTS) if campaign.scripted
+                      else config.render.max_shots),
     })
     llm = config.llm.model_copy(update={
         "campaign_focus": campaign.selection_focus,
@@ -325,9 +443,37 @@ def _produce_one(
                        rank=rank, attempt=attempt)
     if plan is None:
         return None
+    entry = next((s for s in outcome.scored.scored
+                  if s.candidate_id == pick.candidate.candidate_id), None)
+    values = next((v for v in outcome.signals.values
+                   if v.candidate_id == pick.candidate.candidate_id), None)
+    weights = config.llm.rubric_weights.as_dict()
+    record = _render_plan(plan, outcome.info, outcome.transcript.words, config=config,
+                          campaign=campaign, clips_dir=clips_dir, work=work, draft=draft,
+                          corrector=corrector, recheck=recheck)
+    record.components = dict(entry.components) if entry else {}
+    record.raw = dict(entry.raw) if entry else {}
+    record.llm_a_total = values.llm_a.total(weights) if values and values.llm_a else None
+    record.llm_b_total = values.llm_b.total(weights) if values and values.llm_b else None
+    return record
 
+
+def _render_plan(
+    plan: ClipPlan,
+    info: SourceInfo,
+    transcript_words: list[Word],
+    *,
+    config: Config,
+    campaign: CampaignConfig,
+    clips_dir: Path,
+    work: Path,
+    draft: bool,
+    corrector: list[LLMBackend] | None = None,
+    recheck: AudioRecheck | None = None,
+) -> ClipRecord:
+    """Reframe, render and check one planned clip."""
     width, height = output_size(config.render, draft=draft)
-    source_path = Path(outcome.info.media.path)
+    source_path = Path(info.media.path)
 
     plan = plan.model_copy(update={"layout": plan_layout_for(
         source_path,
@@ -345,7 +491,7 @@ def _produce_one(
         max_shots=config.render.max_shots,
     )})
 
-    words, fixes = _corrected_words(outcome.transcript.words, plan, corrector, recheck,
+    words, fixes = _corrected_words(transcript_words, plan, corrector, recheck,
                                     config.llm.rejected_fix_pairs)
 
     slug = slugify(plan.hook_text or plan.text, max_length=40)
@@ -353,7 +499,7 @@ def _produce_one(
 
     render = render_clip(
         source=source_path,
-        media=outcome.info.media,
+        media=info.media,
         plan=plan,
         words=words,
         config=config,
@@ -382,21 +528,11 @@ def _produce_one(
     qa = check_clip(output, context, config.qa, config.render)
     rules = compliance.check_clip(plan, campaign, duration=rendered.duration)
 
-    entry = next((s for s in outcome.scored.scored
-                  if s.candidate_id == pick.candidate.candidate_id), None)
-    values = next((v for v in outcome.signals.values
-                   if v.candidate_id == pick.candidate.candidate_id), None)
-    weights = config.llm.rubric_weights.as_dict()
-
     return ClipRecord(
         plan=plan,
         file=output,
         qa=qa,
         compliance=rules,
-        components=dict(entry.components) if entry else {},
-        raw=dict(entry.raw) if entry else {},
-        llm_a_total=values.llm_a.total(weights) if values and values.llm_a else None,
-        llm_b_total=values.llm_b.total(weights) if values and values.llm_b else None,
         rendered_duration=rendered.duration,
         caption_fixes=fixes,
     )

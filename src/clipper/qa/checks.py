@@ -351,7 +351,11 @@ def detect_all(path: Path, *, duration: float, has_audio: bool,
     args = [
         "-hide_banner", "-nostdin", "-loglevel", "info",
         "-i", str(path),
-        "-vf", ("blackdetect=d=0.05:pic_th=0.98,"
+        # pix_th 0.05, not ffmpeg's 0.10: at 0.10 a night scene with its picture
+        # intact counts as black (Chad Powers Ep 6: an embrace in a dark crowd
+        # and a kiss, 3.6s and 7.9s flagged); at 0.05 neither is, while a true
+        # black frame or fade (luma 16) still is.
+        "-vf", ("blackdetect=d=0.05:pic_th=0.98:pix_th=0.05,"
                 f"freezedetect=n=-60dB:d={freeze_min_duration}"),
     ]
     if has_audio:
