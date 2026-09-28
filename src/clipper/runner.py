@@ -518,6 +518,9 @@ def _render_plan(
 
     words, fixes = _corrected_words(transcript_words, plan, corrector, recheck,
                                     config.llm.rejected_fix_pairs)
+    if campaign.long_description:
+        plan = plan.model_copy(update={"description": _description(
+            plan, words, campaign, corrector, config)})
 
     slug = slugify(plan.hook_text or plan.text, max_length=40)
     output = clips_dir / f"{plan.clip_id}_{slug}.mp4"
@@ -723,6 +726,22 @@ def _reject(record: ClipRecord, rejected_dir: Path, result: RunResult) -> None:
 # Words either side of a clip shown to the corrector as context. About a
 # sentence each way: enough to know the topic, cheap enough to send per clip.
 CORRECTION_CONTEXT_WORDS = 30
+
+
+def _description(plan: ClipPlan, words: list[Word], campaign: CampaignConfig,
+                 backends: list[LLMBackend] | None, config: Config) -> str:
+    """The clip's searchable description (campaign/description.py), or "" on any failure."""
+    from .campaign.description import describe
+
+    text = " ".join(w.text for w in words
+                    if plan.start <= (w.start + w.end) / 2 < plan.end).strip()
+    if not backends:
+        try:
+            backends = [build_backend(config)]
+        except Exception as exc:  # no key, backend not installed, ...
+            log.warning("no description: %s", exc)
+            return ""
+    return describe(text, campaign, plan.suggested_caption, backends)
 
 
 def _correction_backends(config: Config, override: str | None) -> list[LLMBackend]:

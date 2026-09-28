@@ -999,3 +999,21 @@ folders and file names like "POSTED1 bench..." was the daily pain.
 - **BUILD_BRIEF amended by the user**: posting through official APIs only,
   auto-post a setting (global + per campaign) that is off by default, several
   accounts allowed. The toggle is stored now; posting itself is the next step.
+
+### D57. Searchable descriptions under the caption line
+
+TikTok advises that longer descriptions help posts get found. Campaigns can set
+`long_description` (with `description_context` and `description_keywords`); the
+caption becomes three paragraphs -- the caption line with any #ad first, so the
+disclosure shows before "more"; 2-3 sentences on what happens; the hashtags.
+Written at render time from the clip's corrected words (campaign/description.py),
+or for existing unposted clips with `clipper library describe <campaign>`.
+Posted clips keep their caption (what is live, and what the syncs match on).
+
+Measured on the five unposted Chad Powers clips: gemini-flash-lite invented
+settings and secrets ("during practice", "keep it hidden from the team") and
+guessed speakers -- the transcript has no speaker labels -- one description
+had "I love you" said by the wrong person. A stricter prompt (d2) cut the
+inventions but not the guessed speakers. Those five were written by hand
+from the verified frames and dialogue; automatic descriptions need a look in
+the Control Center before posting.

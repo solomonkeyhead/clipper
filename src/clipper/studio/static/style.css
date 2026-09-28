@@ -141,7 +141,7 @@ details.brief pre { white-space: pre-wrap; font: inherit; background: var(--pane
 .clip-meta { font-size: 12px; color: var(--muted); }
 .caption {
   font-size: 12px; background: var(--panel-2); border-radius: 8px; padding: 8px;
-  max-height: 88px; overflow: auto; word-break: break-word;
+  max-height: 150px; overflow: auto; word-break: break-word; white-space: pre-wrap;
 }
 .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 

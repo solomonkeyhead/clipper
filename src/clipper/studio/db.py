@@ -117,7 +117,8 @@ def clip(con: sqlite3.Connection, clip_id: int) -> dict | None:
 
 
 def update_clip(con: sqlite3.Connection, clip_id: int, **changes) -> None:
-    allowed = {k: v for k, v in changes.items() if k in ("status", "notes", "title")}
+    allowed = {k: v for k, v in changes.items()
+               if k in ("status", "notes", "title", "caption", "start_s", "end_s")}
     if "status" in allowed and allowed["status"] not in STATUSES:
         raise ValueError(f"status must be one of {', '.join(STATUSES)}")
     if allowed:

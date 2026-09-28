@@ -65,6 +65,26 @@ hook_texts:
   - "you cannot convince me this was accidental"
   - "the chemistry is insane"
 
+# A searchable description under the caption line (TikTok: longer descriptions
+# get found more). Facts only from the brief, the episodes' dialogue and their
+# credits.
+long_description: true
+description_context: >-
+  Chad Powers season 2, streaming on Hulu, starring Glen Powell. Russ Holliday,
+  a disgraced star quarterback, plays college football for South Georgia (the
+  Catfish) disguised as "Chad Powers". Ricky Hudson is the head coach's
+  daughter and the team's quarterback coach; she and Russ are falling for each
+  other.
+description_keywords:
+  - Chad Powers
+  - Chad Powers season 2
+  - Hulu
+  - Glen Powell
+  - Ricky and Russ
+  - Russ Holliday
+  - Ricky Hudson
+  - romance
+
 required_credit_text: ""
 burn_credit_in_video: false
 

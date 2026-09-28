@@ -959,6 +959,25 @@ def library_import(
     console.print(f"[green]{len(ids)} clip(s) filed under {Path(campaign).stem}.[/green]")
 
 
+@library_app.command("describe")
+def library_describe(
+    campaign: Annotated[str, typer.Argument(help="Campaign name, e.g. chad-powers-s2.")],
+    verbose: VerboseOpt = False,
+) -> None:
+    """Add searchable descriptions to a campaign's clips that aren't posted yet."""
+    setup_logging(verbose)
+    from .studio import library
+
+    try:
+        done = library.describe_clips(Path(campaign).stem)
+    except (ValueError, FileNotFoundError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    for title, description in done:
+        console.print(f"[bold]{title}[/bold]\n  {description}\n")
+    console.print(f"{len(done)} clip(s) described. Posted clips keep their caption.")
+
+
 instagram_app = typer.Typer(help="Your Instagram Reels' stats and links, via Instagram's "
                                  "official API.", no_args_is_help=True)
 app.add_typer(instagram_app, name="instagram")

@@ -139,6 +139,8 @@ def create_app() -> FastAPI:
             if db.clip(con, clip_id) is None:
                 raise HTTPException(404, "no such clip")
             try:
+                # The page edits what the user owns; captions and ranges come from runs.
+                changes = {k: v for k, v in changes.items() if k in ("status", "notes", "title")}
                 db.update_clip(con, clip_id, **changes)
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from exc

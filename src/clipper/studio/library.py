@@ -171,6 +171,85 @@ def import_folder(folder: Path, campaign: str, log_rows: list[dict[str, str]]) -
     return ids
 
 
+def split_caption(caption: str) -> tuple[str, str]:
+    """(caption line, hashtags) of a stored caption, with or without a description."""
+    caption = (caption or "").strip()
+    if "\n\n" in caption:
+        parts = caption.split("\n\n")
+        tags = parts[-1] if all(w.startswith("#") for w in parts[-1].split()) else ""
+        return parts[0].strip(), tags.strip()
+    line, _, tags = caption.partition("  ")
+    if tags and not all(w.startswith("#") for w in tags.split()):
+        return caption, ""
+    return line.strip(), tags.strip()
+
+
+def with_description(caption: str, description: str) -> str:
+    line, tags = split_caption(caption)
+    return "\n\n".join(p for p in (line, description.strip(), tags) if p)
+
+
+def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[tuple[str, str]]:
+    """Write descriptions for a campaign's clips that aren't posted yet.
+
+    Posted clips keep their caption: it is what is live, and what the syncs match
+    on. Needs each clip's time range (start_s/end_s) and its source's transcript.
+    Returns (title, description) for each clip described.
+    """
+    from ..campaign.description import describe
+    from ..config import CampaignConfig, Config
+    from ..learn import log as perf
+    from ..models import SourceInfo, Transcript
+    from ..paths import REPO_ROOT, work_dir
+    from ..runner import with_range_transcript
+    from .stats import posts_by_clip
+
+    campaign = CampaignConfig.load(REPO_ROOT / "campaigns" / f"{campaign_name}.yaml")
+    if not campaign.long_description:
+        raise ValueError(f"{campaign_name}: set long_description: true in its yaml first")
+    config = Config.load()
+    if backends is None:
+        from ..pipeline import build_backend
+
+        backends = [build_backend(config)]
+    rows = perf.read()
+    posts = posts_by_clip(rows)
+    done = []
+    with db.connect() as con:
+        for clip in db.clips(con, campaign_name):
+            live = posts.get((clip["campaign"], clip["source_id"], clip["clip_id"]))
+            if live or clip["status"] != "ready" or clip["start_s"] is None:
+                continue
+            work = work_dir(clip["source_id"])
+            if not (work / "transcript.json").exists():
+                continue
+            words = Transcript.load(work / "transcript.json").words
+            start, end = clip["start_s"], clip["end_s"]
+            if listener is None and (work / "info.json").exists():
+                from ..transcribe.recheck import AudioRecheck
+
+                info = SourceInfo.load(work / "info.json")
+                if info.audio_path and Path(info.audio_path).exists():
+                    listener = AudioRecheck(Path(info.audio_path), config.transcription)
+            if listener is not None:
+                words = with_range_transcript(words, start, end, listener.words_between(start, end))
+            text = " ".join(w.text for w in words if start <= (w.start + w.end) / 2 < end)
+            line, _ = split_caption(clip["caption"])
+            description = describe(text, campaign, line, backends)
+            if not description:
+                continue
+            caption = with_description(clip["caption"], description)
+            db.update_clip(con, clip["id"], caption=caption)
+            for row in rows:  # the log row, so the syncs and Control Center agree
+                if ((row.get("platform") or "tiktok") == "tiktok" and not row.get("url")
+                        and (row.get("campaign"), row.get("source_id"), row.get("clip_id"))
+                        == (clip["campaign"], clip["source_id"], clip["clip_id"])):
+                    row["caption"] = caption
+            done.append((clip["title"], description))
+    perf.write(rows)
+    return done
+
+
 def first_sentence(caption: str, limit: int = 60) -> str:
     """A caption's opening sentence, for a clip with no hook to be named by."""
     text = re.split(r"(?<=[.!?])\s|\s#|\s@", (caption or "").strip(), maxsplit=1)[0].strip()

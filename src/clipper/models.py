@@ -414,6 +414,9 @@ class ClipPlan(Artifact):
     composite: float = 0.0
     hook_text: str = ""
     suggested_caption: str = ""
+    # A campaign's `long_description`: sentences between the caption line and
+    # the hashtags (campaign/description.py).
+    description: str = ""
     hashtags: list[str] = Field(default_factory=list)
     caption_style: str = "bold_pop"
     layout: LayoutPlan | None = None

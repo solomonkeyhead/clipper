@@ -467,6 +467,15 @@ class CampaignConfig(StrictModel):
     # scoring prompt, overriding its general preferences: a romance campaign
     # rejects the comedy clips the default rubric favours.
     selection_focus: str = ""
+    # A searchable description under the caption line: 2-3 plain sentences on
+    # what happens in the clip, written from its transcript (TikTok's own tip:
+    # longer descriptions get found more). `description_context` says what the
+    # show is and who is in it; `description_keywords` are search terms worth
+    # using where they fit. The caption line (with any #ad) stays first, so the
+    # disclosure is visible before "more".
+    long_description: bool = False
+    description_context: str = ""
+    description_keywords: tuple[str, ...] = ()
     notes: str = ""
 
     @field_validator("source_authorization")

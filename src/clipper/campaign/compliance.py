@@ -208,11 +208,18 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
 
 
 def full_caption(plan: ClipPlan) -> str:
-    """The caption as the user would paste it, hashtags included."""
+    """The caption as the user would paste it, hashtags included.
+
+    With a description it is three paragraphs -- caption line, description,
+    hashtags -- so the first line (and any #ad in it) shows before "more".
+    """
     caption = plan.suggested_caption.strip()
     in_text = {w.lower().rstrip(".,!?") for w in caption.split() if w.startswith("#")}
     # A brief's own caption may already carry a required tag (#chadpowers).
     tags = [t for t in plan.hashtags if t.lower() not in in_text]
+    description = plan.description.strip()
+    if description:
+        return "\n\n".join(p for p in (caption, description, " ".join(tags)) if p).strip()
     parts = [caption]
     if tags:
         parts.append(" ".join(tags))
