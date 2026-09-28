@@ -119,8 +119,22 @@ class TestChunking:
         assert chunks[0].words[-1].text == "Stop."
 
     def test_breaks_on_the_character_limit(self):
-        w = words((0.0, 0.3, "extraordinarily"), (0.35, 0.7, "incomprehensible"))
-        assert len(chunk_words(w, get_style("bold_pop"))) == 2
+        """Two lines at most: two long words share a caption, a third does not."""
+        w = words((0.0, 0.3, "extraordinarily"), (0.35, 0.7, "incomprehensible"),
+                  (0.75, 1.1, "circumstances"))
+        chunks = chunk_words(w, get_style("bold_pop"))
+        assert [len(c.words) for c in chunks] == [2, 1]
+
+    def test_a_long_caption_wraps_onto_a_second_line(self):
+        from clipper.config import SafeArea
+        from clipper.render.captions import build_ass
+
+        w = words((0.0, 0.2, "I"), (0.2, 0.4, "wanted"), (0.4, 0.6, "you"),
+                  (0.6, 0.8, "to"), (0.8, 1.0, "score"))
+        ass = build_ass(w, style=get_style("bold_pop"), width=1080, height=1920,
+                        safe_area=SafeArea(), duration=3.0)
+        first = next(line for line in ass.splitlines() if line.startswith("Dialogue"))
+        assert first.count("\\N") == 1 and "SCORE" in first
 
     def test_blank_words_are_skipped(self):
         w = words((0.0, 0.3, "a"), (0.4, 0.5, "   "), (0.6, 0.9, "b"))

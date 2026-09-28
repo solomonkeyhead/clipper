@@ -74,8 +74,12 @@ class CaptionStyle:
     shadow: float
     bold: bool = True
     uppercase: bool = False
-    max_words_per_chunk: int = 3
+    max_words_per_chunk: int = 6
     max_chars_per_line: int = 18
+    # Two lines of up to `max_chars_per_line`: at one line of 3 words, fast
+    # dialogue flipped captions about once a second, too quick to read (user
+    # report on the Chad Powers clips, which asked for about double the time).
+    max_lines: int = 2
     # Scale the whole box when the render is not 1080 wide (e.g. --draft).
     reference_width: int = 1080
 
@@ -90,19 +94,19 @@ STYLES: dict[str, CaptionStyle] = {
     "bold_pop": CaptionStyle(
         name="bold_pop", font="Anton", font_size=96,
         primary=WHITE, highlight=YELLOW, outline_colour=BLACK,
-        outline=7.0, shadow=2.0, uppercase=True, max_words_per_chunk=3,
+        outline=7.0, shadow=2.0, uppercase=True, max_words_per_chunk=6,
     ),
     # Quieter: no colour shift, the active word grows instead.
     "clean_white": CaptionStyle(
         name="clean_white", font="Inter", font_size=78,
         primary=WHITE, highlight=WHITE, outline_colour=BLACK,
-        outline=4.0, shadow=1.0, uppercase=False, max_words_per_chunk=4,
+        outline=4.0, shadow=1.0, uppercase=False, max_words_per_chunk=8,
         max_chars_per_line=22,
     ),
     "yellow_highlight": CaptionStyle(
         name="yellow_highlight", font="Inter", font_size=84,
         primary=YELLOW, highlight=GREEN, outline_colour=BLACK,
-        outline=5.0, shadow=2.0, uppercase=True, max_words_per_chunk=3,
+        outline=5.0, shadow=2.0, uppercase=True, max_words_per_chunk=6,
     ),
 }
 
@@ -167,6 +171,23 @@ def escape_ass_text(text: str) -> str:
     )
 
 
+def line_breaks(texts: list[str], max_chars: int) -> list[int]:
+    """Indexes of the words that start a new line, filling each line greedily.
+
+    A single word longer than a line still gets a line to itself.
+    """
+    breaks: list[int] = []
+    length = 0
+    for i, text in enumerate(texts):
+        needed = len(text) if length == 0 else length + 1 + len(text)
+        if length and needed > max_chars:
+            breaks.append(i)
+            length = len(text)
+        else:
+            length = needed
+    return breaks
+
+
 def chunk_words(words: list[Word], style: CaptionStyle, *,
                 max_gap: float = 0.8) -> list[Chunk]:
     """Group words into on-screen chunks.
@@ -186,7 +207,8 @@ def chunk_words(words: list[Word], style: CaptionStyle, *,
 
         would_be = [*current.words, word]
         too_many = len(would_be) > style.max_words_per_chunk
-        too_long = len(" ".join(w.text.strip() for w in would_be)) > style.max_chars_per_line
+        too_long = len(line_breaks([w.text.strip() for w in would_be],
+                                   style.max_chars_per_line)) >= style.max_lines
         big_gap = bool(current.words) and (word.start - current.words[-1].end) > max_gap
 
         if current.words and (too_many or too_long or big_gap):
@@ -270,8 +292,11 @@ def build_ass(
         ))
 
     shifted = _shift_words(words, clip_start, duration)
-    for chunk in chunk_words(shifted, style):
-        events.extend(_chunk_events(chunk, style, mask_profanity_words))
+    chunks = chunk_words(shifted, style)
+    for i, chunk in enumerate(chunks):
+        limit = chunks[i + 1].start if i + 1 < len(chunks) else duration
+        events.extend(_chunk_events(chunk, style, mask_profanity_words,
+                                    hold_until=caption_hold(chunk, limit)))
 
     return header + "\n".join(events) + "\n"
 
@@ -331,7 +356,26 @@ def _dialogue(start: float, end: float, style_name: str, text: str, *,
     )
 
 
-def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool) -> list[str]:
+#: A caption stays up at least this many times as long as it took to say, and
+#: at least MIN_CAPTION_SECONDS, unless the next caption arrives first. Held only
+#: while its words were spoken, a 3-word caption in a slow scripted scene was up
+#: for well under a second and gone during the pause after it -- too short to
+#: read (user report on the Chad Powers clips, which asked for about double).
+CAPTION_HOLD_FACTOR = 2.0
+MIN_CAPTION_SECONDS = 1.2
+
+
+def caption_hold(chunk: Chunk, limit: float | None) -> float:
+    """When `chunk` leaves the screen: held into the following pause, never past `limit`."""
+    spoken = chunk.end - chunk.start
+    end = chunk.start + max(spoken * CAPTION_HOLD_FACTOR, MIN_CAPTION_SECONDS)
+    if limit is not None:
+        end = min(end, limit)
+    return max(end, chunk.end)
+
+
+def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool, *,
+                  hold_until: float | None = None) -> list[str]:
     """One event per word, each showing the whole chunk with that word active.
 
     libass has no karaoke-with-colour primitive that survives outline rendering
@@ -339,9 +383,12 @@ def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool) -> list[str]:
     so the event count stays modest.
     """
     events: list[str] = []
+    breaks = set(line_breaks([w.text.strip() for w in chunk.words], style.max_chars_per_line))
     for i, active in enumerate(chunk.words):
         parts: list[str] = []
         for j, word in enumerate(chunk.words):
+            if j in breaks:
+                parts.append("\\N")
             text = word.text.strip()
             if mask:
                 text = mask_profanity(text)
@@ -357,10 +404,12 @@ def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool) -> list[str]:
         start = active.start
         # Hold the last word until the chunk ends so the caption does not blink
         # out between chunks; earlier words hand over at the next word's start.
-        end = chunk.words[i + 1].start if i + 1 < len(chunk.words) else chunk.end
+        end = (chunk.words[i + 1].start if i + 1 < len(chunk.words)
+               else max(chunk.end, hold_until or chunk.end))
         if end <= start:
             end = start + 0.05
-        events.append(_dialogue(start, end, "Caption", " ".join(parts)))
+        events.append(_dialogue(start, end, "Caption",
+                                " ".join(parts).replace(" \\N ", "\\N")))
     return events
 
 

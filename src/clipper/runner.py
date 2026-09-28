@@ -190,11 +190,18 @@ def cut(
         if corrector and audio and audio.exists():
             recheck = AudioRecheck(audio, config.transcription)
 
+    audio = Path(info.audio_path) if info.audio_path else None
+    listener = recheck or (AudioRecheck(audio, config.transcription)
+                           if audio and audio.exists() else None)
+
     for attempt, (start, end) in enumerate(ranges, start=1):
         start, end = max(0.0, start), min(end, info.media.duration)
-        plan = manual_plan(start, end, transcript.words, config=config, campaign=campaign,
+        words = transcript.words
+        if listener is not None:
+            words = with_range_transcript(words, start, end, listener.words_between(start, end))
+        plan = manual_plan(start, end, words, config=config, campaign=campaign,
                            rank=first_rank + len(result.accepted), attempt=attempt)
-        record = _render_plan(plan, info, transcript.words, config=config, campaign=campaign,
+        record = _render_plan(plan, info, words, config=config, campaign=campaign,
                               clips_dir=clips_dir, work=work, draft=draft,
                               corrector=corrector, recheck=recheck)
         if record.qa.status == "fail" or record.compliance.status == "fail":
@@ -212,6 +219,24 @@ def cut(
         timings=result.timings,
     )
     return result
+
+
+def with_range_transcript(words: list[Word], start: float, end: float,
+                          heard: list[Word] | None) -> list[Word]:
+    """`words` with `start`-`end` replaced by `heard`, when that heard more.
+
+    More words is the test because the failure being fixed is words *missing*
+    (see `AudioRecheck.words_between`); a range-only pass that heard fewer is
+    not trusted over the episode's.
+    """
+    inside = [w for w in words if start <= (w.start + w.end) / 2 < end]
+    heard = [w for w in heard or [] if start <= (w.start + w.end) / 2 < end]
+    if len(heard) <= len(inside):
+        return words
+    log.info("range %.1f-%.1fs re-transcribed on its own: %d words, was %d",
+             start, end, len(heard), len(inside))
+    kept = [w for w in words if not start <= (w.start + w.end) / 2 < end]
+    return sorted([*kept, *heard], key=lambda w: w.start)
 
 
 def manual_plan(start: float, end: float, words: list[Word], *, config: Config,

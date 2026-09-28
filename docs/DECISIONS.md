@@ -940,3 +940,18 @@ in dark scenes. Measured on the official Ep 4 and Ep 6 footage:
 - **The focus text made the LLM call clips ads** ("This is a paid campaign"):
   12 of 60 dropped as sponsor reads. The focus now says it is never a reason to
   set is_sponsor_or_ad (prompt v4).
+
+### D54. Captions readable at a glance; hand-picked ranges re-transcribed
+
+User report on the Chad Powers clips: captions were on screen too briefly to
+read ("probably double the time"), and the Ep 6 field scene missed whole lines.
+
+- **Two lines, up to 6 words** (was one line of 3). In fast dialogue a caption
+  flipped about once a second; two lines of 18 characters roughly doubles that.
+- **Held into the pause after it**: at least twice as long as it took to say
+  and at least 1.2s, never over the next caption or past the clip's end.
+- **`clipper cut` re-transcribes each range on its own** and uses that when it
+  heard more. The whole-episode pass had 10 words of the field scene's 32 (quiet
+  dialogue under crowd noise); the 36 seconds alone came out whole. VAD stays on
+  so long wordless looks are not filled with hallucinated words, and nothing is
+  conditioned on earlier text.

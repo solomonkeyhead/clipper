@@ -89,6 +89,40 @@ class AudioRecheck:
                   word.text.strip(), replacement, heard, gained, lost)
         return gained and lost
 
+    def words_between(self, start: float, end: float) -> list[Word] | None:
+        """Transcribe `start`-`end` on its own; None if it looped or failed.
+
+        A whole-episode pass drops quiet dialogue under loud crowd audio -- the
+        Chad Powers Ep 6 field scene came out as 7 words of about 40 -- while the
+        same 36 seconds transcribed alone come out whole. VAD stays on so a long
+        wordless look is not filled with hallucinated "Thank you."s, and nothing
+        is carried over from earlier text, which is what lets one bad guess
+        swallow the lines after it.
+        """
+        try:
+            model = self._load_model()
+            audio = self._load_audio()
+            a = max(0, int(start * self._rate))
+            b = min(len(audio), int(end * self._rate))
+            segments, _ = model.transcribe(
+                audio[a:b], language=self.cfg.language if self.cfg.language != "auto" else None,
+                beam_size=5, temperature=0.0, word_timestamps=True,
+                condition_on_previous_text=False, vad_filter=True,
+            )
+            words = [Word(start=start + float(w.start),
+                          end=start + max(float(w.end), float(w.start)),
+                          text=w.word.strip(),
+                          probability=float(getattr(w, "probability", 1.0) or 1.0))
+                     for s in segments for w in (s.words or []) if w.word.strip()]
+        except Exception as exc:  # a better transcript must never fail a render
+            log.warning("re-transcribing %.1f-%.1fs failed (%s); keeping the episode's",
+                        start, end, exc)
+            return None
+        if _is_loop(" ".join(w.text for w in words)):
+            log.info("re-transcribing %.1f-%.1fs looped; keeping the episode's", start, end)
+            return None
+        return words
+
     def _transcribe(self, word: Word, replacement: str) -> str | None:
         model = self._load_model()
         audio = self._load_audio()
