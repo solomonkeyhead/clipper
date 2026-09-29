@@ -13,6 +13,7 @@ import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
 import { LearningPage } from "./pages/LearningPage";
 import { NewClipsPage } from "./pages/NewClipsPage";
+import { ResearchPage } from "./pages/ResearchPage";
 import { AccountsPage, SettingsPage } from "./pages/SettingsPages";
 import { StatsPage } from "./pages/StatsPage";
 import { ClipsPage, type ClipFilter } from "./pages/WorkPages";
@@ -25,6 +26,14 @@ const queryClient = new QueryClient({
 const root = createRootRoute({ component: AppShell });
 const routes = [
   createRoute({ getParentRoute: () => root, path: "/", component: DashboardPage }),
+  createRoute({
+    getParentRoute: () => root, path: "/research", component: ResearchPage,
+    validateSearch: (s: Record<string, unknown>): { tab?: "ask" | "niches" | "saved"; thread?: number; niche?: number } => ({
+      tab: s.tab === "ask" || s.tab === "niches" || s.tab === "saved" ? s.tab : undefined,
+      thread: typeof s.thread === "number" ? s.thread : undefined,
+      niche: typeof s.niche === "number" ? s.niche : undefined,
+    }),
+  }),
   createRoute({ getParentRoute: () => root, path: "/campaigns", component: CampaignsPage }),
   createRoute({ getParentRoute: () => root, path: "/campaigns/new", component: CampaignEditorPage }),
   createRoute({ getParentRoute: () => root, path: "/campaigns/$name", component: CampaignPage }),

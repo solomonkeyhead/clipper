@@ -53,6 +53,39 @@ CREATE TABLE IF NOT EXISTS post_state (
     url         TEXT PRIMARY KEY,     -- the post's link, without query string
     submitted_at TEXT                 -- NULL: not yet submitted to its campaign
 );
+CREATE TABLE IF NOT EXISTS research_threads (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    title       TEXT NOT NULL DEFAULT '',
+    niche_id    INTEGER,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id   INTEGER NOT NULL,
+    role        TEXT NOT NULL,            -- user | assistant
+    content     TEXT NOT NULL,
+    sources     TEXT NOT NULL DEFAULT '[]',   -- [{title, url}]
+    actions     TEXT NOT NULL DEFAULT '[]',   -- proposed actions, see research/agent.py
+    created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS niches (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    keywords    TEXT NOT NULL DEFAULT '[]',
+    brief       TEXT,                     -- JSON, research/radar.py
+    brief_at    TEXT,
+    created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS saved_items (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind        TEXT NOT NULL,            -- hook | idea | answer | link
+    text        TEXT NOT NULL,
+    url         TEXT NOT NULL DEFAULT '',
+    niche_id    INTEGER,
+    created_at  TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS snapshots (
     url         TEXT NOT NULL,
     at          TEXT NOT NULL,        -- ISO time of the sync
@@ -81,6 +114,9 @@ DEFAULT_SETTINGS = {
     "sync_minutes": "15",
     # Use the user's clip ratings when scoring (learn/feedback.py).
     "learn_from_feedback": "1",
+    # Which plan's features are on (studio/plans.py). A local install is the
+    # owner's, so everything; a hosted version would set this per account.
+    "plan": "pro",
 }
 
 
@@ -235,6 +271,8 @@ def settings(con: sqlite3.Connection) -> dict[str, str]:
 def set_setting(con: sqlite3.Connection, key: str, value: str) -> None:
     if key not in DEFAULT_SETTINGS:
         raise ValueError(f"unknown setting {key!r}")
+    if key == "plan" and value not in ("free", "research", "pro"):
+        raise ValueError("plan must be free, research or pro")
     con.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
 

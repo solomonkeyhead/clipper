@@ -333,3 +333,52 @@ export function useRateClip() {
 }
 
 export const RATING_WORDS = ["", "Bad", "Weak", "OK", "Good", "Great"];
+
+/* ---------- research ---------- */
+
+export type ResearchStatus = components["schemas"]["ResearchStatus"];
+export type Thread = components["schemas"]["Thread"];
+export type ThreadDetail = components["schemas"]["ThreadDetail"];
+export type ResearchMessage = components["schemas"]["Message"];
+export type Niche = components["schemas"]["Niche"];
+export type SavedItem = components["schemas"]["SavedItem"];
+
+export interface NicheBrief {
+  summary: string; live: boolean; notes: string[];
+  topics: { title: string; why: string; sources: number[] }[];
+  hooks: string[];
+  sources: { title: string; url: string }[];
+  shorts: { id: string; title: string; channel: string; views: number; likes: number;
+            published: string; seconds: number; url: string; thumb: string }[];
+}
+
+export const useResearchStatus = () =>
+  useQuery({ queryKey: ["research", "status"], queryFn: () => unwrap(api.GET("/api/research/status")) });
+export const useThreads = () =>
+  useQuery({ queryKey: ["research", "threads"], queryFn: () => unwrap(api.GET("/api/research/threads")) });
+export const useThread = (id: number | undefined) =>
+  useQuery({ queryKey: ["research", "thread", id], enabled: id !== undefined,
+             queryFn: () => unwrap(api.GET("/api/research/threads/{thread_id}", { params: { path: { thread_id: id! } } })) });
+export const useNiches = () =>
+  useQuery({ queryKey: ["research", "niches"], queryFn: () => unwrap(api.GET("/api/research/niches")) });
+export const useSaved = () =>
+  useQuery({ queryKey: ["research", "saved"], queryFn: () => unwrap(api.GET("/api/research/saved")) });
+
+export const askResearch = (text: string, threadId?: number, nicheId?: number) =>
+  unwrap(api.POST("/api/research/ask", { body: { text, thread_id: threadId, niche_id: nicheId } }));
+export const deleteThread = (id: number) =>
+  unwrap(api.DELETE("/api/research/threads/{thread_id}", { params: { path: { thread_id: id } } }));
+export const runResearchAction = async (messageId: number, index: number) =>
+  (await unwrap(api.POST("/api/research/messages/{message_id}/actions/{index}",
+    { params: { path: { message_id: messageId, index } } }))) as { done: string; navigate?: string; title?: string; brief?: string };
+export const saveNiche = (body: { name: string; description: string; keywords: string[] }, id?: number) => id
+  ? unwrap(api.PUT("/api/research/niches/{niche_id}", { params: { path: { niche_id: id } }, body }))
+  : unwrap(api.POST("/api/research/niches", { body }));
+export const deleteNiche = (id: number) =>
+  unwrap(api.DELETE("/api/research/niches/{niche_id}", { params: { path: { niche_id: id } } }));
+export const refreshNiche = (id: number) =>
+  unwrap(api.POST("/api/research/niches/{niche_id}/refresh", { params: { path: { niche_id: id } } }));
+export const saveItem = (body: { kind: "hook" | "idea" | "answer" | "link"; text: string; url?: string; niche_id?: number }) =>
+  unwrap(api.POST("/api/research/saved", { body }));
+export const unsaveItem = (id: number) =>
+  unwrap(api.DELETE("/api/research/saved/{item_id}", { params: { path: { item_id: id } } }));

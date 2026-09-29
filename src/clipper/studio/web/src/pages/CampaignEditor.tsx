@@ -35,8 +35,19 @@ function filled(form: CampaignForm) {
     JSON.stringify(v) !== JSON.stringify(BLANK[key as keyof CampaignForm])).length;
 }
 
-function BriefReader({ onRead }: { onRead: (form: CampaignForm) => void }) {
-  const [text, setText] = useState("");
+/** A new campaign handed over from Research ({title, brief}); read once. */
+function takePrefill(): { title?: string; brief?: string } {
+  try {
+    const raw = sessionStorage.getItem("clipper.prefill");
+    sessionStorage.removeItem("clipper.prefill");
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function BriefReader({ onRead, initial = "" }: { onRead: (form: CampaignForm) => void; initial?: string }) {
+  const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const read = async () => {
     setBusy(true);
@@ -83,7 +94,8 @@ export function CampaignEditorPage() {
   const { data: detail } = useCampaign(editing ?? "");
   const save = useSaveCampaign();
   const remove = useDeleteCampaign();
-  const [form, setForm] = useState<CampaignForm>(BLANK);
+  const [prefill] = useState(() => (editing ? {} : takePrefill()));
+  const [form, setForm] = useState<CampaignForm>(() => ({ ...BLANK, title: prefill.title ?? "" }));
   const [market, setMarket] = useState<string>("Content Rewards");
 
   useEffect(() => {
@@ -132,7 +144,7 @@ export function CampaignEditorPage() {
           "Tell Clipper about a campaign you've joined, so it clips and captions to that campaign's rules."} />
 
       <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        {!editing && <BriefReader onRead={fromBrief} />}
+        {!editing && <BriefReader onRead={fromBrief} initial={prefill.brief} />}
 
         <Section title="The basics">
           <Field label="Campaign name" hint={editing ? "Rename it any time; its clips stay with it." : "What you'll call it in Clipper, e.g. \"Chad Powers S2\"."}>

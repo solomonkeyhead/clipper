@@ -627,6 +627,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status */
+        get: operations["status_api_research_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Threads */
+        get: operations["threads_api_research_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Thread */
+        get: operations["thread_api_research_threads__thread_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Thread */
+        delete: operations["delete_thread_api_research_threads__thread_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description Ask in a conversation (a new one without `thread_id`); returns it with the answer.
+         */
+        post: operations["ask_api_research_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/messages/{message_id}/actions/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Action
+         * @description Do what the chat proposed, now that the user confirmed it (Pro).
+         */
+        post: operations["run_action_api_research_messages__message_id__actions__index__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/niches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Niches */
+        get: operations["niches_api_research_niches_get"];
+        put?: never;
+        /** Add Niche */
+        post: operations["add_niche_api_research_niches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/niches/{niche_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edit Niche */
+        put: operations["edit_niche_api_research_niches__niche_id__put"];
+        post?: never;
+        /** Delete Niche */
+        delete: operations["delete_niche_api_research_niches__niche_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/niches/{niche_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Niche */
+        post: operations["refresh_niche_api_research_niches__niche_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Saved */
+        get: operations["saved_api_research_saved_get"];
+        put?: never;
+        /** Save */
+        post: operations["save_api_research_saved_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/research/saved/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unsave */
+        delete: operations["unsave_api_research_saved__item_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -647,6 +827,22 @@ export interface components {
             detail: string;
             /** Expires In Days */
             expires_in_days?: number | null;
+        };
+        /** Action */
+        Action: {
+            /** Type */
+            type: string;
+            /** Label */
+            label: string;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /**
+             * Done
+             * @default false
+             */
+            done: boolean;
         };
         /** Band */
         Band: {
@@ -1014,6 +1210,21 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** Message */
+        Message: {
+            /** Id */
+            id: number;
+            /** Role */
+            role: string;
+            /** Content */
+            content: string;
+            /** Sources */
+            sources: components["schemas"]["Source"][];
+            /** Actions */
+            actions: components["schemas"]["Action"][];
+            /** Created At */
+            created_at: string;
+        };
         /** Metrics */
         Metrics: {
             /** Est Earnings */
@@ -1028,6 +1239,25 @@ export interface components {
             to_submit: number;
             /** Ready */
             ready: number;
+        };
+        /** Niche */
+        Niche: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Keywords */
+            keywords: string[];
+            /** Brief */
+            brief?: {
+                [key: string]: unknown;
+            } | null;
+            /** Brief At */
+            brief_at?: string | null;
+            /** Stale */
+            stale: boolean;
         };
         /** Post */
         Post: {
@@ -1084,6 +1314,36 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** ResearchStatus */
+        ResearchStatus: {
+            /** Plan */
+            plan: string;
+            /** Can Research */
+            can_research: boolean;
+            /** Can Act */
+            can_act: boolean;
+            /** Ai */
+            ai: boolean;
+            /** Web */
+            web: boolean;
+            /** Youtube */
+            youtube: boolean;
+        };
+        /** SavedItem */
+        SavedItem: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Text */
+            text: string;
+            /** Url */
+            url: string;
+            /** Niche Id */
+            niche_id?: number | null;
+            /** Created At */
+            created_at: string;
+        };
         /** Setup */
         Setup: {
             /** Ai Ready */
@@ -1118,6 +1378,13 @@ export interface components {
              */
             top_mover_gain: number;
         };
+        /** Source */
+        Source: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+        };
         /** Status */
         Status: {
             /** Last Synced */
@@ -1132,6 +1399,30 @@ export interface components {
             auto_post: boolean;
             /** Accounts */
             accounts: components["schemas"]["Account"][];
+        };
+        /** Thread */
+        Thread: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Niche Id */
+            niche_id?: number | null;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** ThreadDetail */
+        ThreadDetail: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Niche Id */
+            niche_id?: number | null;
+            /** Updated At */
+            updated_at: string;
+            /** Messages */
+            messages: components["schemas"]["Message"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -2408,6 +2699,423 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_api_research_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchStatus"];
+                };
+            };
+        };
+    };
+    threads_api_research_threads_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thread"][];
+                };
+            };
+        };
+    };
+    thread_api_research_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_thread_api_research_threads__thread_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_api_research_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_action_api_research_messages__message_id__actions__index__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: number;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    niches_api_research_niches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Niche"][];
+                };
+            };
+        };
+    };
+    add_niche_api_research_niches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Niche"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_niche_api_research_niches__niche_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                niche_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Niche"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_niche_api_research_niches__niche_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                niche_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_niche_api_research_niches__niche_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                niche_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Niche"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saved_api_research_saved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedItem"][];
+                };
+            };
+        };
+    };
+    save_api_research_saved_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsave_api_research_saved__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

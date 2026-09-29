@@ -519,7 +519,24 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                     await sync_now()
                 except Exception:
                     log.exception("automatic sync failed")
+            await refresh_a_stale_niche()
             await asyncio.sleep(60)
+
+    async def refresh_a_stale_niche() -> None:
+        """One niche brief a minute at most, once a day each (Research plan)."""
+        from ..research import radar
+        from . import plans
+        from .research_api import niche_rows, refresh_one
+
+        if not plans.has("research") or not setup.key_set("GEMINI_API_KEY"):
+            return
+        stale = next((n for n in niche_rows() if radar.is_stale(n)), None)
+        if stale is not None:
+            try:
+                await asyncio.to_thread(refresh_one, stale["id"], broker)
+                broker.publish("research.niches")
+            except Exception as exc:
+                log.info("daily niche brief for %s skipped: %s", stale["name"], exc)
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -1016,6 +1033,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             return FileResponse(path, media_type="video/mp4",
                                 filename=f"{name or 'clip'} - {found['campaign']}.mp4")
         return FileResponse(path, media_type="video/mp4")
+
+    from .research_api import build_router
+
+    app.include_router(build_router(broker, jobs))
 
     # The single-page app: real files from the build, index.html for its routes.
     if (STATIC / "assets").is_dir():

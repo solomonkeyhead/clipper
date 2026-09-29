@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Film, GraduationCap, LayoutDashboard, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
+  AlertTriangle, BarChart3, Compass, Film, GraduationCap, LayoutDashboard, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
   Settings, UserCircle2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -33,6 +33,7 @@ function useNav(): NavItem[] {
   const waiting = clips.filter((c) => (c.status === "ready" || c.status === "posted") && active.has(c.campaign)).length;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
+    { to: "/research", label: "Research", icon: <Compass />, keys: "G E" },
     { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C", badge: active.size },
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
@@ -134,7 +135,7 @@ export function AppShell() {
   };
   useHotkeys({
     g: () => { pendingG.current = Date.now(); },
-    d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"),
+    d: goto("/"), h: goto("/"), e: goto("/research"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"),
     s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"),
     "[": toggle,
     "?": () => setShortcuts(true),
@@ -216,7 +217,7 @@ export function AppShell() {
 
         {/* Bottom tabs (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
-          {[nav[0], nav[1], nav[2], nav[3], nav[4]].map((item) => (
+          {[nav[0], nav[1], nav[3], nav[4], nav[5]].map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
                   className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted data-[status=active]:text-accent [&_svg]:size-5">

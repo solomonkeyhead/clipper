@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
-  BarChart3, Film, GraduationCap, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
+  BarChart3, Compass, Film, GraduationCap, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
   Settings, Sun, UserCircle2,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -88,6 +88,7 @@ export function CommandPalette() {
         <Command.Empty className="px-4 py-8 text-center text-sm text-muted">No results.</Command.Empty>
         <Group heading="Go to">
           <Item icon={<LayoutDashboard />} label="Dashboard" keys="G D" onSelect={go("/")} />
+          <Item icon={<Compass />} label="Research: ask, niches, saved" keys="G E" onSelect={go("/research")} />
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
@@ -129,7 +130,7 @@ export function CommandPalette() {
 }
 
 const SHORTCUTS: [string, [string, string][]][] = [
-  ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then D", "Dashboard"], ["G then C", "Campaigns"],
+  ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then D", "Dashboard"], ["G then E", "Research"], ["G then C", "Campaigns"],
     ["G then N", "New clips"], ["G then L", "Clips"], ["G then R", "Learning"],
     ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],

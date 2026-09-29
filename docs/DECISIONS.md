@@ -1167,3 +1167,31 @@ prompt gets a "taste" block (liked/disliked examples, common reasons), placed
 after and explicitly weaker than the campaign focus. The Learning page shows
 whether the score agrees with ratings and views (Spearman), by score band. A
 setting turns learning off. Tests never learn from the real library (conftest).
+
+## D62 -- Research section: chat, niche radar, saved; plan tiers (2026-09-29)
+
+The user chose "chat + niche radar" over a chat alone or a dashboard alone.
+
+**Ask.** Gemini (flash, falling back to flash-lite) with function calling over
+Clipper's own data (clips with scores, ratings and post stats; campaigns;
+niches; footage) and two outside sources: web search and top YouTube Shorts.
+Web results are numbered and cited inline; answers are Markdown.
+
+**Web search is Tavily, not Gemini grounding.** Google Search grounding
+returned 429 on every model for the user's free Gemini key (2026-09-29), while
+plain calls worked -- free keys have no grounding quota. Tavily is built for
+AI tools and free for 1,000 searches a month; YouTube Data API v3 (free) gives
+the week's most-viewed Shorts. Both are optional keys with in-page setup;
+without them the chat still answers from the user's data and the model's
+knowledge, and says what the key would add. No site is scraped.
+
+**Niches.** A brief per niche: top Shorts, two recent web searches, and the
+configured LLM's reading (summary, topics citing sources, hook lines). Refreshed
+on demand and once a day while the Control Center runs (one niche a minute at
+most). `live` false marks a brief made without either source.
+
+**Tiers.** The user sees Research as a paid tier and actions as the top tier,
+"further down the line". studio/plans.py: Free < Research (the section) < Pro
+(the chat may propose changes -- hook lines, a clip job, a new campaign from a
+brief -- run only when the user presses Confirm, once). Enforced server-side
+(402); a local install is Pro; Settings has a plan preview. No billing.

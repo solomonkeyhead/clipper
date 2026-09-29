@@ -359,6 +359,7 @@ function SystemCheck() {
 export function SettingsPage() {
   const { data: settings } = useSettings();
   const save = useSetSettings();
+  const qc = useQueryClient();
   const theme = useUI((s) => s.theme);
   const setTheme = useUI((s) => s.setTheme);
   const shortcuts = useUI((s) => s.shortcuts);
@@ -408,6 +409,24 @@ export function SettingsPage() {
               ))}
             </div>
           }
+        />
+        <Row
+          title="Plan (preview)"
+          body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats.{" "}
+            <b className="text-fg">Research</b>: adds the Research section. <b className="text-fg">Pro</b>: Research can also make
+            changes for you (campaigns, clip jobs, hook lines) after you confirm. Nothing is billed; switch to see each tier.</>}
+          control={settings ? (
+            <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">
+              {([["free", "Free"], ["research", "Research"], ["pro", "Pro"]] as const).map(([value, label]) => (
+                <button key={value} role="radio" aria-checked={settings.plan === value}
+                        onClick={() => save.mutate({ plan: value }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ["research"] }) })}
+                        className={cn("h-8 rounded-sm px-3 text-sm",
+                          settings.plan === value ? "bg-surface-1 text-fg shadow-1" : "text-muted hover:text-fg")}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : <Skeleton className="h-9 w-48" />}
         />
         <Row
           title="Single-key shortcuts"
