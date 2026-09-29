@@ -164,3 +164,52 @@ class TestCampaigns:
         monkeypatch.setattr(pipeline, "build_backend", no_key)
         res = client.post("/api/campaigns/read-brief", json={"text": "x" * 100})
         assert res.status_code == 400 and "Settings" in res.json()["detail"]
+
+
+class TestSetup:
+    def test_keys_are_saved_to_env_and_never_shown(self, client, tmp_path, monkeypatch):
+        from clipper.studio import setup
+
+        env = tmp_path / ".env"
+        monkeypatch.setattr(setup, "env_path", lambda: env)
+        monkeypatch.delenv("TIKTOK_CLIENT_KEY", raising=False)
+        res = client.put("/api/setup/keys", json={"TIKTOK_CLIENT_KEY": "abc123"})
+        assert res.status_code == 200 and res.json()["keys"]["TIKTOK_CLIENT_KEY"] is True
+        assert "abc123" not in res.text
+        assert "TIKTOK_CLIENT_KEY=abc123" in env.read_text()
+        assert client.put("/api/setup/keys", json={"PATH": "x"}).status_code == 400
+        monkeypatch.delenv("TIKTOK_CLIENT_KEY", raising=False)
+
+    def test_accounts_are_listed_and_disconnected(self, client, data_root):
+        import json
+        import time as _time
+
+        folder = data_root / "instagram" / "accounts"
+        folder.mkdir(parents=True)
+        for name in ("one", "two"):
+            (folder / f"{name}.json").write_text(json.dumps(
+                {"access_token": "t", "obtained_at": _time.time(), "username": name}))
+        handles = [a["handle"] for a in client.get("/api/accounts").json()]
+        assert handles == ["one", "two"]
+        assert client.delete("/api/accounts/instagram/one").status_code == 200
+        assert [a["handle"] for a in client.get("/api/accounts").json()] == ["two"]
+        assert client.delete("/api/accounts/instagram/nope").status_code == 404
+
+
+def test_tiktok_connect_hands_the_page_the_consent_link(client, monkeypatch):
+    from clipper.tiktok import api
+
+    def fake_login(*, open_browser, **kwargs):
+        open_browser("https://www.tiktok.com/v2/auth/authorize/?x=1")
+        time.sleep(0.2)
+        return {"display_name": "Second Account"}
+
+    monkeypatch.setattr(api, "login", fake_login)
+    started = client.post("/api/accounts/tiktok/connect").json()
+    assert started["state"] == "waiting" and started["url"].startswith("https://www.tiktok.com/")
+    for _ in range(50):
+        state = client.get("/api/accounts/tiktok/connect").json()
+        if state["state"] != "waiting":
+            break
+        time.sleep(0.05)
+    assert state == {"state": "done", "message": "Second Account", "url": started["url"]}

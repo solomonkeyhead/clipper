@@ -18,50 +18,23 @@ def main() -> int:
 
     from dotenv import load_dotenv
 
-    from ..learn import log as perf
     from ..paths import REPO_ROOT, ensure, logs_dir
+    from ..studio import stats
     from ..utils.logging import get_logger, setup_logging
-    from . import api, sync
 
     load_dotenv(REPO_ROOT / ".env", override=False)
     setup_logging(log_file=ensure(logs_dir()) / "tiktok.log")
     log = get_logger("clipper.tiktok")
+    # Every connected TikTok and Instagram account, the same sync the Control
+    # Center runs (snapshots included).
     try:
-        videos = api.list_videos(api.access_token())
-        rows = perf.read()
-        result = sync.apply(videos, rows)
-        perf.write(rows)
-    except PermissionError:
-        log.warning("performance log is open in Excel; will sync next run")
-        return 0
+        result = stats.run_sync()
     except Exception:
-        log.exception("tiktok sync failed")
+        log.exception("sync failed")
         return 1
-    log.info("tiktok sync: %d video(s), %d matched, %d not in the log",
-             len(videos), len(result.matched), len(result.unmatched))
-    # The same scheduled task syncs Instagram Reels once that is connected.
-    return _instagram(log)
-
-
-def _instagram(log) -> int:
-    from ..instagram import api, sync
-    from ..learn import log as perf
-
-    if not api.token_path().exists():
-        return 0
-    try:
-        reels = api.list_reels(api.access_token())
-        rows = perf.read()
-        result = sync.apply(reels, rows, account=api.username())
-        perf.write(rows)
-    except PermissionError:
-        log.warning("performance log is open in Excel; will sync Instagram next run")
-        return 0
-    except Exception:
-        log.exception("instagram sync failed")
-        return 1
-    log.info("instagram sync: %d reel(s), %d matched, %d not in the log",
-             len(reels), len(result.matched), len(result.unmatched))
+    for problem in result.get("problems", []):
+        log.warning("%s", problem)
+    log.info("sync done: last synced %s", result.get("last_synced", ""))
     return 0
 
 

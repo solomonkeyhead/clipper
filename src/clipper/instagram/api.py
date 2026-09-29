@@ -56,13 +56,54 @@ class Reel:
     skip_rate_pct: float | None = None
 
 
-def token_path() -> Path:
-    # Under data/, which is git-ignored: the token is a secret.
-    return data_root() / "instagram" / "token.json"
+def accounts_dir() -> Path:
+    # Under data/, which is git-ignored: tokens are secrets. One file per
+    # connected account, named by its username.
+    return data_root() / "instagram" / "accounts"
+
+
+def token_files() -> list[Path]:
+    """Every connected account's token file (the single-account file is moved in)."""
+    legacy = data_root() / "instagram" / "token.json"
+    if legacy.exists():
+        stored = json.loads(legacy.read_text(encoding="utf-8"))
+        target = ensure(accounts_dir()) / f"{_safe(stored.get('username') or 'account')}.json"
+        if not target.exists():
+            legacy.replace(target)
+    folder = accounts_dir()
+    return sorted(folder.glob("*.json")) if folder.is_dir() else []
+
+
+def token_path(account: str | None = None) -> Path:
+    """Account `account`'s token file, or the first connected account's."""
+    if account:
+        return accounts_dir() / f"{_safe(account)}.json"
+    files = token_files()
+    return files[0] if files else accounts_dir() / "account.json"
+
+
+def _safe(name: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in name)[:80] or "account"
+
+
+def remove(account: str) -> bool:
+    """Disconnect an account: its token file is deleted (connect again to undo)."""
+    path = token_path(account)
+    if path.exists():
+        path.unlink()
+        return True
+    return False
+
+
+def read_token(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def login(token: str) -> str:
-    """Check a dashboard token, extend it to a fresh 60 days, store it. Returns the username."""
+    """Check a dashboard token, extend it to a fresh 60 days, store it. Returns the username.
+
+    Each account gets its own file, so connecting a second account adds it.
+    """
     token = token.strip()
     if not token:
         raise InstagramError("no token given")
@@ -74,34 +115,34 @@ def login(token: str) -> str:
     except InstagramError as exc:  # a brand-new token can't be refreshed for 24h
         log.info("token not extended yet (%s); it will be on a later sync", exc)
         stored["unrefreshed"] = True
-    _save(stored)
+    _save(stored, token_path(me.get("username") or "account"))
     return me.get("username", "")
 
 
-def username() -> str:
-    """The connected account's username, or "" if not connected."""
-    path = token_path()
+def username(path: Path | None = None) -> str:
+    """An account's username (the first connected one by default), or "" if none."""
+    path = path or token_path()
     if not path.exists():
         return ""
     return json.loads(path.read_text(encoding="utf-8")).get("username", "")
 
 
-def access_token() -> str:
+def access_token(path: Path | None = None) -> str:
     """The stored token, extended once it is 30 days old."""
-    path = token_path()
+    path = path or token_path()
     if not path.exists():
-        raise InstagramError("not connected yet: run `clipper instagram login` once")
+        raise InstagramError("not connected yet: connect Instagram on the Accounts page")
     stored = json.loads(path.read_text(encoding="utf-8"))
     age = time.time() - float(stored.get("obtained_at", 0))
     if age >= TOKEN_LIFETIME:
         raise InstagramError("the Instagram token has expired: generate a new one in the Meta "
-                             "App Dashboard and run `clipper instagram login` again")
+                             "App Dashboard and reconnect on the Accounts page")
     if age >= REFRESH_AFTER or stored.get("unrefreshed"):
         try:
             stored.update(access_token=_refresh(stored["access_token"]),
                           obtained_at=time.time())
             stored.pop("unrefreshed", None)
-            _save(stored)
+            _save(stored, path)
         except InstagramError as exc:
             log.warning("could not extend the Instagram token (%s); still valid for %.0f days",
                         exc, (TOKEN_LIFETIME - age) / DAY)
@@ -169,8 +210,8 @@ def _refresh(token: str) -> str:
     return data["access_token"]
 
 
-def _save(stored: dict) -> None:
-    path = token_path()
+def _save(stored: dict, path: Path | None = None) -> None:
+    path = path or token_path()
     ensure(path.parent)
     path.write_text(json.dumps(stored, indent=1), encoding="utf-8")
 

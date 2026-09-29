@@ -32,6 +32,7 @@ export const keys = {
   posts: ["posts"] as const,
   accounts: ["accounts"] as const,
   settings: ["settings"] as const,
+  setup: ["setup"] as const,
 };
 
 export const useStatus = () =>
@@ -264,5 +265,41 @@ export function useSetClipSubmitted() {
     },
     onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
     onSettled: invalidate,
+  });
+}
+
+/* ---------- setup: keys, account connections, system check ---------- */
+
+export type Setup = components["schemas"]["Setup"];
+export interface CheckResult { name: string; status: "ok" | "warn" | "fail"; detail: string; fix: string }
+
+export const useSetup = () => useQuery({ queryKey: keys.setup, queryFn: () => unwrap(api.GET("/api/setup")) });
+
+export function useSetKeys() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (values: Record<string, string>) => unwrap(api.PUT("/api/setup/keys", { body: values })),
+    onSuccess: (data) => {
+      qc.setQueryData(keys.setup, data);
+      qc.invalidateQueries({ queryKey: keys.home });
+    },
+  });
+}
+
+export const testAI = () => unwrap(api.POST("/api/setup/test-ai")) as Promise<{ ok: boolean; detail: string }>;
+export const runSystemCheck = async () => (await unwrap(api.POST("/api/setup/check"))) as unknown as CheckResult[];
+export const startTikTokConnect = () =>
+  unwrap(api.POST("/api/accounts/tiktok/connect")) as Promise<{ state: string; message: string; url: string }>;
+export const tiktokConnectState = () =>
+  unwrap(api.GET("/api/accounts/tiktok/connect")) as Promise<{ state: string; message: string; url: string }>;
+export const connectInstagram = (token: string) =>
+  unwrap(api.POST("/api/accounts/instagram", { body: { token } })) as Promise<{ username: string }>;
+
+export function useDisconnect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ platform, id }: { platform: string; id: string }) =>
+      unwrap(api.DELETE("/api/accounts/{platform}/{account}", { params: { path: { platform, account: id } } })),
+    onSettled: () => [keys.accounts, keys.status, keys.home].forEach((queryKey) => qc.invalidateQueries({ queryKey })),
   });
 }

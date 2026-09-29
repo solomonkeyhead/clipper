@@ -119,7 +119,7 @@ class TestToken:
     @pytest.fixture
     def stored(self, tmp_path, monkeypatch):
         path = tmp_path / "token.json"
-        monkeypatch.setattr(api, "token_path", lambda: path)
+        monkeypatch.setattr(api, "token_path", lambda account=None: path)
         return path
 
     def test_a_young_token_is_used_as_is(self, stored, monkeypatch):
@@ -137,7 +137,7 @@ class TestToken:
     def test_an_expired_token_asks_for_a_new_login(self, stored):
         stored.write_text(json.dumps({"access_token": "A",
                                       "obtained_at": time.time() - 61 * DAY}))
-        with pytest.raises(api.InstagramError, match="login"):
+        with pytest.raises(api.InstagramError, match="reconnect"):
             api.access_token()
 
     def test_errors_never_echo_the_token(self, monkeypatch):

@@ -34,7 +34,7 @@ from ..config import CampaignConfig
 from ..learn import log as perf
 from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
-from . import db, library, stats
+from . import db, library, setup, stats
 from .events import Broker
 
 log = get_logger(__name__)
@@ -163,12 +163,22 @@ class Home(BaseModel):
 
 
 class Account(BaseModel):
+    id: str                # the account's token file, for disconnecting
     platform: str
     connected: bool
     handle: str
     health: str            # ok | warn | error
     detail: str
     expires_in_days: float | None = None
+
+
+class Setup(BaseModel):
+    ai_ready: bool
+    ai_backend: str
+    ai_detail: str
+    keys: dict[str, bool]          # which keys are set (never their values)
+    tiktok_app: bool               # TikTok developer app keys present
+    tiktok_connect: dict[str, str]
 
 
 class Status(BaseModel):
@@ -328,41 +338,37 @@ def brief_of(campaign: CampaignConfig) -> Brief:
 
 
 def accounts() -> list[Account]:
-    """Connection health for each platform, from the stored tokens."""
+    """Every connected account's health, from its stored token."""
     out = []
+    from ..instagram import api as ig_api
     from ..tiktok import api as tt_api
 
-    tiktok = tt_api.token_path()
-    if tiktok.exists():
-        token = json.loads(tiktok.read_text(encoding="utf-8"))
+    tiktoks = tt_api.token_files()
+    for path in tiktoks:
+        token = tt_api.read_token(path)
+        if not token.get("handle") and len(tiktoks) == 1:
+            # Learnt on the next sync; until then, the handle in its posts' links.
+            token["handle"] = next((stats.handle_from_url(r.get("url", "")) for r in perf.read()
+                                    if "tiktok.com/@" in (r.get("url") or "")), "")
         left = (float(token.get("obtained_at", 0)) + float(token.get("refresh_expires_in", 0))
                 - time.time()) / 86400
-        handle = next((stats.handle_from_url(r.get("url", "")) for r in perf.read()
-                       if "tiktok.com/@" in (r.get("url") or "")), "")
         out.append(Account(
-            platform="tiktok", connected=left > 0, handle=handle,
+            id=path.stem, platform="tiktok", connected=left > 0,
+            handle=token.get("handle") or token.get("display_name") or "",
             health="ok" if left > 7 else "warn" if left > 0 else "error",
             detail=("Stats: views, likes, comments, shares. TikTok's API gives no watch time."
-                    if left > 0 else "Login expired: run clipper tiktok login"),
+                    if left > 0 else "Login expired: connect it again with Add a TikTok account"),
             expires_in_days=round(left, 1)))
-    else:
-        out.append(Account(platform="tiktok", connected=False, handle="", health="error",
-                           detail="Not connected: run clipper tiktok login"))
-    from ..instagram import api as ig_api
-
-    if ig_api.token_path().exists():
-        token = json.loads(ig_api.token_path().read_text(encoding="utf-8"))
+    for path in ig_api.token_files():
+        token = ig_api.read_token(path)
         left = (float(token.get("obtained_at", 0)) + ig_api.TOKEN_LIFETIME - time.time()) / 86400
         out.append(Account(
-            platform="instagram", connected=left > 0, handle=token.get("username", ""),
+            id=path.stem, platform="instagram", connected=left > 0,
+            handle=token.get("username", ""),
             health="ok" if left > 7 else "warn" if left > 0 else "error",
             detail=("Stats: views, watch time, 3-second skip rate, saves. Renews itself."
-                    if left > 0 else "Token expired: generate a new one and run "
-                                     "clipper instagram login"),
+                    if left > 0 else "Token expired: paste a new one with Add an Instagram account"),
             expires_in_days=round(left, 1)))
-    else:
-        out.append(Account(platform="instagram", connected=False, handle="", health="error",
-                           detail="Not connected: run clipper instagram login"))
     return out
 
 
@@ -428,6 +434,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     broker = Broker()
     last_problems: list[str] = []
     jobs = JobRunner(broker.publish)
+    tiktok = setup.TikTokConnect(broker.publish)
 
     async def sync_now() -> dict:
         broker.publish("sync.started")
@@ -527,8 +534,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 to_submit=sum(1 for p in posts if not p.submitted_at),
                 ready=pipeline.ready),
             since=since, pipeline=pipeline,
-            first_run={"accounts": any(a.connected for a in accounts()),
-                       "campaign": bool(snap.campaigns), "clips": bool(snap.clips)})
+            # The getting-started checklist, in the order a new user does it.
+            first_run={"ai": setup.ai_status()["ready"], "campaign": bool(snap.campaigns),
+                       "clips": bool(snap.clips),
+                       "accounts": any(a.connected for a in accounts())})
 
     @app.post("/api/visit")
     def visit() -> dict:
@@ -701,6 +710,64 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.get("/api/accounts")
     def get_accounts() -> list[Account]:
         return accounts()
+
+    @app.delete("/api/accounts/{platform}/{account}")
+    def disconnect(platform: str, account: str) -> dict:
+        from ..instagram import api as ig_api
+        from ..tiktok import api as tt_api
+
+        module = {"tiktok": tt_api, "instagram": ig_api}.get(platform)
+        if module is None or not module.remove(account):
+            raise HTTPException(404, "no such account")
+        broker.publish("accounts.changed")
+        return {"ok": True}
+
+    @app.post("/api/accounts/tiktok/connect")
+    def tiktok_connect() -> dict[str, str]:
+        """Start TikTok's login; the page opens the returned consent link."""
+        return tiktok.start()
+
+    @app.get("/api/accounts/tiktok/connect")
+    def tiktok_connect_state() -> dict[str, str]:
+        return tiktok.view()
+
+    @app.post("/api/accounts/instagram")
+    def instagram_connect(body: dict) -> dict:
+        from ..instagram import api as ig_api
+
+        try:
+            username = ig_api.login(str(body.get("token") or ""))
+        except ig_api.InstagramError as exc:
+            raise HTTPException(400, f"Instagram refused the token: {exc}") from exc
+        broker.publish("accounts.changed")
+        return {"username": username}
+
+    @app.get("/api/setup")
+    def get_setup() -> Setup:
+        ai = setup.ai_status()
+        return Setup(ai_ready=ai["ready"], ai_backend=ai["backend"], ai_detail=ai["detail"],
+                     keys={k: setup.key_set(k) for k in setup.KEYS},
+                     tiktok_app=setup.key_set("TIKTOK_CLIENT_KEY")
+                     and setup.key_set("TIKTOK_CLIENT_SECRET"),
+                     tiktok_connect=tiktok.view())
+
+    @app.put("/api/setup/keys")
+    def put_keys(values: dict[str, str]) -> Setup:
+        try:
+            setup.set_keys(values)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("settings.changed")
+        return get_setup()
+
+    @app.post("/api/setup/test-ai")
+    async def test_ai() -> dict:
+        ok, detail = await asyncio.to_thread(setup.test_ai)
+        return {"ok": ok, "detail": detail}
+
+    @app.post("/api/setup/check")
+    async def system_check() -> list[dict]:
+        return await asyncio.to_thread(setup.system_check)
 
     @app.get("/api/settings")
     def get_settings() -> dict[str, str]:

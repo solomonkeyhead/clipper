@@ -824,7 +824,7 @@ def tiktok_login(verbose: VerboseOpt = False) -> None:
     from .tiktok import api
 
     console.print("Opening TikTok in your browser. Approve access there; this waits up "
-                  "to 5 minutes.")
+                  "to 5 minutes. (Connecting another account adds it alongside.)")
     try:
         api.login()
     except api.TikTokError as exc:
@@ -845,7 +845,9 @@ def tiktok_sync(
     from .tiktok import api, sync
 
     try:
-        videos = api.list_videos(api.access_token())
+        if not api.token_files():
+            raise api.TikTokError("not connected yet: run `clipper tiktok login` once")
+        videos = [v for path in api.token_files() for v in api.list_videos(api.access_token(path))]
     except api.TikTokError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
@@ -1011,13 +1013,22 @@ def instagram_sync(
     from .instagram import api, sync
     from .learn import log as perf
 
+    rows = perf.read()
     try:
-        reels = api.list_reels(api.access_token())
+        if not api.token_files():
+            raise api.InstagramError("not connected yet: run `clipper instagram login` once")
+        results = []
+        for path in api.token_files():
+            found = api.list_reels(api.access_token(path))
+            results.append((found, sync.apply(found, rows, account=api.username(path))))
     except api.InstagramError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
-    rows = perf.read()
-    result = sync.apply(reels, rows, account=api.username())
+    reels = [r for found, _ in results for r in found]
+    result = sync.SyncResult(
+        matched=[m for _, r in results for m in r.matched],
+        unmatched=[u for _, r in results for u in r.unmatched],
+        ambiguous=[a for _, r in results for a in r.ambiguous])
     for caption, filled in result.matched:
         console.print(f"  {caption}...  [dim]{filled}[/dim]")
     for reel in result.unmatched:

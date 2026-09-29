@@ -21,23 +21,31 @@ _sync_lock = threading.Lock()
 
 
 def sync_all(rows: list[dict[str, str]]) -> list[str]:
-    """Sync `rows` from TikTok and, once connected, Instagram. Returns what failed."""
+    """Sync `rows` from every connected TikTok and Instagram account. Returns what failed."""
     from ..instagram import api as ig_api
     from ..instagram import sync as ig_sync
     from ..tiktok import api as tt_api
     from ..tiktok import sync as tt_sync
 
     problems = []
-    try:
-        tt_sync.apply(tt_api.list_videos(tt_api.access_token()), rows)
-    except tt_api.TikTokError as exc:
-        problems.append(f"TikTok: {exc}")
-    if ig_api.token_path().exists():
+    tiktoks = tt_api.token_files()
+    if not tiktoks and not ig_api.token_files():
+        return ["No accounts connected yet: connect TikTok or Instagram on the Accounts page"]
+    for path in tiktoks:
+        name = tt_api.read_token(path).get("handle") or tt_api.read_token(path).get("display_name") or ""
         try:
-            ig_sync.apply(ig_api.list_reels(ig_api.access_token()), rows,
-                          account=ig_api.username())
+            videos = tt_api.list_videos(tt_api.access_token(path))
+            tt_sync.apply(videos, rows)
+            handle = next((handle_from_url(v.url) for v in videos if "/@" in v.url), "")
+            tt_api.set_handle(path, handle)
+        except tt_api.TikTokError as exc:
+            problems.append(f"TikTok{f' @{name}' if name else ''}: {exc}")
+    for path in ig_api.token_files():
+        try:
+            ig_sync.apply(ig_api.list_reels(ig_api.access_token(path)), rows,
+                          account=ig_api.username(path))
         except ig_api.InstagramError as exc:
-            problems.append(f"Instagram: {exc}")
+            problems.append(f"Instagram @{ig_api.username(path)}: {exc}")
     return problems
 
 

@@ -60,8 +60,9 @@ class TestLogin:
         def token_request(body):
             sent.update(body)
             return {"access_token": "at", "refresh_token": "rt", "expires_in": 86400,
-                    "refresh_expires_in": 31536000, "obtained_at": time.time()}
+                    "refresh_expires_in": 31536000, "obtained_at": time.time(), "open_id": "u1"}
         monkeypatch.setattr(api, "_token_request", token_request)
+        monkeypatch.setattr(api, "_send", lambda req: {"data": {"user": {"display_name": "Solo"}}})
 
         def browser(url):  # what TikTok does after the user approves
             q = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
@@ -72,7 +73,8 @@ class TestLogin:
         api.login(timeout=10, open_browser=browser)
         assert sent["code"] == "abc" and sent["grant_type"] == "authorization_code"
         assert len(sent["code_verifier"]) >= 43
-        assert json.loads(api.token_path().read_text())["refresh_token"] == "rt"
+        saved = json.loads(api.token_path("u1").read_text())
+        assert saved["refresh_token"] == "rt" and saved["display_name"] == "Solo"
 
     def test_missing_app_keys_are_named(self, monkeypatch):
         monkeypatch.delenv("TIKTOK_CLIENT_KEY", raising=False)
@@ -101,7 +103,7 @@ class TestTokens:
         assert json.loads(api.token_path().read_text())["refresh_token"] == "rt2"
 
     def test_not_logged_in_says_what_to_run(self, keys, data_root):
-        with pytest.raises(api.TikTokError, match="clipper tiktok login"):
+        with pytest.raises(api.TikTokError, match="Accounts page"):
             api.access_token()
 
 
@@ -162,3 +164,14 @@ class TestSync:
                             rows, now=NOW)
         assert len(result.ambiguous) == 1 and len(result.unmatched) == 1
         assert not any(r.get("video_id") for r in rows)
+
+
+class TestAccounts:
+    def test_the_single_account_file_moves_in_and_more_can_be_added(self, data_root):
+        legacy = data_root / "tiktok" / "token.json"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text(json.dumps({"open_id": "first", "access_token": "a"}))
+        assert [p.stem for p in api.token_files()] == ["first"] and not legacy.exists()
+        api._save({"open_id": "second"}, api.token_path("second"))
+        assert [p.stem for p in api.token_files()] == ["first", "second"]
+        assert api.remove("first") and [p.stem for p in api.token_files()] == ["second"]

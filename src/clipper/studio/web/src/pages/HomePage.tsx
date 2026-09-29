@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, Circle, Inbox, Send, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowRight, CheckCircle2, Inbox, Send, Sparkles, TrendingUp } from "lucide-react";
 import { useCampaigns, useClips, useHome, type Clip } from "@/api/client";
 import { Card, Metric, PageHeader, Skeleton } from "@/components/ui";
 import { useUI } from "@/lib/store";
@@ -35,6 +35,54 @@ function PipelineColumn({ title, clips, tone }: { title: string; clips: Clip[]; 
   );
 }
 
+const STEPS: { key: string; title: string; body: string; to: string; action: string }[] = [
+  { key: "ai", title: "Add your free AI key", body: "Clipper uses it to find the best moments and write captions. Takes a minute.",
+    to: "/settings", action: "Add key" },
+  { key: "campaign", title: "Add a campaign", body: "Paste the brief of a campaign you've joined; Clipper fills in its rules.",
+    to: "/campaigns/new", action: "Add campaign" },
+  { key: "clips", title: "Make your first clips", body: "Drop in the campaign's footage and Clipper cuts, frames and captions it.",
+    to: "/new", action: "Make clips" },
+  { key: "accounts", title: "Connect TikTok or Instagram", body: "So Clipper can track views, earnings and your posts' links.",
+    to: "/accounts", action: "Connect" },
+];
+
+function GetStarted({ done }: { done: Record<string, boolean> }) {
+  const next = STEPS.find((s) => !done[s.key]);
+  const count = STEPS.filter((s) => done[s.key]).length;
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-md font-semibold">Get started</h2>
+        <span className="tabular text-xs text-muted">{count} of {STEPS.length} done</span>
+      </div>
+      <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {STEPS.map((step, i) => {
+          const isDone = Boolean(done[step.key]);
+          const isNext = step === next;
+          return (
+            <li key={step.key} className={cn("flex flex-col gap-2 rounded-md border p-4",
+              isNext ? "border-accent bg-accent-soft/50" : "border-line", isDone && "opacity-60")}>
+              <div className="flex items-center gap-2">
+                {isDone ? <CheckCircle2 className="size-5 text-success" />
+                  : <span className="grid size-5 place-items-center rounded-full bg-surface-3 text-[11px] font-bold">{i + 1}</span>}
+                <span className={cn("text-sm font-semibold", isDone && "line-through")}>{step.title}</span>
+              </div>
+              <p className="flex-1 text-xs text-muted">{step.body}</p>
+              {!isDone && (
+                <Link to={step.to}
+                      className={cn("inline-flex h-8 w-fit items-center gap-1.5 rounded-sm px-3 text-sm font-medium",
+                        isNext ? "bg-accent text-accent-fg hover:bg-accent-hover" : "border border-line bg-surface-2 hover:bg-surface-3")}>
+                  {step.action} <ArrowRight className="size-3.5" />
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
 export function DashboardPage() {
   const { data: home } = useHome();
   const { data: clips = [] } = useClips();
@@ -58,7 +106,9 @@ export function DashboardPage() {
 
   return (
     <div className="fade-in flex flex-col gap-8">
-      <PageHeader title={greeting()} subtitle="Here's where your clips stand." />
+      <PageHeader title={greeting()} subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : "Here's where your clips stand."} />
+      {firstRun && <GetStarted done={home.first_run} />}
+      {home.first_run.clips && <>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Metric label="Est. earnings" tone="money" value={formatMoney(m.est_earnings)}
@@ -126,21 +176,6 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {firstRun && (
-        <Card className="p-5">
-          <h2 className="mb-3 text-md font-semibold">Get set up</h2>
-          <ul className="flex flex-col gap-2 text-sm">
-            {([["accounts", "Connect TikTok or Instagram (Accounts)"], ["campaign", "Add a campaign"],
-               ["clips", "Make your first clips"]] as const).map(([key, label]) => (
-              <li key={key} className="flex items-center gap-2">
-                {home.first_run[key] ? <CheckCircle2 className="size-4 text-success" /> : <Circle className="size-4 text-subtle" />}
-                <span className={cn(home.first_run[key] && "text-muted line-through")}>{label}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
       <section>
         <h2 className="mb-3 text-md font-semibold">Pipeline</h2>
         <div className="grid gap-3 md:grid-cols-3">
@@ -149,6 +184,7 @@ export function DashboardPage() {
           <PipelineColumn title="Submitted" clips={by("submitted")} tone="bg-success" />
         </div>
       </section>
+      </>}
     </div>
   );
 }

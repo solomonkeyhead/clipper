@@ -45,6 +45,11 @@ export function useLiveUpdates() {
       source.addEventListener("settings.changed", () => {
         qc.invalidateQueries({ queryKey: keys.settings });
         qc.invalidateQueries({ queryKey: keys.status });
+        qc.invalidateQueries({ queryKey: keys.setup });
+        qc.invalidateQueries({ queryKey: keys.home });
+      });
+      source.addEventListener("accounts.changed", () => {
+        [keys.accounts, keys.setup, keys.status, keys.home].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
       });
       source.onerror = () => {
         failures += 1;
