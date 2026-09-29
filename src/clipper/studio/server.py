@@ -22,11 +22,14 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from ..campaign import editor
+from ..campaign.editor import CampaignError, CampaignForm
 from ..config import CampaignConfig
 from ..learn import log as perf
 from ..paths import REPO_ROOT
@@ -96,6 +99,8 @@ class CampaignCounts(BaseModel):
 
 class Campaign(BaseModel):
     name: str
+    title: str
+    marketplace: str = ""
     has_brief: bool
     archived: bool
     auto_post: bool | None
@@ -186,9 +191,11 @@ def campaigns_dir() -> Path:
 def load_campaigns() -> dict[str, CampaignConfig]:
     out = {}
     for path in sorted(campaigns_dir().glob("*.yaml")):
+        if path.name == "example.yaml":  # the template, not a campaign
+            continue
         try:
             campaign = CampaignConfig.load(path)
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, yaml.YAMLError) as exc:  # one bad file mustn't hide the rest
             log.warning("skipping %s: %s", path.name, exc)
             continue
         out[campaign.name] = campaign
@@ -269,8 +276,9 @@ class Snapshot:
                         brief.max_payout_usd if brief else None),
                     submitted_at=self.submitted.get(p["url"])))
             status = effective_status(c, models)
-            if models and status == "posted" and all(m.submitted_at for m in models):
-                status = "submitted"
+            if models and status in ("posted", "submitted"):
+                # A post found after the clip was marked submitted still needs submitting.
+                status = "submitted" if all(m.submitted_at for m in models) else "posted"
             self.clips.append(Clip(
                 id=c["id"], campaign=c["campaign"], title=c["title"] or c["clip_id"],
                 hook=c["hook"], caption=c["caption"], duration_s=c["duration_s"],
@@ -292,7 +300,8 @@ class Snapshot:
         st = self.state.get(name, {})
         auto = st.get("auto_post")
         return Campaign(
-            name=name, has_brief=brief is not None, archived=bool(st.get("archived")),
+            name=name, title=editor.title_of(brief) if brief else editor.pretty(name),
+            marketplace=brief.marketplace if brief else "", has_brief=brief is not None, archived=bool(st.get("archived")),
             auto_post=None if auto is None else bool(auto),
             platforms=list(brief.platform_targets) if brief else [],
             reward_per_1k_usd=brief.reward_per_1k_usd if brief else None,
@@ -462,6 +471,21 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     app = FastAPI(title="Clipper Control Center", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
 
+    @app.middleware("http")
+    async def same_origin_writes(request: Request, call_next):
+        """Only the Control Center's own pages may change things.
+
+        It listens on 127.0.0.1, but any website open in the browser could still
+        send it a request; browsers label those with the site's Origin.
+        """
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            if origin and origin.split("://", 1)[-1] != request.headers.get("host", ""):
+                from fastapi.responses import JSONResponse
+
+                return JSONResponse({"detail": "cross-site request refused"}, status_code=403)
+        return await call_next(request)
+
     @app.get("/api/status")
     def status() -> Status:
         rows = perf.read()
@@ -547,6 +571,68 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         broker.publish("campaigns.changed")
         return {"ok": True}
 
+    @app.get("/api/campaigns/{name}/form")
+    def campaign_form(name: str) -> CampaignForm:
+        campaign = load_campaigns().get(name)
+        if campaign is None:
+            raise HTTPException(404, f"no campaign {name!r}")
+        return editor.to_form(campaign)
+
+    @app.post("/api/campaigns")
+    def create_campaign(form: CampaignForm) -> dict:
+        try:
+            campaign = editor.create(campaigns_dir(), form)
+        except CampaignError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("campaigns.changed")
+        return {"name": campaign.name}
+
+    @app.put("/api/campaigns/{name}")
+    def edit_campaign(name: str, form: CampaignForm) -> dict:
+        try:
+            campaign = editor.update(campaigns_dir(), name, form)
+        except CampaignError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("campaigns.changed")
+        return {"name": campaign.name}
+
+    @app.delete("/api/campaigns/{name}")
+    def delete_campaign(name: str) -> dict:
+        """Only a campaign with no clips; one with clips is archived instead."""
+        from ..utils.recycle import recycle
+
+        with db.connect() as con:
+            if con.execute("SELECT 1 FROM clips WHERE campaign=? LIMIT 1", (name,)).fetchone():
+                raise HTTPException(400, "this campaign has clips; archive it instead")
+        path = editor.path_for(campaigns_dir(), name)
+        if path is None:
+            raise HTTPException(404, f"no campaign {name!r}")
+        if not recycle(path):
+            raise HTTPException(500, "could not move the file to the Recycle Bin")
+        broker.publish("campaigns.changed")
+        return {"ok": True}
+
+    @app.post("/api/campaigns/read-brief")
+    def read_brief(body: dict) -> CampaignForm:
+        """Fill the New campaign form from a pasted brief (the configured AI model)."""
+        from ..config import Config
+        from ..pipeline import build_backend
+
+        try:
+            backend = build_backend(Config.load())
+        except Exception as exc:  # no key, backend not installed
+            raise HTTPException(400, f"AI isn't set up ({str(exc).splitlines()[0]}). "
+                                     "Add your AI key in Settings, or fill the form in "
+                                     "yourself.") from exc
+        try:
+            return editor.read_brief(str(body.get("text") or ""), backend)
+        except CampaignError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:  # the model is busy / refused
+            log.warning("reading a brief failed: %s", exc)
+            raise HTTPException(503, "the AI model didn't answer (it may be busy). Try again "
+                                     "in a minute, or fill the form in yourself.") from exc
+
     @app.get("/api/clips")
     def clips(campaign: str | None = None) -> list[Clip]:
         return [c for c in Snapshot().clips if campaign is None or c.campaign == campaign]
@@ -584,6 +670,23 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         with db.connect() as con:
             db.set_submitted(con, url, bool(changes.get("submitted", True)))
         broker.publish("clips.changed")
+        return {"ok": True}
+
+    @app.put("/api/clips/{clip_id}/submitted")
+    def clip_submitted(clip_id: int, changes: dict) -> dict:
+        """Mark a clip submitted (or not): its status, and every post link it has."""
+        submitted = bool(changes.get("submitted", True))
+        found = next((c for c in Snapshot().clips if c.id == clip_id), None)
+        if found is None:
+            raise HTTPException(404, "no such clip")
+        with db.connect() as con:
+            for post in found.posts:
+                db.set_submitted(con, post.url.split("?", 1)[0], submitted)
+            if submitted:
+                db.update_clip(con, clip_id, status="submitted")
+            elif found.marked == "submitted":
+                db.update_clip(con, clip_id, status="posted" if found.posts else "ready")
+        broker.publish("clips.changed", {"id": clip_id})
         return {"ok": True}
 
     @app.get("/api/posts/history")

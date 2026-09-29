@@ -203,3 +203,66 @@ export function uploadVideo(file: File, onProgress: (fraction: number) => void):
     xhr.send(file);
   });
 }
+
+/* ---------- campaigns: create, edit, read a brief ---------- */
+
+export type CampaignForm = Required<components["schemas"]["CampaignForm"]>;
+
+export const useCampaignForm = (name: string | undefined) =>
+  useQuery({
+    queryKey: ["campaign-form", name],
+    enabled: Boolean(name),
+    queryFn: async () => (await unwrap(api.GET("/api/campaigns/{name}/form",
+      { params: { path: { name: name! } } }))) as CampaignForm,
+  });
+
+export function useSaveCampaign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ form, name }: { form: CampaignForm; name?: string }) => name
+      ? unwrap(api.PUT("/api/campaigns/{name}", { params: { path: { name } }, body: form }))
+      : unwrap(api.POST("/api/campaigns", { body: form })),
+    onSuccess: () => {
+      CLIP_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey }));
+      qc.invalidateQueries({ queryKey: ["campaign-form"] });
+    },
+  });
+}
+
+export function useDeleteCampaign() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (name: string) => unwrap(api.DELETE("/api/campaigns/{name}", { params: { path: { name } } })),
+    onSettled: invalidate,
+  });
+}
+
+export const readBrief = async (text: string) =>
+  (await unwrap(api.POST("/api/campaigns/read-brief", { body: { text } }))) as CampaignForm;
+
+/** A campaign's display name from its id ("chad-powers-s2" -> "Chad Powers S2"). */
+export function useCampaignTitle() {
+  const { data: campaigns = [] } = useCampaigns();
+  const titles = new Map(campaigns.map((c) => [c.name, c.title]));
+  return (name: string) => titles.get(name) ?? name;
+}
+
+/* ---------- submitted, per clip ---------- */
+
+export function useSetClipSubmitted() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, submitted }: { id: number; submitted: boolean }) =>
+      unwrap(api.PUT("/api/clips/{clip_id}/submitted", { params: { path: { clip_id: id } }, body: { submitted } })),
+    onMutate: async ({ id, submitted }) => {
+      await qc.cancelQueries({ queryKey: keys.clips });
+      const previous = qc.getQueryData<Clip[]>(keys.clips);
+      qc.setQueryData<Clip[]>(keys.clips, (old) => old?.map((c) => c.id === id
+        ? { ...c, status: submitted ? "submitted" : c.posts.length ? "posted" : "ready" } : c));
+      return { previous };
+    },
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
+    onSettled: invalidate,
+  });
+}

@@ -41,3 +41,4 @@ desktop.ini
 
 # Base Python for .venv, kept outside AppData so Task Scheduler can run it
 .python/
+campaigns/.history/

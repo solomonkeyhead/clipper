@@ -1,5 +1,6 @@
 # Pipeline test on a Creative Commons source, chosen 2026-09-22.
 name: cc-blocks
+title: "Neal Brennan: Blocks (test)"
 
 # Verified from the video's own metadata (yt-dlp `license` field) on 2026-09-22:
 # "Creative Commons Attribution license (reuse allowed)", uploaded by the show's

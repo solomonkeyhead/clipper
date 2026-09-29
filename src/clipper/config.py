@@ -443,6 +443,11 @@ class CampaignConfig(StrictModel):
 
     name: str
     source_authorization: str
+    # The name shown in the Control Center ("Chad Powers S2"); `name` stays the
+    # id, the library folder and the file name, so a rename never moves clips.
+    title: str = ""
+    # Where the campaign runs: "Content Rewards", "Vyro", ...
+    marketplace: str = ""
     # Open-licence campaigns (e.g. Creative Commons): refuse any video whose own
     # listing does not state this licence -- checked before downloading.
     require_license: str | None = None

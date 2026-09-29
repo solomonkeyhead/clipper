@@ -1,5 +1,6 @@
 # Local pipeline test. Nothing produced from this config is published.
 name: local-test
+title: Local test
 
 # Recorded accurately: this is a technical test of the pipeline on a
 # user-supplied source, run locally, with no publication or redistribution.

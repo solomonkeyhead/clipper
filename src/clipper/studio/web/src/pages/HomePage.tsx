@@ -35,7 +35,7 @@ function PipelineColumn({ title, clips, tone }: { title: string; clips: Clip[]; 
   );
 }
 
-export function HomePage() {
+export function DashboardPage() {
   const { data: home } = useHome();
   const { data: clips = [] } = useClips();
   const { data: campaigns = [] } = useCampaigns();
@@ -105,14 +105,14 @@ export function HomePage() {
         <Card className="flex flex-col gap-2 p-5">
           <h2 className="mb-1 text-md font-semibold">Next up</h2>
           {m.ready > 0 && (
-            <Link to="/queue" className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
+            <Link to="/clips" search={{ status: "ready" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
               <Send className="size-4 text-accent" />
               <span className="flex-1 text-sm">{m.ready} clip{m.ready === 1 ? "" : "s"} ready to post</span>
               <ArrowRight className="size-4 text-subtle" />
             </Link>
           )}
           {m.to_submit > 0 && (
-            <Link to="/submissions" className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
+            <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
               <Inbox className="size-4 text-warning" />
               <span className="flex-1 text-sm">{m.to_submit} link{m.to_submit === 1 ? "" : "s"} to submit</span>
               <ArrowRight className="size-4 text-subtle" />

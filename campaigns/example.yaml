@@ -2,6 +2,9 @@
 # run without it, and a placeholder like "TBD" is rejected.
 
 name: example-campaign
+# Shown in the Control Center; `name` stays the id and library folder.
+title: Example Campaign
+marketplace: Content Rewards
 
 # REQUIRED. Name the campaign, the URL, or the explicit creator permission that
 # covers this footage. This is the record of why you are allowed to clip it.

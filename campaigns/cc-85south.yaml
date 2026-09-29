@@ -5,6 +5,7 @@
 # 2026-09-26: the channel mixes CC and standard-licence uploads, so every
 # video is checked before download (require_license + allowed_channels).
 name: cc-85south
+title: 85 South Show (growth)
 
 source_authorization: >-
   YouTube Creative Commons Attribution licence (reuse allowed, CC BY 3.0), as

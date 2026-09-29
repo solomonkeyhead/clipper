@@ -120,3 +120,47 @@ def test_a_job_runs_the_pipeline_and_reports_progress(client, tmp_path, monkeypa
         time.sleep(0.05)
     assert latest["id"] == job["id"] and latest["status"] == "done", latest
     assert latest["clips"] == 2 and latest["pct"] == 100 and latest["stage"] == "Made 2 clips"
+
+
+class TestSubmitted:
+    def test_a_clip_is_marked_submitted_and_back(self, client, data_root):
+        clip = add_clip(data_root)
+        assert client.put(f"/api/clips/{clip}/submitted", json={"submitted": True}).status_code == 200
+        assert client.get(f"/api/clips/{clip}").json()["status"] == "submitted"
+        client.put(f"/api/clips/{clip}/submitted", json={"submitted": False})
+        assert client.get(f"/api/clips/{clip}").json()["status"] == "ready"
+
+
+def test_other_sites_cannot_change_anything(client, data_root):
+    clip = add_clip(data_root)
+    res = client.delete(f"/api/clips/{clip}", headers={"Origin": "https://evil.example"})
+    assert res.status_code == 403
+    assert client.delete(f"/api/clips/{clip}", headers={"Origin": "http://testserver"}).status_code == 200
+
+
+class TestCampaigns:
+    FORM = {"title": "My New Show", "reward_per_1k_usd": 2, "required_hashtags": ["#myshow"]}
+
+    def test_create_edit_and_delete(self, client, tmp_path):
+        res = client.post("/api/campaigns", json=self.FORM)
+        assert res.status_code == 200 and res.json()["name"] == "my-new-show"
+        names = {c["name"]: c["title"] for c in client.get("/api/campaigns").json()}
+        assert names["my-new-show"] == "My New Show"
+        form = client.get("/api/campaigns/my-new-show/form").json()
+        assert client.put("/api/campaigns/my-new-show", json={**form, "title": "Renamed"}).status_code == 200
+        assert client.get("/api/campaigns/my-new-show").json()["campaign"]["title"] == "Renamed"
+        assert client.post("/api/campaigns", json={"title": "my new show"}).status_code == 400
+
+    def test_a_campaign_with_clips_is_not_deleted(self, client, data_root):
+        add_clip(data_root)
+        assert client.delete("/api/campaigns/test-campaign").status_code == 400
+
+    def test_reading_a_brief_without_ai_says_so(self, client, monkeypatch):
+        from clipper import pipeline
+
+        def no_key(*a, **k):
+            raise RuntimeError("GEMINI_API_KEY is not set.")
+
+        monkeypatch.setattr(pipeline, "build_backend", no_key)
+        res = client.post("/api/campaigns/read-brief", json={"text": "x" * 100})
+        assert res.status_code == 400 and "Settings" in res.json()["detail"]

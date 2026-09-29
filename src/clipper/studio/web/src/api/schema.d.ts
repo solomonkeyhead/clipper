@@ -68,7 +68,8 @@ export interface paths {
         /** Campaigns */
         get: operations["campaigns_api_campaigns_get"];
         put?: never;
-        post?: never;
+        /** Create Campaign */
+        post: operations["create_campaign_api_campaigns_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -84,13 +85,55 @@ export interface paths {
         };
         /** Campaign */
         get: operations["campaign_api_campaigns__name__get"];
+        /** Edit Campaign */
+        put: operations["edit_campaign_api_campaigns__name__put"];
+        post?: never;
+        /**
+         * Delete Campaign
+         * @description Only a campaign with no clips; one with clips is archived instead.
+         */
+        delete: operations["delete_campaign_api_campaigns__name__delete"];
+        options?: never;
+        head?: never;
+        /** Update Campaign */
+        patch: operations["update_campaign_api_campaigns__name__patch"];
+        trace?: never;
+    };
+    "/api/campaigns/{name}/form": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Campaign Form */
+        get: operations["campaign_form_api_campaigns__name__form_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Campaign */
-        patch: operations["update_campaign_api_campaigns__name__patch"];
+        patch?: never;
+        trace?: never;
+    };
+    "/api/campaigns/read-brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Brief
+         * @description Fill the New campaign form from a pasted brief (the configured AI model).
+         */
+        post: operations["read_brief_api_campaigns_read_brief_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/clips": {
@@ -159,6 +202,26 @@ export interface paths {
         get?: never;
         /** Mark Submitted */
         put: operations["mark_submitted_api_posts_submitted_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clips/{clip_id}/submitted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Clip Submitted
+         * @description Mark a clip submitted (or not): its status, and every post link it has.
+         */
+        put: operations["clip_submitted_api_clips__clip_id__submitted_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -440,6 +503,13 @@ export interface components {
         Campaign: {
             /** Name */
             name: string;
+            /** Title */
+            title: string;
+            /**
+             * Marketplace
+             * @default
+             */
+            marketplace: string;
             /** Has Brief */
             has_brief: boolean;
             /** Archived */
@@ -491,6 +561,131 @@ export interface components {
             brief: components["schemas"]["Brief"] | null;
             /** Clips */
             clips: components["schemas"]["Clip"][];
+        };
+        /**
+         * CampaignForm
+         * @description What the New campaign / Edit campaign page shows.
+         */
+        CampaignForm: {
+            /** Title */
+            title: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Marketplace
+             * @default
+             */
+            marketplace: string;
+            /**
+             * Campaign Url
+             * @default
+             */
+            campaign_url: string;
+            /** Reward Per 1K Usd */
+            reward_per_1k_usd?: number | null;
+            /** Min Payout Usd */
+            min_payout_usd?: number | null;
+            /** Max Payout Usd */
+            max_payout_usd?: number | null;
+            /**
+             * Deadline
+             * @default
+             */
+            deadline: string;
+            /**
+             * Source Authorization
+             * @default
+             */
+            source_authorization: string;
+            /** Platform Targets */
+            platform_targets?: string[];
+            /**
+             * Content Type
+             * @default scripted
+             * @enum {string}
+             */
+            content_type: "scripted" | "podcast" | "other";
+            /**
+             * Min Seconds
+             * @default 15
+             */
+            min_seconds: number;
+            /**
+             * Max Seconds
+             * @default 60
+             */
+            max_seconds: number;
+            /**
+             * Selection Focus
+             * @default
+             */
+            selection_focus: string;
+            /**
+             * Required Caption Text
+             * @default
+             */
+            required_caption_text: string;
+            /** Required Hashtags */
+            required_hashtags?: string[];
+            /**
+             * Only Required Hashtags
+             * @default false
+             */
+            only_required_hashtags: boolean;
+            /**
+             * Required Credit Text
+             * @default
+             */
+            required_credit_text: string;
+            /** Fallback Captions */
+            fallback_captions?: string[];
+            /**
+             * Fixed Captions
+             * @default false
+             */
+            fixed_captions: boolean;
+            /** Hook Texts */
+            hook_texts?: string[];
+            /**
+             * Hook Overlay
+             * @default true
+             */
+            hook_overlay: boolean;
+            /**
+             * Keep Original Audio
+             * @default false
+             */
+            keep_original_audio: boolean;
+            /**
+             * Brief Rules
+             * @default
+             */
+            brief_rules: string;
+            /**
+             * Long Description
+             * @default true
+             */
+            long_description: boolean;
+            /**
+             * Description Context
+             * @default
+             */
+            description_context: string;
+            /** Description Keywords */
+            description_keywords?: string[];
+            /**
+             * Max Clips Per Source
+             * @default 6
+             */
+            max_clips_per_source: number;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
         };
         /** Clip */
         Clip: {
@@ -735,6 +930,41 @@ export interface operations {
             };
         };
     };
+    create_campaign_api_campaigns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignForm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     campaign_api_campaigns__name__get: {
         parameters: {
             query?: never;
@@ -753,6 +983,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_campaign_api_campaigns__name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignForm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_campaign_api_campaigns__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -792,6 +1092,72 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    campaign_form_api_campaigns__name__form_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignForm"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_brief_api_campaigns_read_brief_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignForm"];
                 };
             };
             /** @description Validation Error */
@@ -975,6 +1341,45 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clip_submitted_api_clips__clip_id__submitted_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
             cookie?: never;
         };
         requestBody: {

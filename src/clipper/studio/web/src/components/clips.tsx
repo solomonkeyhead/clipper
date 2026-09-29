@@ -1,9 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { Download, ExternalLink, FolderOpen, Info, SkipForward, Trash2, Upload, X } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, FolderOpen, Info, SkipForward, Trash2, Undo2, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  downloadUrl, revealClip, useClips, useDeleteClip, useSetClipStatus, useSetNote,
+  downloadUrl, revealClip, useCampaignTitle, useClips, useDeleteClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -29,6 +29,40 @@ export function useStatusWithUndo() {
       action: { label: "Undo", onClick: () => mutation.mutate({ id: clip.id, status: previous }) },
     });
   };
+}
+
+/** Mark a clip (all its post links) submitted to its campaign, with a 5-second undo. */
+export function useSubmittedWithUndo() {
+  const mutation = useSetClipSubmitted();
+  return (clip: Clip, submitted = true) => {
+    mutation.mutate({ id: clip.id, submitted });
+    if (submitted) {
+      toast("Marked submitted", {
+        description: clip.title, duration: 5000,
+        action: { label: "Undo", onClick: () => mutation.mutate({ id: clip.id, submitted: false }) },
+      });
+    }
+  };
+}
+
+export function SubmitButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
+  const submit = useSubmittedWithUndo();
+  if (clip.status === "submitted") {
+    return (
+      <Tip label="Undo: back to not submitted">
+        <Button size={size} variant="ghost" onClick={(e) => { e.stopPropagation(); submit(clip, false); }}>
+          <Undo2 className="size-3.5" /> Unmark submitted
+        </Button>
+      </Tip>
+    );
+  }
+  return (
+    <Tip label="You've pasted its link into the campaign's submission form" keys="S">
+      <Button size={size} variant="primary" onClick={(e) => { e.stopPropagation(); submit(clip); }}>
+        <CheckCircle2 className="size-3.5" /> Mark submitted
+      </Button>
+    </Tip>
+  );
 }
 
 export async function showFile(id: number) {
@@ -160,6 +194,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
   clip: Clip; showCampaign?: boolean; focused?: boolean;
 }) {
   const open = useUI((s) => s.setOpenClip);
+  const title = useCampaignTitle();
   const { views, best } = bestViews(clip);
   return (
     <article
@@ -185,14 +220,24 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
           )}
         </div>
         <h3 className="line-clamp-2 text-sm leading-snug font-semibold">{clip.title}</h3>
-        <div className="truncate text-xs text-muted" title={`${clip.campaign} · ${clip.source_title}`}>
-          {showCampaign ? clip.campaign : clip.source_title}
+        <div className="truncate text-xs text-muted" title={`${title(clip.campaign)} · ${clip.source_title}`}>
+          {showCampaign ? title(clip.campaign) : clip.source_title}
         </div>
       </div>
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
-        {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
-        <LinkButtons posts={clip.posts} />
-        {clip.file_exists && <DownloadButton clip={clip} label={clip.posts.length === 0} />}
+        {clip.status === "posted" ? (
+          <>
+            <LinkButtons posts={clip.posts} withLabel={clip.posts.length < 2} />
+            <SubmitButton clip={clip} />
+          </>
+        ) : clip.status === "submitted" ? (
+          <LinkButtons posts={clip.posts} />
+        ) : (
+          <>
+            {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
+            {clip.file_exists && <DownloadButton clip={clip} />}
+          </>
+        )}
         <span className="ml-auto"><DeleteButton clip={clip} /></span>
       </div>
     </article>
@@ -258,6 +303,8 @@ export function ClipSheet() {
   const setOpen = useUI((s) => s.setOpenClip);
   const clip = clips.find((c) => c.id === openId) ?? null;
   const setStatus = useStatusWithUndo();
+  const submit = useSubmittedWithUndo();
+  const title = useCampaignTitle();
   const remove = useDeleteWithUndo();
   const setNote = useSetNote();
   const [note, setNoteText] = useState("");
@@ -277,6 +324,7 @@ export function ClipSheet() {
     p: () => clip && setStatus(clip, "posted"),
     x: () => clip && setStatus(clip, "skipped"),
     r: () => clip && setStatus(clip, "ready"),
+    s: () => clip && clip.status !== "submitted" && submit(clip),
     f: () => clip && void showFile(clip.id),
     d: () => clip?.file_exists && window.location.assign(downloadUrl(clip.id)),
     Delete: () => clip && remove(clip),
@@ -317,7 +365,7 @@ export function ClipSheet() {
                   <div className="min-w-0">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       <StatusChip status={clip.status} />
-                      <span className="text-xs text-muted">{clip.campaign} · {clip.source_title} · {formatDuration(clip.duration_s)}</span>
+                      <span className="text-xs text-muted">{title(clip.campaign)} · {clip.source_title} · {formatDuration(clip.duration_s)}</span>
                     </div>
                     <Dialog.Title className="text-lg font-semibold">{clip.title}</Dialog.Title>
                     {clip.hook && clip.hook !== clip.title && (
@@ -330,12 +378,13 @@ export function ClipSheet() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  {(clip.status === "posted" || clip.status === "submitted") && <SubmitButton clip={clip} size="md" />}
                   {clip.status === "ready" || clip.status === "skipped" ? (
                     <Button variant="primary" onClick={() => setStatus(clip, "posted")}>
                       <Upload className="size-4" /> Mark posted <Kbd className="border-white/30 bg-white/10 text-white">P</Kbd>
                     </Button>
-                  ) : (
-                    <Button variant="secondary" onClick={() => setStatus(clip, "ready")}>Back to ready <Kbd>R</Kbd></Button>
+                  ) : clip.posts.length === 0 && (
+                    <Button variant="ghost" onClick={() => setStatus(clip, "ready")}>Back to ready <Kbd>R</Kbd></Button>
                   )}
                   {clip.status !== "skipped" && (
                     <Button variant="ghost" onClick={() => setStatus(clip, "skipped")}>

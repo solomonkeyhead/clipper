@@ -150,7 +150,7 @@ export function NewClipsPage() {
                 <button key={c.name} onClick={() => setCampaign(c.name)}
                   className={cn("flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
                     campaign === c.name ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
-                  <span className="truncate text-sm font-medium">{c.name}</span>
+                  <span className="truncate text-sm font-medium">{c.title}</span>
                   <span className="flex items-center gap-1.5 text-muted">
                     {c.platforms.map((p) => <PlatformIcon key={p} platform={p} className="size-3.5" />)}
                   </span>

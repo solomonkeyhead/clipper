@@ -1,19 +1,20 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  createRootRoute, createRoute, createRouter, RouterProvider,
+  createRootRoute, createRoute, createRouter, redirect, RouterProvider,
 } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import { AppShell } from "./components/AppShell";
 import { useUI } from "./lib/store";
+import { CampaignEditorPage } from "./pages/CampaignEditor";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
-import { HomePage } from "./pages/HomePage";
+import { DashboardPage } from "./pages/HomePage";
 import { NewClipsPage } from "./pages/NewClipsPage";
 import { AccountsPage, SettingsPage } from "./pages/SettingsPages";
 import { StatsPage } from "./pages/StatsPage";
-import { ClipsPage, QueuePage, SubmissionsPage, type ClipFilter } from "./pages/WorkPages";
+import { ClipsPage, type ClipFilter } from "./pages/WorkPages";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -22,9 +23,11 @@ const queryClient = new QueryClient({
 
 const root = createRootRoute({ component: AppShell });
 const routes = [
-  createRoute({ getParentRoute: () => root, path: "/", component: HomePage }),
+  createRoute({ getParentRoute: () => root, path: "/", component: DashboardPage }),
   createRoute({ getParentRoute: () => root, path: "/campaigns", component: CampaignsPage }),
+  createRoute({ getParentRoute: () => root, path: "/campaigns/new", component: CampaignEditorPage }),
   createRoute({ getParentRoute: () => root, path: "/campaigns/$name", component: CampaignPage }),
+  createRoute({ getParentRoute: () => root, path: "/campaigns/$name/edit", component: CampaignEditorPage }),
   createRoute({
     getParentRoute: () => root, path: "/clips", component: ClipsPage,
     validateSearch: (s: Record<string, unknown>): { status?: ClipFilter; campaign?: string } => ({
@@ -33,8 +36,11 @@ const routes = [
     }),
   }),
   createRoute({ getParentRoute: () => root, path: "/new", component: NewClipsPage }),
-  createRoute({ getParentRoute: () => root, path: "/queue", component: QueuePage }),
-  createRoute({ getParentRoute: () => root, path: "/submissions", component: SubmissionsPage }),
+  // Queue and Submissions became filters on Clips.
+  createRoute({ getParentRoute: () => root, path: "/queue",
+                beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "ready" } }); } }),
+  createRoute({ getParentRoute: () => root, path: "/submissions",
+                beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "posted" } }); } }),
   createRoute({ getParentRoute: () => root, path: "/stats", component: StatsPage }),
   createRoute({ getParentRoute: () => root, path: "/accounts", component: AccountsPage }),
   createRoute({ getParentRoute: () => root, path: "/settings", component: SettingsPage }),

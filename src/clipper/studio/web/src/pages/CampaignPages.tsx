@@ -1,5 +1,5 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { Archive, ArchiveRestore, CalendarClock, ExternalLink, Megaphone, ShieldCheck } from "lucide-react";
+import { Archive, ArchiveRestore, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useCampaign, useCampaigns, useSetCampaign, type Brief, type Campaign } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
@@ -14,12 +14,13 @@ function CampaignCard({ c }: { c: Campaign }) {
           className="group flex flex-col gap-4 rounded-lg border border-line bg-surface-1 p-5 shadow-1 transition-colors duration-[var(--dur-base)] hover:border-line-strong hover:bg-surface-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-md font-semibold">{c.name}</h3>
+          <h3 className="truncate text-md font-semibold">{c.title}</h3>
           <div className="mt-1 flex items-center gap-1.5 text-muted">
             {c.platforms.map((p) => (
               <Tip key={p} label={PLATFORM_NAME[p] ?? p}><span><PlatformIcon platform={p} /></span></Tip>
             ))}
-            {c.last_post && <span className="ml-1 text-xs">last post {ago(c.last_post)}</span>}
+            {c.marketplace && <span className="ml-1 text-xs">{c.marketplace}</span>}
+            {c.last_post && <span className="ml-1 text-xs">· last post {ago(c.last_post)}</span>}
           </div>
         </div>
         {c.reward_per_1k_usd !== null && c.reward_per_1k_usd !== undefined && (
@@ -49,6 +50,15 @@ function CampaignCard({ c }: { c: Campaign }) {
   );
 }
 
+export function NewCampaignButton() {
+  return (
+    <Link to="/campaigns/new"
+          className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+      <Plus className="size-4" /> New campaign
+    </Link>
+  );
+}
+
 export function CampaignsPage() {
   const { data, isLoading } = useCampaigns();
   const [showArchived, setShowArchived] = useState(false);
@@ -57,19 +67,23 @@ export function CampaignsPage() {
   return (
     <div className="fade-in">
       <PageHeader title="Campaigns" subtitle="Each campaign's pay, rules and progress."
-        actions={archivedCount > 0 && (
-          <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>
-            {showArchived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
-            {showArchived ? "Active campaigns" : `Archived (${archivedCount})`}
-          </Button>
-        )} />
+        actions={<>
+          {archivedCount > 0 && (
+            <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>
+              {showArchived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+              {showArchived ? "Active campaigns" : `Archived (${archivedCount})`}
+            </Button>
+          )}
+          <NewCampaignButton />
+        </>} />
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}</div>
       ) : list.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{list.map((c) => <CampaignCard key={c.name} c={c} />)}</div>
       ) : (
-        <EmptyState icon={<Megaphone className="size-5" />} title={showArchived ? "Nothing archived" : "No active campaigns"}
-          body="Add a campaign's brief under campaigns/ in the Clipper folder, and it shows up here." />
+        <EmptyState icon={<Megaphone className="size-5" />} title={showArchived ? "Nothing archived" : "No campaigns yet"}
+          body={showArchived ? undefined : "Joined a campaign on Content Rewards or Vyro? Add it here: paste its brief and Clipper fills in the rules."}
+          action={showArchived ? undefined : <NewCampaignButton />} />
       )}
     </div>
   );
@@ -148,7 +162,7 @@ export function CampaignPage() {
   return (
     <div className="fade-in">
       <PageHeader
-        title={<span className="flex items-center gap-3">{c.name}{c.archived && <Chip>Archived</Chip>}</span>}
+        title={<span className="flex items-center gap-3">{c.title}{c.archived && <Chip>Archived</Chip>}</span>}
         subtitle={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {c.reward_per_1k_usd != null && <span><b className="text-money">{formatMoney(c.reward_per_1k_usd)}</b> per 1K views</span>}
@@ -164,6 +178,12 @@ export function CampaignPage() {
                className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
               <ExternalLink className="size-4" /> Campaign page
             </a>
+          )}
+          {c.has_brief && (
+            <Link to="/campaigns/$name/edit" params={{ name: c.name }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
+              <Pencil className="size-4" /> Edit
+            </Link>
           )}
           <Button variant="ghost" onClick={() => setCampaign.mutate({ name: c.name, archived: !c.archived })}>
             {c.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
@@ -186,7 +206,8 @@ export function CampaignPage() {
           </div>
           {tab === "clips" ? (
             clips.length ? <ClipGrid clips={clips} /> : <EmptyState icon={<Megaphone className="size-5" />} title="No clips yet"
-              body="Run clipper on this campaign's footage and the clips land here." />
+              body="Give Clipper this campaign's footage and the clips land here."
+              action={<Link to="/new" search={{ campaign: c.name }} className="text-sm font-medium text-accent hover:underline">Make clips →</Link>} />
           ) : (
             <PostTable posts={posts} />
           )}

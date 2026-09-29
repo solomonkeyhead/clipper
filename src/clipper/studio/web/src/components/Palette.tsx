@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
-  BarChart3, Film, Home, Inbox, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
+  BarChart3, Film, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
   Settings, Sun, UserCircle2,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -68,7 +68,8 @@ export function CommandPalette() {
   const { data: clips = [] } = useClips();
 
   const run = (fn: () => void) => () => { setOpen(false); fn(); };
-  const go = (to: string) => run(() => void navigate({ to }));
+  const go = (to: string, search?: Record<string, string>) => run(() => void navigate({ to, search }));
+  const title = new Map(campaigns.map((c) => [c.name, c.title]));
 
   return (
     <Command.Dialog
@@ -86,12 +87,13 @@ export function CommandPalette() {
       <Command.List className="max-h-[min(420px,60vh)] overflow-y-auto py-2">
         <Command.Empty className="px-4 py-8 text-center text-sm text-muted">No results.</Command.Empty>
         <Group heading="Go to">
-          <Item icon={<Home />} label="Home" keys="G H" onSelect={go("/")} />
+          <Item icon={<LayoutDashboard />} label="Dashboard" keys="G D" onSelect={go("/")} />
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
-          <Item icon={<Send />} label="Queue: ready to post" keys="G Q" onSelect={go("/queue")} />
-          <Item icon={<Inbox />} label="Submissions" keys="G U" onSelect={go("/submissions")} />
+          <Item icon={<Send />} label="Clips ready to post" onSelect={go("/clips", { status: "ready" })} />
+          <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
+          <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
           <Item icon={<BarChart3 />} label="Stats" keys="G S" onSelect={go("/stats")} />
           <Item icon={<UserCircle2 />} label="Accounts" keys="G A" onSelect={go("/accounts")} />
           <Item icon={<Settings />} label="Settings" keys="G ," onSelect={go("/settings")} />
@@ -106,7 +108,7 @@ export function CommandPalette() {
         {campaigns.length > 0 && (
           <Group heading="Campaigns">
             {campaigns.map((c) => (
-              <Item key={c.name} value={c.name} keywords={["campaign"]} icon={<Megaphone />} label={c.name}
+              <Item key={c.name} value={c.title} keywords={["campaign", c.name]} icon={<Megaphone />} label={c.title}
                     hint={c.archived ? "archived" : `${c.clips} clips`}
                     onSelect={go(`/campaigns/${encodeURIComponent(c.name)}`)} />
             ))}
@@ -115,8 +117,8 @@ export function CommandPalette() {
         {clips.length > 0 && (
           <Group heading="Clips">
             {clips.map((c) => (
-              <Item key={c.id} value={`${c.title} #${c.id}`} keywords={[c.campaign, c.caption, "clip"]} icon={<Film />}
-                    label={c.title} hint={c.campaign} onSelect={run(() => setClip(c.id))} />
+              <Item key={c.id} value={`${c.title} #${c.id}`} keywords={[title.get(c.campaign) ?? c.campaign, c.caption, "clip"]} icon={<Film />}
+                    label={c.title} hint={title.get(c.campaign) ?? c.campaign} onSelect={run(() => setClip(c.id))} />
             ))}
           </Group>
         )}
@@ -126,8 +128,8 @@ export function CommandPalette() {
 }
 
 const SHORTCUTS: [string, [string, string][]][] = [
-  ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then H", "Home"], ["G then C", "Campaigns"],
-    ["G then N", "New clips"], ["G then L", "Clips"], ["G then Q", "Queue"], ["G then U", "Submissions"],
+  ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then D", "Dashboard"], ["G then C", "Campaigns"],
+    ["G then N", "New clips"], ["G then L", "Clips"],
     ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
     ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"]]],
