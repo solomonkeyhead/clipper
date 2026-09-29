@@ -361,9 +361,64 @@ def accounts() -> list[Account]:
 # The app
 # --------------------------------------------------------------------------
 
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".m4v", ".webm", ".avi"}
+
+
+def source_folders() -> list[Path]:
+    """Where footage for new clips is looked for: Clipper's downloads, then yours."""
+    from ..paths import downloads_dir
+
+    return [downloads_dir(), Path.home() / "Downloads"]
+
+
+def list_sources() -> list[dict]:
+    seen, out = set(), []
+    for folder in source_folders():
+        if not folder.is_dir():
+            continue
+        for path in folder.iterdir():
+            if path.suffix.lower() in VIDEO_EXTENSIONS and path.is_file():
+                key = path.resolve()
+                if key in seen:
+                    continue
+                seen.add(key)
+                stat = path.stat()
+                out.append({"name": path.name, "path": str(key),
+                            "size_mb": round(stat.st_size / 1_048_576, 1),
+                            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                            "folder": "Clipper uploads" if folder == source_folders()[0] else "Downloads"})
+    return sorted(out, key=lambda s: s["modified"], reverse=True)
+
+
+def allowed_source(path: str) -> Path:
+    """A source path the page may clip: an existing video in one of the source folders."""
+    target = Path(path).resolve()
+    if (target.suffix.lower() not in VIDEO_EXTENSIONS or not target.is_file()
+            or not any(folder.resolve() in target.parents for folder in source_folders()
+                       if folder.is_dir())):
+        raise HTTPException(400, "pick a video from the list, or upload one")
+    return target
+
+
+def purge_trash() -> int:
+    """Clips in the trash for 30 days go to the Windows Recycle Bin."""
+    from ..utils.recycle import recycle
+
+    purged = 0
+    with db.connect() as con:
+        for clip in db.expired_trash(con):
+            if recycle(library.clip_path(clip["file"])):
+                db.forget(con, clip["id"])
+                purged += 1
+    return purged
+
+
 def create_app(*, auto_sync: bool = False) -> FastAPI:
+    from .jobs import JobRunner
+
     broker = Broker()
     last_problems: list[str] = []
+    jobs = JobRunner(broker.publish)
 
     async def sync_now() -> dict:
         broker.publish("sync.started")
@@ -395,6 +450,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     async def lifespan(app: FastAPI):
         broker.bind(asyncio.get_running_loop())
         task = asyncio.create_task(sync_loop()) if auto_sync else None
+        if auto_sync:
+            with contextlib.suppress(Exception):
+                purged = await asyncio.to_thread(purge_trash)
+                if purged:
+                    log.info("moved %d clip(s) from the 30-day trash to the Recycle Bin", purged)
         yield
         if task:
             task.cancel()
@@ -584,12 +644,67 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             found = db.clip(con, clip_id)
         if found is None:
             raise HTTPException(404, "no such clip")
-        path = library.clip_path(found["file"])
+        path = library.clip_path(found["file"]).resolve()
         if not path.exists():
             raise HTTPException(404, "the file is missing from the library")
         if sys.platform == "win32":
-            subprocess.Popen(["explorer", f"/select,{path}"])
+            # One string, path in quotes: passed as a list, Python quotes the
+            # whole "/select,..." argument, which Explorer can't parse when the
+            # name has spaces or brackets -- it opened Documents instead.
+            subprocess.Popen(f'explorer /select,"{path}"')
         return {"path": str(path)}
+
+    @app.delete("/api/clips/{clip_id}")
+    def delete_clip(clip_id: int) -> dict:
+        """To the trash: hidden at once, the file kept 30 days, then recycled."""
+        with db.connect() as con:
+            if db.clip(con, clip_id) is None:
+                raise HTTPException(404, "no such clip")
+            db.trash(con, clip_id, True)
+        broker.publish("clips.changed", {"id": clip_id})
+        return {"ok": True}
+
+    @app.post("/api/clips/{clip_id}/restore")
+    def restore_clip(clip_id: int) -> dict:
+        with db.connect() as con:
+            if db.clip(con, clip_id) is None:
+                raise HTTPException(404, "no such clip")
+            db.trash(con, clip_id, False)
+        broker.publish("clips.changed", {"id": clip_id})
+        return {"ok": True}
+
+    @app.get("/api/sources")
+    def sources() -> list[dict]:
+        return list_sources()
+
+    @app.put("/api/uploads/{filename}")
+    async def upload(filename: str, request: Request) -> dict:
+        """Stream an uploaded video into Clipper's downloads folder (no size limit)."""
+        from ..paths import downloads_dir, ensure
+
+        name = re.sub(r"[^\w .()\-]+", "_", Path(filename).name).strip() or "upload.mp4"
+        if Path(name).suffix.lower() not in VIDEO_EXTENSIONS:
+            raise HTTPException(400, "only video files (mp4, mov, mkv, m4v, webm, avi)")
+        target = ensure(downloads_dir()) / name
+        partial = target.with_name(target.name + ".part")
+        with partial.open("wb") as out:
+            async for chunk in request.stream():
+                out.write(chunk)
+        partial.replace(target)
+        return next(s for s in list_sources() if Path(s["path"]) == target.resolve())
+
+    @app.get("/api/jobs")
+    def list_jobs() -> list[dict]:
+        return jobs.list()
+
+    @app.post("/api/jobs")
+    def start_job(body: dict) -> dict:
+        campaign = load_campaigns().get(str(body.get("campaign") or ""))
+        if campaign is None:
+            raise HTTPException(400, "pick a campaign")
+        source = allowed_source(str(body.get("source") or ""))
+        top = max(1, min(10, int(body.get("top") or 4)))
+        return jobs.submit(campaign, str(source), top).view()
 
     @app.get("/thumb/{clip_id}")
     def thumb(clip_id: int) -> FileResponse:
@@ -606,12 +721,17 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                             headers={"Cache-Control": "max-age=86400"})
 
     @app.get("/media/{clip_id}")
-    def media(clip_id: int) -> FileResponse:
+    def media(clip_id: int, download: bool = False) -> FileResponse:
+        """The clip's video: streamed for playing, or as a named file to save."""
         with db.connect() as con:
             found = db.clip(con, clip_id)
         path = library.clip_path(found["file"]) if found else None
         if path is None or not path.exists():
             raise HTTPException(404, "no such clip file")
+        if download:
+            name = re.sub(r'[\\/:*?"<>|]+', "", found["title"] or found["clip_id"]).strip()[:80]
+            return FileResponse(path, media_type="video/mp4",
+                                filename=f"{name or 'clip'} - {found['campaign']}.mp4")
         return FileResponse(path, media_type="video/mp4")
 
     # The single-page app: real files from the build, index.html for its routes.

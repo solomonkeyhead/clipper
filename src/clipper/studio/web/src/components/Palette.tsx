@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
-  BarChart3, Film, Home, Inbox, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Send,
+  BarChart3, Film, Home, Inbox, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
   Settings, Sun, UserCircle2,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -88,6 +88,7 @@ export function CommandPalette() {
         <Group heading="Go to">
           <Item icon={<Home />} label="Home" keys="G H" onSelect={go("/")} />
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
+          <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
           <Item icon={<Send />} label="Queue: ready to post" keys="G Q" onSelect={go("/queue")} />
           <Item icon={<Inbox />} label="Submissions" keys="G U" onSelect={go("/submissions")} />
@@ -126,12 +127,13 @@ export function CommandPalette() {
 
 const SHORTCUTS: [string, [string, string][]][] = [
   ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then H", "Home"], ["G then C", "Campaigns"],
-    ["G then L", "Clips"], ["G then Q", "Queue"], ["G then U", "Submissions"], ["G then S", "Stats"],
-    ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
+    ["G then N", "New clips"], ["G then L", "Clips"], ["G then Q", "Queue"], ["G then U", "Submissions"],
+    ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
-    ["L", "Copy link"], ["P", "Mark posted"], ["X", "Skip"]]],
+    ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"]]],
   ["Open clip", [["J / K", "Next / previous clip"], ["C", "Copy caption"], ["L", "Copy link"],
-    ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip"], ["F", "Show file"], ["Esc", "Close"]]],
+    ["D", "Download"], ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip"], ["F", "Show in folder"],
+    ["Delete", "Delete (undo)"], ["Esc", "Close"]]],
 ];
 
 export function ShortcutSheet() {

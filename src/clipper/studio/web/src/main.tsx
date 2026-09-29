@@ -10,6 +10,7 @@ import { AppShell } from "./components/AppShell";
 import { useUI } from "./lib/store";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { HomePage } from "./pages/HomePage";
+import { NewClipsPage } from "./pages/NewClipsPage";
 import { AccountsPage, SettingsPage } from "./pages/SettingsPages";
 import { StatsPage } from "./pages/StatsPage";
 import { ClipsPage, QueuePage, SubmissionsPage, type ClipFilter } from "./pages/WorkPages";
@@ -31,6 +32,7 @@ const routes = [
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
     }),
   }),
+  createRoute({ getParentRoute: () => root, path: "/new", component: NewClipsPage }),
   createRoute({ getParentRoute: () => root, path: "/queue", component: QueuePage }),
   createRoute({ getParentRoute: () => root, path: "/submissions", component: SubmissionsPage }),
   createRoute({ getParentRoute: () => root, path: "/stats", component: StatsPage }),

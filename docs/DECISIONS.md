@@ -1108,3 +1108,23 @@ L-cuts, split-screen for rapid turns, punch-ins on emphasis, laughter/reaction
 detection beyond loudness, watermark and duplicate detection, caption contrast
 boxes, re-hook checks, and the paired A/B harness (the report's thresholds are
 mostly [O] starting values for it).
+
+### D60. Downloads, delete with undo, and making clips from the Control Center
+
+- **Show in folder** passed Explorer `/select,<path>` as one list argument; for
+  names with spaces or brackets ("5b laundry room - ... (SHORT, safer).mp4")
+  Python's quoting broke it and Explorer opened Documents. It now gets one
+  command string with the path in quotes, verified selecting that file.
+- **Download** (cards, Queue, clip sheet, key D): `/media/{id}?download=true`
+  serves the clip as "<title> - <campaign>.mp4".
+- **Delete** (cards, Queue, sheet, Delete key): instant, with a 5-second Undo
+  (research: undo over confirm). The clip goes to a trash -- hidden, file
+  kept -- and after 30 days the file goes to the Windows Recycle Bin (the
+  user's rule: nothing is deleted permanently), checked at server start.
+- **New clips** page: pick a campaign, drop in the footage (streamed to
+  data/downloads, any size, with a progress bar) or pick a video already in
+  Downloads, choose how many clips, and a background job runs the normal
+  `runner.run` -- one at a time, since transcription holds the GPU. Its log
+  lines become stages and a percentage, pushed live over SSE; the clips land
+  in the library and on the campaign's page. Hand-picked ranges (`clipper
+  cut`) and creating a campaign from a pasted brief are not in the page yet.

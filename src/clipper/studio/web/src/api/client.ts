@@ -138,3 +138,68 @@ export function useSyncNow() {
 export async function revealClip(id: number) {
   return unwrap(api.POST("/api/clips/{clip_id}/reveal", { params: { path: { clip_id: id } } }));
 }
+
+export const downloadUrl = (id: number) => `/media/${id}?download=true`;
+
+/* ---------- delete (to the 30-day trash) with undo ---------- */
+
+export function useDeleteClip() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, restore }: { id: number; restore?: boolean }) => restore
+      ? unwrap(api.POST("/api/clips/{clip_id}/restore", { params: { path: { clip_id: id } } }))
+      : unwrap(api.DELETE("/api/clips/{clip_id}", { params: { path: { clip_id: id } } })),
+    onMutate: async ({ id, restore }) => {
+      if (restore) return {};
+      await qc.cancelQueries({ queryKey: keys.clips });
+      const previous = qc.getQueryData<Clip[]>(keys.clips);
+      qc.setQueryData<Clip[]>(keys.clips, (old) => old?.filter((c) => c.id !== id));
+      return { previous };
+    },
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
+    onSettled: invalidate,
+  });
+}
+
+/* ---------- new clips: footage, uploads, jobs ---------- */
+
+export interface Source { name: string; path: string; size_mb: number; modified: string; folder: string }
+export interface Job {
+  id: number; campaign: string; source: string; name: string; top: number;
+  status: "queued" | "running" | "done" | "failed"; stage: string; pct: number;
+  clips: number; message: string; created: string; finished: string;
+}
+
+export const useSources = () =>
+  useQuery({ queryKey: ["sources"], queryFn: async () => (await fetch("/api/sources")).json() as Promise<Source[]> });
+export const useJobs = () =>
+  useQuery({ queryKey: ["jobs"], queryFn: async () => (await fetch("/api/jobs")).json() as Promise<Job[]> });
+
+export async function startJob(campaign: string, source: string, top: number): Promise<Job> {
+  const res = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" },
+                                         body: JSON.stringify({ campaign, source, top }) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data as Job;
+}
+
+/** Upload with progress (fetch can't report upload progress; XHR can). */
+export function uploadVideo(file: File, onProgress: (fraction: number) => void): Promise<Source> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `/api/uploads/${encodeURIComponent(file.name)}`);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data as Source);
+        else reject(new Error(data.detail || xhr.statusText));
+      } catch {
+        reject(new Error(xhr.statusText || "Upload failed"));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Upload failed: lost connection to Clipper"));
+    xhr.send(file);
+  });
+}

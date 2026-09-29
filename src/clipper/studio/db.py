@@ -82,6 +82,13 @@ DEFAULT_SETTINGS = {
 }
 
 
+#: Columns added after the first release, created on older databases at connect.
+MIGRATIONS = [
+    ("clips", "deleted_at", "ALTER TABLE clips ADD COLUMN deleted_at TEXT"),
+]
+TRASH_DAYS = 30
+
+
 def db_path() -> Path:
     return data_root() / "clipper.db"
 
@@ -94,6 +101,9 @@ def connect(path: Path | None = None):
     con.row_factory = sqlite3.Row
     try:
         con.executescript(SCHEMA)
+        for table, column, sql in MIGRATIONS:
+            if column not in {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}:
+                con.execute(sql)
         yield con
         con.commit()
     finally:
@@ -129,10 +139,28 @@ def upsert_clip(con: sqlite3.Connection, clip: dict) -> int:
 
 
 def clips(con: sqlite3.Connection, campaign: str | None = None) -> list[dict]:
-    query, args = "SELECT * FROM clips", ()
+    """The library's clips, leaving out any in the trash."""
+    query, args = "SELECT * FROM clips WHERE deleted_at IS NULL", ()
     if campaign is not None:
-        query, args = query + " WHERE campaign=?", (campaign,)
+        query, args = query + " AND campaign=?", (campaign,)
     return [dict(r) for r in con.execute(query + " ORDER BY created_at, id", args)]
+
+
+def trash(con: sqlite3.Connection, clip_id: int, deleted: bool = True) -> None:
+    """Move a clip to the trash (hidden, file kept) or back out of it."""
+    con.execute("UPDATE clips SET deleted_at=? WHERE id=?", (now() if deleted else None, clip_id))
+
+
+def expired_trash(con: sqlite3.Connection, days: int = TRASH_DAYS) -> list[dict]:
+    from datetime import timedelta
+
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M")
+    return [dict(r) for r in con.execute(
+        "SELECT * FROM clips WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,))]
+
+
+def forget(con: sqlite3.Connection, clip_id: int) -> None:
+    con.execute("DELETE FROM clips WHERE id=?", (clip_id,))
 
 
 def clip(con: sqlite3.Connection, clip_id: int) -> dict | None:

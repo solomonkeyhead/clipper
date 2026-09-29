@@ -1,11 +1,11 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { CheckCircle2, Film, FolderOpen, Inbox, PartyPopper, Send, Undo2 } from "lucide-react";
+import { CheckCircle2, Film, Inbox, PartyPopper, Send, Undo2 } from "lucide-react";
 import { toast } from "sonner";
-import { revealClip, useCampaigns, useClips, usePosts, useSetSubmitted, type Clip, type Post } from "@/api/client";
+import { useCampaigns, useClips, usePosts, useSetSubmitted, type Clip, type Post } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
-import { LinkButtons, useStatusWithUndo } from "@/components/clips";
+import { DeleteButton, DownloadButton, LinkButtons, useStatusWithUndo } from "@/components/clips";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Button, Card, Chip, CopyButton, EmptyState, Kbd, PageHeader, Skeleton, Tip } from "@/components/ui";
+import { Button, Card, Chip, CopyButton, EmptyState, Kbd, PageHeader, Skeleton } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, formatCount, formatDuration } from "@/lib/utils";
 
@@ -87,17 +87,12 @@ function QueueRow({ clip }: { clip: Clip }) {
         {clip.notes && <div className="mt-1 line-clamp-1 text-xs text-warning">{clip.notes}</div>}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-        <Tip label="Show the file in Explorer, then drag it into TikTok or Instagram">
-          <Button size="sm" onClick={async () => {
-            try { await revealClip(clip.id); } catch (e) { toast.error((e as Error).message); }
-          }}>
-            <FolderOpen className="size-3.5" /> File
-          </Button>
-        </Tip>
+        {clip.file_exists && <DownloadButton clip={clip} />}
         {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
         <Button size="sm" variant="primary" onClick={() => setStatus(clip, "posted")}>
           <Send className="size-3.5" /> Mark posted
         </Button>
+        <DeleteButton clip={clip} />
       </div>
     </Card>
   );
@@ -113,8 +108,8 @@ export function QueuePage() {
       <Card className="mb-5 flex items-start gap-3 border-dashed p-4 text-sm text-muted">
         <Send className="mt-0.5 size-4 shrink-0 text-accent" />
         <p>
-          Posting straight from Clipper is coming next. For now: <b className="text-fg">File</b> opens the video to drag into
-          TikTok or Instagram, <b className="text-fg">Caption</b> copies the caption, then <b className="text-fg">Mark posted</b>.
+          Posting straight from Clipper is coming next. For now: <b className="text-fg">Download</b> saves the video to upload
+          to TikTok or Instagram, <b className="text-fg">Caption</b> copies the caption, then <b className="text-fg">Mark posted</b>.
           Posts also switch to Posted by themselves on the next sync, once they're live with the same caption.
         </p>
       </Card>

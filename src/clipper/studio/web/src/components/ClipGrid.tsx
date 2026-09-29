@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import type { Clip } from "@/api/client";
+import { downloadUrl, type Clip } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
 import { copyText } from "@/lib/utils";
-import { ClipCard, useStatusWithUndo } from "./clips";
+import { ClipCard, useDeleteWithUndo, useStatusWithUndo } from "./clips";
 
 /** A grid of clips you can drive from the keyboard: J/K, Enter, C, L, P, X. */
 export function ClipGrid({ clips, showCampaign = false }: { clips: Clip[]; showCampaign?: boolean }) {
@@ -11,6 +11,7 @@ export function ClipGrid({ clips, showCampaign = false }: { clips: Clip[]; showC
   const setListIds = useUI((s) => s.setListIds);
   const open = useUI((s) => s.setOpenClip);
   const setStatus = useStatusWithUndo();
+  const remove = useDeleteWithUndo();
 
   useEffect(() => setListIds(clips.map((c) => c.id)), [clips, setListIds]);
   useEffect(() => {
@@ -28,6 +29,8 @@ export function ClipGrid({ clips, showCampaign = false }: { clips: Clip[]; showC
     l: () => current?.posts[0] && void copyText(current.posts[0].url, "Link"),
     p: () => current && setStatus(current, "posted"),
     x: () => current && setStatus(current, "skipped"),
+    d: () => current?.file_exists && window.location.assign(downloadUrl(current.id)),
+    Delete: () => current && remove(current),
   });
 
   return (

@@ -5,8 +5,10 @@ import { chromium } from "playwright-core";
 
 const [base = "http://127.0.0.1:8766", out = ".", theme = "dark", width = "1440", height = "960"] =
   process.argv.slice(2);
-const pages = ["/", "/campaigns", "/campaigns/chad-powers-s2", "/clips", "/queue", "/submissions",
-               "/stats", "/accounts", "/settings"];
+const all = ["/", "/campaigns", "/campaigns/chad-powers-s2", "/new", "/clips", "/queue",
+             "/submissions", "/stats", "/accounts", "/settings"];
+const only = process.argv.find((a) => a.startsWith("--pages="));
+const pages = only ? only.slice(8).split(",") : all;
 
 const browser = await chromium.launch({ channel: "msedge" });
 const context = await browser.newContext({

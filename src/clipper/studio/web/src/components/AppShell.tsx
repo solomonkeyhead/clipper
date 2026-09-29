@@ -1,10 +1,10 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Film, Home, Inbox, Megaphone, PanelLeft, RefreshCw, Search, Send,
-  Settings, UserCircle2, WifiOff,
+  AlertTriangle, BarChart3, Film, Home, Inbox, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
+  Send, Settings, UserCircle2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useCampaigns, useClips, usePosts, useStatus, useSyncNow } from "@/api/client";
+import { useCampaigns, useClips, useJobs, usePosts, useStatus, useSyncNow } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
 import { useUI } from "@/lib/store";
@@ -26,12 +26,15 @@ function useNav(): NavItem[] {
   const { data: campaigns = [] } = useCampaigns();
   const { data: clips = [] } = useClips();
   const { data: posts = [] } = usePosts();
+  const { data: jobs = [] } = useJobs();
+  const working = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const active = new Set(campaigns.filter((c) => !c.archived).map((c) => c.name));
   const ready = clips.filter((c) => c.status === "ready" && active.has(c.campaign)).length;
   const toSubmit = posts.filter((p) => !p.submitted_at && active.has(p.campaign)).length;
   return [
     { to: "/", label: "Home", icon: <Home />, keys: "G H" },
     { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C", badge: active.size },
+    { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L" },
     { to: "/queue", label: "Queue", icon: <Send />, keys: "G Q", badge: ready, tone: "accent" },
     { to: "/submissions", label: "Submissions", icon: <Inbox />, keys: "G U", badge: toSubmit, tone: "warning" },
@@ -132,7 +135,7 @@ export function AppShell() {
   };
   useHotkeys({
     g: () => { pendingG.current = Date.now(); },
-    h: goto("/"), c: goto("/campaigns"), l: goto("/clips"), q: goto("/queue"),
+    h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"), q: goto("/queue"),
     u: goto("/submissions"), s: goto("/stats"), a: goto("/accounts"), ",": goto("/settings"),
     "[": toggle,
     "?": () => setShortcuts(true),
@@ -214,7 +217,7 @@ export function AppShell() {
 
         {/* Bottom tabs (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
-          {[nav[0], nav[2], nav[3], nav[4], nav[5]].map((item) => (
+          {[nav[0], nav[3], nav[4], nav[5], nav[6]].map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
                   className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted data-[status=active]:text-accent [&_svg]:size-5">

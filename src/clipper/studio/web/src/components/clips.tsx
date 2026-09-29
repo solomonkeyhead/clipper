@@ -1,9 +1,10 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { ExternalLink, FolderOpen, Info, SkipForward, Upload, X } from "lucide-react";
+import { Download, ExternalLink, FolderOpen, Info, SkipForward, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  revealClip, useClips, useSetClipStatus, useSetNote, type Clip, type ClipStatus, type Post,
+  downloadUrl, revealClip, useClips, useDeleteClip, useSetClipStatus, useSetNote,
+  type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
@@ -30,13 +31,66 @@ export function useStatusWithUndo() {
   };
 }
 
-async function showFile(id: number) {
+export async function showFile(id: number) {
   try {
     await revealClip(id);
     toast("Opened in File Explorer", { description: "Drag it into TikTok or Instagram to upload." });
   } catch (e) {
     toast.error((e as Error).message);
   }
+}
+
+/** Delete to the trash at once, with a 5-second Undo instead of "are you sure?". */
+export function useDeleteWithUndo() {
+  const mutation = useDeleteClip();
+  const setOpen = useUI((s) => s.setOpenClip);
+  return (clip: Clip) => {
+    mutation.mutate({ id: clip.id });
+    setOpen(null);
+    toast("Clip deleted", {
+      description: `${clip.title} · kept in the trash for 30 days`,
+      duration: 5000,
+      action: { label: "Undo", onClick: () => mutation.mutate({ id: clip.id, restore: true }) },
+    });
+  };
+}
+
+export function DownloadButton({ clip, label = true, size = "sm" }: {
+  clip: Clip; label?: boolean; size?: "sm" | "md";
+}) {
+  return (
+    <Tip label="Download the video" keys="D">
+      <a
+        href={downloadUrl(clip.id)}
+        download
+        onClick={(e) => e.stopPropagation()}
+        aria-label="Download the video"
+        className={cn(
+          "inline-flex items-center justify-center gap-1.5 rounded-sm border border-line bg-surface-2 font-medium text-fg",
+          "transition-colors duration-[var(--dur-fast)] hover:border-line-strong hover:bg-surface-3",
+          size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
+        )}
+      >
+        <Download className="size-3.5" />{label && "Download"}
+      </a>
+    </Tip>
+  );
+}
+
+export function DeleteButton({ clip, label = false, size = "sm" }: {
+  clip: Clip; label?: boolean; size?: "sm" | "md";
+}) {
+  const remove = useDeleteWithUndo();
+  return (
+    <Tip label="Delete (you can undo)" keys="Del">
+      <Button size={label ? size : "icon"} variant="ghost"
+              className={cn(!label && "size-7", "hover:text-danger")}
+              aria-label="Delete clip"
+              onClick={(e) => { e.stopPropagation(); remove(clip); }}>
+        <Trash2 className="size-3.5" />{label && "Delete"}
+      </Button>
+    </Tip>
+  );
 }
 
 /* ---------- Thumbnail with hover preview ---------- */
@@ -138,6 +192,8 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
         {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
         <LinkButtons posts={clip.posts} />
+        {clip.file_exists && <DownloadButton clip={clip} label={clip.posts.length === 0} />}
+        <span className="ml-auto"><DeleteButton clip={clip} /></span>
       </div>
     </article>
   );
@@ -202,6 +258,7 @@ export function ClipSheet() {
   const setOpen = useUI((s) => s.setOpenClip);
   const clip = clips.find((c) => c.id === openId) ?? null;
   const setStatus = useStatusWithUndo();
+  const remove = useDeleteWithUndo();
   const setNote = useSetNote();
   const [note, setNoteText] = useState("");
   useEffect(() => setNoteText(clip?.notes ?? ""), [clip?.id, clip?.notes]);
@@ -221,6 +278,8 @@ export function ClipSheet() {
     x: () => clip && setStatus(clip, "skipped"),
     r: () => clip && setStatus(clip, "ready"),
     f: () => clip && void showFile(clip.id),
+    d: () => clip?.file_exists && window.location.assign(downloadUrl(clip.id)),
+    Delete: () => clip && remove(clip),
   }, { enabled: clip !== null, inDialog: true });
 
   return (
@@ -240,9 +299,18 @@ export function ClipSheet() {
                 ) : (
                   <div className="grid aspect-[9/16] place-items-center rounded-lg bg-surface-2 text-sm text-muted">File missing</div>
                 )}
-                <Button variant="secondary" onClick={() => void showFile(clip.id)}>
-                  <FolderOpen className="size-4" /> Show file <Kbd className="ml-auto">F</Kbd>
-                </Button>
+                {clip.file_exists && (
+                  <a href={downloadUrl(clip.id)} download
+                     className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                    <Download className="size-4" /> Download video <Kbd className="ml-auto border-white/30 bg-white/10 text-white">D</Kbd>
+                  </a>
+                )}
+                <div className="flex gap-2">
+                  <Button variant="secondary" className="flex-1" onClick={() => void showFile(clip.id)}>
+                    <FolderOpen className="size-4" /> Show in folder
+                  </Button>
+                  <DeleteButton clip={clip} label size="md" />
+                </div>
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-4">
                 <div className="flex items-start justify-between gap-3">

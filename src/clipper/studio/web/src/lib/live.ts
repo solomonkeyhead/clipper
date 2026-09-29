@@ -34,6 +34,13 @@ export function useLiveUpdates() {
         data.problems?.forEach((p) => toast.warning(p, { duration: 8000 }));
       });
       source.addEventListener("clips.changed", refreshClips);
+      source.addEventListener("job.progress", (e) => {
+        const job = JSON.parse((e as MessageEvent).data) as { id: number; status: string };
+        qc.setQueryData<{ id: number }[]>(["jobs"], (old = []) => {
+          const rest = old.filter((j) => j.id !== job.id);
+          return [job, ...rest].sort((a, b) => b.id - a.id);
+        });
+      });
       source.addEventListener("campaigns.changed", refreshClips);
       source.addEventListener("settings.changed", () => {
         qc.invalidateQueries({ queryKey: keys.settings });
