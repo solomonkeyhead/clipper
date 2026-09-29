@@ -136,6 +136,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/campaigns/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Campaign
+         * @description Read a pasted campaign brief and say how well it fits this user.
+         */
+        post: operations["check_campaign_api_campaigns_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/found": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Found Campaigns */
+        get: operations["found_campaigns_api_found_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/found/{key}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check Found */
+        post: operations["check_found_api_found__key__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/found/{key}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss Found */
+        post: operations["dismiss_found_api_found__key__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/clips": {
         parameters: {
             query?: never;
@@ -607,6 +678,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/clips/{clip_id}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Post
+         * @description A post link pasted by hand, for when the sync hasn't found the post yet.
+         */
+        post: operations["add_post_api_clips__clip_id__posts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/{clip_id}/proof": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proof Pack
+         * @description A zip to send a campaign if it rejects the clip: brief, checks, posts, views, clip.
+         */
+        get: operations["proof_pack_media__clip_id__proof_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/{clip_id}": {
         parameters: {
             query?: never;
@@ -699,114 +810,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/research/messages/{message_id}/actions/{index}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run Action
-         * @description Do what the chat proposed, now that the user confirmed it (Pro).
-         */
-        post: operations["run_action_api_research_messages__message_id__actions__index__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/niches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Niches */
-        get: operations["niches_api_research_niches_get"];
-        put?: never;
-        /** Add Niche */
-        post: operations["add_niche_api_research_niches_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/niches/{niche_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Edit Niche */
-        put: operations["edit_niche_api_research_niches__niche_id__put"];
-        post?: never;
-        /** Delete Niche */
-        delete: operations["delete_niche_api_research_niches__niche_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/niches/{niche_id}/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Refresh Niche */
-        post: operations["refresh_niche_api_research_niches__niche_id__refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/saved": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Saved */
-        get: operations["saved_api_research_saved_get"];
-        put?: never;
-        /** Save */
-        post: operations["save_api_research_saved_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/saved/{item_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Unsave */
-        delete: operations["unsave_api_research_saved__item_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -827,22 +830,6 @@ export interface components {
             detail: string;
             /** Expires In Days */
             expires_in_days?: number | null;
-        };
-        /** Action */
-        Action: {
-            /** Type */
-            type: string;
-            /** Label */
-            label: string;
-            /** Params */
-            params: {
-                [key: string]: unknown;
-            };
-            /**
-             * Done
-             * @default false
-             */
-            done: boolean;
         };
         /** Band */
         Band: {
@@ -927,6 +914,16 @@ export interface components {
             to_submit: number;
             /** Last Post */
             last_post?: string | null;
+            /**
+             * Campaign Url
+             * @default
+             */
+            campaign_url: string;
+        };
+        /** CampaignCheck */
+        CampaignCheck: {
+            form: components["schemas"]["CampaignForm"];
+            fit: components["schemas"]["Fit"];
         };
         /** CampaignCounts */
         CampaignCounts: {
@@ -1140,6 +1137,12 @@ export interface components {
              * @default []
              */
             reasons: string[];
+            proof?: components["schemas"]["Proof"] | null;
+            /**
+             * Watching
+             * @default false
+             */
+            watching: boolean;
         };
         /** Dimension */
         Dimension: {
@@ -1153,6 +1156,55 @@ export interface components {
             learned: number;
             /** Agreement */
             agreement?: number | null;
+        };
+        /** Fit */
+        Fit: {
+            /** Verdict */
+            verdict: string;
+            /** Checks */
+            checks: components["schemas"]["FitCheck"][];
+            /** Per Post Usd */
+            per_post_usd?: number | null;
+            /** Checked At */
+            checked_at: string;
+        };
+        /** FitCheck */
+        FitCheck: {
+            /** Ok */
+            ok?: boolean | null;
+            /** Text */
+            text: string;
+        };
+        /** FoundCampaign */
+        FoundCampaign: {
+            /** Key */
+            key: string;
+            /** Source */
+            source: string;
+            /** Name */
+            name: string;
+            /** Owner */
+            owner: string;
+            /** Rate */
+            rate: string;
+            /** Rate Per 1K Usd */
+            rate_per_1k_usd?: number | null;
+            /** Platforms */
+            platforms: string[];
+            /** Budget */
+            budget: string;
+            /** Deadline */
+            deadline: string;
+            /** Link */
+            link: string;
+            /** Fit */
+            fit: string;
+            /** Why */
+            why: string;
+            /** Found At */
+            found_at: string;
+            /** Dismissed */
+            dismissed: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1220,8 +1272,6 @@ export interface components {
             content: string;
             /** Sources */
             sources: components["schemas"]["Source"][];
-            /** Actions */
-            actions: components["schemas"]["Action"][];
             /** Created At */
             created_at: string;
         };
@@ -1239,25 +1289,6 @@ export interface components {
             to_submit: number;
             /** Ready */
             ready: number;
-        };
-        /** Niche */
-        Niche: {
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /** Keywords */
-            keywords: string[];
-            /** Brief */
-            brief?: {
-                [key: string]: unknown;
-            } | null;
-            /** Brief At */
-            brief_at?: string | null;
-            /** Stale */
-            stale: boolean;
         };
         /** Post */
         Post: {
@@ -1304,6 +1335,30 @@ export interface components {
             est_earnings?: number | null;
             /** Submitted At */
             submitted_at?: string | null;
+            /** Posted Caption */
+            posted_caption?: string | null;
+        };
+        /** Proof */
+        Proof: {
+            /** Saved At */
+            saved_at?: string | null;
+            /**
+             * Late
+             * @default false
+             */
+            late: boolean;
+            /**
+             * Passed
+             * @default 0
+             */
+            passed: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /** Posted Ok */
+            posted_ok?: boolean | null;
         };
         /** ReasonCount */
         ReasonCount: {
@@ -1320,29 +1375,10 @@ export interface components {
             plan: string;
             /** Can Research */
             can_research: boolean;
-            /** Can Act */
-            can_act: boolean;
             /** Ai */
             ai: boolean;
             /** Web */
             web: boolean;
-            /** Youtube */
-            youtube: boolean;
-        };
-        /** SavedItem */
-        SavedItem: {
-            /** Id */
-            id: number;
-            /** Kind */
-            kind: string;
-            /** Text */
-            text: string;
-            /** Url */
-            url: string;
-            /** Niche Id */
-            niche_id?: number | null;
-            /** Created At */
-            created_at: string;
         };
         /** Setup */
         Setup: {
@@ -1406,8 +1442,6 @@ export interface components {
             id: number;
             /** Title */
             title: string;
-            /** Niche Id */
-            niche_id?: number | null;
             /** Updated At */
             updated_at: string;
         };
@@ -1417,8 +1451,6 @@ export interface components {
             id: number;
             /** Title */
             title: string;
-            /** Niche Id */
-            niche_id?: number | null;
             /** Updated At */
             updated_at: string;
             /** Messages */
@@ -1756,6 +1788,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignForm"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_campaign_api_campaigns_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    found_campaigns_api_found_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FoundCampaign"][];
+                };
+            };
+        };
+    };
+    check_found_api_found__key__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_found_api_found__key__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -2679,6 +2830,76 @@ export interface operations {
             };
         };
     };
+    add_post_api_clips__clip_id__posts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proof_pack_media__clip_id__proof_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     media_media__clip_id__get: {
         parameters: {
             query?: {
@@ -2838,284 +3059,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_action_api_research_messages__message_id__actions__index__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                message_id: number;
-                index: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    niches_api_research_niches_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Niche"][];
-                };
-            };
-        };
-    };
-    add_niche_api_research_niches_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Niche"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    edit_niche_api_research_niches__niche_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                niche_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Niche"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_niche_api_research_niches__niche_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                niche_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    refresh_niche_api_research_niches__niche_id__refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                niche_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Niche"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    saved_api_research_saved_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SavedItem"][];
-                };
-            };
-        };
-    };
-    save_api_research_saved_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SavedItem"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    unsave_api_research_saved__item_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                item_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
             /** @description Validation Error */

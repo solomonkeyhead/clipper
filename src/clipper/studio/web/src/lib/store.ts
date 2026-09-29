@@ -26,6 +26,9 @@ export function applyTheme(theme: Theme) {
 
 interface UI {
   paletteOpen: boolean;
+  /** The Ask panel (research chat), open over any page. */
+  askOpen: boolean;
+  setAsk: (open: boolean) => void;
   shortcutsOpen: boolean;
   openClip: number | null;
   /** The order of the list the open clip came from, for J/K in the detail sheet. */
@@ -48,6 +51,8 @@ interface UI {
 
 export const useUI = create<UI>((set) => ({
   paletteOpen: false,
+  askOpen: false,
+  setAsk: (askOpen) => set({ askOpen }),
   shortcutsOpen: false,
   openClip: null,
   listIds: [],

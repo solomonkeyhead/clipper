@@ -1,11 +1,15 @@
-"""The Research section: chat threads, proposed actions, niches, saved items, plans."""
+"""The Ask chat, finding campaigns, proof packs and fast post-link capture."""
 
 from __future__ import annotations
+
+import io
+import json
+import zipfile
 
 import pytest
 import yaml
 
-from clipper.research import agent, radar, sources
+from clipper.research import agent, sources
 from clipper.studio import db
 
 
@@ -17,25 +21,29 @@ def client(data_root, tmp_path, monkeypatch, valid_campaign_dict):
 
     campaigns = tmp_path / "campaigns"
     campaigns.mkdir()
-    (campaigns / "test-campaign.yaml").write_text(yaml.safe_dump(valid_campaign_dict), encoding="utf-8")
+    (campaigns / "test-campaign.yaml").write_text(yaml.safe_dump(
+        {**valid_campaign_dict, "required_caption_text": "#ad", "campaign_url": "https://whop.com/c/x"}),
+        encoding="utf-8")
     monkeypatch.setattr(server, "campaigns_dir", lambda: campaigns)
-    downloads = tmp_path / "dl"
-    downloads.mkdir()
-    (downloads / "ep1.mp4").write_bytes(b"x")
-    monkeypatch.setattr(server, "source_folders", lambda: [downloads])
     return TestClient(server.create_app())
 
 
-def fake_ask(question, history, box, *, niche=None, can_act=False, progress=lambda s: None):
+def add_clip(data_root, **extra) -> int:
+    path = data_root / "library" / "test-campaign" / "x.mp4"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\x00" * 1024)
+    with db.connect() as con:
+        return db.upsert_clip(con, {"campaign": "test-campaign", "source_id": "s", "clip_id": "001",
+                                    "title": "a clip", "file": "test-campaign/x.mp4",
+                                    "caption": "so good #test #ad", **extra})
+
+
+# ---------- Ask ----------
+
+def fake_ask(question, history, box, progress=lambda s: None):
     progress("Searching the web: x")
-    actions = []
-    if can_act:
-        run = agent._Run(box, can_act, progress)
-        run._propose_hook_lines("test-campaign", ["the chemistry is insane", "wait for it"])
-        run._propose_clip_job("test-campaign", "ep1.mp4", 3)
-        actions = run.actions
     return agent.Answer(text=f"answer to {question} after {len(history)} turns",
-                        sources=[{"title": "A", "url": "https://a.example"}], actions=actions)
+                        sources=[{"title": "A", "url": "https://a.example"}])
 
 
 def test_a_conversation_keeps_its_history(client, monkeypatch):
@@ -44,83 +52,131 @@ def test_a_conversation_keeps_its_history(client, monkeypatch):
     assert first["title"] == "what is trending?" and len(first["messages"]) == 2
     again = client.post("/api/research/ask", json={"text": "and hooks?", "thread_id": first["id"]}).json()
     assert again["messages"][-1]["content"] == "answer to and hooks? after 2 turns"
-    assert [t["id"] for t in client.get("/api/research/threads").json()] == [first["id"]]
+    assert again["messages"][-1]["sources"] == [{"title": "A", "url": "https://a.example"}]
     client.delete(f"/api/research/threads/{first['id']}")
     assert client.get("/api/research/threads").json() == []
 
 
-def test_proposed_actions_run_only_when_confirmed_and_once(client, monkeypatch, data_root):
-    from clipper.studio import server
-
-    monkeypatch.setattr(agent, "ask", fake_ask)
-    submitted = []
-    monkeypatch.setattr("clipper.studio.jobs.JobRunner.submit",
-                        lambda self, c, s, top, ranges=None: submitted.append((c.name, top))
-                        or type("J", (), {"id": 7})())
-    thread = client.post("/api/research/ask", json={"text": "hooks please"}).json()
-    message = thread["messages"][-1]
-    assert [a["type"] for a in message["actions"]] == ["hook_lines", "clip_job"]
-    assert server.load_campaigns()["test-campaign"].hook_texts == ()  # nothing yet
-
-    done = client.post(f"/api/research/messages/{message['id']}/actions/0").json()
-    assert "Added 2" in done["done"]
-    assert server.load_campaigns()["test-campaign"].hook_texts == ("the chemistry is insane", "wait for it")
-    assert client.post(f"/api/research/messages/{message['id']}/actions/0").status_code == 400
-    client.post(f"/api/research/messages/{message['id']}/actions/1")
-    assert submitted == [("test-campaign", 3)]
-
-
-def test_plans_gate_research_and_actions(client, monkeypatch):
-    monkeypatch.setattr(agent, "ask", fake_ask)
-    with db.connect() as con:
-        db.set_setting(con, "plan", "research")
-    status = client.get("/api/research/status").json()
-    assert status["can_research"] and not status["can_act"]
-    message = client.post("/api/research/ask", json={"text": "x"}).json()["messages"][-1]
-    assert message["actions"] == []  # the chat isn't offered the propose tools
+def test_the_free_plan_has_no_ask(client):
     with db.connect() as con:
         db.set_setting(con, "plan", "free")
     assert client.get("/api/research/threads").status_code == 402
-    with pytest.raises(ValueError):
-        with db.connect() as con:
-            db.set_setting(con, "plan", "platinum")
+    assert client.get("/api/research/status").json()["can_research"] is False
 
 
-def test_niches_and_their_briefs(client, monkeypatch):
-    monkeypatch.setattr(radar, "refresh", lambda niche, backend, progress=None: {
-        "summary": f"{niche['name']} is hot", "topics": [], "hooks": ["h1"], "shorts": [],
-        "sources": [], "notes": [], "live": False})
-    monkeypatch.setattr("clipper.pipeline.build_backend", lambda config: object())
-    niche = client.post("/api/research/niches", json={"name": "TV romance edits",
-                                                      "keywords": ["chad powers", " "]}).json()
-    assert niche["keywords"] == ["chad powers"] and niche["stale"]
-    fresh = client.post(f"/api/research/niches/{niche['id']}/refresh").json()
-    assert fresh["brief"]["summary"] == "TV romance edits is hot" and not fresh["stale"]
-    assert client.post("/api/research/niches", json={"name": " "}).status_code == 400
-
-
-def test_saved_items(client):
-    item = client.post("/api/research/saved", json={"kind": "hook", "text": "wait for it"}).json()
-    assert client.get("/api/research/saved").json()[0]["text"] == "wait for it"
-    client.delete(f"/api/research/saved/{item['id']}")
-    assert client.get("/api/research/saved").json() == []
-
-
-def test_sources_need_keys(monkeypatch):
+def test_web_search_needs_a_key_and_numbers_sources_once(monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-    monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
     with pytest.raises(sources.SourceUnavailable, match="Tavily"):
         sources.search_web("x")
-    with pytest.raises(sources.SourceUnavailable, match="YouTube"):
-        sources.top_shorts("x")
-    assert sources._iso_seconds("PT1M5S") == 65
-
-
-def test_the_web_tool_numbers_sources_once(monkeypatch):
     monkeypatch.setattr(sources, "search_web", lambda q, days=None: [
         sources.WebResult("A", "https://a", "text a"), sources.WebResult("B", "https://b", "text b")])
-    run = agent._Run(agent.Toolbox(lambda c: [], lambda: [], lambda: [], lambda: []), False, lambda s: None)
+    run = agent._Run(agent.Toolbox(lambda c: [], lambda: []), lambda s: None)
     run.call("search_web", {"query": "one"})
     second = run.call("search_web", {"query": "two"})
     assert [r["n"] for r in second["results"]] == [1, 2] and len(run.sources) == 2
-    assert run.call("propose_hook_lines", {"campaign": "c", "lines": ["x"]})["error"]
+    assert run.call("propose_hook_lines", {"campaign": "c"})["error"]  # no actions any more
+
+
+# ---------- finding campaigns ----------
+
+def test_the_watcher_keeps_what_it_finds(client):
+    from clipper.studio import finder
+    from clipper.watch.judge import Verdict
+
+    finder.record_found(Verdict(is_new_campaign=True, source="vyro", name="New Show",
+                                rate_per_1k_usd=2.0, platforms=["tiktok"], fit="yes"), "brief text")
+    found = client.get("/api/found").json()
+    assert [f["name"] for f in found] == ["New Show"] and "brief" not in found[0]
+    client.post(f"/api/found/{found[0]['key']}/dismiss")
+    assert client.get("/api/found").json() == []
+
+
+def test_checking_a_campaign_explains_the_fit(client, monkeypatch):
+    from clipper.campaign import editor
+    from clipper.campaign.editor import CampaignForm
+
+    monkeypatch.setattr("clipper.pipeline.build_backend", lambda config: object())
+    monkeypatch.setattr(editor, "read_brief", lambda text, backend: CampaignForm(
+        title="Show", reward_per_1k_usd=2.0, platform_targets=["youtube_shorts"],
+        notes="- Account must be 30 days old"))
+    result = client.post("/api/campaigns/check", json={"text": "x" * 60}).json()
+    assert result["form"]["title"] == "Show"
+    fit = result["fit"]
+    assert fit["verdict"] == "poor"  # pays for YouTube Shorts, which isn't connected
+    texts = [c["text"] for c in fit["checks"]]
+    assert any("none of those connected" in t for t in texts)
+    assert "Account must be 30 days old" in texts
+
+
+# ---------- proof packs ----------
+
+def test_a_late_snapshot_and_the_proof_pack(client, data_root):
+    clip = add_clip(data_root)
+    from clipper.studio import library, server
+
+    library.backfill_evidence(server.load_campaigns())
+    got = client.get(f"/api/clips/{clip}").json()
+    assert got["proof"]["late"] is True and got["proof"]["saved_at"]
+    res = client.get(f"/media/{clip}/proof")
+    assert res.status_code == 200 and res.headers["content-type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(res.content))
+    assert {"proof.html", "brief.yaml", "clip.mp4", "stats.csv", "evidence.json"} <= set(z.namelist())
+    assert "saved later" in z.read("proof.html").decode()
+    assert "required_caption_text: '#ad'" in z.read("brief.yaml").decode()
+
+
+def test_the_posted_caption_is_checked_against_the_saved_rules():
+    from clipper.studio.evidence import caption_checks, summary
+
+    rules = {"required_hashtags": ["#test"], "required_caption_text": "#ad",
+             "only_required_hashtags": True}
+    checks = caption_checks("great clip #test #fyp", rules)
+    assert [c["passed"] for c in checks] == [True, False, False]
+    assert checks[-1]["detail"] == "#fyp"
+    ev = {"saved_at": "2026-09-29 10:00:00", "checks": [{"name": "x", "passed": True}],
+          "campaign": {"rules": rules}}
+    assert summary(ev, [{"posted_caption": "ok #test #ad"}])["posted_ok"] is True
+
+
+# ---------- fast link capture ----------
+
+def test_marking_posted_starts_fast_syncs(client, data_root):
+    clip = add_clip(data_root)
+    client.patch(f"/api/clips/{clip}", json={"status": "posted"})
+    assert client.get(f"/api/clips/{clip}").json()["watching"] is True
+    client.patch(f"/api/clips/{clip}", json={"status": "ready"})
+    assert client.get(f"/api/clips/{clip}").json()["watching"] is False
+
+
+def test_a_pasted_link_becomes_a_post(client, data_root):
+    from clipper.learn import log as perf
+
+    clip = add_clip(data_root)
+    bad = client.post(f"/api/clips/{clip}/posts", json={"url": "https://example.com/x"})
+    assert bad.status_code == 400
+    res = client.post(f"/api/clips/{clip}/posts",
+                      json={"url": "https://www.tiktok.com/@me/video/7412345678901234567?lang=en"})
+    assert res.json() == {"platform": "tiktok"}
+    got = client.get(f"/api/clips/{clip}").json()
+    assert got["status"] == "posted" and got["posts"][0]["url"].endswith("/video/7412345678901234567")
+    row = next(r for r in perf.read() if r.get("url"))
+    assert row["video_id"] == "7412345678901234567"
+    again = client.post(f"/api/clips/{clip}/posts",
+                        json={"url": "https://www.tiktok.com/@me/video/7412345678901234567"})
+    assert again.status_code == 400
+    ig = client.post(f"/api/clips/{clip}/posts", json={"url": "https://www.instagram.com/reel/AbC123/"})
+    assert ig.json() == {"platform": "instagram"}
+    assert len(client.get(f"/api/clips/{clip}").json()["posts"]) == 2
+
+
+def test_instagram_sync_adopts_a_pasted_link():
+    from clipper.instagram import sync
+    from clipper.instagram.api import Reel
+
+    rows = [{"caption": "c", "platform": "instagram", "url": "https://www.instagram.com/reel/AbC123",
+             "video_id": ""}]
+    sync.apply([Reel(id="999", caption="rewritten caption", created=0,
+                     url="https://www.instagram.com/reel/AbC123/", views=50)], rows)
+    assert len(rows) == 1 and rows[0]["video_id"] == "999" and rows[0]["views_latest"] == "50"
+    assert rows[0]["posted_caption"] == "rewritten caption"
+    json.dumps(rows)

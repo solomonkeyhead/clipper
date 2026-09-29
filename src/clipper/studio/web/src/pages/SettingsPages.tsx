@@ -413,8 +413,8 @@ export function SettingsPage() {
         <Row
           title="Plan (preview)"
           body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats.{" "}
-            <b className="text-fg">Research</b>: adds the Research section. <b className="text-fg">Pro</b>: Research can also make
-            changes for you (campaigns, clip jobs, hook lines) after you confirm. Nothing is billed; switch to see each tier.</>}
+            <b className="text-fg">Research</b>: adds the Ask chat. <b className="text-fg">Pro</b>: everything, and auto-posting once
+            it's available. Nothing is billed; switch to see each tier.</>}
           control={settings ? (
             <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">
               {([["free", "Free"], ["research", "Research"], ["pro", "Pro"]] as const).map(([value, label]) => (

@@ -30,8 +30,15 @@ def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
     result = SyncResult()
     by_id = {r.get("video_id", ""): i for i, r in enumerate(rows)
              if r.get("platform") == PLATFORM and r.get("video_id")}
+    # Links pasted by hand in the Control Center have a URL but no media id yet.
+    by_url = {_bare(r.get("url", "")): i for i, r in enumerate(rows)
+              if r.get("platform") == PLATFORM and r.get("url") and not r.get("video_id")}
     for reel in reels:
         index = by_id.get(reel.id)
+        if index is None and _bare(reel.url) in by_url:
+            index = by_url.pop(_bare(reel.url))
+            rows[index]["video_id"] = reel.id
+            by_id[reel.id] = index
         if index is None:
             key = normalise(reel.caption)[:MATCH_CHARS]
             clips = {r.get("clip_id") or i: i for i, r in enumerate(rows)
@@ -54,6 +61,10 @@ def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
     return result
 
 
+def _bare(url: str) -> str:
+    return url.split("?", 1)[0].rstrip("/").lower()
+
+
 def _update(row: dict[str, str], reel: Reel, now: float) -> list[str]:
     filled: list[str] = []
 
@@ -65,6 +76,7 @@ def _update(row: dict[str, str], reel: Reel, now: float) -> list[str]:
             filled.append(column)
 
     put("url", reel.url)
+    put("posted_caption", reel.caption, only_if_empty=False)
     if reel.created:
         put("posted_at", datetime.fromtimestamp(reel.created).strftime("%Y-%m-%d %H:%M"))
     age = now - reel.created if reel.created else -1

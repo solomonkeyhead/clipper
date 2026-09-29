@@ -36,7 +36,7 @@ function filled(form: CampaignForm) {
 }
 
 /** A new campaign handed over from Research ({title, brief}); read once. */
-function takePrefill(): { title?: string; brief?: string } {
+function takePrefill(): { title?: string; brief?: string; form?: CampaignForm } {
   try {
     const raw = sessionStorage.getItem("clipper.prefill");
     sessionStorage.removeItem("clipper.prefill");
@@ -95,8 +95,11 @@ export function CampaignEditorPage() {
   const save = useSaveCampaign();
   const remove = useDeleteCampaign();
   const [prefill] = useState(() => (editing ? {} : takePrefill()));
-  const [form, setForm] = useState<CampaignForm>(() => ({ ...BLANK, title: prefill.title ?? "" }));
-  const [market, setMarket] = useState<string>("Content Rewards");
+  const [form, setForm] = useState<CampaignForm>(() => prefill.form ?? { ...BLANK, title: prefill.title ?? "" });
+  const [market, setMarket] = useState<string>(() => {
+    const m = prefill.form?.marketplace;
+    return !m ? "Content Rewards" : MARKETS.includes(m) ? m : "other";
+  });
 
   useEffect(() => {
     if (loaded) {
@@ -144,7 +147,7 @@ export function CampaignEditorPage() {
           "Tell Clipper about a campaign you've joined, so it clips and captions to that campaign's rules."} />
 
       <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        {!editing && <BriefReader onRead={fromBrief} initial={prefill.brief} />}
+        {!editing && !prefill.form && <BriefReader onRead={fromBrief} initial={prefill.brief} />}
 
         <Section title="The basics">
           <Field label="Campaign name" hint={editing ? "Rename it any time; its clips stay with it." : "What you'll call it in Clipper, e.g. \"Chad Powers S2\"."}>

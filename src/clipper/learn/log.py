@@ -34,7 +34,8 @@ RESULT_COLUMNS = ["url", "posted_at", "views_24h", "views_7d", "views_30d", "vie
                   "new_followers", "verified_views", "payout_usd", "notes"]
 ID_COLUMNS = ["platform", "account", "duration_s", "opening", "lead_in_s", "hook",
               "campaign", "source_title", "file",
-              "source_id", "clip_id", "candidate_id", "video_id", "synced_at", "studio_at"]
+              "source_id", "clip_id", "candidate_id", "video_id", "synced_at", "studio_at",
+              "posted_caption"]
 COLUMNS = ["caption", *RESULT_COLUMNS, *ID_COLUMNS]
 NUMERIC = ["views_24h", "views_7d", "views_30d", "views_latest", "likes", "comments", "shares",
            "saves", "avg_watch_s", "watched_full_pct", "drop_off_s", "skip_rate_pct",

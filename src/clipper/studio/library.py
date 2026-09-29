@@ -38,6 +38,7 @@ def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignC
              captions: list[str] | None = None) -> list[int]:
     """Copy a run's accepted clips into the library and record them. Returns their ids."""
     from ..campaign.compliance import full_caption
+    from . import evidence
 
     ids = []
     folder = ensure(library_dir() / campaign.name)
@@ -55,6 +56,9 @@ def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignC
                 "caption": captions[i] if captions else full_caption(plan),
                 "duration_s": record.duration, "start_s": plan.start, "end_s": plan.end,
                 "scores": json.dumps(scores_of(record)),
+                "evidence": json.dumps(evidence.snapshot(
+                    record, info=info, campaign=campaign,
+                    caption=captions[i] if captions else full_caption(plan)), ensure_ascii=False),
             }))
     return ids
 
@@ -69,6 +73,19 @@ def scores_of(record: ClipRecord) -> dict:
             "score": round(llm, 2) if llm is not None else None,
             "rubric": record.rubric, "composite": round(record.plan.composite, 4),
             "pool": record.pool, "pool_rank": record.pool_rank}
+
+
+def backfill_evidence(campaigns: dict) -> int:
+    """A (late) evidence snapshot for clips made before they were kept."""
+    from . import evidence
+
+    with db.connect() as con:
+        todo = [c for c in db.clips(con) if not c.get("evidence")]
+        for clip in todo:
+            con.execute("UPDATE clips SET evidence=? WHERE id=?", (json.dumps(
+                evidence.late_snapshot(clip, campaigns.get(clip["campaign"])), ensure_ascii=False),
+                clip["id"]))
+    return len(todo)
 
 
 def backfill_scores() -> int:

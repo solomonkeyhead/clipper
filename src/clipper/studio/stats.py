@@ -10,7 +10,8 @@ from ..learn import log as perf
 
 #: Per-post numbers shown on a clip, in display order.
 POST_FIELDS = ("posted_at", "views_latest", "likes", "comments", "shares", "saves",
-               "avg_watch_s", "watched_full_pct", "skip_rate_pct", "drop_off_s")
+               "avg_watch_s", "watched_full_pct", "skip_rate_pct", "drop_off_s", "posted_caption")
+TEXT_FIELDS = {"posted_at", "posted_caption"}
 
 #: Instagram insights "can be delayed up to 48 hours" (Meta's reference).
 SETTLING_HOURS = {"instagram": 48}
@@ -88,7 +89,7 @@ def posts_by_clip(rows: list[dict[str, str]]) -> dict[tuple[str, str, str], list
                 "url": url.split("?", 1)[0]}
         for name in POST_FIELDS:
             value = (row.get(name) or "").strip()
-            number = perf.number(value) if name != "posted_at" else None
+            number = perf.number(value) if name not in TEXT_FIELDS else None
             post[name] = number if number is not None else (value or None)
         key = (row.get("campaign", ""), row.get("source_id", ""), row.get("clip_id", ""))
         out.setdefault(key, []).append(post)

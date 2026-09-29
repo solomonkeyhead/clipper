@@ -28,8 +28,7 @@ KEYS = {
     "ANTHROPIC_API_KEY": "Anthropic Claude (paid, optional)",
     "TIKTOK_CLIENT_KEY": "Your TikTok developer app's client key",
     "TIKTOK_CLIENT_SECRET": "Your TikTok developer app's client secret",
-    "TAVILY_API_KEY": "Tavily (free): live web search for Research",
-    "YOUTUBE_API_KEY": "YouTube Data API (free): top Shorts for Research",
+    "TAVILY_API_KEY": "Tavily (free): live web search for the Ask chat",
 }
 
 

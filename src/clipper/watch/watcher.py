@@ -145,6 +145,8 @@ def run_pass(cfg: WatchConfig, backend: LLMBackend | list[LLMBackend], *,
             continue
         if verdict.is_new_campaign:
             result.campaigns += 1
+            if not dry_run:
+                _remember(verdict, mail)
         ok, reason = should_push(verdict, cfg)
         key = campaign_key(verdict)
         if ok and key in state.pushed:
@@ -167,6 +169,16 @@ def run_pass(cfg: WatchConfig, backend: LLMBackend | list[LLMBackend], *,
     if not dry_run:
         state.save(path)
     return result
+
+
+def _remember(verdict: Verdict, mail) -> None:
+    """Keep the campaign for the Control Center's Campaigns page, pushed or not."""
+    try:
+        from ..studio.finder import record_found
+
+        record_found(verdict, f"{mail.subject}\n\n{mail.text}")
+    except Exception as exc:  # the page is a convenience; the push still matters
+        log.warning("could not keep %r for the Control Center: %s", verdict.name, exc)
 
 
 def _failed(state: State, key: str, result: PassResult) -> None:

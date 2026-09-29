@@ -13,7 +13,6 @@ import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
 import { LearningPage } from "./pages/LearningPage";
 import { NewClipsPage } from "./pages/NewClipsPage";
-import { ResearchPage } from "./pages/ResearchPage";
 import { AccountsPage, SettingsPage } from "./pages/SettingsPages";
 import { StatsPage } from "./pages/StatsPage";
 import { ClipsPage, type ClipFilter } from "./pages/WorkPages";
@@ -26,15 +25,15 @@ const queryClient = new QueryClient({
 const root = createRootRoute({ component: AppShell });
 const routes = [
   createRoute({ getParentRoute: () => root, path: "/", component: DashboardPage }),
+  // The Research page became the Ask panel (top bar) and Find campaigns (Campaigns), D63.
+  createRoute({ getParentRoute: () => root, path: "/research",
+                beforeLoad: () => { throw redirect({ to: "/campaigns", search: { find: "1" } }); } }),
   createRoute({
-    getParentRoute: () => root, path: "/research", component: ResearchPage,
-    validateSearch: (s: Record<string, unknown>): { tab?: "ask" | "niches" | "saved"; thread?: number; niche?: number } => ({
-      tab: s.tab === "ask" || s.tab === "niches" || s.tab === "saved" ? s.tab : undefined,
-      thread: typeof s.thread === "number" ? s.thread : undefined,
-      niche: typeof s.niche === "number" ? s.niche : undefined,
+    getParentRoute: () => root, path: "/campaigns", component: CampaignsPage,
+    validateSearch: (s: Record<string, unknown>): { find?: string } => ({
+      find: s.find === "1" || s.find === 1 ? "1" : undefined,
     }),
   }),
-  createRoute({ getParentRoute: () => root, path: "/campaigns", component: CampaignsPage }),
   createRoute({ getParentRoute: () => root, path: "/campaigns/new", component: CampaignEditorPage }),
   createRoute({ getParentRoute: () => root, path: "/campaigns/$name", component: CampaignPage }),
   createRoute({ getParentRoute: () => root, path: "/campaigns/$name/edit", component: CampaignEditorPage }),

@@ -1,9 +1,12 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { CheckCircle2, Download, ExternalLink, FolderOpen, Info, SkipForward, Trash2, Undo2, Upload, X } from "lucide-react";
+import {
+  CheckCircle2, Download, ExternalLink, FileCheck2, FolderOpen, Info, Link2, Loader2, Send, SkipForward, Trash2, Undo2,
+  Upload, X, XCircle,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  downloadUrl, revealClip, useCampaignTitle, useClips, useDeleteClip, useRateClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
+  downloadUrl, proofUrl, revealClip, useAddPostLink, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -63,6 +66,91 @@ export function SubmitButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | 
         <CheckCircle2 className="size-3.5" /> Mark submitted
       </Button>
     </Tip>
+  );
+}
+
+/** The campaign's own page, where post links are submitted. */
+export function useCampaignUrl() {
+  const { data: campaigns = [] } = useCampaigns();
+  const urls = new Map(campaigns.map((c) => [c.name, c.campaign_url]));
+  return (name: string) => urls.get(name) || "";
+}
+
+/** Copy the post's link and open the campaign's page to paste it into, in one click. */
+export function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy link & submit" }: {
+  post: Post; campaignUrl: string; size?: "sm" | "md"; label?: string;
+}) {
+  if (!campaignUrl) return null;
+  return (
+    <Tip label="Copies the post's link and opens the campaign page to paste it">
+      <Button size={size} variant="secondary" onClick={(e) => {
+        e.stopPropagation();
+        void copyText(post.url, `${PLATFORM_NAME[post.platform] ?? post.platform} link`);
+        window.open(campaignUrl, "_blank", "noopener");
+      }}>
+        <Send className="size-3.5" /> {label}
+      </Button>
+    </Tip>
+  );
+}
+
+function PasteLink({ clip, compact = false }: { clip: Clip; compact?: boolean }) {
+  const add = useAddPostLink();
+  const [open, setOpen] = useState(!compact);
+  const [url, setUrl] = useState("");
+  if (!open) {
+    return <Button size="sm" variant="ghost" onClick={() => setOpen(true)}><Link2 className="size-3.5" /> Add a post link</Button>;
+  }
+  return (
+    <form className="flex gap-2" onSubmit={(e) => {
+      e.preventDefault();
+      add.mutate({ id: clip.id, url }, {
+        onSuccess: (res) => { setUrl(""); if (compact) setOpen(false); toast.success(`${PLATFORM_NAME[(res as { platform: string }).platform] ?? "Post"} link added`, { description: "Its stats update on the next sync." }); },
+        onError: (err) => toast.error((err as Error).message),
+      });
+    }}>
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the post's link (TikTok, Instagram or YouTube)"
+             aria-label="Post link" className="h-9 flex-1 rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
+      <Button type="submit" variant="secondary" disabled={!url.trim() || add.isPending}>Add</Button>
+    </form>
+  );
+}
+
+function ProofPanel({ clip }: { clip: Clip }) {
+  const proof = clip.proof;
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-1 p-3">
+      <ul className="flex flex-col gap-1 text-sm">
+        <li className="flex gap-2">
+          <FileCheck2 className="mt-0.5 size-4 shrink-0 text-success" />
+          <span>
+            Campaign rules saved {proof?.saved_at ? ago(proof.saved_at) : "—"}
+            {proof?.late && <span className="text-muted"> (from the campaign's rules then; this clip was made before Clipper saved them)</span>}
+          </span>
+        </li>
+        {proof && proof.total > 0 && (
+          <li className="flex gap-2">
+            {proof.passed === proof.total ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" /> : <XCircle className="mt-0.5 size-4 shrink-0 text-danger" />}
+            <span>{proof.passed} of {proof.total} brief checks passed when it was made</span>
+          </li>
+        )}
+        <li className="flex gap-2">
+          {proof?.posted_ok === true ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+            : proof?.posted_ok === false ? <XCircle className="mt-0.5 size-4 shrink-0 text-danger" />
+            : <Info className="mt-0.5 size-4 shrink-0 text-subtle" />}
+          <span className={cn(proof?.posted_ok == null && "text-muted")}>
+            {proof?.posted_ok === true ? "The caption as posted meets the brief"
+              : proof?.posted_ok === false ? "The caption as posted is missing something the brief requires (see the pack)"
+              : clip.posts.length ? "The caption as posted is checked on the next sync" : "The caption as posted is checked once the post is found"}
+          </span>
+        </li>
+      </ul>
+      <a href={proofUrl(clip.id)} download
+         className="inline-flex h-8 w-fit items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3 text-xs font-medium hover:bg-surface-3">
+        <Download className="size-3.5" /> Download proof pack
+      </a>
+      <p className="text-xs text-subtle">If a campaign rejects this clip after it gets views, send them the pack: their brief as it was, the checks, the posts and their views.</p>
+    </div>
   );
 }
 
@@ -196,6 +284,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
 }) {
   const open = useUI((s) => s.setOpenClip);
   const title = useCampaignTitle();
+  const campaignUrl = useCampaignUrl()(clip.campaign);
   const { views, best } = bestViews(clip);
   return (
     <article
@@ -230,9 +319,13 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
         </div>
       </div>
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
-        {clip.status === "posted" ? (
+        {clip.status === "posted" && clip.posts.length === 0 && clip.watching ? (
+          <span className="flex items-center gap-1.5 text-xs text-muted"><Loader2 className="size-3.5 animate-spin" /> Finding your post…</span>
+        ) : clip.status === "posted" ? (
           <>
-            <LinkButtons posts={clip.posts} withLabel={clip.posts.length < 2} />
+            {clip.posts.length === 1 && campaignUrl
+              ? <SubmitLinkButton post={clip.posts[0]} campaignUrl={campaignUrl} label="Submit" />
+              : <LinkButtons posts={clip.posts} withLabel={clip.posts.length < 2} />}
             <SubmitButton clip={clip} />
           </>
         ) : clip.status === "submitted" ? (
@@ -251,7 +344,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
 
 /* ---------- Detail sheet ---------- */
 
-function PostStats({ post }: { post: Post }) {
+function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
   const na = (why: string) => (
     <Tip label={why}><span className="text-subtle">n/a</span></Tip>
   );
@@ -265,6 +358,7 @@ function PostStats({ post }: { post: Post }) {
           {post.account && <span className="text-muted">@{post.account}</span>}
         </span>
         <span className="flex items-center gap-1.5">
+          {!post.submitted_at && <SubmitLinkButton post={post} campaignUrl={campaignUrl} />}
           <CopyButton text={post.url} what={`${PLATFORM_NAME[post.platform] ?? post.platform} link`} label="Copy link" />
           <Tip label="Open the post">
             <a href={post.url} target="_blank" rel="noopener noreferrer"
@@ -311,6 +405,8 @@ export function ClipSheet() {
   const submit = useSubmittedWithUndo();
   const rate = useRateClip();
   const title = useCampaignTitle();
+  const campaignUrlOf = useCampaignUrl();
+  const campaignUrl = clip ? campaignUrlOf(clip.campaign) : "";
   const remove = useDeleteWithUndo();
   const setNote = useSetNote();
   const [note, setNoteText] = useState("");
@@ -426,13 +522,26 @@ export function ClipSheet() {
                 <section>
                   <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Posts</h3>
                   {clip.posts.length ? (
-                    <div className="flex flex-col gap-2">{clip.posts.map((p) => <PostStats key={p.url} post={p} />)}</div>
+                    <div className="flex flex-col gap-2">
+                      {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} />)}
+                      <PasteLink clip={clip} compact />
+                    </div>
                   ) : (
-                    <p className="flex items-center gap-2 rounded-md border border-dashed border-line p-3 text-sm text-muted">
-                      <Info className="size-4 shrink-0" />
-                      Not posted yet. Once it's up with this caption, the next sync links it here automatically.
-                    </p>
+                    <div className="flex flex-col gap-2 rounded-md border border-dashed border-line p-3">
+                      <p className="flex items-center gap-2 text-sm text-muted">
+                        {clip.watching ? <Loader2 className="size-4 shrink-0 animate-spin text-accent" /> : <Info className="size-4 shrink-0" />}
+                        {clip.watching
+                          ? "Looking for your post every 2 minutes for the next half hour, so you can submit it fast."
+                          : "Not posted yet. Press Mark posted once it's up and Clipper finds it within minutes, or paste its link."}
+                      </p>
+                      <PasteLink clip={clip} />
+                    </div>
                   )}
+                </section>
+
+                <section>
+                  <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Proof for disputes</h3>
+                  <ProofPanel clip={clip} />
                 </section>
 
                 <section>

@@ -1,1 +1,1 @@
-"""The Research section: chat, niche radar and saved items (studio/server.py)."""
+"""The Ask chat (research/agent.py) and its web search (research/sources.py)."""

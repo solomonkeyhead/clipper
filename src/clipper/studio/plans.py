@@ -1,10 +1,9 @@
 """Plans: which features an account has.
 
-Planned as paid tiers for a hosted Clipper: Free (clipping, stats), Research
-(the Research section: chat, niche radar, saved), Pro (Research, and the chat may
-change things in Clipper -- create campaigns, start clip jobs, add hook lines --
-after the user confirms). Nothing is billed; a local install is on Pro, and the
-setting exists so the tiers can be tried and the checks sit in the right places.
+Planned as paid tiers for a hosted Clipper (D62, D63): Free (clipping, stats),
+Research (adds the Ask chat), Pro (everything, and later auto-posting). Nothing
+is billed; a local install is on Pro, and the setting exists so the tiers can
+be tried and the checks sit in the right places.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from . import db
 PLANS = ["free", "research", "pro"]
 PLAN_NAMES = {"free": "Free", "research": "Research", "pro": "Pro"}
 #: feature -> the lowest plan that has it
-FEATURES = {"research": "research", "research_actions": "pro"}
+FEATURES = {"research": "research"}
 
 
 def current() -> str:

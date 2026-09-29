@@ -90,6 +90,7 @@ def _update(row: dict[str, str], video: Video, now: float) -> list[str]:
 
     put("video_id", video.id)
     put("url", video.url)
+    put("posted_caption", video.caption, only_if_empty=False)
     if video.created:
         put("posted_at", datetime.fromtimestamp(video.created).strftime("%Y-%m-%d %H:%M"))
     age = now - video.created if video.created else -1

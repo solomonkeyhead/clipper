@@ -1,10 +1,11 @@
-import { Link, useParams } from "@tanstack/react-router";
-import { Archive, ArchiveRestore, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, ShieldCheck } from "lucide-react";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { Archive, ArchiveRestore, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, Search, ShieldCheck } from "lucide-react";
 import { useState } from "react";
-import { useCampaign, useCampaigns, useSetCampaign, type Brief, type Campaign } from "@/api/client";
+import { useCampaign, useCampaigns, useFound, useSetCampaign, type Brief, type Campaign } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, Chip, CopyButton, EmptyState, PageHeader, Skeleton, Tip } from "@/components/ui";
+import { FindCampaigns } from "./FindCampaigns";
 import { PostTable } from "./StatsPage";
 import { PLATFORM_NAME, ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
@@ -61,6 +62,10 @@ export function NewCampaignButton() {
 
 export function CampaignsPage() {
   const { data, isLoading } = useCampaigns();
+  const { data: found = [] } = useFound();
+  const search = useSearch({ from: "/campaigns" });
+  const navigate = useNavigate({ from: "/campaigns" });
+  const finding = search.find === "1";
   const [showArchived, setShowArchived] = useState(false);
   const list = (data ?? []).filter((c) => c.archived === showArchived);
   const archivedCount = (data ?? []).filter((c) => c.archived).length;
@@ -74,8 +79,14 @@ export function CampaignsPage() {
               {showArchived ? "Active campaigns" : `Archived (${archivedCount})`}
             </Button>
           )}
+          <Button variant={finding ? "secondary" : "ghost"}
+                  onClick={() => void navigate({ search: { find: finding ? undefined : "1" } })}>
+            <Search className="size-4" /> Find campaigns
+            {found.length > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent">{found.length}</span>}
+          </Button>
           <NewCampaignButton />
         </>} />
+      {finding && <FindCampaigns />}
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}</div>
       ) : list.length ? (

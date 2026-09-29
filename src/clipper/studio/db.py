@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS post_state (
 CREATE TABLE IF NOT EXISTS research_threads (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT NOT NULL DEFAULT '',
-    niche_id    INTEGER,
+    niche_id    INTEGER,                  -- unused since D63
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
@@ -66,26 +66,29 @@ CREATE TABLE IF NOT EXISTS research_messages (
     role        TEXT NOT NULL,            -- user | assistant
     content     TEXT NOT NULL,
     sources     TEXT NOT NULL DEFAULT '[]',   -- [{title, url}]
-    actions     TEXT NOT NULL DEFAULT '[]',   -- proposed actions, see research/agent.py
+    actions     TEXT NOT NULL DEFAULT '[]',   -- unused since D63 (chat actions removed)
     created_at  TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS niches (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    keywords    TEXT NOT NULL DEFAULT '[]',
-    brief       TEXT,                     -- JSON, research/radar.py
-    brief_at    TEXT,
-    created_at  TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS found_campaigns (
+    key         TEXT PRIMARY KEY,         -- watch.watcher.campaign_key
+    source      TEXT NOT NULL DEFAULT '',
+    name        TEXT NOT NULL DEFAULT '',
+    owner       TEXT NOT NULL DEFAULT '',
+    rate        TEXT NOT NULL DEFAULT '',
+    rate_per_1k_usd REAL,
+    platforms   TEXT NOT NULL DEFAULT '[]',
+    budget      TEXT NOT NULL DEFAULT '',
+    deadline    TEXT NOT NULL DEFAULT '',
+    link        TEXT NOT NULL DEFAULT '',
+    fit         TEXT NOT NULL DEFAULT '',
+    why         TEXT NOT NULL DEFAULT '',
+    brief       TEXT NOT NULL DEFAULT '',  -- the email's text, for "Add campaign"
+    found_at    TEXT NOT NULL,
+    dismissed   INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS saved_items (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    kind        TEXT NOT NULL,            -- hook | idea | answer | link
-    text        TEXT NOT NULL,
-    url         TEXT NOT NULL DEFAULT '',
-    niche_id    INTEGER,
-    created_at  TEXT NOT NULL
-);
+-- Niches and saved items (D62) were removed in D63.
+DROP TABLE IF EXISTS niches;
+DROP TABLE IF EXISTS saved_items;
 CREATE TABLE IF NOT EXISTS snapshots (
     url         TEXT NOT NULL,
     at          TEXT NOT NULL,        -- ISO time of the sync
@@ -129,6 +132,10 @@ MIGRATIONS = [
     ("clips", "rating", "ALTER TABLE clips ADD COLUMN rating INTEGER"),
     ("clips", "reasons", "ALTER TABLE clips ADD COLUMN reasons TEXT NOT NULL DEFAULT '[]'"),
     ("clips", "rated_at", "ALTER TABLE clips ADD COLUMN rated_at TEXT"),
+    # The campaign's rules and the clip's checks when it was made (studio/evidence.py).
+    ("clips", "evidence", "ALTER TABLE clips ADD COLUMN evidence TEXT"),
+    # Marked posted at: syncs run every 2 minutes until this passes or the post is found.
+    ("clips", "watch_until", "ALTER TABLE clips ADD COLUMN watch_until TEXT"),
 ]
 TRASH_DAYS = 30
 
@@ -165,8 +172,9 @@ def upsert_clip(con: sqlite3.Connection, clip: dict) -> int:
     """
     fields = ["campaign", "source_id", "clip_id", "source_title", "title", "file", "hook",
               "caption", "duration_s", "start_s", "end_s"]
-    if clip.get("scores") is not None:
-        fields.append("scores")
+    for optional in ("scores", "evidence"):
+        if clip.get(optional) is not None:
+            fields.append(optional)
     values = {f: clip.get(f) for f in fields}
     for text in ("source_id", "clip_id", "source_title", "title", "hook", "caption"):
         values[text] = values[text] or ""
@@ -216,7 +224,7 @@ def clip(con: sqlite3.Connection, clip_id: int) -> dict | None:
 
 def update_clip(con: sqlite3.Connection, clip_id: int, **changes) -> None:
     allowed = {k: v for k, v in changes.items()
-               if k in ("status", "notes", "title", "caption", "start_s", "end_s")}
+               if k in ("status", "notes", "title", "caption", "start_s", "end_s", "watch_until")}
     if "status" in allowed and allowed["status"] not in STATUSES:
         raise ValueError(f"status must be one of {', '.join(STATUSES)}")
     if allowed:
@@ -304,6 +312,12 @@ def views_at(con: sqlite3.Connection, when: str) -> dict[str, int]:
         "SELECT url, views FROM snapshots s WHERE at = (SELECT MAX(at) FROM snapshots t "
         "WHERE t.url = s.url AND t.at <= ?)", (when,))
     return {r["url"]: int(r["views"] or 0) for r in rows}
+
+
+def history_full(con: sqlite3.Connection, url: str) -> list[dict]:
+    """Every snapshot of one post, for its proof pack."""
+    return [dict(r) for r in con.execute(
+        "SELECT at, views, likes, comments, shares FROM snapshots WHERE url=? ORDER BY at", (url,))]
 
 
 def history(con: sqlite3.Connection, url: str) -> list[dict]:

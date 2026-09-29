@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Compass, Film, GraduationCap, LayoutDashboard, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
+  AlertTriangle, BarChart3, Film, GraduationCap, LayoutDashboard, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
   Settings, UserCircle2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -9,6 +9,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
 import { useUI } from "@/lib/store";
 import { ago, cn } from "@/lib/utils";
+import { AskPanel } from "./AskPanel";
 import { ClipSheet } from "./clips";
 import { CommandPalette, ShortcutSheet } from "./Palette";
 import { Button, Kbd, Tip } from "./ui";
@@ -33,7 +34,6 @@ function useNav(): NavItem[] {
   const waiting = clips.filter((c) => (c.status === "ready" || c.status === "posted") && active.has(c.campaign)).length;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
-    { to: "/research", label: "Research", icon: <Compass />, keys: "G E" },
     { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C", badge: active.size },
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
@@ -124,6 +124,7 @@ export function AppShell() {
   const online = useUI((s) => s.online);
   const setPalette = useUI((s) => s.setPalette);
   const setShortcuts = useUI((s) => s.setShortcuts);
+  const setAsk = useUI((s) => s.setAsk);
   const nav = useNav();
   const pendingG = useRef(0);
 
@@ -135,9 +136,10 @@ export function AppShell() {
   };
   useHotkeys({
     g: () => { pendingG.current = Date.now(); },
-    d: goto("/"), h: goto("/"), e: goto("/research"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"),
+    d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"),
     s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"),
     "[": toggle,
+    i: () => setAsk(true),
     "?": () => setShortcuts(true),
     "/": () => setPalette(true),
   });
@@ -198,6 +200,12 @@ export function AppShell() {
             <Kbd className="hidden sm:inline">Ctrl K</Kbd>
           </button>
           <div className="flex items-center gap-2">
+            <Tip label="Ask about your clips, campaigns and trends" keys="I">
+              <button onClick={() => setAsk(true)}
+                      className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium text-muted hover:border-line-strong hover:text-fg">
+                <Sparkles className="size-3.5 text-accent" /> Ask
+              </button>
+            </Tip>
             <AutoPostPill />
             <SyncPill />
           </div>
@@ -217,7 +225,7 @@ export function AppShell() {
 
         {/* Bottom tabs (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
-          {[nav[0], nav[1], nav[3], nav[4], nav[5]].map((item) => (
+          {[nav[0], nav[1], nav[2], nav[3], nav[4]].map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
                   className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted data-[status=active]:text-accent [&_svg]:size-5">
@@ -230,6 +238,7 @@ export function AppShell() {
       </div>
 
       <ClipSheet />
+      <AskPanel />
       <CommandPalette />
       <ShortcutSheet />
     </div>

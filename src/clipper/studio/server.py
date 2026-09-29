@@ -19,7 +19,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -34,7 +34,7 @@ from ..config import CampaignConfig
 from ..learn import log as perf
 from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
-from . import db, library, setup, stats
+from . import db, evidence, library, setup, stats
 from .events import Broker
 
 log = get_logger(__name__)
@@ -43,6 +43,10 @@ STATIC = Path(__file__).parent / "static"
 HOST, PORT = "127.0.0.1", 8765
 HEARTBEAT_SECONDS = 15
 SESSION_GAP_MINUTES = 30
+#: After "Mark posted", sync every FAST_SYNC_SECONDS for this long, so the post's
+#: link is ready while campaigns still accept it (a 30-minute window is reported).
+WATCH_FOR = timedelta(minutes=30)
+FAST_SYNC_SECONDS = 120
 
 
 # --------------------------------------------------------------------------
@@ -70,6 +74,15 @@ class Post(BaseModel):
     x_median: float | None = None
     est_earnings: float | None = None
     submitted_at: str | None = None
+    posted_caption: str | None = None   # as it is on the platform, for the proof pack
+
+
+class Proof(BaseModel):
+    saved_at: str | None = None
+    late: bool = False
+    passed: int = 0
+    total: int = 0
+    posted_ok: bool | None = None
 
 
 class Clip(BaseModel):
@@ -97,6 +110,10 @@ class Clip(BaseModel):
     picked_by: str = "unknown"      # auto | hand | unknown
     rating: int | None = None
     reasons: list[str] = []
+    # The dispute pack (studio/evidence.py): when the brief was saved, how many of
+    # the clip's checks passed, and whether the posted captions meet the rules.
+    proof: Proof | None = None
+    watching: bool = False         # marked posted; looking for the post every 2 minutes
 
 
 class CampaignCounts(BaseModel):
@@ -122,6 +139,7 @@ class Campaign(BaseModel):
     est_earnings: float | None = None
     to_submit: int
     last_post: str | None = None
+    campaign_url: str = ""         # where the user submits post links
 
 
 class Brief(BaseModel):
@@ -223,6 +241,40 @@ class Learning(BaseModel):
     min_for_weights: int
     min_for_agreement: int
     reason_labels: dict[str, str]
+
+
+class FoundCampaign(BaseModel):
+    key: str
+    source: str
+    name: str
+    owner: str
+    rate: str
+    rate_per_1k_usd: float | None = None
+    platforms: list[str]
+    budget: str
+    deadline: str
+    link: str
+    fit: str
+    why: str
+    found_at: str
+    dismissed: int
+
+
+class FitCheck(BaseModel):
+    ok: bool | None = None
+    text: str
+
+
+class Fit(BaseModel):
+    verdict: str                    # good | check | poor
+    checks: list[FitCheck]
+    per_post_usd: float | None = None
+    checked_at: str
+
+
+class CampaignCheck(BaseModel):
+    form: CampaignForm
+    fit: Fit
 
 
 class Setup(BaseModel):
@@ -328,6 +380,7 @@ class Snapshot:
                     platform=p["platform"], account=p["account"], url=p["url"],
                     campaign=p["campaign"], clip=p["clip"], clip_title=p["clip_title"],
                     posted_at=p.get("posted_at"), age_hours=age, settling=settling,
+                    posted_caption=p.get("posted_caption"),
                     views=views, likes=p.get("likes"), comments=p.get("comments"),
                     shares=p.get("shares"), saves=p.get("saves"),
                     avg_watch_s=p.get("avg_watch_s"), watched_full_pct=p.get("watched_full_pct"),
@@ -348,6 +401,9 @@ class Snapshot:
                 pool=scores.get("pool"), pool_rank=scores.get("pool_rank"),
                 picked_by=scores.get("picked_by") or "unknown", rating=c.get("rating"),
                 reasons=json.loads(c.get("reasons") or "[]"),
+                proof=Proof(**evidence.summary(json.loads(c.get("evidence") or "null"),
+                                               [m.model_dump() for m in models])),
+                watching=bool(c.get("watch_until") and c["watch_until"] > now.strftime("%Y-%m-%d %H:%M")),
                 id=c["id"], campaign=c["campaign"], title=c["title"] or c["clip_id"],
                 hook=c["hook"], caption=c["caption"], duration_s=c["duration_s"],
                 source_title=display_source(c["source_title"]), status=status,
@@ -374,6 +430,7 @@ class Snapshot:
             platforms=list(brief.platform_targets) if brief else [],
             reward_per_1k_usd=brief.reward_per_1k_usd if brief else None,
             max_clips=brief.max_clips_per_source if brief else 8,
+            campaign_url=brief.campaign_url if brief else "",
             clips=len(mine), counts=counts,
             views=sum(p.views or 0 for p in posts),
             est_earnings=round(sum(earnings), 2) if earnings else None,
@@ -508,41 +565,38 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         while True:
             with db.connect() as con:
                 minutes = max(5, int(db.settings(con)["sync_minutes"] or 15))
+                watching = con.execute("SELECT 1 FROM clips WHERE watch_until > ? LIMIT 1",
+                                       (datetime.now().strftime("%Y-%m-%d %H:%M"),)).fetchone()
+            interval = FAST_SYNC_SECONDS if watching else minutes * 60
             synced = stats.last_synced(perf.read())
             due = True
             if synced:
                 with contextlib.suppress(ValueError):
                     age = (datetime.now() - datetime.strptime(synced, "%Y-%m-%d %H:%M"))
-                    due = age.total_seconds() >= minutes * 60
+                    due = age.total_seconds() >= interval
             if due:
                 try:
                     await sync_now()
+                    if watching:
+                        await asyncio.to_thread(stop_watching_found)
                 except Exception:
                     log.exception("automatic sync failed")
-            await refresh_a_stale_niche()
             await asyncio.sleep(60)
 
-    async def refresh_a_stale_niche() -> None:
-        """One niche brief a minute at most, once a day each (Research plan)."""
-        from ..research import radar
-        from . import plans
-        from .research_api import niche_rows, refresh_one
-
-        if not plans.has("research") or not setup.key_set("GEMINI_API_KEY"):
-            return
-        stale = next((n for n in niche_rows() if radar.is_stale(n)), None)
-        if stale is not None:
-            try:
-                await asyncio.to_thread(refresh_one, stale["id"], broker)
-                broker.publish("research.niches")
-            except Exception as exc:
-                log.info("daily niche brief for %s skipped: %s", stale["name"], exc)
+    def stop_watching_found() -> None:
+        """Clips whose post has turned up need no more fast syncs."""
+        found = [c.id for c in Snapshot().clips if c.watching and c.posts]
+        with db.connect() as con:
+            for clip_id in found:
+                db.update_clip(con, clip_id, watch_until=None)
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         broker.bind(asyncio.get_running_loop())
         with contextlib.suppress(Exception):  # scores for clips filed before they were kept
             await asyncio.to_thread(library.backfill_scores)
+        with contextlib.suppress(Exception):  # and a (late) evidence snapshot
+            await asyncio.to_thread(library.backfill_evidence, load_campaigns())
         task = asyncio.create_task(sync_loop()) if auto_sync else None
         if auto_sync:
             with contextlib.suppress(Exception):
@@ -720,6 +774,51 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             raise HTTPException(503, "the AI model didn't answer (it may be busy). Try again "
                                      "in a minute, or fill the form in yourself.") from exc
 
+    def check_brief(text: str) -> CampaignCheck:
+        from ..config import Config
+        from ..pipeline import build_backend
+        from . import finder
+
+        try:
+            backend = build_backend(Config.load())
+        except Exception as exc:
+            raise HTTPException(400, "Checking a campaign needs your AI key: add it in Settings.") from exc
+        try:
+            form = editor.read_brief(text, backend)
+        except CampaignError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            log.warning("campaign check failed: %s", exc)
+            raise HTTPException(503, "The AI didn't answer (it may be busy). Try again in a minute.") from exc
+        return CampaignCheck(form=form, fit=Fit(**finder.fit(form, Snapshot(), accounts())))
+
+    @app.post("/api/campaigns/check")
+    async def check_campaign(body: dict) -> CampaignCheck:
+        """Read a pasted campaign brief and say how well it fits this user."""
+        return await asyncio.to_thread(check_brief, str(body.get("text") or ""))
+
+    @app.get("/api/found")
+    def found_campaigns() -> list[FoundCampaign]:
+        from . import finder
+
+        return [FoundCampaign(**f) for f in finder.found()]
+
+    @app.post("/api/found/{key}/check")
+    async def check_found(key: str) -> CampaignCheck:
+        from . import finder
+
+        brief = finder.brief_of(key)
+        if brief is None:
+            raise HTTPException(404, "no such campaign")
+        return await asyncio.to_thread(check_brief, brief)
+
+    @app.post("/api/found/{key}/dismiss")
+    def dismiss_found(key: str) -> dict:
+        from . import finder
+
+        finder.dismiss(key)
+        return {"ok": True}
+
     @app.get("/api/clips")
     def clips(campaign: str | None = None) -> list[Clip]:
         return [c for c in Snapshot().clips if campaign is None or c.campaign == campaign]
@@ -739,6 +838,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             try:
                 # The page edits what the user owns; captions and ranges come from runs.
                 allowed = {k: v for k, v in changes.items() if k in ("status", "notes", "title")}
+                if allowed.get("status") == "posted":
+                    allowed["watch_until"] = (datetime.now() + WATCH_FOR).strftime("%Y-%m-%d %H:%M")
+                elif "status" in allowed:
+                    allowed["watch_until"] = None
                 db.update_clip(con, clip_id, **allowed)
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from exc
@@ -1020,6 +1123,50 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         return FileResponse(still, media_type="image/jpeg",
                             headers={"Cache-Control": "max-age=86400"})
 
+    @app.post("/api/clips/{clip_id}/posts")
+    def add_post(clip_id: int, body: dict) -> dict:
+        """A post link pasted by hand, for when the sync hasn't found the post yet."""
+        from .posts import PostLinkError, add_link
+
+        with db.connect() as con:
+            found = db.clip(con, clip_id)
+        if found is None:
+            raise HTTPException(404, "no such clip")
+        try:
+            platform = add_link(found, str(body.get("url") or ""))
+        except PostLinkError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(409, f"{perf.log_path().name} is open in Excel; close it and "
+                                     "try again") from exc
+        with db.connect() as con:
+            if found["status"] == "ready":
+                db.update_clip(con, clip_id, status="posted")
+            db.update_clip(con, clip_id, watch_until=None)
+        broker.publish("clips.changed", {"id": clip_id})
+        return {"platform": platform}
+
+    @app.get("/media/{clip_id}/proof")
+    def proof_pack(clip_id: int):
+        """A zip to send a campaign if it rejects the clip: brief, checks, posts, views, clip."""
+        from fastapi.responses import Response
+
+        with db.connect() as con:
+            found = db.clip(con, clip_id)
+            if found is None:
+                raise HTTPException(404, "no such clip")
+            snap = next((c for c in Snapshot().clips if c.id == clip_id), None)
+            posts = [p.model_dump() for p in (snap.posts if snap else [])]
+            history = {p["url"]: db.history_full(con, p["url"]) for p in posts}
+        saved = json.loads(found.get("evidence") or "null") or evidence.late_snapshot(
+            found, load_campaigns().get(found["campaign"]))
+        data = evidence.build_pack(found, library.clip_path(found["file"]), saved, posts, history)
+        name = re.sub(r'[\\/:*?"<>|]+', "", found["title"] or found["clip_id"]).strip()[:60] or "clip"
+        from urllib.parse import quote
+
+        return Response(data, media_type="application/zip", headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name + ' - proof.zip')}"})
+
     @app.get("/media/{clip_id}")
     def media(clip_id: int, download: bool = False) -> FileResponse:
         """The clip's video: streamed for playing, or as a named file to save."""
@@ -1036,7 +1183,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     from .research_api import build_router
 
-    app.include_router(build_router(broker, jobs))
+    app.include_router(build_router(broker))
 
     # The single-page app: real files from the build, index.html for its routes.
     if (STATIC / "assets").is_dir():

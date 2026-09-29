@@ -1195,3 +1195,36 @@ most). `live` false marks a brief made without either source.
 (the chat may propose changes -- hook lines, a clip job, a new campaign from a
 brief -- run only when the user presses Confirm, once). Enforced server-side
 (402); a local install is Pro; Settings has a plan preview. No billing.
+
+## D63 -- After the market research: slimmer Research, dispute packs, fast link capture (2026-09-29)
+
+The competitor report (docs/research/, requested with competitor-research-prompt.md)
+found the gap is the campaign workflow, not the edit: the most-cited clipper loss
+is rejection after views accrue; Whop lets brands reject only for failing a
+written requirement; a 30-minute submission window is reported (unverified).
+It judged niche briefs, chat actions and a web-wide campaign finder as bloat
+(Apify scrapers already aggregate campaigns). The user chose to slim Research
+and build the dispute pack and fast link capture now; Drive/Dropbox import,
+honest-results and duplicate checks wait.
+
+- **Research slimmed.** Niches, Saved, chat actions and YouTube lookups removed.
+  The Ask chat (own data + optional Tavily web search, answers only) is a panel
+  from the top bar (I), not a page. Plans: Research = Ask; Pro = later auto-post.
+- **Find campaigns** (Campaigns page): the watcher now records every campaign it
+  finds (found_campaigns), and "Check a campaign" reads a pasted brief and
+  shows plain fit checks against the user's own record (connected platforms,
+  median views -> earnings a post, footage they've clipped, deadline, rules to
+  check themselves). "Add campaign" opens the form already filled.
+- **Proof for disputes.** Each clip keeps an evidence snapshot when it's made:
+  the campaign's rules (full YAML), the compliance and QA checks, the recorded
+  permission. The sync now keeps each post's caption as actually posted, which
+  is re-checked against the saved rules. "Download proof pack" zips proof.html,
+  brief.yaml, evidence.json, stats.csv and the clip. Older clips get a snapshot
+  marked late, and the pack says so.
+- **Fast link capture.** Mark posted -> syncs every 2 minutes for 30 minutes
+  until the post is found. A post link can be pasted by hand (TikTok gets its
+  video id for the next sync; Instagram is adopted by URL). "Copy link & submit"
+  copies the post link and opens the campaign page.
+
+Still not self-service for other users: the campaign watcher (email forwarding +
+app password). A hosted Clipper would give each user a forwarding address.
