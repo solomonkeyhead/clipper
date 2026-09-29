@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  CheckCircle2, Download, ExternalLink, FileCheck2, FolderOpen, Info, Link2, Loader2, Send, SkipForward, Trash2, Undo2,
+  AlertTriangle, CheckCircle2, Download, ExternalLink, FileCheck2, FolderOpen, Info, Link2, Loader2, Send, SkipForward, Trash2, Undo2,
   Upload, X, XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -113,6 +113,33 @@ function PasteLink({ clip, compact = false }: { clip: Clip; compact?: boolean })
              aria-label="Post link" className="h-9 flex-1 rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
       <Button type="submit" variant="secondary" disabled={!url.trim() || add.isPending}>Add</Button>
     </form>
+  );
+}
+
+/** Already posted: the clips this one repeats, and where they're up. */
+function DuplicateWarning({ clip }: { clip: Clip }) {
+  const open = useUI((s) => s.setOpenClip);
+  if (!clip.duplicates.length || clip.status === "skipped") return null;
+  const accounts = [...new Set(clip.duplicates.flatMap((d) => d.posted_on))];
+  return (
+    <div className="flex gap-2.5 rounded-md border border-warning/40 bg-[color-mix(in_oklch,var(--warning)_8%,transparent)] p-3 text-sm">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+      <div className="flex flex-col gap-1">
+        <p><b>Already posted.</b> This repeats {clip.duplicates.length === 1 ? "a clip" : `${clip.duplicates.length} clips`} you've put up on {accounts.join(", ")}:</p>
+        <ul className="flex flex-col">
+          {clip.duplicates.map((d) => (
+            <li key={d.id}>
+              <button className="text-left text-accent hover:underline" onClick={() => open(d.id)}>“{d.title}”</button>
+              <span className="text-muted"> · {d.how}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted">
+          Posting it again on the same account breaks Vyro's rules, and Instagram stops recommending accounts that repeat
+          themselves. Post it on a different account, or skip it.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -303,6 +330,11 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5">
             <StatusChip status={clip.status} />
+            {clip.duplicates.length > 0 && clip.status === "ready" && (
+              <Tip label={`Already posted: repeats “${clip.duplicates[0].title}” (${clip.duplicates[0].posted_on.join(", ")})`}>
+                <span aria-label="Already posted" className="text-warning"><AlertTriangle className="size-3.5" /></span>
+              </Tip>
+            )}
             <ScoreBadge clip={clip} />
             <RatingStars rating={clip.rating} />
           </span>
@@ -480,6 +512,8 @@ export function ClipSheet() {
                     <Button variant="ghost" size="icon" aria-label="Close"><X className="size-4" /></Button>
                   </Dialog.Close>
                 </div>
+
+                <DuplicateWarning clip={clip} />
 
                 <div className="flex flex-wrap gap-2">
                   {(clip.status === "posted" || clip.status === "submitted") && <SubmitButton clip={clip} size="md" />}

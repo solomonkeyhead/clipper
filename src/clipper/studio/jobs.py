@@ -40,6 +40,8 @@ class Job:
     pct: float = 0.0
     clips: int = 0
     message: str = ""
+    # What happened to every moment (select/report.py), shown as the job's results.
+    report: dict = field(default_factory=dict)
     created: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M"))
     finished: str = ""
 
@@ -109,6 +111,32 @@ def explain_stop(note: str, made: int) -> str:
     return note[:1].upper() + note[1:]
 
 
+KEEP = 30
+
+
+def _load_finished() -> dict[int, dict]:
+    import json
+
+    from . import db
+
+    with db.connect() as con:
+        rows = con.execute("SELECT id, data FROM jobs ORDER BY id DESC LIMIT ?", (KEEP,)).fetchall()
+    return {r["id"]: json.loads(r["data"]) for r in rows}
+
+
+def _save_finished(job: Job) -> None:
+    import json
+
+    from . import db
+
+    try:
+        with db.connect() as con:
+            con.execute("INSERT OR REPLACE INTO jobs (id, data, finished) VALUES (?, ?, ?)",
+                        (job.id, json.dumps(job.view()), job.finished))
+    except Exception as exc:  # the job itself is done; only its record is lost
+        log.warning("could not keep job %s: %s", job.id, exc)
+
+
 class JobRunner:
     """A single worker thread and its queue; jobs are kept for the session."""
 
@@ -117,7 +145,9 @@ class JobRunner:
         self.jobs: dict[int, Job] = {}
         self._configs: dict[int, object] = {}
         self._queue: queue.Queue[Job] = queue.Queue()
-        self._ids = itertools.count(1)
+        # Finished jobs are kept in the database, so their results outlive a restart.
+        self._done = _load_finished()
+        self._ids = itertools.count(max([0, *self._done]) + 1)
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
@@ -142,7 +172,9 @@ class JobRunner:
         return job
 
     def list(self) -> list[dict]:
-        return [j.view() for j in sorted(self.jobs.values(), key=lambda j: -j.id)]
+        live = {j.id: j.view() for j in self.jobs.values()}
+        merged = {**self._done, **live}
+        return [merged[i] for i in sorted(merged, reverse=True)[:KEEP]]
 
     def _work(self) -> None:
         while True:
@@ -176,6 +208,7 @@ class JobRunner:
                                     out_root=runs_dir(),
                                     top=job.top or campaign.max_clips_per_source)
             job.clips = len(result.accepted)
+            job.report = getattr(result, "report", None) or {}
             job.status, job.pct = "done", 100.0
             job.stage = (f"Made {job.clips} clip{'s' if job.clips != 1 else ''}" if job.clips
                          else "No clips made")
@@ -194,5 +227,6 @@ class JobRunner:
             pipeline.removeHandler(handler)
             pipeline.setLevel(previous)
             job.finished = datetime.now().strftime("%Y-%m-%d %H:%M")
+            _save_finished(job)
             self.publish("job.progress", job.view())
             self.publish("clips.changed")

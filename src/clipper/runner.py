@@ -56,6 +56,8 @@ class RunResult:
     selection_note: str = ""
     signals_available: list[str] = field(default_factory=list)
     weights_used: dict[str, float] = field(default_factory=dict)
+    # What happened to every moment, for the Control Center (select/report.py).
+    report: dict = field(default_factory=dict)
 
     @property
     def clip_count(self) -> int:
@@ -118,6 +120,10 @@ def run(
         limit=limit, result=result, corrector=corrector, recheck=recheck,
     )
     timings["render_and_qa"] = time.perf_counter() - render_started
+    from .select import report as run_report
+
+    result.report = run_report.build(outcome, selection, result,
+                                     bar=config.selection.min_llm_total, limit=limit)
 
     if outcome.transcribe_stats:
         timings["transcribe"] = outcome.transcribe_stats.wall_seconds
@@ -213,6 +219,9 @@ def cut(
     if stats:
         result.timings["transcribe"] = stats.wall_seconds
     result.timings["total"] = time.perf_counter() - started
+    from .select import report as run_report
+
+    result.report = run_report.manual(ranges, result)
     result.outputs = write_outputs(
         result.accepted, info=info, campaign=campaign, out_dir=out_dir,
         rejected=result.rejected, selection_note=result.selection_note,

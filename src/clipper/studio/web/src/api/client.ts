@@ -167,11 +167,17 @@ export function useDeleteClip() {
 
 export interface Source { name: string; path: string; size_mb: number; modified: string; folder: string }
 export type JobMode = "auto" | "top" | "manual";
+export interface RunReport {
+  mode: "auto" | "manual"; moments: number; cleared: number; bar: number | null; limit: number; made: number;
+  reasons: { reason: string; count: number }[];
+  near_misses: { start: number; end: number; score: number | null; why: string; text: string }[];
+}
 export interface Job {
   id: number; campaign: string; source: string; name: string; top: number | null;
   mode: JobMode; ranges: [number, number][];
   status: "queued" | "running" | "done" | "failed"; stage: string; pct: number;
   clips: number; message: string; created: string; finished: string;
+  report?: RunReport | Record<string, never>;
 }
 
 export const useSources = () =>
@@ -383,3 +389,23 @@ export function useAddPostLink() {
     onSettled: invalidate,
   });
 }
+
+/* ---------- footage from shared links ---------- */
+
+export interface LinkContents { kind: string; zipped: boolean; files: { name: string; size: number | null }[] }
+export interface FootageImport {
+  id: number; link: string; kind: string; names: string[]; status: "queued" | "running" | "done" | "failed";
+  current: string; done_bytes: number; total_bytes: number | null; files_done: number; message: string; saved: string[];
+}
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data as T;
+}
+
+export const inspectLink = (url: string) => postJson<LinkContents>("/api/imports/inspect", { url });
+export const startImport = (url: string, files: string[]) => postJson<FootageImport>("/api/imports", { url, files });
+export const useImports = () =>
+  useQuery({ queryKey: ["imports"], queryFn: async () => (await fetch("/api/imports")).json() as Promise<FootageImport[]> });

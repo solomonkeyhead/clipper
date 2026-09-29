@@ -77,6 +77,16 @@ class Post(BaseModel):
     posted_caption: str | None = None   # as it is on the platform, for the proof pack
 
 
+class Duplicate(BaseModel):
+    id: int
+    title: str
+    how: str                       # "same moment" | "same lines"
+    posted_on: list[str]
+
+
+PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube"}
+
+
 class Proof(BaseModel):
     saved_at: str | None = None
     late: bool = False
@@ -114,6 +124,7 @@ class Clip(BaseModel):
     # the clip's checks passed, and whether the posted captions meet the rules.
     proof: Proof | None = None
     watching: bool = False         # marked posted; looking for the post every 2 minutes
+    duplicates: list[Duplicate] = []  # already-posted clips this one repeats
 
 
 class CampaignCounts(BaseModel):
@@ -410,6 +421,16 @@ class Snapshot:
                 marked=c["status"], notes=c["notes"], created_at=c["created_at"],
                 file_exists=library.clip_path(c["file"]).exists(),
                 video=f"/media/{c['id']}", thumb=f"/thumb/{c['id']}", posts=models))
+        # Before posting: which already-posted clips each one repeats (studio/duplicates.py).
+        from . import duplicates
+
+        posted = {c.id: [f"{PLATFORM_NAMES.get(p.platform, p.platform)}"
+                         + (f" @{p.account.lstrip('@')}" if p.account else "") for p in c.posts]
+                  or (["posted"] if c.status in ("posted", "submitted") else [])
+                  for c in self.clips}
+        found = duplicates.find(self.raw_clips, posted)
+        for clip in self.clips:
+            clip.duplicates = [Duplicate(**d) for d in found.get(clip.id, [])]
 
     @property
     def posts(self) -> list[Post]:
@@ -551,6 +572,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     last_problems: list[str] = []
     jobs = JobRunner(broker.publish)
     tiktok = setup.TikTokConnect(broker.publish)
+    from .imports import ImportRunner
+
+    importer = ImportRunner(broker.publish)
 
     async def sync_now() -> dict:
         broker.publish("sync.started")
@@ -590,6 +614,13 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             for clip_id in found:
                 db.update_clip(con, clip_id, watch_until=None)
 
+    def backfill_words() -> None:
+        try:
+            if library.backfill_text():
+                broker.publish("clips.changed")
+        except Exception as exc:  # optional; the duplicate check just sees less
+            log.info("couldn't transcribe clips for the duplicate check: %s", exc)
+
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         broker.bind(asyncio.get_running_loop())
@@ -597,6 +628,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             await asyncio.to_thread(library.backfill_scores)
         with contextlib.suppress(Exception):  # and a (late) evidence snapshot
             await asyncio.to_thread(library.backfill_evidence, load_campaigns())
+        # Words for clips without them (imported ones), for the duplicate check.
+        # In the background: it loads a small Whisper model.
+        words = asyncio.create_task(asyncio.to_thread(backfill_words))
         task = asyncio.create_task(sync_loop()) if auto_sync else None
         if auto_sync:
             with contextlib.suppress(Exception):
@@ -604,6 +638,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 if purged:
                     log.info("moved %d clip(s) from the 30-day trash to the Recycle Bin", purged)
         yield
+        words.cancel()
         if task:
             task.cancel()
 
@@ -1073,6 +1108,35 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 out.write(chunk)
         partial.replace(target)
         return next(s for s in list_sources() if Path(s["path"]) == target.resolve())
+
+    @app.post("/api/imports/inspect")
+    async def inspect_link(body: dict) -> dict:
+        """What a shared footage link holds, before downloading it."""
+        from . import imports
+
+        try:
+            found = await asyncio.to_thread(imports.inspect, str(body.get("url") or ""))
+        except imports.ImportError_ as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"kind": found.kind, "zipped": found.zipped,
+                "files": [{"name": f.name, "size": f.size} for f in found.files]}
+
+    @app.post("/api/imports")
+    async def start_import(body: dict) -> dict:
+        """Download a shared link's videos into Clipper's uploads, in the background."""
+        from . import imports
+
+        url = str(body.get("url") or "")
+        try:
+            found = await asyncio.to_thread(imports.inspect, url)
+        except imports.ImportError_ as exc:
+            raise HTTPException(400, str(exc)) from exc
+        pick = [str(n) for n in body.get("files") or []]
+        return importer.start(url, found, pick or None).view()
+
+    @app.get("/api/imports")
+    def list_imports() -> list[dict]:
+        return importer.list()
 
     @app.get("/api/jobs")
     def list_jobs() -> list[dict]:

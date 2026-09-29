@@ -69,6 +69,11 @@ CREATE TABLE IF NOT EXISTS research_messages (
     actions     TEXT NOT NULL DEFAULT '[]',   -- unused since D63 (chat actions removed)
     created_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS jobs (
+    id          INTEGER PRIMARY KEY,      -- studio/jobs.py Job.id
+    data        TEXT NOT NULL,            -- the finished job, with its results report
+    finished    TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS found_campaigns (
     key         TEXT PRIMARY KEY,         -- watch.watcher.campaign_key
     source      TEXT NOT NULL DEFAULT '',

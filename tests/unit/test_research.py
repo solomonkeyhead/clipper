@@ -180,3 +180,48 @@ def test_instagram_sync_adopts_a_pasted_link():
     assert len(rows) == 1 and rows[0]["video_id"] == "999" and rows[0]["views_latest"] == "50"
     assert rows[0]["posted_caption"] == "rewritten caption"
     json.dumps(rows)
+
+
+# ---------- duplicates ----------
+
+def test_a_repeated_moment_is_flagged_before_posting():
+    from clipper.studio import duplicates
+
+    scene = ("Pardon me, would you pass the beans please? Black or pinto? What are you trying "
+             "to say? You can say black beans. Pinto. By the way, I love Hanukkah. I wish there "
+             "were more nights. Grandma baked cookies again, delicious chocolate walnut ones")
+    rows = [
+        {"id": 1, "source_id": "a", "start_s": 10, "end_s": 40, "title": "posted",
+         "scores": json.dumps({"text": scene})},
+        {"id": 2, "source_id": "a", "start_s": 20, "end_s": 50, "title": "same moment"},
+        {"id": 3, "source_id": "other-copy", "start_s": 0, "end_s": 30, "title": "same lines",
+         "scores": json.dumps({"text": "Blah blah. " + scene})},
+        {"id": 4, "source_id": "a", "start_s": 300, "end_s": 330, "title": "elsewhere",
+         "scores": json.dumps({"text": "A completely different conversation about parking "
+                               "tickets, zoning boards, elections, neighbours, lawyers, "
+                               "fences, gardens, dogs, hoses, sprinklers and paperwork"})},
+    ]
+    found = duplicates.find(rows, {1: ["TikTok @me"]})
+    assert [d["how"] for d in found[2]] == ["same moment"]
+    assert [d["how"] for d in found[3]] == ["same lines"]
+    assert 4 not in found and 1 not in found
+
+
+def test_a_run_report_explains_every_moment():
+    from types import SimpleNamespace as NS
+
+    from clipper.select import report
+
+    scored = [NS(candidate_id=c, dropped=False, raw={"llm": s}, composite=s / 10)
+              for c, s in [("a", 8.0), ("b", 7.0), ("c", 4.0), ("d", 6.0)]]
+    outcome = NS(scored=NS(scored=scored), candidates=NS(candidates=[
+        NS(candidate_id=c, start=i * 60.0, end=i * 60.0 + 30, text=f"words {c}") for i, c in enumerate("abcd")]))
+    selection = NS(rejections={"b": "overlaps a better clip", "c": "LLM rubric total 4.00/10 is below the absolute minimum",
+                               "d": "beyond the requested top 1"})
+    result = NS(accepted=[NS(plan=NS(candidate_id="a"))], rejected=[])
+    got = report.build(outcome, selection, result, bar=5.5, limit=1)
+    assert got["moments"] == 4 and got["cleared"] == 3 and got["made"] == 1
+    assert {r["reason"] for r in got["reasons"]} == {"Overlaps a better moment", "Scored below the quality bar",
+                                                    "Past the number of clips you asked for"}
+    assert [m["score"] for m in got["near_misses"]] == [7.0, 6.0, 4.0]
+    assert got["near_misses"][0]["why"] == "Overlaps a better moment"

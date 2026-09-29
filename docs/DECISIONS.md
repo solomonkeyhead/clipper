@@ -1228,3 +1228,28 @@ honest-results and duplicate checks wait.
 
 Still not self-service for other users: the campaign watcher (email forwarding +
 app password). A hosted Clipper would give each user a forwarding address.
+
+## D64 -- Footage from shared links, run results, duplicate check (2026-09-29)
+
+From the D63 research list; scheduling stays on hold (platform audits).
+
+- **Import from a link** (New clips > Footage): public Google Drive files and
+  folders (the folder's embeddable view lists its videos; the user picks which),
+  Dropbox files and folders (dl=1; a folder arrives as a zip whose videos are
+  kept), or a direct video URL. Downloads run one at a time in the background
+  with progress. HTML where a file was expected means the link is private or
+  over its limit, and says so. WeTransfer, Frame.io and password-protected links
+  are refused with "download it by hand". Each file's link is remembered and
+  goes into its clips' proof packs. Tested with mocked responses only; the Drive
+  folder page format is unverified against a live folder.
+- **Run results**: every job keeps a report (select/report.py) -- moments found,
+  how many cleared the bar, why the rest were left out in plain words, and the
+  five closest calls with a "Make it anyway" button (a hand-picked job on that
+  range). Finished jobs are kept in the database, so results survive restarts.
+- **Duplicate check** (studio/duplicates.py): a clip that repeats an
+  already-posted one -- same source with half the shorter clip's time in common,
+  or most of the shorter clip's meaningful words (a re-download has a new
+  source id) -- shows a warning with the accounts it's on. Clips keep up to
+  1,500 characters of their words for this; clips without words (imports) are
+  transcribed once in the background with Whisper small. On the user's library
+  it found three real repeats (FX Adults imports of scenes already posted).

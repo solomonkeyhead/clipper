@@ -1,0 +1,88 @@
+# Written by the Control Center (New campaign / Edit campaign).
+# Earlier versions are kept in campaigns/.history/.
+name: camp-duval-the-movie
+title: Camp Duval The Movie
+marketplace: Content Rewards
+campaign_url: ''
+reward_per_1k_usd: 1.25
+min_payout_usd: 3.0
+max_payout_usd: 900.0
+deadline: '2026-09-30'
+source_authorization: Official footage supplied by the campaign "Camp Duval The Movie" on
+  Content Rewards, which pays clippers to post it. Only that footage is used.
+platform_targets:
+- tiktok
+- instagram_reels
+content_type: scripted
+scripted: true
+duration:
+  min_seconds: 10.0
+  max_seconds: 60.0
+selection_focus: Drive awareness towards Camp Duval The Movie premiering in theatres using
+  approved campaign assets. Focus on positive movie reactions, sharpness, and clean vertical
+  framing. Reject explicit sexual content, slurs, insults toward real people, graphic blood
+  or injury, character death spoilers, mask reveal spoilers, parody rating slates, and low
+  effort clips.
+required_caption_text: 'In AMC theaters Sept 30, 2026 · @campduval · #CampDuval'
+required_hashtags:
+- '#CampDuval'
+only_required_hashtags: false
+required_credit_text: ''
+fallback_captions: []
+fixed_captions: false
+hook_texts:
+- Camp Duval has an actual movie and Lil Duval & Friends is in it ??
+- they turned Camp Duval IG into a whole feature film
+- the fact that this movie exists is insane to me
+- lil duval in a slasher movie was NOT on my bingo card
+- lil duval, jayski, erica duchess, just brittany and moneybag mafia in ONE horror movie
+- the cameo list in camp duval is actually insane
+- putting a bunch of comedians in a house with a serial killer is diabolical
+- camp duval looks like friday the 13th if everybody was funny as hell
+- lil duval vs a masked killer is all the plot i need
+- why does this look like friday meets scream
+- whoever decided lil duval needed his own horror movie deserves a raise
+- imagine trying to survive a serial killer with THIS group
+- this might be the most unserious horror movie ever made
+- the killer picked the absolute WRONG house
+- camp duval looks completely unhinged and i'm here for it
+- everybody's laughing until somebody actually gets killed
+- why does the killer look like he's already tired of lil duval
+- a slasher movie where the victims roast the killer is crazy work
+- lil duval getting chased by a serial killer should not be this funny
+- camp duval might have invented the hood slasher comedy
+- scream energy + friday energy + lil duval = absolute chaos
+- imagine being a serial killer and realizing THIS is who you have to kill
+- this movie looks like one long night of terrible decisions
+hook_overlay: true
+keep_original_audio: false
+brief_rules: Use the sharpest footage and clear positive movie reactions. Color grade flat
+  Sony footage, correct green lighting, trim camera resets, and combine short B roll into
+  a finished video at least 10 seconds long. Do not stretch or heavily crop lower resolution
+  footage. Bleep or remove profanity, verify all spoken words, and use only cleared music
+  or replace the audio.
+long_description: true
+description_context: Created by Lil Duval & Eric Tomosunas, the film follows comedian Lil
+  Duval as he purchases a rundown former summer camp and invites a group of fellow comedians
+  for a weekend comedy retreat. What starts as a chance to sharpen their stand-up quickly
+  turns into a hilariously chaotic fight for survival when a vengeful ghost begins offing
+  comedians in absurdly ironic ways.
+description_keywords:
+- Camp Duval
+- Lil Duval
+- Jayski
+- Erica Duchess
+- Moneybag Mafia
+- Just Brittany
+- Nod Ross
+- Navv Green
+- Tyler Chronicles
+- Poppa Snoop
+max_clips_per_source: 6
+notes: |-
+  - Submit every final video to Spencer Lampkin or Eric Tomosunas for approval in Content Rewards before posting.
+  - Must keep likes and comments ON.
+  - No NSFW, sexual, aggressive, weird, mean or rude content towards any person.
+  - No spam posting, no story boosting, no dedicated pages required, no collab posts, no AI generated Reel covers, and no stolen clips.
+  - Provide a screen recording of the video's analytics showing watch time, all view graphs and audience locations when submitting for payout.
+burn_credit_in_video: false

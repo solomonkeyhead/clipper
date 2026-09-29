@@ -1,11 +1,12 @@
 import { Link, useSearch } from "@tanstack/react-router";
 import { AlertTriangle, CheckCircle2, Film, Loader2, Plus, Scissors, UploadCloud, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   sourceVideoUrl, startJob, uploadVideo, useCampaignTitle, useCampaigns, useJobs, useSetup, useSources,
   type Job, type JobMode, type Source,
 } from "@/api/client";
+import { JobResults, LinkImport } from "@/components/footage";
 import { Segmented, TextInput } from "@/components/form";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, Chip, EmptyState, PageHeader } from "@/components/ui";
@@ -111,6 +112,7 @@ function JobCard({ job }: { job: Job }) {
         </div>
       )}
       {job.message && <p className="text-xs text-muted">{job.message}</p>}
+      {job.status === "done" && <JobResults job={job} />}
       {job.status === "done" && job.clips > 0 && (
         <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium text-accent hover:underline">
           View and rate the clips →
@@ -231,6 +233,19 @@ export function NewClipsPage() {
   const [ranges, setRanges] = useState<Range[]>([{ start: "", end: "" }]);
   const [busy, setBusy] = useState(false);
   const chosen = active.find((c) => c.name === campaign);
+  // An import's videos join the list a moment after it finishes; select the first then.
+  const [imported, setImported] = useState<string[]>([]);
+  const onImported = useCallback((names: string[]) => {
+    setImported(names);
+    toast.success(`Imported ${names.join(", ")}`, { description: "Selected below, ready to clip." });
+  }, []);
+  useEffect(() => {
+    const first = sources.find((s) => imported.includes(s.name));
+    if (first) {
+      setSource(first.path);
+      setImported([]);
+    }
+  }, [sources, imported]);
   const filled = ranges.filter((r) => r.start || r.end);
   const rangesOk = filled.length > 0 && filled.every((r) => !rangeProblem(r));
   const ready = Boolean(campaign && source && (mode !== "manual" || rangesOk));
@@ -297,6 +312,7 @@ export function NewClipsPage() {
 
         <Step n={2} title="Footage">
           <Dropzone onUploaded={(s) => setSource(s.path)} />
+          <LinkImport onImported={onImported} />
           {sources.length > 0 && (
             <>
               <div className="mt-4 mb-2 text-xs font-medium text-muted">Or pick a video already on this PC</div>

@@ -50,7 +50,9 @@ def snapshot(record, *, info, campaign, caption: str) -> dict:
         "campaign": _campaign_part(campaign),
         "permission": campaign.source_authorization,
         "source": {"title": info.title or "", "id": info.source_id, "url": info.url or "",
-                   "start_s": round(plan.start, 2), "end_s": round(plan.end, 2)},
+                   "start_s": round(plan.start, 2), "end_s": round(plan.end, 2),
+                   # The shared link it was imported from (studio/imports.py), if it was.
+                   "footage": _origin(info.title or "")},
         "duration_s": round(record.duration, 2),
         "caption": caption,
         "checks": [{"name": r.name, "passed": r.passed, "detail": r.detail}
@@ -58,6 +60,15 @@ def snapshot(record, *, info, campaign, caption: str) -> dict:
         "quality": [{"name": c.name, "status": c.status, "detail": c.detail}
                     for c in record.qa.checks],
     }
+
+
+def _origin(title: str) -> dict | None:
+    try:
+        from .imports import origin
+
+        return origin(title)
+    except Exception:  # the snapshot matters more than its footnote
+        return None
 
 
 def late_snapshot(clip: dict, campaign) -> dict:
@@ -141,6 +152,9 @@ def _html(clip: dict, evidence: dict, posts: list[dict], history: dict[str, list
     rows.append(f"<h2>The clip</h2><p>{e(src.get('title') or '')} "
                 f"{src.get('start_s') or 0:.1f}s–{src.get('end_s') or 0:.1f}s · "
                 f"{evidence.get('duration_s') or 0:.1f}s long · file <code>clip.mp4</code></p>")
+    if src.get("footage"):
+        rows.append(f"<p>Footage downloaded from the campaign's link <a href='{e(src['footage']['link'])}'>"
+                    f"{e(src['footage']['link'])}</a> on {e(src['footage']['imported_at'])}.</p>")
     if evidence.get("permission"):
         rows.append(f"<p>Permission recorded: {e(evidence['permission'])}</p>")
     if evidence.get("checks"):

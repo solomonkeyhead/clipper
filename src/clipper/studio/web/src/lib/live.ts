@@ -42,6 +42,12 @@ export function useLiveUpdates() {
         });
       });
       source.addEventListener("campaigns.changed", refreshClips);
+      source.addEventListener("import.progress", (e) => {
+        const item = JSON.parse((e as MessageEvent).data) as { id: number };
+        qc.setQueryData<{ id: number }[]>(["imports"], (old = []) =>
+          [item, ...old.filter((i) => i.id !== item.id)].sort((a, b) => b.id - a.id));
+      });
+      source.addEventListener("sources.changed", () => qc.invalidateQueries({ queryKey: ["sources"] }));
       source.addEventListener("settings.changed", () => {
         qc.invalidateQueries({ queryKey: keys.settings });
         qc.invalidateQueries({ queryKey: keys.status });

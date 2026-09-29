@@ -19,6 +19,9 @@ from typing import TYPE_CHECKING
 from ..paths import data_root, ensure
 from ..utils.cache import slugify
 from . import db
+from ..utils.logging import get_logger
+
+log = get_logger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..campaign.manifest import ClipRecord
@@ -63,16 +66,55 @@ def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignC
     return ids
 
 
+#: Enough of a clip's words to compare it with others (studio/duplicates.py).
+TEXT_CHARS = 1500
+
+
 def scores_of(record: ClipRecord) -> dict:
     """What the scorer thought of a clip, as stored with it (see db.MIGRATIONS)."""
-    text = record.plan.text[:400]
+    text = record.plan.text[:TEXT_CHARS]
     if record.plan.candidate_id == "manual":
-        return {"picked_by": "hand", "text": text}
+        return {"picked_by": "hand", "text": text, "text_v": 2}
     llm = record.raw.get("llm")
-    return {"picked_by": "auto", "text": text,
+    return {"picked_by": "auto", "text": text, "text_v": 2,
             "score": round(llm, 2) if llm is not None else None,
             "rubric": record.rubric, "composite": round(record.plan.composite, 4),
             "pool": record.pool, "pool_rank": record.pool_rank}
+
+
+def backfill_text() -> int:
+    """The spoken words of clips that have none on record, or only the first 400
+    characters (clips filed before `text_v` 2).
+
+    The duplicate check (studio/duplicates.py) compares words, so a clip without
+    them can't be matched. They are transcribed once, with a small fast model --
+    enough to compare, not to caption.
+    """
+    from ..config import TranscriptionConfig
+    from ..transcribe.whisper import load_model
+
+    with db.connect() as con:
+        todo = [c for c in db.clips(con)
+                if json.loads(c.get("scores") or "{}").get("text_v") != 2
+                and clip_path(c["file"]).exists()]
+    if not todo:
+        return 0
+    model, *_ = load_model(TranscriptionConfig(model="small", compute_type="int8_float16"))
+    done = 0
+    for clip in todo:
+        try:
+            segments, _info = model.transcribe(str(clip_path(clip["file"])), vad_filter=True,
+                                               beam_size=1)
+            text = " ".join(s.text.strip() for s in segments)[:TEXT_CHARS]
+        except Exception as exc:  # one unreadable file mustn't stop the rest
+            log.info("no words for clip %s: %s", clip["id"], exc)
+            continue
+        scores = json.loads(clip.get("scores") or "{}")
+        with db.connect() as con:
+            con.execute("UPDATE clips SET scores=? WHERE id=?",
+                        (json.dumps({**scores, "text": text or " ", "text_v": 2}), clip["id"]))
+        done += 1
+    return done
 
 
 def backfill_evidence(campaigns: dict) -> int:
