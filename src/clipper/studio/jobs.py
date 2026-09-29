@@ -1,7 +1,9 @@
 """Clipping jobs started from the Control Center, one at a time, with live progress.
 
 A job is `runner.run` on a campaign and a source video, the same as `clipper run`
-on the command line; its clips land in the library like any run's. Progress
+on the command line, or `runner.cut` for hand-picked ranges (`clipper cut`); its
+clips land in the library like any run's. In "auto" mode Clipper decides how
+many: every moment that clears the quality bar, up to the campaign's maximum. Progress
 comes from the pipeline's own log lines (ingest, transcribe, score, render k of
 N), mapped to a stage and a percentage and pushed to open pages as
 `job.progress` events -- the research's rule for waits over 10 seconds: show
@@ -30,7 +32,9 @@ class Job:
     id: int
     campaign: str
     source: str
-    top: int
+    top: int | None                 # None: Clipper decides (auto)
+    mode: str = "auto"              # auto | top | manual
+    ranges: list[tuple[float, float]] = field(default_factory=list)
     status: str = "queued"          # queued | running | done | failed
     stage: str = "Waiting to start"
     pct: float = 0.0
@@ -93,6 +97,18 @@ class _Progress(logging.Handler):
         self.publish("job.progress", job.view())
 
 
+def explain_stop(note: str, made: int) -> str:
+    """The selection's reason for stopping, in plain words, for an auto job."""
+    if note.startswith("reached the requested"):
+        return (f"Stopped at the campaign's maximum of {made}; raise \"Most clips per video\" "
+                "on the campaign to allow more")
+    if "below the absolute quality bar" in note:
+        return "Every other moment scored below the quality bar"
+    if "no candidate survived" in note:
+        return "Nothing in this video scored well enough to clip"
+    return note[:1].upper() + note[1:]
+
+
 class JobRunner:
     """A single worker thread and its queue; jobs are kept for the session."""
 
@@ -105,9 +121,16 @@ class JobRunner:
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
-    def submit(self, campaign, source: str, top: int) -> Job:
-        """Queue `runner.run` for a loaded `CampaignConfig` and a source path."""
-        job = Job(id=next(self._ids), campaign=campaign.name, source=source, top=top)
+    def submit(self, campaign, source: str, top: int | None,
+               ranges: list[tuple[float, float]] | None = None) -> Job:
+        """Queue a run for a loaded `CampaignConfig` and a source path.
+
+        `ranges` (seconds) cuts exactly those moments; otherwise `top` clips at
+        most, or with `top` None as many as are good enough.
+        """
+        mode = "manual" if ranges else "top" if top else "auto"
+        job = Job(id=next(self._ids), campaign=campaign.name, source=source, top=top,
+                  mode=mode, ranges=list(ranges or []))
         self.jobs[job.id] = job
         self._configs[job.id] = campaign
         self._queue.put(job)
@@ -141,18 +164,29 @@ class JobRunner:
         pipeline.setLevel(logging.INFO)
         job.status, job.stage = "running", "Starting"
         self.publish("job.progress", job.view())
+        campaign = self._configs.pop(job.id)
         try:
-            result = runner.run(job.source, config=Config.load(),
-                                campaign=self._configs.pop(job.id), out_root=runs_dir(),
-                                top=job.top)
+            if job.mode == "manual":
+                handler.total = len(job.ranges)
+                result = runner.cut(job.source, job.ranges, config=Config.load(),
+                                    campaign=campaign, out_root=runs_dir())
+            else:
+                # Auto: the quality bar decides how many, up to the campaign's maximum.
+                result = runner.run(job.source, config=Config.load(), campaign=campaign,
+                                    out_root=runs_dir(),
+                                    top=job.top or campaign.max_clips_per_source)
             job.clips = len(result.accepted)
             job.status, job.pct = "done", 100.0
             job.stage = (f"Made {job.clips} clip{'s' if job.clips != 1 else ''}" if job.clips
                          else "No clips made")
-            if not job.clips:
-                job.message = result.selection_note
-            elif result.rejected:
-                job.message = f"{len(result.rejected)} failed quality checks and were left out"
+            notes = []
+            if job.mode == "auto" and result.selection_note:
+                notes.append(explain_stop(result.selection_note, job.clips))
+            elif not job.clips:
+                notes.append(result.selection_note)
+            if result.rejected:
+                notes.append(f"{len(result.rejected)} failed quality checks and were left out")
+            job.message = ". ".join(n for n in notes if n)
         except Exception as exc:  # shown on the page, and in the log for debugging
             job.status, job.stage, job.message = "failed", "Failed", str(exc)[:400]
             log.error("clip job %s failed:\n%s", job.id, traceback.format_exc())

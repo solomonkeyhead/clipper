@@ -26,6 +26,14 @@ def data_root(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.fixture(autouse=True)
+def _no_ratings_from_the_real_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Runs learn from the user's ratings in data/clipper.db; tests must not."""
+    from clipper import runner
+
+    monkeypatch.setattr(runner, "_learning", lambda config, campaign: (None, ""))
+
+
+@pytest.fixture(autouse=True)
 def _no_ambient_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     """A key in the developer's shell must not change test outcomes."""
     for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"):

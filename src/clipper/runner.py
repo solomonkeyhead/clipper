@@ -364,13 +364,40 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         "max_shots": (max(config.render.max_shots, SCRIPTED_MAX_SHOTS) if campaign.scripted
                       else config.render.max_shots),
     })
+    weights, taste = _learning(config, campaign)
     llm = config.llm.model_copy(update={
         "campaign_focus": campaign.selection_focus,
+        "user_taste": taste,
+        **({"rubric_weights": config.llm.rubric_weights.model_copy(update=weights)}
+           if weights else {}),
         "drop_needs_prior_context":
             config.llm.drop_needs_prior_context and not campaign.scripted,
     })
     return config.model_copy(update={"candidates": candidates, "render": render, "llm": llm,
                                      "refine": refine})
+
+
+def _learning(config: Config, campaign: CampaignConfig) -> tuple[dict[str, float] | None, str]:
+    """What the user's ratings teach this run: rubric weights (None: keep the
+    defaults) and the taste block for the scoring prompt. Nothing while the
+    Control Center's "Learn from my ratings" setting is off."""
+    from .learn import feedback
+    from .studio import db
+
+    try:
+        with db.connect() as con:
+            if db.settings(con).get("learn_from_feedback", "1") != "1":
+                return None, ""
+            rows = db.clips(con)
+    except Exception as exc:  # learning is optional; a run must not fail on it
+        log.warning("not using clip ratings: %s", exc)
+        return None, ""
+    clips = feedback.from_rows(rows)
+    weights, n = feedback.learned_weights(clips, config.llm.rubric_weights.as_dict())
+    if n >= feedback.MIN_FOR_WEIGHTS:
+        log.info("rubric weights learnt from %d rated clip(s): %s", n,
+                 ", ".join(f"{k} {v:.2f}" for k, v in weights.items()))
+    return (weights if n >= feedback.MIN_FOR_WEIGHTS else None), feedback.taste(clips, campaign.name)
 
 
 def _render_with_replacement(
@@ -487,7 +514,26 @@ def _produce_one(
     record.raw = dict(entry.raw) if entry else {}
     record.llm_a_total = values.llm_a.total(weights) if values and values.llm_a else None
     record.llm_b_total = values.llm_b.total(weights) if values and values.llm_b else None
+    record.rubric = average_rubric(values)
+    ranked = sorted((s for s in outcome.scored.scored if not s.dropped),
+                    key=lambda s: s.composite, reverse=True)
+    record.pool = len(ranked)
+    record.pool_rank = next((i for i, s in enumerate(ranked, 1)
+                             if s.candidate_id == pick.candidate.candidate_id), None)
     return record
+
+
+RUBRIC_FIELDS = ("hook_strength", "standalone_clarity", "payoff", "emotional_intensity",
+                 "quotability", "ending_completeness")
+
+
+def average_rubric(values) -> dict[str, float]:
+    """A candidate's six rubric scores, averaged over the prompts that answered."""
+    answers = [a for a in ((values.llm_a, values.llm_b) if values else ()) if a is not None]
+    if not answers:
+        return {}
+    return {f: round(sum(getattr(a, f) for a in answers) / len(answers), 2)
+            for f in RUBRIC_FIELDS}
 
 
 def _render_plan(

@@ -229,6 +229,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/clips/{clip_id}/rating": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Rate Clip
+         * @description The user's 1-5 verdict on a clip, and why; what the learner learns from.
+         */
+        put: operations["rate_clip_api_clips__clip_id__rating_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/learning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Learning */
+        get: operations["learning_api_learning_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/posts/history": {
         parameters: {
             query?: never;
@@ -530,6 +567,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sources/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Source Video
+         * @description A source video for the page's player (manual mode), with seeking.
+         */
+        get: operations["source_video_api_sources_video_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/thumb/{clip_id}": {
         parameters: {
             query?: never;
@@ -591,6 +648,19 @@ export interface components {
             /** Expires In Days */
             expires_in_days?: number | null;
         };
+        /** Band */
+        Band: {
+            /** Label */
+            label: string;
+            /** Clips */
+            clips: number;
+            /** Avg Rating */
+            avg_rating?: number | null;
+            /** Rated */
+            rated: number;
+            /** Median Views */
+            median_views?: number | null;
+        };
         /** Brief */
         Brief: {
             /** Min Seconds */
@@ -645,6 +715,11 @@ export interface components {
             platforms: string[];
             /** Reward Per 1K Usd */
             reward_per_1k_usd?: number | null;
+            /**
+             * Max Clips
+             * @default 8
+             */
+            max_clips: number;
             /** Clips */
             clips: number;
             counts: components["schemas"]["CampaignCounts"];
@@ -844,6 +919,44 @@ export interface components {
             thumb: string;
             /** Posts */
             posts: components["schemas"]["Post"][];
+            /** Score */
+            score?: number | null;
+            /**
+             * Rubric
+             * @default {}
+             */
+            rubric: {
+                [key: string]: number;
+            };
+            /** Pool */
+            pool?: number | null;
+            /** Pool Rank */
+            pool_rank?: number | null;
+            /**
+             * Picked By
+             * @default unknown
+             */
+            picked_by: string;
+            /** Rating */
+            rating?: number | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /** Dimension */
+        Dimension: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Default */
+            default: number;
+            /** Learned */
+            learned: number;
+            /** Agreement */
+            agreement?: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -858,6 +971,47 @@ export interface components {
             /** First Run */
             first_run: {
                 [key: string]: boolean;
+            };
+        };
+        /** Learning */
+        Learning: {
+            /** Active */
+            active: boolean;
+            /** Rated */
+            rated: number;
+            /** Unrated */
+            unrated: number;
+            /** Scored And Rated */
+            scored_and_rated: number;
+            /** Agreement */
+            agreement?: number | null;
+            /** Agreement Verdict */
+            agreement_verdict: string;
+            /** With Views */
+            with_views: number;
+            /** Views Agreement */
+            views_agreement?: number | null;
+            /** Views Verdict */
+            views_verdict: string;
+            /** Rating Vs Views */
+            rating_vs_views?: number | null;
+            /** Bands */
+            bands: components["schemas"]["Band"][];
+            /** Dimensions */
+            dimensions: components["schemas"]["Dimension"][];
+            /** Reasons */
+            reasons: components["schemas"]["ReasonCount"][];
+            /** Taste */
+            taste: string;
+            /** Weights N */
+            weights_n: number;
+            /** Min For Weights */
+            min_for_weights: number;
+            /** Min For Agreement */
+            min_for_agreement: number;
+            /** Reason Labels */
+            reason_labels: {
+                [key: string]: string;
             };
         };
         /** Metrics */
@@ -920,6 +1074,15 @@ export interface components {
             est_earnings?: number | null;
             /** Submitted At */
             submitted_at?: string | null;
+        };
+        /** ReasonCount */
+        ReasonCount: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Count */
+            count: number;
         };
         /** Setup */
         Setup: {
@@ -1556,6 +1719,65 @@ export interface operations {
             };
         };
     };
+    rate_clip_api_clips__clip_id__rating_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    learning_api_learning_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Learning"];
+                };
+            };
+        };
+    };
     post_history_api_posts_history_get: {
         parameters: {
             query: {
@@ -2091,6 +2313,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    source_video_api_sources_video_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

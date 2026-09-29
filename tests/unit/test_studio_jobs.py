@@ -112,7 +112,7 @@ def test_a_job_runs_the_pipeline_and_reports_progress(client, tmp_path, monkeypa
 
     monkeypatch.setattr(runner, "run", fake_run)
     job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video),
-                                          "top": 2}).json()
+                                          "mode": "top", "top": 2}).json()
     for _ in range(100):
         (latest,) = client.get("/api/jobs").json()
         if latest["status"] in ("done", "failed"):
@@ -213,3 +213,66 @@ def test_tiktok_connect_hands_the_page_the_consent_link(client, monkeypatch):
             break
         time.sleep(0.05)
     assert state == {"state": "done", "message": "Second Account", "url": started["url"]}
+
+
+class TestModes:
+    def run_job(self, client, body):
+        for _ in range(100):
+            (latest, *_rest) = client.get("/api/jobs").json()
+            if latest["status"] in ("done", "failed"):
+                return latest
+            time.sleep(0.05)
+        return latest
+
+    def test_auto_lets_the_quality_bar_decide_up_to_the_campaign_max(self, client, tmp_path, monkeypatch):
+        from clipper import runner
+
+        seen = {}
+
+        def fake_run(source, **kwargs):
+            seen.update(kwargs)
+            return SimpleNamespace(accepted=[1, 2, 3], rejected=[],
+                                   selection_note="stopped with 3: 20 below the absolute quality bar")
+
+        monkeypatch.setattr(runner, "run", fake_run)
+        video = tmp_path / "home_downloads" / "ep.mp4"
+        video.write_bytes(b"x")
+        job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video)}).json()
+        assert job["mode"] == "auto" and job["top"] is None
+        done = self.run_job(client, job)
+        assert seen["top"] == 8  # the campaign's max_clips_per_source default
+        assert done["clips"] == 3 and "quality bar" in done["message"]
+
+    def test_manual_cuts_the_given_ranges(self, client, tmp_path, monkeypatch):
+        from clipper import runner
+
+        seen = {}
+
+        def fake_cut(source, ranges, **kwargs):
+            seen["ranges"] = ranges
+            return SimpleNamespace(accepted=[1, 2], rejected=[], selection_note="ranges chosen by hand")
+
+        monkeypatch.setattr(runner, "cut", fake_cut)
+        video = tmp_path / "home_downloads" / "ep.mp4"
+        video.write_bytes(b"x")
+        bad = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video),
+                                             "mode": "manual", "ranges": [["1:00", "0:50"]]})
+        assert bad.status_code == 400
+        job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video),
+                                             "mode": "manual",
+                                             "ranges": [["24:45", "26:05"], ["90", "120.5"]]}).json()
+        assert self.run_job(client, job)["clips"] == 2
+        assert seen["ranges"] == [(1485.0, 1565.0), (90.0, 120.5)]
+
+
+class TestRatings:
+    def test_a_rating_is_stored_and_shown(self, client, data_root):
+        clip = add_clip(data_root)
+        res = client.put(f"/api/clips/{clip}/rating", json={"rating": 2, "reasons": ["weak_hook"]})
+        assert res.status_code == 200
+        got = client.get(f"/api/clips/{clip}").json()
+        assert got["rating"] == 2 and got["reasons"] == ["weak_hook"]
+        assert client.put(f"/api/clips/{clip}/rating", json={"rating": 9}).status_code == 400
+        assert client.put(f"/api/clips/{clip}/rating", json={"rating": 3, "reasons": ["x"]}).status_code == 400
+        report = client.get("/api/learning").json()
+        assert report["rated"] == 1 and report["reasons"][0]["key"] == "weak_hook"

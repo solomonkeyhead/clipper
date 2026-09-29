@@ -88,6 +88,15 @@ class Clip(BaseModel):
     video: str
     thumb: str
     posts: list[Post]
+    # What the scorer thought (0-10, the rubric's six parts, and its rank among
+    # the video's moments), and what the user thought (1-5, with reasons).
+    score: float | None = None
+    rubric: dict[str, float] = {}
+    pool: int | None = None
+    pool_rank: int | None = None
+    picked_by: str = "unknown"      # auto | hand | unknown
+    rating: int | None = None
+    reasons: list[str] = []
 
 
 class CampaignCounts(BaseModel):
@@ -106,6 +115,7 @@ class Campaign(BaseModel):
     auto_post: bool | None
     platforms: list[str]
     reward_per_1k_usd: float | None = None
+    max_clips: int = 8             # most clips per video when Clipper decides
     clips: int
     counts: CampaignCounts
     views: float
@@ -170,6 +180,49 @@ class Account(BaseModel):
     health: str            # ok | warn | error
     detail: str
     expires_in_days: float | None = None
+
+
+class Band(BaseModel):
+    label: str
+    clips: int
+    avg_rating: float | None = None
+    rated: int
+    median_views: float | None = None
+
+
+class Dimension(BaseModel):
+    key: str
+    label: str
+    default: float
+    learned: float
+    agreement: float | None = None
+
+
+class ReasonCount(BaseModel):
+    key: str
+    label: str
+    count: int
+
+
+class Learning(BaseModel):
+    active: bool
+    rated: int
+    unrated: int
+    scored_and_rated: int
+    agreement: float | None = None
+    agreement_verdict: str
+    with_views: int
+    views_agreement: float | None = None
+    views_verdict: str
+    rating_vs_views: float | None = None
+    bands: list[Band]
+    dimensions: list[Dimension]
+    reasons: list[ReasonCount]
+    taste: str
+    weights_n: int
+    min_for_weights: int
+    min_for_agreement: int
+    reason_labels: dict[str, str]
 
 
 class Setup(BaseModel):
@@ -289,7 +342,12 @@ class Snapshot:
             if models and status in ("posted", "submitted"):
                 # A post found after the clip was marked submitted still needs submitting.
                 status = "submitted" if all(m.submitted_at for m in models) else "posted"
+            scores = json.loads(c.get("scores") or "{}")
             self.clips.append(Clip(
+                score=scores.get("score"), rubric=scores.get("rubric") or {},
+                pool=scores.get("pool"), pool_rank=scores.get("pool_rank"),
+                picked_by=scores.get("picked_by") or "unknown", rating=c.get("rating"),
+                reasons=json.loads(c.get("reasons") or "[]"),
                 id=c["id"], campaign=c["campaign"], title=c["title"] or c["clip_id"],
                 hook=c["hook"], caption=c["caption"], duration_s=c["duration_s"],
                 source_title=display_source(c["source_title"]), status=status,
@@ -315,6 +373,7 @@ class Snapshot:
             auto_post=None if auto is None else bool(auto),
             platforms=list(brief.platform_targets) if brief else [],
             reward_per_1k_usd=brief.reward_per_1k_usd if brief else None,
+            max_clips=brief.max_clips_per_source if brief else 8,
             clips=len(mine), counts=counts,
             views=sum(p.views or 0 for p in posts),
             est_earnings=round(sum(earnings), 2) if earnings else None,
@@ -465,6 +524,8 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         broker.bind(asyncio.get_running_loop())
+        with contextlib.suppress(Exception):  # scores for clips filed before they were kept
+            await asyncio.to_thread(library.backfill_scores)
         task = asyncio.create_task(sync_loop()) if auto_sync else None
         if auto_sync:
             with contextlib.suppress(Exception):
@@ -698,6 +759,36 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         broker.publish("clips.changed", {"id": clip_id})
         return {"ok": True}
 
+    @app.put("/api/clips/{clip_id}/rating")
+    def rate_clip(clip_id: int, body: dict) -> dict:
+        """The user's 1-5 verdict on a clip, and why; what the learner learns from."""
+        rating = body.get("rating")
+        with db.connect() as con:
+            if db.clip(con, clip_id) is None:
+                raise HTTPException(404, "no such clip")
+            try:
+                db.set_rating(con, clip_id, None if rating is None else int(rating),
+                              [str(r) for r in body.get("reasons") or []])
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(400, str(exc)) from exc
+        broker.publish("clips.changed", {"id": clip_id})
+        return {"ok": True}
+
+    @app.get("/api/learning")
+    def learning() -> Learning:
+        from ..config import Config
+        from ..learn import feedback
+
+        snap = Snapshot()
+        views = {c.id: sum(p.views or 0 for p in c.posts) for c in snap.clips if c.posts}
+        with db.connect() as con:
+            active = db.settings(con).get("learn_from_feedback", "1") == "1"
+        clips = feedback.from_rows(snap.raw_clips, views)
+        result = feedback.report(clips, Config.load().llm.rubric_weights.as_dict(), active=active)
+        return Learning(active=active, min_for_weights=feedback.MIN_FOR_WEIGHTS,
+                        min_for_agreement=feedback.MIN_FOR_AGREEMENT,
+                        reason_labels=db.REASONS, **result.__dict__)
+
     @app.get("/api/posts/history")
     def post_history(url: str) -> list[dict]:
         with db.connect() as con:
@@ -873,8 +964,30 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         if campaign is None:
             raise HTTPException(400, "pick a campaign")
         source = allowed_source(str(body.get("source") or ""))
-        top = max(1, min(10, int(body.get("top") or 4)))
+        mode = str(body.get("mode") or "auto")
+        if mode == "manual":
+            from ..runner import parse_range
+
+            try:
+                ranges = [parse_range(f"{a}-{b}") for a, b in body.get("ranges") or []]
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(400, str(exc)) from exc
+            if not ranges:
+                raise HTTPException(400, "add at least one start and end time")
+            short = [r for r in ranges if r[1] - r[0] < 3]
+            if short:
+                raise HTTPException(400, "each moment needs to be at least 3 seconds long")
+            return jobs.submit(campaign, str(source), None, ranges).view()
+        top = max(1, min(20, int(body.get("top") or 4))) if mode == "top" else None
         return jobs.submit(campaign, str(source), top).view()
+
+    @app.get("/api/sources/video")
+    def source_video(path: str) -> FileResponse:
+        """A source video for the page's player (manual mode), with seeking."""
+        target = allowed_source(path)
+        kind = {".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm",
+                ".mov": "video/quicktime"}.get(target.suffix.lower(), "application/octet-stream")
+        return FileResponse(target, media_type=kind)
 
     @app.get("/thumb/{clip_id}")
     def thumb(clip_id: int) -> FileResponse:

@@ -52,6 +52,12 @@ class ClipRecord:
     rendered_duration: float | None = None
     # Words the transcript correction changed in this clip's captions.
     caption_fixes: list[WordFix] = field(default_factory=list)
+    # The rubric's six 0-10 scores (the two prompts averaged), and where the
+    # moment ranked among all the video's scored moments: shown in the Control
+    # Center so the user can judge the scoring, and learnt from with their ratings.
+    rubric: dict[str, float] = field(default_factory=dict)
+    pool: int | None = None
+    pool_rank: int | None = None
 
     @property
     def duration(self) -> float:

@@ -9,6 +9,7 @@ captions from their POSTING.md / captions.txt and the posted state from the
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from dataclasses import dataclass
@@ -53,8 +54,88 @@ def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignC
                 "hook": plan.hook_text if plan.hook_shown else "",
                 "caption": captions[i] if captions else full_caption(plan),
                 "duration_s": record.duration, "start_s": plan.start, "end_s": plan.end,
+                "scores": json.dumps(scores_of(record)),
             }))
     return ids
+
+
+def scores_of(record: ClipRecord) -> dict:
+    """What the scorer thought of a clip, as stored with it (see db.MIGRATIONS)."""
+    text = record.plan.text[:400]
+    if record.plan.candidate_id == "manual":
+        return {"picked_by": "hand", "text": text}
+    llm = record.raw.get("llm")
+    return {"picked_by": "auto", "text": text,
+            "score": round(llm, 2) if llm is not None else None,
+            "rubric": record.rubric, "composite": round(record.plan.composite, 4),
+            "pool": record.pool, "pool_rank": record.pool_rank}
+
+
+def backfill_scores() -> int:
+    """Scores for clips filed before they were stored, from their runs' scoring files.
+
+    Joins each clip to its candidate through the performance log, then reads
+    that candidate's rubric from data/work/<source>/signals.json and scored.json.
+    Clips whose work files are gone, or that were cut by hand, are marked so
+    they aren't looked up again.
+    """
+    from ..learn import log as perf
+    from ..paths import work_dir
+
+    with db.connect() as con:
+        todo = [c for c in db.clips(con) if c.get("scores") is None]
+    if not todo:
+        return 0
+    candidate = {(r.get("campaign"), r.get("source_id"), r.get("clip_id")): r.get("candidate_id")
+                 for r in perf.read() if r.get("candidate_id")}
+    cache: dict[str, tuple[dict, dict, dict]] = {}
+    filled = 0
+    with db.connect() as con:
+        for clip in todo:
+            cid = candidate.get((clip["campaign"], clip["source_id"], clip["clip_id"]))
+            scores: dict = {"picked_by": "hand" if cid == "manual" else "unknown"}
+            if cid and cid != "manual":
+                if clip["source_id"] not in cache:
+                    cache[clip["source_id"]] = _load_scoring(work_dir(clip["source_id"]))
+                values, scored, texts = cache[clip["source_id"]]
+                entry = scored.get(cid)
+                if entry is not None:
+                    ranked = sorted((e for e in scored.values() if not e.get("dropped")),
+                                    key=lambda e: e.get("composite", 0), reverse=True)
+                    llm = (entry.get("raw") or {}).get("llm")
+                    scores = {"picked_by": "auto", "text": texts.get(cid, "")[:400],
+                              "score": round(llm, 2) if llm is not None else None,
+                              "rubric": _average(values.get(cid) or {}),
+                              "composite": round(entry.get("composite", 0), 4),
+                              "pool": len(ranked),
+                              "pool_rank": next((i for i, e in enumerate(ranked, 1)
+                                                 if e.get("candidate_id") == cid), None)}
+                    filled += 1
+            con.execute("UPDATE clips SET scores=? WHERE id=?", (json.dumps(scores), clip["id"]))
+    return filled
+
+
+def _load_scoring(work: Path) -> tuple[dict, dict, dict]:
+    def read(name: str) -> dict:
+        try:
+            return json.loads((work / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    values = {v.get("candidate_id"): v for v in read("signals.json").get("values", [])}
+    scored = {s.get("candidate_id"): s for s in read("scored.json").get("scored", [])}
+    texts = {c.get("candidate_id"): c.get("text", "") for c in read("candidates.json").get("candidates", [])}
+    return values, scored, texts
+
+
+def _average(values: dict) -> dict[str, float]:
+    from ..runner import RUBRIC_FIELDS
+
+    answers = [a for a in (values.get("llm_a"), values.get("llm_b")) if a]
+    if not answers:
+        return {}
+    return {f: round(sum(float(a.get(f, 0)) for a in answers) / len(answers), 2)
+            for f in RUBRIC_FIELDS}
 
 
 def thumbnail(video: Path, *, at: float = 1.5) -> Path | None:

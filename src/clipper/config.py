@@ -184,6 +184,9 @@ class LLMConfig(StrictModel):
     drop_needs_prior_context: bool = True
     # A campaign's `selection_focus`, set per run (runner.campaign_config).
     campaign_focus: str = ""
+    # What the user's own ratings say they like and dislike (learn/feedback.py),
+    # set per run; guidance for the scorer, weaker than the campaign focus.
+    user_taste: str = ""
     # Caption fixes ruled wrong, as "heard -> replacement"; never applied.
     rejected_caption_fixes: list[str] = Field(default_factory=list)
 

@@ -79,12 +79,20 @@ DEFAULT_SETTINGS = {
     "seen_at": "",
     # Minutes between automatic syncs while the Control Center is open.
     "sync_minutes": "15",
+    # Use the user's clip ratings when scoring (learn/feedback.py).
+    "learn_from_feedback": "1",
 }
 
 
 #: Columns added after the first release, created on older databases at connect.
 MIGRATIONS = [
     ("clips", "deleted_at", "ALTER TABLE clips ADD COLUMN deleted_at TEXT"),
+    # How the scorer rated the clip (JSON: score, rubric, composite, pool, pool_rank,
+    # picked_by), and how the user did: 1-5, with reasons (JSON list).
+    ("clips", "scores", "ALTER TABLE clips ADD COLUMN scores TEXT"),
+    ("clips", "rating", "ALTER TABLE clips ADD COLUMN rating INTEGER"),
+    ("clips", "reasons", "ALTER TABLE clips ADD COLUMN reasons TEXT NOT NULL DEFAULT '[]'"),
+    ("clips", "rated_at", "ALTER TABLE clips ADD COLUMN rated_at TEXT"),
 ]
 TRASH_DAYS = 30
 
@@ -121,6 +129,8 @@ def upsert_clip(con: sqlite3.Connection, clip: dict) -> int:
     """
     fields = ["campaign", "source_id", "clip_id", "source_title", "title", "file", "hook",
               "caption", "duration_s", "start_s", "end_s"]
+    if clip.get("scores") is not None:
+        fields.append("scores")
     values = {f: clip.get(f) for f in fields}
     for text in ("source_id", "clip_id", "source_title", "title", "hook", "caption"):
         values[text] = values[text] or ""
@@ -176,6 +186,32 @@ def update_clip(con: sqlite3.Connection, clip_id: int, **changes) -> None:
     if allowed:
         sets = ", ".join(f"{k}=?" for k in allowed)
         con.execute(f"UPDATE clips SET {sets} WHERE id=?", [*allowed.values(), clip_id])
+
+
+REASONS = {
+    # what the user liked
+    "great_hook": "Great hook", "funny": "Funny", "emotional": "Emotional",
+    "good_ending": "Good ending", "on_brief": "Right for the campaign",
+    # what they didn't
+    "weak_hook": "Weak hook", "boring": "Boring / slow", "bad_ending": "Cut off / bad ending",
+    "needs_context": "Needs context", "off_brief": "Wrong for the campaign",
+    "bad_framing": "Bad framing", "caption_errors": "Caption mistakes",
+}
+
+
+def set_rating(con: sqlite3.Connection, clip_id: int, rating: int | None,
+               reasons: list[str]) -> None:
+    """The user's verdict on a clip: 1 (bad) to 5 (great), None to clear."""
+    if rating is not None and not 1 <= int(rating) <= 5:
+        raise ValueError("rating must be 1 to 5")
+    unknown = set(reasons) - set(REASONS)
+    if unknown:
+        raise ValueError(f"unknown reason: {', '.join(sorted(unknown))}")
+    import json
+
+    con.execute("UPDATE clips SET rating=?, reasons=?, rated_at=? WHERE id=?",
+                (rating, json.dumps(list(dict.fromkeys(reasons))),
+                 now() if rating is not None else None, clip_id))
 
 
 def campaign_state(con: sqlite3.Connection) -> dict[str, dict]:

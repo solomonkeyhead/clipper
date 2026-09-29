@@ -3,13 +3,14 @@ import { CheckCircle2, Download, ExternalLink, FolderOpen, Info, SkipForward, Tr
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  downloadUrl, revealClip, useCampaignTitle, useClips, useDeleteClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
+  downloadUrl, revealClip, useCampaignTitle, useClips, useDeleteClip, useRateClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
+import { RatingPanel, RatingStars, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
 
 const STATUS_WORD: Record<ClipStatus, string> = {
@@ -211,7 +212,11 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
       <Preview clip={clip} />
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
-          <StatusChip status={clip.status} />
+          <span className="flex items-center gap-1.5">
+            <StatusChip status={clip.status} />
+            <ScoreBadge clip={clip} />
+            <RatingStars rating={clip.rating} />
+          </span>
           {clip.posts.length > 0 && (
             <span className="tabular text-xs text-muted">
               {formatCount(views)} views
@@ -304,6 +309,7 @@ export function ClipSheet() {
   const clip = clips.find((c) => c.id === openId) ?? null;
   const setStatus = useStatusWithUndo();
   const submit = useSubmittedWithUndo();
+  const rate = useRateClip();
   const title = useCampaignTitle();
   const remove = useDeleteWithUndo();
   const setNote = useSetNote();
@@ -325,6 +331,8 @@ export function ClipSheet() {
     x: () => clip && setStatus(clip, "skipped"),
     r: () => clip && setStatus(clip, "ready"),
     s: () => clip && clip.status !== "submitted" && submit(clip),
+    ...Object.fromEntries([1, 2, 3, 4, 5].map((n) => [String(n), () =>
+      clip && rate.mutate({ id: clip.id, rating: clip.rating === n ? null : n, reasons: clip.rating === n ? [] : clip.reasons })])),
     f: () => clip && void showFile(clip.id),
     d: () => clip?.file_exists && window.location.assign(downloadUrl(clip.id)),
     Delete: () => clip && remove(clip),
@@ -406,6 +414,16 @@ export function ClipSheet() {
                 )}
 
                 <section>
+                  <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Your rating</h3>
+                  <RatingPanel clip={clip} />
+                </section>
+
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Clipper's score</h3>
+                  <ScoreBreakdown clip={clip} />
+                </section>
+
+                <section>
                   <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Posts</h3>
                   {clip.posts.length ? (
                     <div className="flex flex-col gap-2">{clip.posts.map((p) => <PostStats key={p.url} post={p} />)}</div>
@@ -433,6 +451,7 @@ export function ClipSheet() {
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
                   <span><Kbd>J</Kbd> <Kbd>K</Kbd> next / previous</span>
                   <span><Kbd>L</Kbd> copy link</span>
+                  <span><Kbd>1</Kbd>–<Kbd>5</Kbd> rate</span>
                   <span><Kbd>Esc</Kbd> close</span>
                 </p>
               </div>

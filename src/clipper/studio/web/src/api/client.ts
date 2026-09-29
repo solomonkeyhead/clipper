@@ -166,8 +166,10 @@ export function useDeleteClip() {
 /* ---------- new clips: footage, uploads, jobs ---------- */
 
 export interface Source { name: string; path: string; size_mb: number; modified: string; folder: string }
+export type JobMode = "auto" | "top" | "manual";
 export interface Job {
-  id: number; campaign: string; source: string; name: string; top: number;
+  id: number; campaign: string; source: string; name: string; top: number | null;
+  mode: JobMode; ranges: [number, number][];
   status: "queued" | "running" | "done" | "failed"; stage: string; pct: number;
   clips: number; message: string; created: string; finished: string;
 }
@@ -177,9 +179,10 @@ export const useSources = () =>
 export const useJobs = () =>
   useQuery({ queryKey: ["jobs"], queryFn: async () => (await fetch("/api/jobs")).json() as Promise<Job[]> });
 
-export async function startJob(campaign: string, source: string, top: number): Promise<Job> {
+export async function startJob(campaign: string, source: string, mode: JobMode,
+                               options: { top?: number; ranges?: [string, string][] } = {}): Promise<Job> {
   const res = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" },
-                                         body: JSON.stringify({ campaign, source, top }) });
+                                         body: JSON.stringify({ campaign, source, mode, ...options }) });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || res.statusText);
   return data as Job;
@@ -303,3 +306,30 @@ export function useDisconnect() {
     onSettled: () => [keys.accounts, keys.status, keys.home].forEach((queryKey) => qc.invalidateQueries({ queryKey })),
   });
 }
+
+export const sourceVideoUrl = (path: string) => `/api/sources/video?path=${encodeURIComponent(path)}`;
+
+/* ---------- ratings and learning ---------- */
+
+export type Learning = components["schemas"]["Learning"];
+export const useLearning = () =>
+  useQuery({ queryKey: ["learning"], queryFn: () => unwrap(api.GET("/api/learning")) });
+
+export function useRateClip() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, rating, reasons }: { id: number; rating: number | null; reasons: string[] }) =>
+      unwrap(api.PUT("/api/clips/{clip_id}/rating", { params: { path: { clip_id: id } }, body: { rating, reasons } })),
+    onMutate: async ({ id, rating, reasons }) => {
+      await qc.cancelQueries({ queryKey: keys.clips });
+      const previous = qc.getQueryData<Clip[]>(keys.clips);
+      qc.setQueryData<Clip[]>(keys.clips, (old) => old?.map((c) => (c.id === id ? { ...c, rating, reasons } : c)));
+      return { previous };
+    },
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
+    onSettled: () => { invalidate(); qc.invalidateQueries({ queryKey: ["learning"] }); },
+  });
+}
+
+export const RATING_WORDS = ["", "Bad", "Weak", "OK", "Good", "Great"];

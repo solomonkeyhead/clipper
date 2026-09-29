@@ -1128,3 +1128,42 @@ mostly [O] starting values for it).
   lines become stages and a percentage, pushed live over SSE; the clips land
   in the library and on the campaign's page. Hand-picked ranges (`clipper
   cut`) and creating a campaign from a pasted brief are not in the page yet.
+
+## D61 -- Self-service Control Center; clip count, scores and learning from ratings (2026-09-29)
+
+**Campaigns from the page.** New campaign / Edit campaign write campaigns/*.yaml
+through `CampaignConfig` (campaign/editor.py); the previous file is kept in
+campaigns/.history/. A pasted brief fills the form via the configured LLM, which
+is told to leave out passwords and footage links (and links to Drive, Dropbox,
+Discord... are dropped even if it doesn't). Campaigns gained `title` (renameable)
+and `marketplace`; `name` stays the id and library folder.
+
+**Navigation.** Queue and Submissions became Clips filters (Ready to post, To
+submit); a clip is marked submitted as a whole (every post link), with undo. A
+post found after that reopens it. Home is Dashboard.
+
+**New users.** Keys (Gemini, TikTok app) are set from the page into .env and
+applied at once; the page learns only whether a key is set. Accounts are one
+token file each (data/<platform>/accounts/), several per platform; TikTok's
+consent page opens from the page. Settings runs `clipper doctor`'s checks. The
+Dashboard shows a four-step checklist until done. Non-GET requests carrying a
+foreign Origin are refused (any open website could otherwise post to 127.0.0.1).
+
+**How many clips.** "Let Clipper decide" passes the campaign's
+`max_clips_per_source` as the cap and lets the absolute quality gate
+(`min_llm_total`) decide -- the gate already expresses "this video has N clips
+worth making". "Set a number" is the old top-N; "I'll pick them" is `clipper cut`.
+
+**Scores.** Each clip keeps the raw 0-10 LLM total (absolute, comparable across
+videos -- unlike the per-video percentile composite), the six rubric parts and
+its rank among the video's moments. Older clips were backfilled from their
+work/ scoring files via the performance log's candidate ids.
+
+**Learning.** 1-5 ratings with reason tags. With 8+ rated, scored clips the
+rubric weights move toward each part's rank correlation with the ratings,
+blended with the defaults at n/(n+20), capped at 60%; weights only reweight
+cached rubric scores, so no model calls repeat. With 3+ ratings the scoring
+prompt gets a "taste" block (liked/disliked examples, common reasons), placed
+after and explicitly weaker than the campaign focus. The Learning page shows
+whether the score agrees with ratings and views (Spearman), by score band. A
+setting turns learning off. Tests never learn from the real library (conftest).

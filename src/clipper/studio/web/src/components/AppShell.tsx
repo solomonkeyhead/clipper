@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Film, LayoutDashboard, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
+  AlertTriangle, BarChart3, Film, GraduationCap, LayoutDashboard, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
   Settings, UserCircle2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -19,7 +19,7 @@ interface NavItem {
   icon: ReactNode;
   keys: string;
   badge?: number;
-  tone?: "accent" | "warning";
+  tone?: "accent" | "warning" | "neutral";
 }
 
 function useNav(): NavItem[] {
@@ -29,6 +29,7 @@ function useNav(): NavItem[] {
   const working = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const active = new Set(campaigns.filter((c) => !c.archived).map((c) => c.name));
   // Clips waiting on you: ready to post, or posted and not yet submitted.
+  const unrated = clips.filter((c) => c.rating == null && c.file_exists).length;
   const waiting = clips.filter((c) => (c.status === "ready" || c.status === "posted") && active.has(c.campaign)).length;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
@@ -36,6 +37,7 @@ function useNav(): NavItem[] {
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
     { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },
+    { to: "/learning", label: "Learning", icon: <GraduationCap />, keys: "G R", badge: unrated, tone: "neutral" as const },
   ];
 }
 
@@ -133,7 +135,7 @@ export function AppShell() {
   useHotkeys({
     g: () => { pendingG.current = Date.now(); },
     d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"),
-    s: goto("/stats"), a: goto("/accounts"), ",": goto("/settings"),
+    s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"),
     "[": toggle,
     "?": () => setShortcuts(true),
     "/": () => setPalette(true),

@@ -1,10 +1,12 @@
-import { Link } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Film, Loader2, Scissors, UploadCloud } from "lucide-react";
-import { useRef, useState } from "react";
+import { Link, useSearch } from "@tanstack/react-router";
+import { AlertTriangle, CheckCircle2, Film, Loader2, Plus, Scissors, UploadCloud, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  startJob, uploadVideo, useCampaigns, useJobs, useSources, type Job, type Source,
+  sourceVideoUrl, startJob, uploadVideo, useCampaignTitle, useCampaigns, useJobs, useSetup, useSources,
+  type Job, type JobMode, type Source,
 } from "@/api/client";
+import { Segmented, TextInput } from "@/components/form";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, Chip, EmptyState, PageHeader } from "@/components/ui";
 import { useQueryClient } from "@tanstack/react-query";
@@ -78,14 +80,19 @@ function Dropzone({ onUploaded }: { onUploaded: (s: Source) => void }) {
   );
 }
 
+const modeLabel = (job: Job) =>
+  job.mode === "manual" ? `${job.ranges.length} hand-picked`
+    : job.mode === "top" ? `up to ${job.top} clips` : "Clipper decides how many";
+
 function JobCard({ job }: { job: Job }) {
+  const title = useCampaignTitle();
   const running = job.status === "running" || job.status === "queued";
   return (
     <Card className="flex flex-col gap-2 p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{job.name}</div>
-          <div className="text-xs text-muted">{job.campaign} · {job.top} clips · started {ago(job.created)}</div>
+          <div className="text-xs text-muted">{title(job.campaign)} · {modeLabel(job)} · started {ago(job.created)}</div>
         </div>
         {job.status === "done" && (job.clips > 0
           ? <Chip tone="success"><CheckCircle2 className="size-3.5" /> {job.clips} made</Chip>
@@ -106,29 +113,134 @@ function JobCard({ job }: { job: Job }) {
       {job.message && <p className="text-xs text-muted">{job.message}</p>}
       {job.status === "done" && job.clips > 0 && (
         <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium text-accent hover:underline">
-          View the clips →
+          View and rate the clips →
         </Link>
       )}
     </Card>
   );
 }
 
+/* ---------- manual mode: hand-picked moments ---------- */
+
+/** "1:02:03.5" / "24:45" / "90" -> seconds; null if unreadable. */
+export function toSeconds(text: string): number | null {
+  const parts = text.trim().split(":");
+  if (!text.trim() || parts.length > 3 || parts.some((p) => p === "" || isNaN(Number(p)))) return null;
+  return parts.reduce((total, p) => total * 60 + Number(p), 0);
+}
+
+export function toClock(seconds: number): string {
+  const whole = Math.floor(seconds);
+  const tenth = Math.round((seconds - whole) * 10);
+  const h = Math.floor(whole / 3600), m = Math.floor((whole % 3600) / 60), sec = whole % 60;
+  const body = h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+  return tenth > 0 && tenth < 10 ? `${body}.${tenth}` : body;
+}
+
+type Range = { start: string; end: string };
+
+function rangeProblem(r: Range): string | null {
+  const a = toSeconds(r.start), b = toSeconds(r.end);
+  if (a === null || b === null) return "Use minutes:seconds, like 24:45";
+  if (b <= a) return "The end is before the start";
+  if (b - a < 3) return "At least 3 seconds";
+  return null;
+}
+
+function RangeEditor({ source, ranges, setRanges }: {
+  source: string; ranges: Range[]; setRanges: (r: Range[]) => void;
+}) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [playable, setPlayable] = useState(true);
+  const [active, setActive] = useState(0);
+  useEffect(() => setPlayable(true), [source]);
+  const update = (i: number, key: keyof Range, value: string) =>
+    setRanges(ranges.map((r, j) => (j === i ? { ...r, [key]: value } : r)));
+  const mark = (key: keyof Range) => video.current && update(active, key, toClock(video.current.currentTime));
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted">
+        Clipper cuts exactly these moments, then frames, captions and checks them like any other clip. Good for scenes
+        without much talking, which it can't find by itself.
+      </p>
+      {source && playable ? (
+        <div className="flex flex-col gap-2">
+          <video ref={video} src={sourceVideoUrl(source)} controls preload="metadata" onError={() => setPlayable(false)}
+                 className="max-h-80 w-full rounded-md bg-black" />
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            <span>Pause where moment {active + 1} should</span>
+            <Button size="sm" variant="secondary" onClick={() => mark("start")}>Start here</Button>
+            <Button size="sm" variant="secondary" onClick={() => mark("end")}>End here</Button>
+          </div>
+        </div>
+      ) : source ? (
+        <p className="rounded-md border border-dashed border-line p-3 text-xs text-muted">
+          This file can't play in the browser (common for .mov files from editing software). Find the times in your usual
+          video player and type them below.
+        </p>
+      ) : (
+        <p className="text-xs text-muted">Pick the video above to watch it here and mark times as you go.</p>
+      )}
+      <div className="flex flex-col gap-2">
+        {ranges.map((r, i) => {
+          const problem = (r.start || r.end) ? rangeProblem(r) : null;
+          const a = toSeconds(r.start), b = toSeconds(r.end);
+          return (
+            <div key={i} onFocus={() => setActive(i)} onClick={() => setActive(i)}
+                 className={cn("flex flex-wrap items-center gap-2 rounded-md border p-2",
+                   active === i ? "border-accent/60 bg-accent-soft/30" : "border-line")}>
+              <span className="w-20 text-xs font-medium text-muted">Moment {i + 1}</span>
+              <TextInput className="w-28" value={r.start} placeholder="24:45" aria-label={`Moment ${i + 1} start`}
+                         onChange={(e) => update(i, "start", e.target.value)} />
+              <span className="text-muted">to</span>
+              <TextInput className="w-28" value={r.end} placeholder="26:05" aria-label={`Moment ${i + 1} end`}
+                         onChange={(e) => update(i, "end", e.target.value)} />
+              {!problem && a !== null && b !== null && <span className="tabular text-xs text-muted">{Math.round(b - a)}s</span>}
+              {problem && <span className="text-xs text-warning">{problem}</span>}
+              {ranges.length > 1 && (
+                <Button size="icon" variant="ghost" className="ml-auto size-7" aria-label={`Remove moment ${i + 1}`}
+                        onClick={(e) => { e.stopPropagation(); setRanges(ranges.filter((_, j) => j !== i)); setActive(0); }}>
+                  <X className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          );
+        })}
+        <Button variant="ghost" className="w-fit"
+                onClick={() => { setRanges([...ranges, { start: "", end: "" }]); setActive(ranges.length); }}>
+          <Plus className="size-4" /> Add a moment
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function NewClipsPage() {
+  const search = useSearch({ from: "/new" });
   const { data: campaigns = [] } = useCampaigns();
   const { data: sources = [] } = useSources();
   const { data: jobs = [] } = useJobs();
+  const { data: setup } = useSetup();
   const qc = useQueryClient();
   const active = campaigns.filter((c) => c.has_brief && !c.archived);
-  const [campaign, setCampaign] = useState("");
+  const [campaign, setCampaign] = useState(search.campaign ?? "");
   const [source, setSource] = useState("");
+  const [mode, setMode] = useState<JobMode>("auto");
   const [top, setTop] = useState(4);
+  const [ranges, setRanges] = useState<Range[]>([{ start: "", end: "" }]);
   const [busy, setBusy] = useState(false);
   const chosen = active.find((c) => c.name === campaign);
+  const filled = ranges.filter((r) => r.start || r.end);
+  const rangesOk = filled.length > 0 && filled.every((r) => !rangeProblem(r));
+  const ready = Boolean(campaign && source && (mode !== "manual" || rangesOk));
 
   const make = async () => {
     setBusy(true);
     try {
-      await startJob(campaign, source, top);
+      await startJob(campaign, source, mode, mode === "manual"
+        ? { ranges: filled.map((r) => [r.start, r.end] as [string, string]) }
+        : mode === "top" ? { top } : {});
       await qc.invalidateQueries({ queryKey: ["jobs"] });
       toast.success("Clipping started", { description: "You can keep using Clipper; progress shows below." });
     } catch (e) {
@@ -143,6 +255,14 @@ export function NewClipsPage() {
       <PageHeader title="New clips"
         subtitle="Give Clipper a campaign's footage and it finds the best moments, frames them, captions them and files them under the campaign." />
       <div className="flex flex-col gap-4">
+        {setup && !setup.ai_ready && (
+          <Card className="flex flex-wrap items-center gap-3 border-warning/40 p-4 text-sm">
+            <AlertTriangle className="size-4 shrink-0 text-warning" />
+            <span className="flex-1">Clipper needs your free AI key to find and score moments.</span>
+            <Link to="/settings" className="font-medium text-accent hover:underline">Add it in Settings →</Link>
+          </Card>
+        )}
+
         <Step n={1} title="Campaign">
           {active.length ? (
             <div className="grid gap-2 sm:grid-cols-2">
@@ -156,9 +276,19 @@ export function NewClipsPage() {
                   </span>
                 </button>
               ))}
+              <Link to="/campaigns/new"
+                    className="flex items-center gap-2 rounded-md border border-dashed border-line px-3 py-2.5 text-sm text-muted hover:bg-surface-2 hover:text-fg">
+                <Plus className="size-4" /> New campaign
+              </Link>
             </div>
           ) : (
-            <p className="text-sm text-muted">No active campaigns with a brief. Add the campaign's brief under campaigns/ first.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-muted">Clipper follows a campaign's rules, so add the campaign first.</p>
+              <Link to="/campaigns/new"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                <Plus className="size-4" /> Add a campaign
+              </Link>
+            </div>
           )}
           {chosen && chosen.reward_per_1k_usd != null && (
             <p className="mt-2 text-xs text-muted">Pays ${chosen.reward_per_1k_usd.toFixed(2)} per 1K views. Clipper follows its brief's rules.</p>
@@ -187,22 +317,41 @@ export function NewClipsPage() {
           )}
         </Step>
 
-        <Step n={3} title="How many clips">
-          <div className="flex flex-wrap items-center gap-2">
-            {[2, 3, 4, 5, 6, 8].map((n) => (
-              <button key={n} onClick={() => setTop(n)}
-                className={cn("h-9 min-w-11 rounded-md border px-3 text-sm font-medium",
-                  top === n ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
-                {n}
-              </button>
-            ))}
-            <span className="text-xs text-muted">the best moments, up to this many; fewer if nothing else is good enough</span>
+        <Step n={3} title="Which moments">
+          <Segmented label="Which moments" value={mode} onChange={setMode}
+            options={[["auto", "Let Clipper decide", `Every moment good enough, up to ${chosen?.max_clips ?? "the campaign's max"}`],
+                      ["top", "Set a number", "The best ones, up to your count"],
+                      ["manual", "I'll pick them", "Type or mark start and end times"]]} />
+          <div className="mt-4">
+            {mode === "auto" && (
+              <p className="text-sm text-muted">
+                Clipper scores every moment in the video and keeps each one that clears its quality bar, so a strong
+                episode gives more clips and a weak one fewer, or none. Every clip shows its score, so you can judge it.
+              </p>
+            )}
+            {mode === "top" && (
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
+                  <button key={n} onClick={() => setTop(n)}
+                    className={cn("h-9 min-w-11 rounded-md border px-3 text-sm font-medium",
+                      top === n ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                    {n}
+                  </button>
+                ))}
+                <span className="text-xs text-muted">at most; fewer if nothing else is good enough</span>
+              </div>
+            )}
+            {mode === "manual" && <RangeEditor source={source} ranges={ranges} setRanges={setRanges} />}
           </div>
         </Step>
 
         <div className="flex items-center justify-end gap-3">
-          {!campaign || !source ? <span className="text-xs text-muted">Pick a campaign and a video</span> : null}
-          <Button variant="primary" disabled={!campaign || !source || busy} onClick={() => void make()}>
+          {!ready && (
+            <span className="text-xs text-muted">
+              {!campaign ? "Pick a campaign" : !source ? "Pick a video" : "Add at least one moment's start and end"}
+            </span>
+          )}
+          <Button variant="primary" disabled={!ready || busy} onClick={() => void make()}>
             <Scissors className="size-4" /> Make clips
           </Button>
         </div>

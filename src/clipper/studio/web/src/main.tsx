@@ -11,6 +11,7 @@ import { useUI } from "./lib/store";
 import { CampaignEditorPage } from "./pages/CampaignEditor";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
+import { LearningPage } from "./pages/LearningPage";
 import { NewClipsPage } from "./pages/NewClipsPage";
 import { AccountsPage, SettingsPage } from "./pages/SettingsPages";
 import { StatsPage } from "./pages/StatsPage";
@@ -35,13 +36,19 @@ const routes = [
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
     }),
   }),
-  createRoute({ getParentRoute: () => root, path: "/new", component: NewClipsPage }),
+  createRoute({
+    getParentRoute: () => root, path: "/new", component: NewClipsPage,
+    validateSearch: (s: Record<string, unknown>): { campaign?: string } => ({
+      campaign: typeof s.campaign === "string" ? s.campaign : undefined,
+    }),
+  }),
   // Queue and Submissions became filters on Clips.
   createRoute({ getParentRoute: () => root, path: "/queue",
                 beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "ready" } }); } }),
   createRoute({ getParentRoute: () => root, path: "/submissions",
                 beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "posted" } }); } }),
   createRoute({ getParentRoute: () => root, path: "/stats", component: StatsPage }),
+  createRoute({ getParentRoute: () => root, path: "/learning", component: LearningPage }),
   createRoute({ getParentRoute: () => root, path: "/accounts", component: AccountsPage }),
   createRoute({ getParentRoute: () => root, path: "/settings", component: SettingsPage }),
 ];

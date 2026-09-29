@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
-  BarChart3, Film, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
+  BarChart3, Film, GraduationCap, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
   Settings, Sun, UserCircle2,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -95,6 +95,7 @@ export function CommandPalette() {
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
           <Item icon={<BarChart3 />} label="Stats" keys="G S" onSelect={go("/stats")} />
+          <Item icon={<GraduationCap />} label="Learning: rate clips, check the score" keys="G R" onSelect={go("/learning")} />
           <Item icon={<UserCircle2 />} label="Accounts" keys="G A" onSelect={go("/accounts")} />
           <Item icon={<Settings />} label="Settings" keys="G ," onSelect={go("/settings")} />
         </Group>
@@ -129,7 +130,7 @@ export function CommandPalette() {
 
 const SHORTCUTS: [string, [string, string][]][] = [
   ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then D", "Dashboard"], ["G then C", "Campaigns"],
-    ["G then N", "New clips"], ["G then L", "Clips"],
+    ["G then N", "New clips"], ["G then L", "Clips"], ["G then R", "Learning"],
     ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
     ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"]]],

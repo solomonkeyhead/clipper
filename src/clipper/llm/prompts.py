@@ -139,6 +139,22 @@ good it is otherwise. The focus says what the clips are for; it is never a reaso
 to mark a clip is_sponsor_or_ad, which is about the clip's own content only.""")
 
 
+def with_taste(variant: PromptVariant, taste: str) -> PromptVariant:
+    """`variant` with the user's own rated examples appended, keyed apart in the cache."""
+    import hashlib
+
+    taste = taste.strip()
+    if not taste:
+        return variant
+    digest = hashlib.sha256(taste.encode()).hexdigest()[:10]
+    return PromptVariant(f"{variant.key}:taste-{digest}", variant.system + f"""
+
+THE ACCOUNT OWNER'S TASTE -- from clips they rated after posting. Use it to calibrate
+your scores toward what they value; it never overrides a campaign focus, and it is
+not a list of topics to require or avoid:
+{taste}""")
+
+
 PROMPT_A = PromptVariant("a", PROMPT_A_SYSTEM)
 PROMPT_B = PromptVariant("b", PROMPT_B_SYSTEM)
 VARIANTS = {"a": PROMPT_A, "b": PROMPT_B}

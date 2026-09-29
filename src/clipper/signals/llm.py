@@ -32,6 +32,7 @@ from ..llm.prompts import (
     PromptVariant,
     build_user_message,
     with_focus,
+    with_taste,
 )
 from ..models import Candidate, RubricScores
 from ..utils.logging import get_logger
@@ -106,7 +107,7 @@ def score_candidates(
         return result
 
     cache = cache if cache is not None else LLMCache()
-    variants = [with_focus(v, cfg.campaign_focus)
+    variants = [with_taste(with_focus(v, cfg.campaign_focus), cfg.user_taste)
                 for v in [PROMPT_A] + ([PROMPT_B] if cfg.use_second_opinion else [])]
 
     per_variant: dict[str, dict[str, RubricScores]] = {}
