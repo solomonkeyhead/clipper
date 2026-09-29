@@ -284,7 +284,7 @@ SCRIPTED_MAX_SILENCE = 0.55
 SCRIPTED_OPENING_SECONDS = 3.0
 SCRIPTED_TARGET = (20.0, 45.0)
 SCRIPTED_MAX_SECONDS = 90.0
-SCRIPTED_MAX_LEAD_IN = 0.5    # silence before the first word
+SCRIPTED_MAX_LEAD_IN = 0.15   # silence before the first word (research R1.1, D59)
 SCRIPTED_REACTION_TAIL = 1.0  # held after the last line, into silence only
 SCRIPTED_MAX_TAIL = 1.5       # never more silence than this at the end
 SCRIPTED_MAX_SHOTS = 32       # separately framed shots per clip
@@ -336,9 +336,16 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         refine = refine.model_copy(update={
             "post_roll": SCRIPTED_REACTION_TAIL, "tail_guard": 0.15,
             "max_lead_in": SCRIPTED_MAX_LEAD_IN, "max_tail": SCRIPTED_MAX_TAIL})
+    if campaign.target_seconds:
+        low_t, high_t = campaign.target_seconds
+        candidate_updates["target_seconds"] = (max(low, low_t), min(high, max(high_t, low_t)))
+        candidate_updates["prefer_target_length"] = True
     candidates = config.candidates.model_copy(update=candidate_updates)
+    from .campaign.edits import permissions
+
+    allowed = permissions(campaign)
     render = config.render.model_copy(update={
-        "show_hook_text": config.render.show_hook_text and campaign.hook_overlay,
+        "show_hook_text": config.render.show_hook_text and allowed.added_text,
         # Held through the first 3 seconds, where viewers decide to stay.
         "hook_text_seconds": (max(config.render.hook_text_seconds, SCRIPTED_OPENING_SECONDS)
                               if campaign.scripted or campaign.short_form_timing
@@ -496,13 +503,69 @@ def _render_plan(
     corrector: list[LLMBackend] | None = None,
     recheck: AudioRecheck | None = None,
 ) -> ClipRecord:
-    """Reframe, render and check one planned clip."""
+    """Reframe, edit, render and check one planned clip (edits per docs/DECISIONS.md D59)."""
+    from .campaign.edits import permissions
+    from .render.placement import faces_on_screen
+    from .render.prepare import darkness, first_bright, join_segments, lift_for
+    from .render.tighten import keep_segments, plan_cuts, remap_words
+
     width, height = output_size(config.render, draft=draft)
     source_path = Path(info.media.path)
+    allowed = permissions(campaign)
 
-    plan = plan.model_copy(update={"layout": plan_layout_for(
-        source_path,
-        start=plan.start, duration=plan.duration,
+    # Never open on a black frame (research R1.1) -- but never skip speech either.
+    skip = first_bright(source_path, plan.start)
+    if skip > 0:
+        first_word = next((w.start for w in transcript_words
+                           if plan.start <= w.start < plan.end), plan.end)
+        start = min(plan.start + skip, max(plan.start, first_word - 0.05))
+        if start > plan.start + 0.01:
+            plan = plan.model_copy(update={
+                "start": start, "refine_notes": [*plan.refine_notes,
+                                                 f"skipped {start - plan.start:.2f}s of black"]})
+
+    words, fixes = _corrected_words(transcript_words, plan, corrector, recheck,
+                                    config.llm.rejected_fix_pairs)
+    if campaign.long_description:
+        plan = plan.model_copy(update={"description": _description(
+            plan, words, campaign, corrector, config)})
+
+    # Dead air and fillers (podcasts; `internal_cuts`). The kept pieces are joined
+    # into one file and everything below runs on it, on the tightened timeline.
+    render_source, render_media, render_plan, render_words = source_path, info.media, plan, words
+    if allowed.internal_cuts and plan.candidate_id != "manual":
+        cuts = plan_cuts(words, plan.start, plan.end, _loudness(info),
+                         min_length=campaign.duration.min_seconds)
+        if cuts:
+            segments = keep_segments(cuts, plan.start, plan.end)
+            render_source = join_segments(
+                source_path, segments, work / f"{plan.clip_id}_tight.mkv",
+                width=info.media.width, height=info.media.height,
+                has_audio=info.media.has_audio, punch_in=allowed.visual_effects)
+            render_media = probe(render_source)
+            removed = plan.duration - sum(b - a for a, b in segments)
+            kinds = sorted({c.reason.split()[0] for c in cuts})
+            plan = plan.model_copy(update={"refine_notes": [
+                *plan.refine_notes,
+                f"tightened: {len(cuts)} cut(s), {removed:.1f}s removed ({', '.join(kinds)})"]})
+            render_words = remap_words(words, segments)
+            render_plan = plan.model_copy(update={"start": 0.0,
+                                                  "end": sum(b - a for a, b in segments)})
+            log.info("%s %s", plan.clip_id, plan.refine_notes[-1])
+
+    # Dark footage, lifted gently where visual effects are allowed (research R6.3).
+    lift = None
+    if allowed.visual_effects:
+        lift = lift_for(darkness(render_source, render_plan.start, render_plan.duration))
+        if lift:
+            plan = plan.model_copy(update={"refine_notes": [*plan.refine_notes,
+                                                            f"dark footage lifted (gamma {lift})"]})
+
+    scans: list = []
+    layout = plan_layout_for(
+        render_source,
+        scan_out=scans,
+        start=render_plan.start, duration=render_plan.duration,
         out_width=width, out_height=height,
         sample_fps=config.render.face_sample_fps,
         min_face_ratio=config.qa.min_face_ratio,
@@ -514,22 +577,19 @@ def _render_plan(
         opening_seconds=config.render.opening_full_screen_seconds,
         min_shot_seconds=config.render.min_shot_seconds,
         max_shots=config.render.max_shots,
-    )})
-
-    words, fixes = _corrected_words(transcript_words, plan, corrector, recheck,
-                                    config.llm.rejected_fix_pairs)
-    if campaign.long_description:
-        plan = plan.model_copy(update={"description": _description(
-            plan, words, campaign, corrector, config)})
+    )
+    plan = plan.model_copy(update={"layout": layout})
+    render_plan = render_plan.model_copy(update={"layout": layout,
+                                                 "refine_notes": plan.refine_notes})
 
     slug = slugify(plan.hook_text or plan.text, max_length=40)
     output = clips_dir / f"{plan.clip_id}_{slug}.mp4"
 
     render = render_clip(
-        source=source_path,
-        media=info.media,
-        plan=plan,
-        words=words,
+        source=render_source,
+        media=render_media,
+        plan=render_plan,
+        words=render_words,
         config=config,
         work_dir=work,
         output=output,
@@ -538,20 +598,26 @@ def _render_plan(
                          if campaign.burn_credit_in_video else ""),
         credit_position=campaign.credit_position,
         mask_profanity=campaign.mask_profanity_in_captions,
-        normalize_audio=not campaign.keep_original_audio,
+        # Loudness normalisation is a container edit: the audio's content is
+        # untouched, so even "keep the original audio" briefs get it (R7.1).
+        normalize_audio=True,
+        lift_gamma=lift,
+        show_captions=allowed.captions,
+        # Where faces sit on the 9:16 frame, so captions move off them (R5.2).
+        faces=faces_on_screen(scans[0], layout, width, height) if scans else None,
     )
 
     rendered = probe(output)
     context = QAContext(
-        plan=plan,
-        words=words,
+        plan=render_plan,
+        words=render_words,
         ass_text=render.ass_path.read_text(encoding="utf-8") if render.ass_path else "",
         duration_bounds=(campaign.duration.min_seconds, campaign.duration.max_seconds),
         expected_width=width,
         expected_height=height,
         expected_fps=config.render.fps,
         pre_roll=config.refine.pre_roll,
-        audio_untouched=campaign.keep_original_audio,
+        captions_expected=allowed.captions,
     )
     qa = check_clip(output, context, config.qa, config.render)
     rules = compliance.check_clip(plan, campaign, duration=rendered.duration)
@@ -726,6 +792,26 @@ def _reject(record: ClipRecord, rejected_dir: Path, result: RunResult) -> None:
 # Words either side of a clip shown to the corrector as context. About a
 # sentence each way: enough to know the topic, cheap enough to send per clip.
 CORRECTION_CONTEXT_WORDS = 30
+
+
+_LOUDNESS: dict[str, object] = {}
+
+
+def _loudness(info: SourceInfo):
+    """The source's short-window loudness (for tightening), read once per source."""
+    from .render.tighten import Loudness
+
+    path = info.audio_path
+    if not path or not Path(path).exists():
+        return None
+    if path not in _LOUDNESS:
+        try:
+            _LOUDNESS.clear()  # one source at a time: the arrays are large
+            _LOUDNESS[path] = Loudness.from_wav(Path(path))
+        except (OSError, ValueError) as exc:
+            log.warning("no loudness for tightening (%s); cutting on timings alone", exc)
+            return None
+    return _LOUDNESS[path]
 
 
 def _description(plan: ClipPlan, words: list[Word], campaign: CampaignConfig,

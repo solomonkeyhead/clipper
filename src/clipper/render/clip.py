@@ -47,6 +47,9 @@ def render_clip(
     credit_position: str = "top_left",
     mask_profanity: bool = False,
     normalize_audio: bool = True,
+    lift_gamma: float | None = None,
+    show_captions: bool = True,
+    faces: list | None = None,
 ) -> RenderResult:
     """Render one `ClipPlan` to an MP4.
 
@@ -65,7 +68,7 @@ def render_clip(
     ass_path = work_dir / f"{plan.clip_id}.ass"
     cap.write_ass(
         cap.build_ass(
-            words,
+            words if show_captions else [],
             style=style,
             width=width,
             height=height,
@@ -77,6 +80,7 @@ def render_clip(
             hook_seconds=rc.hook_text_seconds if rc.show_hook_text else 0.0,
             credit_text=campaign_credit,
             credit_position=credit_position,
+            faces=faces,
         ),
         ass_path,
     )
@@ -106,6 +110,10 @@ def render_clip(
         audio_rate=rc.audio_rate,
         has_audio=media.has_audio,
         normalize_audio=normalize_audio,
+        loudness_measured=(measure_loudness(source, plan.start, plan.duration, rc)
+                           if normalize_audio and media.has_audio else None),
+        loudness_range=rc.loudness_range,
+        lift_gamma=lift_gamma,
     )
 
     command = build_command(spec)
@@ -126,6 +134,33 @@ def render_clip(
         elapsed=elapsed,
         command=command,
     )
+
+
+def measure_loudness(source: Path, start: float, duration: float, rc) -> dict | None:
+    """First loudnorm pass over the clip's span; None if it can't be read.
+
+    One-pass loudnorm estimates as it goes and pumps on speech with pauses; with
+    the clip measured first, the second pass applies one linear gain (research
+    rule R7.1: -14 LUFS integrated, true peak -1.5 dBTP, range <= 8 LU).
+    """
+    import json
+    import re
+
+    try:
+        proc = run(["-hide_banner", "-nostdin", "-ss", f"{start:.3f}", "-t", f"{duration:.3f}",
+                    "-i", str(source), "-vn",
+                    "-af", (f"loudnorm=I={rc.loudness_lufs}:TP={rc.true_peak_dbtp}:"
+                            f"LRA={rc.loudness_range}:print_format=json"),
+                    "-f", "null", "-"], check=False)
+        found = re.findall(r"\{[^{}]*\"input_i\"[^{}]*\}", proc.stderr or "")
+        data = json.loads(found[-1]) if found else None
+    except (OSError, ValueError) as exc:
+        log.debug("loudness measurement failed: %s", exc)
+        return None
+    if not data or any(str(data.get(k, "")).strip() in ("", "-inf", "inf")
+                       for k in ("input_i", "input_tp", "input_lra", "input_thresh")):
+        return None  # silence or a measurement loudnorm can't use: one pass instead
+    return data
 
 
 def _scale_layout(layout: LayoutPlan, media: MediaInfo, width: int, height: int) -> LayoutPlan:

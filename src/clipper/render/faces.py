@@ -463,8 +463,12 @@ def plan_layout_for(
     min_shot_seconds: float = 1.5,
     max_shots: int = 8,
     opening_seconds: float = 0.0,
+    scan_out: list | None = None,
 ):
     """Scan a clip and return the `LayoutPlan` for it.
+
+    `scan_out`, when given, receives the `FaceScan`, so captions can be kept off
+    the faces it found (render/placement.py) without scanning twice.
 
     Any detection failure degrades to the blurred-background layout rather than
     failing the render -- a clip with a slightly wrong frame is worth more than
@@ -486,6 +490,8 @@ def plan_layout_for(
             reason=f"face detection unavailable: {exc}",
         )
 
+    if scan_out is not None:
+        scan_out.append(result)
     if not result.per_sample:
         return plan_blurred_fit(
             src_w=media.width, src_h=media.height,

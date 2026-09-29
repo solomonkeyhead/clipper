@@ -1060,3 +1060,51 @@ followed. Built now, for everything that exists today:
   stands for posting: unaudited API clients post privately only, and a
   single-team upload tool is outside TikTok's intended use -- so manual posting
   and drafts must stay first-class paths.
+
+### D59. Editing to the short-form retention playbook
+
+The user commissioned a research report on what holds and loses short-form
+viewers ([P]latform / [S]tudy / [O]pinion-labelled) and asked for cuts when
+needed and edits when allowed. Built, by the report's own priorities:
+
+- **Permission gate** (campaign/edits.py): edit classes -- captions, added
+  text, internal cuts, re-edits, visual effects, audio additions, overlays --
+  resolved per campaign: an explicit `edits:` setting, else anything the
+  brief's `brief_rules` wording forbids ("do not alter", "no jump cuts",
+  "keep the original audio", ...), else the content type's default. Container
+  edits (crop, head/tail trim, loudness) are always allowed. Scripted scenes:
+  no cuts inside a scene. Podcasts: pauses and fillers tightened.
+- **Tightening** (render/tighten.py, podcasts): sentence pauses > 0.50 s cut to
+  0.28 s, mid-sentence > 0.70 s to 0.30 s, the pause before the payoff kept up
+  to 0.80 s; standalone um/uh and immediate repeats removed. Never within 40 ms
+  of a word, never after the payoff starts, never in a gap that isn't quiet --
+  measured on the audio (80th-percentile level 18 dB under speech): on 85 South,
+  a live-audience show, every "pause" in a sampled clip was laughter at -18 to
+  -29 dB and was kept; true dead air read -45 dB. Budgets: <= 20% removed,
+  cuts >= 2.5 s apart, pieces >= 0.6 s, never under the campaign minimum.
+  Pieces are joined into an intermediate file (12 ms audio fades, every other
+  piece punched in 10% to hide the jump cut when effects are allowed), and
+  framing, captions and QA run on that timeline. Measured: a 40 s stretch lost
+  2.9 s of dead air; QA passed.
+- **Openings**: speech within 0.15 s of the first frame (was 0.5 s, D52); a
+  black first frame is skipped (luma < 0.12), never past the first word.
+- **Loudness**: two-pass loudnorm to -14 LUFS, true peak -1.5 dBTP, LRA 8 --
+  for every clip, since normalising is a container edit (it used to be off for
+  "keep original audio" briefs). Measured on a render: peak -1.5, LRA 4.4.
+- **Safe zones**: captions end by y=1240 and stay within x 300-780 (clear of
+  TikTok's text and button rail -- they had sat at y=1520, under the
+  description); hook band from y=300, white with a black stroke, 69 px, up for
+  max(2.5 s, 0.3 s/word + 0.8 s), at most 3.5 s. A caption page that would cover
+  a face moves below the chin (inside the box) or to the top band; in extreme
+  close-ups where neither is free it keeps the lower third.
+- **Caption pages**: sentence case (hook stays upper); never ending on a weak
+  word ("the", "to"); at most 3 words when speech runs over 3.3 words/s; no page
+  up under 0.5 s; 2-frame gap between pages; active word at 105% (was 108%).
+- **Dark footage**: lifted with gamma 1.12 (power 0.89, keeps blacks) when mean
+  luma < 0.22 and the 95th percentile < 0.55, where effects are allowed.
+
+Not built yet (need signals the tool doesn't have): speaker-aware turn gaps and
+L-cuts, split-screen for rapid turns, punch-ins on emphasis, laughter/reaction
+detection beyond loudness, watermark and duplicate detection, caption contrast
+boxes, re-hook checks, and the paired A/B harness (the report's thresholds are
+mostly [O] starting values for it).

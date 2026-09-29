@@ -214,13 +214,15 @@ class LLMConfig(StrictModel):
 class SafeArea(StrictModel):
     """Pixels of the 1080x1920 frame kept clear of platform UI."""
 
-    top: int = Field(default=220, ge=0)
-    # TikTok's username, description and sound ticker: the conservative safe
-    # zone keeps text above y=1520 on a 1920-high frame.
-    bottom: int = Field(default=400, ge=0)
-    side: int = Field(default=90, ge=0)
-    # The like/comment/share rail on the right needs more room than the left.
-    right: int = Field(default=180, ge=0)
+    # The research's universal box across TikTok, Reels and Shorts (compiled
+    # from each platform's ad specs): x 120-888, y 288-1248, and left of x=780
+    # below y=840 for the button rail. The old 400px bottom margin put captions
+    # at y=1520 -- under TikTok's username and description.
+    top: int = Field(default=300, ge=0)
+    bottom: int = Field(default=680, ge=0)
+    side: int = Field(default=120, ge=0)
+    # The like/comment/share rail on the right, below y=840 (captions sit there).
+    right: int = Field(default=300, ge=0)
 
 
 class RenderConfig(StrictModel):
@@ -235,6 +237,8 @@ class RenderConfig(StrictModel):
     audio_rate: int = 48_000
     loudness_lufs: float = -14.0
     true_peak_dbtp: float = -1.5
+    # Loudness range for dialogue clips (research R7.1: <= 8 LU).
+    loudness_range: float = Field(default=8.0, gt=0)
     caption_style: CaptionStyle = "bold_pop"
     caption_font: str = "Inter"
     show_hook_text: bool = True
@@ -418,6 +422,22 @@ class BrandMentions(StrictModel):
         return self
 
 
+class EditPermissions(StrictModel):
+    """Per edit class: True allowed, False forbidden, None = the default (campaign/edits.py).
+
+    Classes follow the retention research (D59): container edits (crop, head and
+    tail trim, loudness) are always allowed and so are not listed.
+    """
+
+    captions: bool | None = None         # burned-in transcript captions
+    added_text: bool | None = None       # hook line, labels
+    internal_cuts: bool | None = None    # pauses, fillers, stutters inside a clip
+    re_edit: bool | None = None          # removing or reordering lines, montage
+    visual_effects: bool | None = None   # punch-in zooms, brightness correction
+    audio_additions: bool | None = None  # music, sound effects
+    overlays: bool | None = None         # b-roll, stickers, reaction cams
+
+
 class CampaignConfig(StrictModel):
     """Per-campaign rules. `source_authorization` is the gate on the whole tool."""
 
@@ -476,6 +496,18 @@ class CampaignConfig(StrictModel):
     long_description: bool = False
     description_context: str = ""
     description_keywords: tuple[str, ...] = ()
+    # What kind of footage this is: sets the editing defaults (scripted scenes
+    # keep their own edit; podcasts get pauses and fillers tightened). None:
+    # "scripted" when `scripted` is set, else "podcast".
+    content_type: Literal["scripted", "podcast", "other"] | None = None
+    # Which kinds of edits the brief allows (campaign/edits.py). Unset fields
+    # follow the content type's defaults and whatever `brief_rules` forbids.
+    edits: EditPermissions = Field(default_factory=lambda: EditPermissions())
+    # The brief's own wording about edits ("do not alter", "no jump cuts",
+    # "keep the original audio", ...), read for anything it forbids.
+    brief_rules: str = ""
+    # Preferred clip length, overriding the content type's default target.
+    target_seconds: tuple[float, float] | None = None
     # What the campaign pays, for the Control Center's earnings estimates: per
     # 1,000 views, counted once a post passes the minimum, capped at the maximum.
     reward_per_1k_usd: float | None = None

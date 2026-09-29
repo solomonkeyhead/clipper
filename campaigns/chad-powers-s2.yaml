@@ -22,6 +22,12 @@ duration:
 
 scripted: true
 keep_original_audio: true   # brief allows original dialogue or a trending sound
+# The brief's wording on edits, read by the permission gate (campaign/edits.py).
+# Nothing here forbids an edit class, so scripted defaults apply: no cuts inside
+# a scene; captions, hook line and the dark-footage lift allowed.
+brief_rules: >-
+  Use only footage from the official Season 2 folder; no ripped or outside
+  clips. Original dialogue or a trending sound.
 
 # Brief: Ricky + Russ only. "Football highlights and comedy-only clips will be
 # rejected."

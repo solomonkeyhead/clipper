@@ -152,7 +152,8 @@ class TestScriptedSettings:
         cfg = campaign_config(Config(), campaign)
         assert cfg.candidates.max_seconds == 90 and cfg.candidates.target_seconds == (30, 45)
         assert cfg.candidates.prefer_target_length
-        assert cfg.refine.max_lead_in == 0.5 and cfg.refine.max_tail == 1.5
+        # D59: speech within 0.15 s of the first frame (was 0.5 s in D52).
+        assert cfg.refine.max_lead_in == 0.15 and cfg.refine.max_tail == 1.5
         assert cfg.refine.post_roll == 1.0 and cfg.refine.tail_guard > 0
         assert cfg.render.opening_full_screen_seconds == 3.0
         assert cfg.render.hook_text_seconds >= 3.0
@@ -168,12 +169,17 @@ class TestScriptedSettings:
 
 
 class TestSafeZone:
-    def test_captions_keep_clear_of_the_right_hand_buttons(self):
+    def test_captions_sit_in_the_research_safe_box(self):
+        """D59: captions end by y=1240 (TikTok's text sits below) and stay left
+        of x=780 (the button rail), centred; the hook sits from y=300."""
         ass = build_ass(words((0.1, 0.5)), style=get_style("bold_pop"), width=1080,
                         height=1920, safe_area=SafeArea())
         caption = next(line for line in ass.splitlines() if line.startswith("Style: Caption"))
         margin_l, margin_r, margin_v = (int(v) for v in caption.split(",")[-4:-1])
-        assert margin_r > margin_l and margin_v >= 400 * 1080 // 1080 - 1
+        assert 1920 - margin_v <= 1248
+        assert margin_l == margin_r and 1080 - margin_r <= 780
+        hook = next(line for line in ass.splitlines() if line.startswith("Style: Hook"))
+        assert int(hook.split(",")[-4]) >= 120
 
 
 class TestLogAndCompare:

@@ -56,6 +56,8 @@ class QAContext:
     #: The campaign kept the source audio as delivered, so there is no
     #: loudness target to hold it to.
     audio_untouched: bool = False
+    #: False when the campaign forbids burned-in captions (campaign/edits.py).
+    captions_expected: bool = True
 
 
 def check_clip(path: Path, context: QAContext, qa: QAConfig,
@@ -99,7 +101,11 @@ def check_clip(path: Path, context: QAContext, qa: QAConfig,
         checks.append(_check_face_ratio(layout.face_ratio, qa))
 
     if context.ass_text:
-        checks.extend(_check_captions(context, qa))
+        if context.captions_expected:
+            checks.extend(_check_captions(context, qa))
+        else:
+            checks.append(QACheck(name="caption_sync", status="pass",
+                                  detail="no burned-in captions: the brief forbids them"))
 
     return QAReport(clip_id=context.plan.clip_id, file=str(path), checks=checks)
 

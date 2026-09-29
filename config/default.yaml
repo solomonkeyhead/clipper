@@ -85,12 +85,12 @@ render:
   caption_style: bold_pop
   caption_font: Inter
   show_hook_text: true
-  hook_text_seconds: 2.0
-  safe_area:                 # keep captions clear of platform UI
-    top: 220
-    bottom: 400                # username, description and sound ticker
-    side: 90
-    right: 180                 # the like/comment/share rail
+  hook_text_seconds: 3.5       # the most; each hook shows max(2.5, 0.3 s/word + 0.8)
+  safe_area:                 # keep text clear of TikTok/Reels/Shorts UI (D59)
+    top: 300                   # hook band starts here (y 300-560)
+    bottom: 680                # captions end by y=1240: username/description below
+    side: 120
+    right: 300                 # the like/comment/share rail, below y=840
   face_sample_fps: 5.0
   detect_screen_share: true  # stack content over the speaker for screen-share sources
   content_pane_share: 0.58   # target share of height for the content pane

@@ -129,12 +129,13 @@ class TestChunking:
         from clipper.config import SafeArea
         from clipper.render.captions import build_ass
 
-        w = words((0.0, 0.2, "I"), (0.2, 0.4, "wanted"), (0.4, 0.6, "you"),
-                  (0.6, 0.8, "to"), (0.8, 1.0, "score"))
+        # Conversational pace (2.5 words/s): the fast-speech page limit doesn't apply.
+        w = words((0.0, 0.4, "I"), (0.4, 0.8, "wanted"), (0.8, 1.2, "you"),
+                  (1.2, 1.6, "to"), (1.6, 2.0, "score"))
         ass = build_ass(w, style=get_style("bold_pop"), width=1080, height=1920,
                         safe_area=SafeArea(), duration=3.0)
         first = next(line for line in ass.splitlines() if line.startswith("Dialogue"))
-        assert first.count("\\N") == 1 and "SCORE" in first
+        assert first.count("\\N") == 1 and "score" in first
 
     def test_blank_words_are_skipped(self):
         w = words((0.0, 0.3, "a"), (0.4, 0.5, "   "), (0.6, 0.9, "b"))
@@ -167,7 +168,7 @@ class TestBuildAss:
         src = speech(9)
         out = self._build(src)
         for w in src:
-            assert w.text.upper() in out
+            assert w.text in out
 
     def test_one_event_per_word_for_highlighting(self):
         src = speech(9)
@@ -202,8 +203,13 @@ class TestBuildAss:
         )
 
     def test_uppercase_style_uppercases(self):
-        out = self._build(words((0.0, 0.5, "hello")), style=get_style("bold_pop"))
+        out = self._build(words((0.0, 0.5, "hello")), style=get_style("yellow_highlight"))
         assert "HELLO" in out
+
+    def test_dialogue_is_sentence_case_by_default(self):
+        """Research R5.3: all caps slows reading of anything longer than a few words."""
+        out = self._build(words((0.0, 0.5, "hello")), style=get_style("bold_pop"))
+        assert "hello" in out and "HELLO" not in out
 
     def test_non_uppercase_style_preserves_case(self):
         out = self._build(words((0.0, 0.5, "hello")), style=get_style("clean_white"))
@@ -211,8 +217,8 @@ class TestBuildAss:
 
     def test_profanity_masking_is_opt_in(self):
         w = words((0.0, 0.5, "shit"))
-        assert "SHIT" in self._build(w)
-        assert "S**T" in self._build(w, mask_profanity_words=True)
+        assert "shit" in self._build(w)
+        assert "s**t" in self._build(w, mask_profanity_words=True)
 
     def test_hook_text_is_a_timed_event(self):
         out = self._build(speech(4), hook_text="This changed everything", hook_seconds=2.0)
@@ -259,7 +265,7 @@ class TestParseEventTimes:
             width=1080, height=1920, safe_area=SafeArea(),
         )
         texts = [t for _, _, t in parse_event_times(content)]
-        assert texts == ["HELLO"]
+        assert texts == ["hello"]
         assert not any("{" in t for t in texts)
 
     def test_ignores_non_dialogue_lines(self):

@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 
 from ..config import SafeArea
 from ..models import Word
 from ..utils.timecode import to_ass
+from .placement import place
 
 # Alignment values in ASS "numpad" layout: 2 = bottom-centre, 5 = middle-centre.
 ALIGN_BOTTOM_CENTRE = 2
@@ -80,6 +82,9 @@ class CaptionStyle:
     # dialogue flipped captions about once a second, too quick to read (user
     # report on the Chad Powers clips, which asked for about double the time).
     max_lines: int = 2
+    # The hook line is shouted; dialogue captions are sentence case (research
+    # R5.3: all caps slows reading of longer text).
+    hook_uppercase: bool = True
     # Scale the whole box when the render is not 1080 wide (e.g. --draft).
     reference_width: int = 1080
 
@@ -94,7 +99,7 @@ STYLES: dict[str, CaptionStyle] = {
     "bold_pop": CaptionStyle(
         name="bold_pop", font="Anton", font_size=96,
         primary=WHITE, highlight=YELLOW, outline_colour=BLACK,
-        outline=7.0, shadow=2.0, uppercase=True, max_words_per_chunk=6,
+        outline=7.0, shadow=2.0, uppercase=False, max_words_per_chunk=6,
     ),
     # Quieter: no colour shift, the active word grows instead.
     "clean_white": CaptionStyle(
@@ -188,15 +193,60 @@ def line_breaks(texts: list[str], max_chars: int) -> list[int]:
     return breaks
 
 
+#: A page never ends on one of these: "the" belongs with its noun, "to" with its
+#: verb (research R5.1: break at clause boundaries, never between an article or
+#: adjective and its noun).
+WEAK_ENDINGS = frozenset([
+    "a", "an", "the", "my", "your", "his", "her", "its", "our", "their", "this", "that",
+    "these", "those", "to", "of", "in", "on", "at", "for", "with", "from", "by", "as", "and",
+    "but", "or", "nor", "so", "if", "than", "then", "because", "is", "are", "was", "were",
+    "be", "been", "i", "you", "he", "she", "we", "they", "it's", "i'm", "you're", "we're",
+    "they're", "i've", "i'll", "can't", "don't", "won't", "not", "no", "very", "really", "just",
+])
+#: Above this many words per second, pages hold at most FAST_SPEECH_WORDS
+#: (research: BBC's comfortable 160-180 wpm is ~3 words/s).
+FAST_SPEECH_RATE, FAST_SPEECH_WORDS = 3.3, 3
+#: No page stays up for less than this (Netflix's minimum event is 5/6 s; the
+#: research's short-form floor is 0.5 s).
+MIN_PAGE_SECONDS = 0.5
+#: Two frames at 30 fps between one page and the next (Netflix's minimum gap).
+PAGE_GAP = 2 / 30
+
+
+def _bare_word(text: str) -> str:
+    return text.strip().strip(".,!?;:…\"'").lower()
+
+
+def speech_rate(words: list[Word]) -> float:
+    """Words per second while talking (pauses over 0.5 s left out)."""
+    spoken = [w for w in words if w.text.strip()]
+    if len(spoken) < 2:
+        return 0.0
+    talking = sum(min(b.start - a.start, 0.5 + (a.end - a.start))
+                  for a, b in pairwise(spoken))
+    return (len(spoken) - 1) / talking if talking > 0 else 0.0
+
+
 def chunk_words(words: list[Word], style: CaptionStyle, *,
                 max_gap: float = 0.8) -> list[Chunk]:
-    """Group words into on-screen chunks.
+    """Group words into on-screen pages.
 
-    A chunk breaks on any of: the word limit, the character limit, a pause
-    longer than `max_gap`, or sentence-ending punctuation. Breaking on
-    punctuation keeps a sentence's final word from sharing the screen with the
-    start of the next thought.
+    A page breaks on any of: the word limit (fewer words when speech is fast),
+    the line limit, a pause longer than `max_gap`, or sentence-ending
+    punctuation -- which keeps a sentence's last word from sharing the screen
+    with the next thought. A page that would end on a weak word ("the", "to")
+    hands it to the next page, and a page too brief to read is merged into the
+    next when both fit.
     """
+    max_words = style.max_words_per_chunk
+    if speech_rate(words) > FAST_SPEECH_RATE:
+        max_words = min(max_words, FAST_SPEECH_WORDS)
+
+    def fits(page: list[Word]) -> bool:
+        return (len(page) <= max_words and
+                len(line_breaks([w.text.strip() for w in page], style.max_chars_per_line))
+                < style.max_lines)
+
     chunks: list[Chunk] = []
     current = Chunk()
 
@@ -206,14 +256,16 @@ def chunk_words(words: list[Word], style: CaptionStyle, *,
             continue
 
         would_be = [*current.words, word]
-        too_many = len(would_be) > style.max_words_per_chunk
-        too_long = len(line_breaks([w.text.strip() for w in would_be],
-                                   style.max_chars_per_line)) >= style.max_lines
         big_gap = bool(current.words) and (word.start - current.words[-1].end) > max_gap
 
-        if current.words and (too_many or too_long or big_gap):
+        if current.words and (big_gap or not fits(would_be)):
+            carry: list[Word] = []
+            if (not big_gap and len(current.words) > 1
+                    and _bare_word(current.words[-1].text) in WEAK_ENDINGS
+                    and fits([current.words[-1], word])):
+                carry = [current.words.pop()]
             chunks.append(current)
-            current = Chunk()
+            current = Chunk(words=carry)
 
         current.words.append(word)
 
@@ -223,7 +275,26 @@ def chunk_words(words: list[Word], style: CaptionStyle, *,
 
     if current.words:
         chunks.append(current)
-    return chunks
+    return _merge_brief(chunks, fits)
+
+
+def _merge_brief(chunks: list[Chunk], fits) -> list[Chunk]:
+    """Merge a page shown under MIN_PAGE_SECONDS into the next, when that fits."""
+    out: list[Chunk] = []
+    i = 0
+    while i < len(chunks):
+        page = chunks[i]
+        while i + 1 < len(chunks):
+            nxt = chunks[i + 1]
+            shown = nxt.start - page.start
+            ends_sentence = page.words[-1].text.strip().endswith((".", "!", "?"))
+            if shown >= MIN_PAGE_SECONDS or ends_sentence or not fits([*page.words, *nxt.words]):
+                break
+            page = Chunk(words=[*page.words, *nxt.words])
+            i += 1
+        out.append(page)
+        i += 1
+    return out
 
 
 def _scaled(value: float, width: int, style: CaptionStyle) -> int:
@@ -245,8 +316,12 @@ def build_ass(
     hook_seconds: float = 0.0,
     credit_text: str = "",
     credit_position: str = "top_left",
+    faces: list[tuple[float, list[tuple[float, float, float, float]]]] | None = None,
 ) -> str:
     """Render an ASS file for one clip.
+
+    `faces` (clip-relative time, face boxes on the output; render/placement.py)
+    moves any caption page that would cover a face.
 
     `words` carry source-absolute times; `clip_start` shifts them to be relative
     to the clip. Events outside [0, duration] are dropped, because the QA gate
@@ -282,21 +357,36 @@ def build_ass(
             font_size=credit_size, margin_v=edge,
         ))
 
+    hook_until, hook_bottom = 0.0, top_safe
     if hook_text and hook_seconds > 0:
         # Below the credit when both are at the top, not on top of it.
         hook_top = top_safe + (round(credit_size * 1.8) if credit_on_top else 0)
+        hook_size = round(font_size * 0.72)  # research R1.4: 60-72 px, white, black stroke
+        hook_until = hook_duration(hook_text, hook_seconds)
+        hook_bottom = hook_top + len(hook_lines(hook_text)) * hook_size * 1.2
         events.append(_hook_event(
-            hook_text, hook_seconds, style=style,
-            top_margin=hook_top,
-            font_size=round(font_size * 0.85),
+            hook_text, hook_until, style=style, top_margin=hook_top, font_size=hook_size,
         ))
 
     shifted = _shift_words(words, clip_start, duration)
     chunks = chunk_words(shifted, style)
+    line_height = font_size * 1.18 + outline * 2
+    bottom_edge = height - margin_v
     for i, chunk in enumerate(chunks):
-        limit = chunks[i + 1].start if i + 1 < len(chunks) else duration
-        events.extend(_chunk_events(chunk, style, mask_profanity_words,
-                                    hold_until=caption_hold(chunk, limit)))
+        # A 2-frame gap before the next page, so the change reads as a new page.
+        limit = chunks[i + 1].start - PAGE_GAP if i + 1 < len(chunks) else duration
+        hold = caption_hold(chunk, limit)
+        where = None
+        if faces:
+            lines = 1 + len(line_breaks([w.text.strip() for w in chunk.words],
+                                        style.max_chars_per_line))
+            box = (margin_r, bottom_edge - lines * line_height, width - margin_r, bottom_edge)
+            seen = [b for t, boxes in faces if chunk.start - 0.1 <= t <= hold + 0.1 for b in boxes]
+            where = place(box, seen, bottom_limit=height * 1248 / 1920,
+                          top_limit=(hook_bottom + 20 * scale) if chunk.start < hook_until
+                          else top_safe, gap=40 * scale)
+        events.extend(_chunk_events(chunk, style, mask_profanity_words, hold_until=hold,
+                                    where=where, frame_height=height))
 
     return header + "\n".join(events) + "\n"
 
@@ -327,6 +417,9 @@ def _header(*, style: CaptionStyle, width: int, height: int, font_size: int,
     ``ScaledBorderAndShadow: yes`` makes the outline scale with PlayRes, which
     matters because we set PlayRes to the real output size.
     """
+    # Captions (below y=840) keep the button rail's margin on both sides, so they
+    # stay centred: an 18-character line of Anton 96 is ~420-450 px, which fits
+    # x 300-780. The hook sits above the rail and uses the plain side margin.
     margin_r = margin_h if margin_r is None else margin_r
     return f"""[Script Info]
 ; Generated by clipper
@@ -339,8 +432,8 @@ YCbCr Matrix: TV.709
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,{style.font},{font_size},{style.primary},{style.highlight},{style.outline_colour},{BLACK},{-1 if style.bold else 0},0,0,0,100,100,0,0,1,{outline},{shadow},{ALIGN_BOTTOM_CENTRE},{margin_h},{margin_r},{margin_v},1
-Style: Hook,{style.font},{font_size},{style.highlight},{style.highlight},{style.outline_colour},{BLACK},-1,0,0,0,100,100,0,0,1,{outline},{shadow},{ALIGN_TOP_CENTRE},{margin_h},{margin_r},{margin_v},1
+Style: Caption,{style.font},{font_size},{style.primary},{style.highlight},{style.outline_colour},{BLACK},{-1 if style.bold else 0},0,0,0,100,100,0,0,1,{outline},{shadow},{ALIGN_BOTTOM_CENTRE},{margin_r},{margin_r},{margin_v},1
+Style: Hook,{style.font},{font_size},{style.primary},{style.primary},{style.outline_colour},{BLACK},-1,0,0,0,100,100,0,0,1,{outline},{shadow},{ALIGN_TOP_CENTRE},{margin_h},{margin_h},{margin_v},1
 Style: Credit,{style.font},{font_size},{style.primary},{style.primary},{style.outline_colour},{BLACK},0,0,0,0,100,100,0,0,1,{max(2.5, outline / 2):.1f},1,{ALIGN_TOP_LEFT},{margin_h},{margin_r},{margin_h},1
 
 [Events]
@@ -375,7 +468,9 @@ def caption_hold(chunk: Chunk, limit: float | None) -> float:
 
 
 def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool, *,
-                  hold_until: float | None = None) -> list[str]:
+                  hold_until: float | None = None,
+                  where: tuple[str, float] | None = None,
+                  frame_height: int = 1920) -> list[str]:
     """One event per word, each showing the whole chunk with that word active.
 
     libass has no karaoke-with-colour primitive that survives outline rendering
@@ -397,7 +492,8 @@ def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool, *,
             text = escape_ass_text(text)
             if j == i:
                 # Colour override plus a slight scale bump on the active word.
-                parts.append(f"{{\\c{style.highlight}\\fscx108\\fscy108}}{text}{{\\r}}")
+                # Research R5.3: no scale bounce above 105%.
+                parts.append(f"{{\\c{style.highlight}\\fscx105\\fscy105}}{text}{{\\r}}")
             else:
                 parts.append(text)
 
@@ -408,8 +504,15 @@ def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool, *,
                else max(chunk.end, hold_until or chunk.end))
         if end <= start:
             end = start + 0.05
-        events.append(_dialogue(start, end, "Caption",
-                                " ".join(parts).replace(" \\N ", "\\N")))
+        text = " ".join(parts).replace(" \\N ", "\\N")
+        margin_v = 0  # the style's
+        if where is not None:  # moved off a face (render/placement.py)
+            kind, y = where
+            if kind == "top":
+                text, margin_v = f"{{\\an{ALIGN_TOP_CENTRE}}}" + text, round(y)
+            else:
+                margin_v = round(frame_height - y)
+        events.append(_dialogue(start, end, "Caption", text, margin_v=margin_v))
     return events
 
 
@@ -427,9 +530,18 @@ def hook_lines(text: str, limit: int = HOOK_LINE_CHARS) -> list[str]:
     return list(min(splits, key=lambda pair: max(len(pair[0]), len(pair[1]))))
 
 
+def hook_duration(text: str, cap: float) -> float:
+    """How long the hook stays up: its reading time, 2.5 s at least, `cap` at most.
+
+    Research R1.4: max(2.5 s, 0.3 s per word + 0.8 s), capped at 3.5 s.
+    """
+    words = len(text.split())
+    return min(cap, max(2.5, 0.3 * words + 0.8)) if words else 0.0
+
+
 def _hook_event(text: str, seconds: float, *, style: CaptionStyle,
                 top_margin: int, font_size: int) -> str:
-    shown = text.strip().upper() if style.uppercase else text.strip()
+    shown = text.strip().upper() if style.hook_uppercase else text.strip()
     body = r"\N".join(escape_ass_text(line) for line in hook_lines(shown))
     return _dialogue(
         0.0, seconds, "Hook",

@@ -51,6 +51,11 @@ class RenderSpec:
     has_audio: bool = True
     #: False leaves levels exactly as delivered (a brief forbidding audio edits).
     normalize_audio: bool = True
+    #: Two-pass loudnorm: the first pass's measurements (render/clip.py).
+    loudness_measured: dict | None = None
+    loudness_range: float = 8.0
+    #: A gamma lift for dark footage (render/prepare.py), or None.
+    lift_gamma: float | None = None
 
 
 def build_video_filter(spec: RenderSpec) -> str:
@@ -59,6 +64,9 @@ def build_video_filter(spec: RenderSpec) -> str:
         chain = _per_shot_chain(spec)
     else:
         chain = _layout_chain(spec, spec.layout, "[0:v]", "")
+    if spec.lift_gamma:
+        # Lift before any crop or blur, so the fill behind a fit matches too.
+        chain = f"[0:v]eq=gamma={spec.lift_gamma:.3f}[lit];" + chain.replace("[0:v]", "[lit]")
 
     # Normalise frame rate and pixel aspect before captions, so caption
     # positioning is computed against the final geometry.
@@ -229,8 +237,15 @@ def build_audio_filter(spec: RenderSpec) -> str:
     if not spec.normalize_audio:
         return (f"[0:a]aresample={spec.audio_rate}:resampler=soxr,"
                 f"aformat=sample_fmts=fltp:channel_layouts=stereo[a]")
+    norm = f"loudnorm=I={spec.loudness_lufs}:TP={spec.true_peak_dbtp}:LRA={spec.loudness_range}"
+    m = spec.loudness_measured
+    if m:
+        # Second pass: normalise to the measured values, linearly where it can.
+        norm += (f":measured_I={m['input_i']}:measured_TP={m['input_tp']}"
+                 f":measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}"
+                 f":offset={m['target_offset']}:linear=true")
     return (
-        f"[0:a]loudnorm=I={spec.loudness_lufs}:TP={spec.true_peak_dbtp}:LRA=11,"
+        f"[0:a]{norm},"
         f"aresample={spec.audio_rate}:resampler=soxr,"
         f"aformat=sample_fmts=fltp:channel_layouts=stereo[a]"
     )
