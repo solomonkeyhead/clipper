@@ -31,6 +31,8 @@ KEYS = {
     "TAVILY_API_KEY": "Tavily (free): live web search for the Ask chat",
     "DISCORD_BOT_TOKEN": "Your Discord bot's token: reads the campaign channels you follow",
     "NTFY_TOPIC": "Your ntfy topic: campaign alerts on your phone",
+    "YOUTUBE_CLIENT_ID": "Your Google app's client ID: reads your YouTube Shorts' stats",
+    "YOUTUBE_CLIENT_SECRET": "Your Google app's client secret",
     "WHOP_CLIENT_ID": "Your Whop app's ID (app_...): reads campaign feeds you've joined",
     "WHOP_CLIENT_SECRET": "Your Whop app's API key, used as its sign-in secret",
 }
@@ -146,6 +148,13 @@ def tiktok_connect(publish) -> BrowserConnect:
     from ..tiktok import api
 
     return BrowserConnect(publish, lambda **kw: api.login(**kw), name="TikTok",
+                          describe=lambda token: token.get("display_name") or "")
+
+
+def youtube_connect(publish) -> BrowserConnect:
+    from ..youtube import api
+
+    return BrowserConnect(publish, lambda **kw: api.login(**kw), name="YouTube",
                           describe=lambda token: token.get("display_name") or "")
 
 

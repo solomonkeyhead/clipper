@@ -137,9 +137,10 @@ def _connected() -> list[str]:
     """The platforms the user has an account connected on."""
     from ..instagram import api as ig_api
     from ..tiktok import api as tt_api
+    from ..youtube import api as yt_api
 
-    return [name for name, files in (("tiktok", tt_api.token_files), ("instagram", ig_api.token_files))
-            if files()]
+    return [name for name, files in (("tiktok", tt_api.token_files), ("instagram", ig_api.token_files),
+                                     ("youtube", yt_api.token_files)) if files()]
 
 
 def _recent(stamp: str | None) -> bool:

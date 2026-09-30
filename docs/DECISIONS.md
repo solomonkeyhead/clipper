@@ -1390,3 +1390,26 @@ Each check reads posts newer than the last one seen (up to 100, so a day with th
 PC off is caught up; the first check judges the newest 25 from the last 14
 days). All reading is through Whop's official API as the signed-in user; no site
 is scraped. A hosted Clipper would run one company app for everyone.
+
+## D70 -- YouTube Shorts stats through YouTube's official APIs (2026-09-30)
+
+The user made a YouTube channel (a Brand Account channel on their Google
+account -- a new Gmail was refused for phone-number reuse, and a channel needs
+none). Its Shorts sync like TikTok and Instagram:
+
+- youtube/api.py signs in through the user's own Google Cloud app (Desktop app
+  OAuth client, PKCE, loopback redirect on 127.0.0.1:3457, read-only scopes
+  youtube.readonly + yt-analytics.readonly). The consent page's channel picker
+  chooses the Brand Account channel; one token file per channel.
+- The consent screen must be "In production": in "Testing" Google expires the
+  refresh token after 7 days. Unverified, it shows a warning the owner clicks
+  through; an expired sign-in says so.
+- Data API: the uploads playlist, then each video's title, description, views,
+  likes and comments; uploads over 3 minutes aren't Shorts. Analytics API adds
+  average watch time and shares (it lags a day or two; optional -- counts still
+  sync without it). ~3 quota units per sync against 10,000 a day.
+- The log is filled by instagram/sync.apply, now given a `platform`: a Short
+  gets its own row copied from its clip's, matched by caption (title +
+  description) the first time and by video id after.
+- Accounts page: a YouTube Shorts card with the one-time Google Cloud setup
+  steps. The TikTok and YouTube "add account" flows are one component.

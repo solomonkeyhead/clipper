@@ -283,6 +283,10 @@ export const startTikTokConnect = () =>
   unwrap(api.POST("/api/accounts/tiktok/connect")) as Promise<{ state: string; message: string; url: string }>;
 export const tiktokConnectState = () =>
   unwrap(api.GET("/api/accounts/tiktok/connect")) as Promise<{ state: string; message: string; url: string }>;
+export const startYouTubeConnect = () =>
+  unwrap(api.POST("/api/accounts/youtube/connect")) as Promise<{ state: string; message: string; url: string }>;
+export const youtubeConnectState = () =>
+  unwrap(api.GET("/api/accounts/youtube/connect")) as Promise<{ state: string; message: string; url: string }>;
 export const connectInstagram = (token: string) =>
   unwrap(api.POST("/api/accounts/instagram", { body: { token } })) as Promise<{ username: string }>;
 

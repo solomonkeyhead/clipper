@@ -589,6 +589,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/youtube/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Youtube Connect State */
+        get: operations["youtube_connect_state_api_accounts_youtube_connect_get"];
+        put?: never;
+        /**
+         * Youtube Connect
+         * @description Start Google's sign-in; the page opens the returned consent link.
+         */
+        post: operations["youtube_connect_api_accounts_youtube_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/instagram": {
         parameters: {
             query?: never;
@@ -1730,6 +1751,11 @@ export interface components {
             tiktok_connect: {
                 [key: string]: string;
             };
+            /**
+             * Youtube App
+             * @default false
+             */
+            youtube_app: boolean;
         };
         /** SinceLastVisit */
         SinceLastVisit: {
@@ -2927,6 +2953,50 @@ export interface operations {
         };
     };
     tiktok_connect_api_accounts_tiktok_connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    youtube_connect_state_api_accounts_youtube_connect_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    youtube_connect_api_accounts_youtube_connect_post: {
         parameters: {
             query?: never;
             header?: never;

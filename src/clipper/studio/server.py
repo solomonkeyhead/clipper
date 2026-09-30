@@ -347,6 +347,7 @@ class Setup(BaseModel):
     keys: dict[str, bool]          # which keys are set (never their values)
     tiktok_app: bool               # TikTok developer app keys present
     tiktok_connect: dict[str, str]
+    youtube_app: bool = False      # Google app client ID and secret present
 
 
 class Status(BaseModel):
@@ -560,6 +561,15 @@ def accounts() -> list[Account]:
             detail=("Stats: views, watch time, 3-second skip rate, saves. Renews itself."
                     if left > 0 else "Token expired: paste a new one with Add an Instagram account"),
             expires_in_days=round(left, 1)))
+    from ..youtube import api as yt_api
+
+    for path in yt_api.token_files():
+        # Google's refresh tokens don't expire on a clock (in production); a
+        # revoked or lapsed one shows up as a sync problem instead.
+        out.append(Account(
+            id=path.stem, platform="youtube", connected=True, handle=yt_api.name(path), health="ok",
+            detail="Stats: views, likes, comments, and a day or two later watch time and shares.",
+            expires_in_days=None))
     return out
 
 
@@ -626,6 +636,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     last_problems: list[str] = []
     jobs = JobRunner(broker.publish)
     tiktok = setup.tiktok_connect(broker.publish)
+    youtube = setup.youtube_connect(broker.publish)
     whop_login = setup.whop_connect(lambda *a: broker.publish("alerts.changed"))
     from .imports import ImportRunner
 
@@ -1117,8 +1128,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def disconnect(platform: str, account: str) -> dict:
         from ..instagram import api as ig_api
         from ..tiktok import api as tt_api
+        from ..youtube import api as yt_api
 
-        module = {"tiktok": tt_api, "instagram": ig_api}.get(platform)
+        module = {"tiktok": tt_api, "instagram": ig_api, "youtube": yt_api}.get(platform)
         if module is None or not module.remove(account):
             raise HTTPException(404, "no such account")
         broker.publish("accounts.changed")
@@ -1132,6 +1144,17 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.get("/api/accounts/tiktok/connect")
     def tiktok_connect_state() -> dict[str, str]:
         return tiktok.view()
+
+    @app.post("/api/accounts/youtube/connect")
+    def youtube_connect() -> dict[str, str]:
+        """Start Google's sign-in; the page opens the returned consent link."""
+        if not (setup.key_set("YOUTUBE_CLIENT_ID") and setup.key_set("YOUTUBE_CLIENT_SECRET")):
+            raise HTTPException(400, "Save your Google app's client ID and secret first")
+        return youtube.start()
+
+    @app.get("/api/accounts/youtube/connect")
+    def youtube_connect_state() -> dict[str, str]:
+        return youtube.view()
 
     @app.post("/api/accounts/instagram")
     def instagram_connect(body: dict) -> dict:
@@ -1151,7 +1174,8 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                      keys={k: setup.key_set(k) for k in setup.KEYS},
                      tiktok_app=setup.key_set("TIKTOK_CLIENT_KEY")
                      and setup.key_set("TIKTOK_CLIENT_SECRET"),
-                     tiktok_connect=tiktok.view())
+                     tiktok_connect=tiktok.view(),
+                     youtube_app=setup.key_set("YOUTUBE_CLIENT_ID") and setup.key_set("YOUTUBE_CLIENT_SECRET"))
 
     @app.put("/api/setup/keys")
     def put_keys(values: dict[str, str]) -> Setup:

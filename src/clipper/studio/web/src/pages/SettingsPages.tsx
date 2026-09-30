@@ -4,7 +4,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  connectInstagram, runSystemCheck, startTikTokConnect, testAI, tiktokConnectState, useAccounts, useDisconnect,
+  connectInstagram, runSystemCheck, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
   useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
@@ -107,8 +107,13 @@ function TikTokAppKeys({ onSaved }: { onSaved?: () => void }) {
   );
 }
 
-function AddTikTok() {
-  const { data: setup } = useSetup();
+type ConnectState = { state: string; message: string; url: string };
+
+/** Connect one more account through a platform's own consent page, opened in a new tab. */
+function AddAccount({ platform, name, label, ready, appKeys, start, state, intro, waitingHint }: {
+  platform: string; name: string; label: string; ready: boolean; appKeys: ReactNode;
+  start: () => Promise<ConnectState>; state: () => Promise<ConnectState>; intro: string; waitingHint: string;
+}) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [waiting, setWaiting] = useState<{ url: string } | null>(null);
@@ -117,13 +122,13 @@ function AddTikTok() {
 
   const connect = async () => {
     try {
-      const res = await startTikTokConnect();
+      const res = await start();
       if (res.state === "failed") throw new Error(res.message);
       setWaiting({ url: res.url });
       window.open(res.url, "_blank", "noopener");
       window.clearInterval(poll.current);
       poll.current = window.setInterval(async () => {
-        const now = await tiktokConnectState();
+        const now = await state();
         if (now.state === "done" || now.state === "failed") {
           window.clearInterval(poll.current);
           setWaiting(null);
@@ -139,36 +144,89 @@ function AddTikTok() {
   };
 
   if (!open) {
-    return <Button variant="secondary" onClick={() => setOpen(true)}><Plus className="size-4" /> Add a TikTok account</Button>;
+    return <Button variant="secondary" onClick={() => setOpen(true)}><Plus className="size-4" /> {label}</Button>;
   }
-  if (!setup?.tiktok_app) return <TikTokAppKeys />;
+  if (!ready) return <>{appKeys}</>;
   return (
     <div className="flex flex-col gap-3 rounded-md border border-dashed border-line p-4">
       {waiting ? (
         <>
-          <div className="flex items-center gap-2 text-sm font-medium"><Loader2 className="size-4 animate-spin text-accent" /> Waiting for you to approve in the TikTok tab…</div>
-          <p className="text-sm text-muted">
-            TikTok connects whichever account is logged in on tiktok.com in that browser. For a different account, log into it
-            there first, or copy this link into another browser.
-          </p>
+          <div className="flex items-center gap-2 text-sm font-medium"><Loader2 className="size-4 animate-spin text-accent" /> Waiting for you to approve in the {name} tab…</div>
+          <p className="text-sm text-muted">{waitingHint}</p>
           <div className="flex gap-2">
             <a href={waiting.url} target="_blank" rel="noopener noreferrer"
                className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
-              <ExternalLink className="size-3.5" /> Open TikTok again
+              <ExternalLink className="size-3.5" /> Open {name} again
             </a>
             <CopyButton text={waiting.url} what="Link" label="Copy link" />
           </div>
         </>
       ) : (
         <>
-          <p className="text-sm text-muted">TikTok opens in a new tab. Approve access for the account you want, then come back here.</p>
+          <p className="text-sm text-muted">{intro}</p>
           <div className="flex items-center gap-2">
-            <Button variant="primary" onClick={() => void connect()}><PlatformIcon platform="tiktok" className="size-4" /> Connect with TikTok</Button>
+            <Button variant="primary" onClick={() => void connect()}><PlatformIcon platform={platform} className="size-4" /> Connect with {name}</Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function AddTikTok() {
+  const { data: setup } = useSetup();
+  return (
+    <AddAccount platform="tiktok" name="TikTok" label="Add a TikTok account" ready={!!setup?.tiktok_app}
+      appKeys={<TikTokAppKeys />} start={startTikTokConnect} state={tiktokConnectState}
+      intro="TikTok opens in a new tab. Approve access for the account you want, then come back here."
+      waitingHint="TikTok connects whichever account is logged in on tiktok.com in that browser. For a different account, log into it there first, or copy this link into another browser." />
+  );
+}
+
+function YouTubeAppKeys() {
+  const { data: setup } = useSetup();
+  const save = useSetKeys();
+  const [id, setId] = useState("");
+  const [secret, setSecret] = useState("");
+  return (
+    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+      <div>
+        <div className="text-sm font-semibold">One-time setup: a free Google Cloud app</div>
+        <p className="mt-0.5 text-sm text-muted">YouTube shares your Shorts' stats with an app you register. About 5 minutes, once; no card needed.</p>
+      </div>
+      <Steps>
+        <li>Open the <Ext href="https://console.cloud.google.com/projectcreate">Google Cloud console</Ext> and create a project called "Clipper".</li>
+        <li>In <b>APIs &amp; Services → Library</b>, enable <Ext href="https://console.cloud.google.com/apis/library/youtube.googleapis.com">YouTube Data API v3</Ext> and <Ext href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com">YouTube Analytics API</Ext>.</li>
+        <li>Open <Ext href="https://console.cloud.google.com/auth/overview">Google Auth Platform</Ext> → <b>Get started</b>: name "Clipper", your email, audience <b>External</b>.</li>
+        <li>Under <b>Audience</b>, press <b>Publish app</b> so it's <b>In production</b>. Left in Testing, Google signs you out every 7 days.</li>
+        <li>Under <b>Clients</b>, <b>Create client</b> → type <b>Desktop app</b> → name it "Clipper", then copy its <b>Client ID</b> and <b>Client secret</b> here.</li>
+      </Steps>
+      <p className="text-xs text-muted">When you connect, Google will say it hasn't verified the app. It's your own app: press <b>Advanced → Go to Clipper</b>.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Client ID">{(fid) => <SecretInput id={fid} value={id} onChange={setId} isSet={setup?.keys.YOUTUBE_CLIENT_ID} />}</Field>
+        <Field label="Client secret">{(fid) => <SecretInput id={fid} value={secret} onChange={setSecret} isSet={setup?.keys.YOUTUBE_CLIENT_SECRET} />}</Field>
+      </div>
+      <div className="flex justify-end">
+        <Button variant="primary" disabled={!id.trim() || !secret.trim() || save.isPending}
+          onClick={() => save.mutate({ YOUTUBE_CLIENT_ID: id, YOUTUBE_CLIENT_SECRET: secret }, {
+            onSuccess: () => { setId(""); setSecret(""); toast.success("Google app saved"); },
+            onError: (e) => toast.error((e as Error).message),
+          })}>
+          <KeyRound className="size-4" /> Save keys
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AddYouTube() {
+  const { data: setup } = useSetup();
+  return (
+    <AddAccount platform="youtube" name="YouTube" label="Add a YouTube channel" ready={!!setup?.youtube_app}
+      appKeys={<YouTubeAppKeys />} start={startYouTubeConnect} state={youtubeConnectState}
+      intro="Google opens in a new tab. Pick the channel you post Shorts on (a Brand Account channel is listed on its own), approve, then come back here."
+      waitingHint="Choose the channel itself, not only your Google account. To add another channel later, connect again and pick that one." />
   );
 }
 
@@ -242,6 +300,7 @@ export function AccountsPage() {
         <div className="flex flex-col gap-4">
           <PlatformCard platform="tiktok" title="TikTok" accounts={list.filter((a) => a.platform === "tiktok")} add={<AddTikTok />} />
           <PlatformCard platform="instagram" title="Instagram" accounts={list.filter((a) => a.platform === "instagram")} add={<AddInstagram />} />
+          <PlatformCard platform="youtube" title="YouTube Shorts" accounts={list.filter((a) => a.platform === "youtube")} add={<AddYouTube />} />
           <p className="text-xs text-subtle">
             Clipper only reads stats through each platform's official API. Logins are stored on this PC only, in Clipper's data folder.
           </p>

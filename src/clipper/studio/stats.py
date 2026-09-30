@@ -13,8 +13,9 @@ POST_FIELDS = ("posted_at", "views_latest", "likes", "comments", "shares", "save
                "avg_watch_s", "watched_full_pct", "skip_rate_pct", "drop_off_s", "posted_caption")
 TEXT_FIELDS = {"posted_at", "posted_caption"}
 
-#: Instagram insights "can be delayed up to 48 hours" (Meta's reference).
-SETTLING_HOURS = {"instagram": 48}
+#: Instagram insights "can be delayed up to 48 hours" (Meta's reference); YouTube
+#: Analytics (watch time, shares) lags a day or two the same way.
+SETTLING_HOURS = {"instagram": 48, "youtube": 48}
 #: Fewer posts than this and "x your median" means nothing.
 MEDIAN_MIN_POSTS = 3
 
@@ -22,16 +23,17 @@ _sync_lock = threading.Lock()
 
 
 def sync_all(rows: list[dict[str, str]]) -> list[str]:
-    """Sync `rows` from every connected TikTok and Instagram account. Returns what failed."""
+    """Sync `rows` from every connected TikTok, Instagram and YouTube account. Returns what failed."""
     from ..instagram import api as ig_api
     from ..instagram import sync as ig_sync
     from ..tiktok import api as tt_api
     from ..tiktok import sync as tt_sync
+    from ..youtube import api as yt_api
 
     problems = []
     tiktoks = tt_api.token_files()
-    if not tiktoks and not ig_api.token_files():
-        return ["No accounts connected yet: connect TikTok or Instagram on the Accounts page"]
+    if not tiktoks and not ig_api.token_files() and not yt_api.token_files():
+        return ["No accounts connected yet: connect TikTok, Instagram or YouTube on the Accounts page"]
     for path in tiktoks:
         name = tt_api.read_token(path).get("handle") or tt_api.read_token(path).get("display_name") or ""
         try:
@@ -47,6 +49,12 @@ def sync_all(rows: list[dict[str, str]]) -> list[str]:
                           account=ig_api.username(path))
         except ig_api.InstagramError as exc:
             problems.append(f"Instagram @{ig_api.username(path)}: {exc}")
+    for path in yt_api.token_files():
+        try:
+            ig_sync.apply(yt_api.list_shorts(yt_api.access_token(path)), rows,
+                          account=yt_api.name(path), platform="youtube")
+        except yt_api.YouTubeError as exc:
+            problems.append(f"YouTube {yt_api.name(path)}: {exc}")
     return problems
 
 

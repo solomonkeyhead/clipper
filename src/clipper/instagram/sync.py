@@ -24,15 +24,19 @@ CARRIED = ["caption", "duration_s", "opening", "lead_in_s", "hook", "campaign",
 
 
 def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
-          now: float | None = None) -> SyncResult:
-    """Update `rows` in place (appending Instagram rows as needed) from `reels`."""
+          now: float | None = None, platform: str = PLATFORM) -> SyncResult:
+    """Update `rows` in place (appending rows for `platform` as needed) from `reels`.
+
+    YouTube Shorts use it too (youtube/api.Short has the same fields): a clip
+    reposted on another platform works the same way whichever it is.
+    """
     now = time.time() if now is None else now
     result = SyncResult()
     by_id = {r.get("video_id", ""): i for i, r in enumerate(rows)
-             if r.get("platform") == PLATFORM and r.get("video_id")}
+             if r.get("platform") == platform and r.get("video_id")}
     # Links pasted by hand in the Control Center have a URL but no media id yet.
     by_url = {_bare(r.get("url", "")): i for i, r in enumerate(rows)
-              if r.get("platform") == PLATFORM and r.get("url") and not r.get("video_id")}
+              if r.get("platform") == platform and r.get("url") and not r.get("video_id")}
     for reel in reels:
         index = by_id.get(reel.id)
         if index is None and _bare(reel.url) in by_url:
@@ -42,7 +46,7 @@ def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
         if index is None:
             key = normalise(reel.caption)[:MATCH_CHARS]
             clips = {r.get("clip_id") or i: i for i, r in enumerate(rows)
-                     if key and r.get("platform") != PLATFORM
+                     if key and r.get("platform") != platform
                      and normalise(r.get("caption", ""))[:MATCH_CHARS] == key}
             if len(clips) > 1:
                 result.ambiguous.append(reel)
@@ -52,7 +56,7 @@ def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
                 continue
             template = rows[next(iter(clips.values()))]
             rows.append({**{c: template.get(c, "") for c in CARRIED},
-                         "platform": PLATFORM, "account": account, "video_id": reel.id})
+                         "platform": platform, "account": account, "video_id": reel.id})
             index = len(rows) - 1
             by_id[reel.id] = index
         filled = _update(rows[index], reel, now)
