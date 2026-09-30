@@ -1161,6 +1161,74 @@ def _print_performance(joined) -> None:
                           "not results.[/dim]")
 
 
+whop_app = typer.Typer(help="Whop community feeds you've joined, via Whop's official API "
+                            "(experimental, D66).", no_args_is_help=True)
+app.add_typer(whop_app, name="whop")
+
+
+@whop_app.command("login")
+def whop_login(verbose: VerboseOpt = False) -> None:
+    """Sign in to your Whop app once (opens Whop's consent page)."""
+    setup_logging(verbose)
+    from .watch import whop
+
+    console.print("Opening Whop in your browser. Approve access there; this waits up to 5 minutes.")
+    try:
+        token = whop.login()
+    except whop.WhopError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Signed in.[/green] Scopes granted: {token.get('scope') or '(not stated)'}")
+
+
+@whop_app.command("find")
+def whop_find() -> None:
+    """List the communities you've joined and their feeds, with their ids."""
+    from .watch import whop
+
+    try:
+        memberships = whop.get("/memberships", {"first": 100}).get("data") or []
+    except whop.WhopError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    seen = set()
+    for m in memberships:
+        company = m.get("company") or {}
+        cid = company.get("id")
+        if not cid or cid in seen:
+            continue
+        seen.add(cid)
+        console.print(f"[bold]{company.get('title') or cid}[/bold] ({cid})")
+        try:
+            for e in whop.get("/experiences", {"account_id": cid, "first": 100}).get("data") or []:
+                console.print(f"  {e.get('id')}  {e.get('name')}  [dim]({(e.get('app') or {}).get('name', '')})[/dim]")
+        except whop.WhopError as exc:
+            console.print(f"  [yellow]{exc}[/yellow]")
+    if not seen:
+        console.print("No memberships came back. Paste the feed's link into `clipper whop feed` instead.")
+
+
+@whop_app.command("feed")
+def whop_feed(where: Annotated[str, typer.Argument(help="An experience id (exp_...) or a Whop link containing one")],
+              count: Annotated[int, typer.Option("--count", "-n")] = 10) -> None:
+    """Show the newest posts in one feed: the test of whether Clipper can read it."""
+    from .watch import whop
+
+    exp = whop.experience_in(where)
+    if not exp:
+        console.print("[red]No exp_... id in that. Run `clipper whop find` to list your feeds' ids.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        found = whop.posts(exp, first=count)
+    except whop.WhopError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    for p in found:
+        text = " ".join(f"{p.get('title') or ''} {p.get('content') or ''}".split())
+        console.print(f"[dim]{p.get('created_at')}[/dim] {text[:160]}")
+    console.print(f"[green]{len(found)} post(s) read.[/green]" if found else "[yellow]The feed came back empty.[/yellow]")
+
+
 def main() -> None:
     # Load .env before any command reads an API key. override=False so a key
     # exported in the shell wins over a stale one in the file.

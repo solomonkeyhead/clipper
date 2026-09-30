@@ -45,10 +45,6 @@ class AudioAnalysis:
     flux: np.ndarray            # per frame, positive spectral flux
     duration: float
 
-    @property
-    def frame_times(self) -> np.ndarray:
-        return np.arange(len(self.rms_db)) * self.hop
-
     def slice_indices(self, start: float, end: float) -> tuple[int, int]:
         lo = max(0, int(start / self.hop))
         hi = min(len(self.rms_db), int(np.ceil(end / self.hop)))

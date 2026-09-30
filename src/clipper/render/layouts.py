@@ -130,14 +130,6 @@ def clamp_crop_origin(x: float, y: float, crop_w: int, crop_h: int,
     return round(min(max(x, 0), max_x)), round(min(max(y, 0), max_y))
 
 
-def centered_crop(src_w: int, src_h: int, out_w: int, out_h: int) -> CropRect:
-    """The static, middle-of-frame crop. Used as the fallback trajectory."""
-    crop_w, crop_h = crop_size_for_aspect(src_w, src_h, out_w, out_h)
-    x, y = clamp_crop_origin((src_w - crop_w) / 2, (src_h - crop_h) / 2,
-                             crop_w, crop_h, src_w, src_h)
-    return CropRect(x=x, y=y, width=crop_w, height=crop_h)
-
-
 def crop_origin_for_face(face_x: float, face_y: float, crop_w: int, crop_h: int,
                          src_w: int, src_h: int) -> tuple[int, int]:
     """Crop origin that frames a face centre with headroom above it."""
@@ -578,7 +570,6 @@ def plan_content_stack(
             f"webcam {webcam.width}x{webcam.height}, split {content_height}/{webcam_height}"
         ),
     )
-
 
 
 # --------------------------------------------------------------------------

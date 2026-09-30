@@ -184,16 +184,16 @@ class TestApi:
         assert data["brief"]["required_text"] == "#ad"
         assert data["campaign"]["est_earnings"] == 3.0 and data["campaign"]["to_submit"] == 1
 
-    def test_submitting_every_link_makes_the_clip_submitted(self, client, data_root):
+    def test_marking_a_clip_submitted_marks_its_links(self, client, data_root):
         add_clip(data_root)
         self.post()
-        url = "https://www.tiktok.com/@s/video/9"
-        assert client.put("/api/posts/submitted", json={"url": url, "submitted": True}).status_code == 200
+        (clip,) = client.get("/api/clips").json()
+        url = f"/api/clips/{clip['id']}/submitted"
+        assert client.put(url, json={"submitted": True}).status_code == 200
         (post,) = client.get("/api/posts").json()
         assert post["submitted_at"]
-        (clip,) = client.get("/api/clips").json()
-        assert clip["status"] == "submitted"
-        client.put("/api/posts/submitted", json={"url": url, "submitted": False})
+        assert client.get("/api/clips").json()[0]["status"] == "submitted"
+        client.put(url, json={"submitted": False})
         assert client.get("/api/clips").json()[0]["status"] == "posted"
 
     def test_a_fresh_reels_zero_watch_time_is_not_yet_reported(self, client, data_root):

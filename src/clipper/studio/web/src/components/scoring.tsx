@@ -3,22 +3,22 @@ import { RATING_WORDS, useRateClip, type Clip } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { Tip } from "./ui";
 
-export const RUBRIC_LABELS: Record<string, string> = {
+const RUBRIC_LABELS: Record<string, string> = {
   hook_strength: "Hook", standalone_clarity: "Makes sense alone", payoff: "Payoff",
   emotional_intensity: "Emotion", quotability: "Quotable", ending_completeness: "Ending",
 };
 
-export const GOOD_REASONS: [string, string][] = [
+const GOOD_REASONS: [string, string][] = [
   ["great_hook", "Great hook"], ["funny", "Funny"], ["emotional", "Emotional"],
   ["good_ending", "Good ending"], ["on_brief", "Right for the campaign"],
 ];
-export const BAD_REASONS: [string, string][] = [
+const BAD_REASONS: [string, string][] = [
   ["weak_hook", "Weak hook"], ["boring", "Boring / slow"], ["bad_ending", "Cut off / bad ending"],
   ["needs_context", "Needs context"], ["off_brief", "Wrong for the campaign"],
   ["bad_framing", "Bad framing"], ["caption_errors", "Caption mistakes"],
 ];
 
-export const scoreTone = (score: number) =>
+const scoreTone = (score: number) =>
   score >= 8 ? "text-success" : score >= 6.5 ? "text-accent" : score >= 5.5 ? "text-fg" : "text-warning";
 
 /** Clipper's 0-10 score, or "Hand-picked" for a clip cut from chosen times. */

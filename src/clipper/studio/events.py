@@ -47,6 +47,3 @@ class Broker:
             pass
         self._loop.call_soon_threadsafe(deliver)
 
-    @property
-    def clients(self) -> int:
-        return len(self._clients)

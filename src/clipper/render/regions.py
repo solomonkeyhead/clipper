@@ -77,16 +77,6 @@ class ContentMap:
             height=max(2, min(self.frame_height, py1) - max(0, py0)),
         )
 
-    def pixels_to_cells(self, rect: CropRect) -> tuple[int, int, int, int]:
-        sx = self.score.shape[1] / self.frame_width
-        sy = self.score.shape[0] / self.frame_height
-        return (
-            max(0, int(rect.x * sx)),
-            max(0, int(rect.y * sy)),
-            min(self.score.shape[1], int((rect.x + rect.width) * sx) + 1),
-            min(self.score.shape[0], int((rect.y + rect.height) * sy) + 1),
-        )
-
 
 class ActivityAccumulator:
     """Builds a `ContentMap` incrementally, one sampled frame at a time.

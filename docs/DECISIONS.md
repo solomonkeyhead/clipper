@@ -1253,3 +1253,60 @@ From the D63 research list; scheduling stays on hold (platform audits).
   1,500 characters of their words for this; clips without words (imports) are
   transcribed once in the background with Whisper small. On the user's library
   it found three real repeats (FX Adults imports of scenes already posted).
+
+## D65 -- Campaign alerts from Discord, not email (2026-09-30)
+
+The email watcher (D-watch) depends on forwarding rules the user found
+unreliable, and Whop sends no new-campaign emails at all. Checked before
+choosing: Whop's API has no Content Rewards listing (Bounties are fixed-price
+tasks); contentrewards.com/discover has no feed, API or alerts; Whop's terms
+(section 5) forbid "accessing or monitoring any material or information from
+the Service using any automated means, including robots, spiders, or scrapers"
+without written consent -- so third-party scrapers (Apify) stay out, for the
+user's payout account and for a product that may later want Whop as a partner.
+
+- **Discord channel following.** Campaigns are announced in Discord
+  announcement channels, which anyone can Follow into a server where they have
+  Manage Webhooks. The user makes a private server, follows the campaign
+  channels into it, and adds a bot they create (View Channel + Read Message
+  History, Message Content intent on). Clipper reads only that server, with the
+  user's bot, through Discord's REST API (watch/discord.py): polled, no gateway,
+  no discord.py dependency.
+- **Same judge, same list.** Each new post (40+ characters, embeds included) goes
+  through the campaign judge (now `judge_text`, told it may be a Discord post);
+  campaigns land in found_campaigns (`via` = discord) and fitting ones are pushed
+  through ntfy once (a campaign already found by email or another post isn't
+  pushed again). Without a campaign-site link the entry links to the post.
+- **Nothing missed while off.** Discord keeps the messages; each channel
+  remembers the last post read, and the next check reads everything after it
+  (up to 500). A newly watched channel reads its last 25 posts but judges only
+  the last 14 days'. A post the AI can't judge is retried twice more; its
+  unusable answer is dropped from the LLM cache so the retry really asks again.
+- **Checks** every 5 minutes while the Control Center runs (auto-sync mode), and
+  on "Check now".
+- **Self-service setup** on Campaigns > Find campaigns: five steps (make the bot,
+  private server with an invite link Clipper builds, follow channels, pick
+  channels from the bot's view, say what fits you). The fit profile and minimum
+  rate are now settings (default: config's watch profile), and the ntfy topic
+  and bot token are keys set from the page. A hosted Clipper would run one
+  company bot and server instead of one per user.
+- The email watcher still works and still records into the same list; it can be
+  retired once the user's Discord alerts are running.
+
+## D66 -- Whop feed through the official API (experiment); pruning (2026-09-30)
+
+The Content Rewards Discord's "discover campaigns" channel only links to Whop,
+so Discord alerts can't cover Content Rewards. Its campaigns are posted in the
+Content Rewards Whop's Home feed by @contentrewardsbot. Whop's API lists a
+forum/feed's posts (`GET /api/v1/forum_posts?experience_id=...`, `forum:read`)
+and accepts a user OAuth token, whose reach is what that user can see -- so a
+member signing in to their own Whop app may read it. The docs don't say
+whether member tokens get `forum:read`, or whether that Home feed is a forum
+experience; `clipper whop login / find / feed` (watch/whop.py) tests it. If it
+works it joins the alerts beside Discord; if not, the code is removed.
+
+Pruned, at the user's request (and from now on, as features are replaced):
+unused functions and classes found by vulture (and confirmed by search) and
+their tests; the per-post "submitted" endpoint and hook (clips carry it now);
+the Apps Script email watcher (never installed); the Playwright screenshot
+scripts and two unused front-end packages.

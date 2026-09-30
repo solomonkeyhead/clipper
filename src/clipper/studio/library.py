@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING
 
 from ..paths import data_root, ensure
 from ..utils.cache import slugify
-from . import db
 from ..utils.logging import get_logger
+from . import db
 
 log = get_logger(__name__)
 

@@ -34,7 +34,7 @@ from ..config import CampaignConfig
 from ..learn import log as perf
 from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
-from . import db, evidence, library, setup, stats
+from . import alerts, db, evidence, library, setup, stats
 from .events import Broker
 
 log = get_logger(__name__)
@@ -269,6 +269,43 @@ class FoundCampaign(BaseModel):
     why: str
     found_at: str
     dismissed: int
+    via: str = "email"
+
+
+class AlertChannel(BaseModel):
+    id: str
+    guild_id: str
+    guild: str
+    name: str
+    kind: str = "text"
+
+
+class Alerts(BaseModel):
+    token_set: bool
+    watched: list[AlertChannel]
+    checked_at: str
+    error: str
+    push_set: bool
+    every_minutes: int
+    profile: str
+    min_rate: float
+
+
+class DiscordBot(BaseModel):
+    id: str
+    name: str
+    content_intent: bool
+    invite: str
+    channels: list[AlertChannel]
+
+
+class AlertCheck(BaseModel):
+    busy: bool = False
+    read: int = 0
+    campaigns: int = 0
+    new: list[str] = []
+    pushed: int = 0
+    errors: list[str] = []
 
 
 class FitCheck(BaseModel):
@@ -621,6 +658,16 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         except Exception as exc:  # optional; the duplicate check just sees less
             log.info("couldn't transcribe clips for the duplicate check: %s", exc)
 
+    async def alerts_loop() -> None:
+        """Campaign alerts from Discord, every few minutes (studio/alerts.py)."""
+        while True:
+            if alerts.token() and alerts.watched():
+                try:
+                    await asyncio.to_thread(alerts.check, publish=broker.publish)
+                except Exception:
+                    log.exception("campaign alert check failed")
+            await asyncio.sleep(alerts.CHECK_MINUTES * 60)
+
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         broker.bind(asyncio.get_running_loop())
@@ -632,6 +679,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         # In the background: it loads a small Whisper model.
         words = asyncio.create_task(asyncio.to_thread(backfill_words))
         task = asyncio.create_task(sync_loop()) if auto_sync else None
+        watcher = asyncio.create_task(alerts_loop()) if auto_sync else None
         if auto_sync:
             with contextlib.suppress(Exception):
                 purged = await asyncio.to_thread(purge_trash)
@@ -639,8 +687,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                     log.info("moved %d clip(s) from the 30-day trash to the Recycle Bin", purged)
         yield
         words.cancel()
-        if task:
-            task.cancel()
+        for t in (task, watcher):
+            if t:
+                t.cancel()
 
     app = FastAPI(title="Clipper Control Center", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
@@ -847,6 +896,63 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             raise HTTPException(404, "no such campaign")
         return await asyncio.to_thread(check_brief, brief)
 
+    @app.get("/api/alerts")
+    def get_alerts() -> Alerts:
+        return Alerts(**alerts.status())
+
+    @app.get("/api/alerts/discord")
+    async def discord_bot() -> DiscordBot:
+        """The bot behind the token, and every channel it can read (asks Discord)."""
+        from ..watch import discord
+
+        if not alerts.token():
+            raise HTTPException(400, "Add your bot's token first")
+        try:
+            bot = await asyncio.to_thread(discord.bot, alerts.token())
+            channels = await asyncio.to_thread(discord.channels, alerts.token())
+        except discord.DiscordError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return DiscordBot(**bot, channels=[AlertChannel(**c) for c in channels])
+
+    @app.put("/api/alerts/channels")
+    async def watch_channels(body: dict) -> Alerts:
+        from ..watch import discord
+
+        ids = [str(i) for i in body.get("ids") or []]
+        try:
+            available = await asyncio.to_thread(discord.channels, alerts.token()) if ids else []
+            alerts.watch(ids, available)
+        except (discord.DiscordError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("alerts.changed")
+        return get_alerts()
+
+    @app.put("/api/alerts/prefs")
+    def alert_prefs(body: dict) -> Alerts:
+        try:
+            alerts.set_prefs(str(body.get("profile") or ""), float(body.get("min_rate") or 0))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("alerts.changed")
+        return get_alerts()
+
+    @app.post("/api/alerts/check")
+    async def check_alerts() -> AlertCheck:
+        """Check the watched channels now, rather than at the next scheduled check."""
+        result = await asyncio.to_thread(alerts.check, publish=broker.publish)
+        broker.publish("alerts.changed")
+        return AlertCheck(**result)
+
+    @app.post("/api/alerts/test-push")
+    async def alert_test_push() -> dict:
+        from ..watch import notify
+
+        try:
+            await asyncio.to_thread(alerts.test_push)
+        except (ValueError, notify.PushError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True}
+
     @app.post("/api/found/{key}/dismiss")
     def dismiss_found(key: str) -> dict:
         from . import finder
@@ -886,16 +992,6 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.get("/api/posts")
     def posts(campaign: str | None = None) -> list[Post]:
         return [p for p in Snapshot().posts if campaign is None or p.campaign == campaign]
-
-    @app.put("/api/posts/submitted")
-    def mark_submitted(changes: dict) -> dict:
-        url = str(changes.get("url") or "").split("?", 1)[0]
-        if not url:
-            raise HTTPException(400, "url is required")
-        with db.connect() as con:
-            db.set_submitted(con, url, bool(changes.get("submitted", True)))
-        broker.publish("clips.changed")
-        return {"ok": True}
 
     @app.put("/api/clips/{clip_id}/submitted")
     def clip_submitted(clip_id: int, changes: dict) -> dict:

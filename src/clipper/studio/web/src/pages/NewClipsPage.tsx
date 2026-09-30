@@ -125,13 +125,13 @@ function JobCard({ job }: { job: Job }) {
 /* ---------- manual mode: hand-picked moments ---------- */
 
 /** "1:02:03.5" / "24:45" / "90" -> seconds; null if unreadable. */
-export function toSeconds(text: string): number | null {
+function toSeconds(text: string): number | null {
   const parts = text.trim().split(":");
   if (!text.trim() || parts.length > 3 || parts.some((p) => p === "" || isNaN(Number(p)))) return null;
   return parts.reduce((total, p) => total * 60 + Number(p), 0);
 }
 
-export function toClock(seconds: number): string {
+function toClock(seconds: number): string {
   const whole = Math.floor(seconds);
   const tenth = Math.round((seconds - whole) * 10);
   const h = Math.floor(whole / 3600), m = Math.floor((whole % 3600) / 60), sec = whole % 60;

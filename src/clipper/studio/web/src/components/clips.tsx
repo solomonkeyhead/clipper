@@ -36,7 +36,7 @@ export function useStatusWithUndo() {
 }
 
 /** Mark a clip (all its post links) submitted to its campaign, with a 5-second undo. */
-export function useSubmittedWithUndo() {
+function useSubmittedWithUndo() {
   const mutation = useSetClipSubmitted();
   return (clip: Clip, submitted = true) => {
     mutation.mutate({ id: clip.id, submitted });
@@ -49,7 +49,7 @@ export function useSubmittedWithUndo() {
   };
 }
 
-export function SubmitButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
+function SubmitButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
   const submit = useSubmittedWithUndo();
   if (clip.status === "submitted") {
     return (
@@ -70,14 +70,14 @@ export function SubmitButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | 
 }
 
 /** The campaign's own page, where post links are submitted. */
-export function useCampaignUrl() {
+function useCampaignUrl() {
   const { data: campaigns = [] } = useCampaigns();
   const urls = new Map(campaigns.map((c) => [c.name, c.campaign_url]));
   return (name: string) => urls.get(name) || "";
 }
 
 /** Copy the post's link and open the campaign's page to paste it into, in one click. */
-export function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy link & submit" }: {
+function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy link & submit" }: {
   post: Post; campaignUrl: string; size?: "sm" | "md"; label?: string;
 }) {
   if (!campaignUrl) return null;
@@ -181,7 +181,7 @@ function ProofPanel({ clip }: { clip: Clip }) {
   );
 }
 
-export async function showFile(id: number) {
+async function showFile(id: number) {
   try {
     await revealClip(id);
     toast("Opened in File Explorer", { description: "Drag it into TikTok or Instagram to upload." });
@@ -205,7 +205,7 @@ export function useDeleteWithUndo() {
   };
 }
 
-export function DownloadButton({ clip, label = true, size = "sm" }: {
+function DownloadButton({ clip, label = true, size = "sm" }: {
   clip: Clip; label?: boolean; size?: "sm" | "md";
 }) {
   return (
@@ -227,7 +227,7 @@ export function DownloadButton({ clip, label = true, size = "sm" }: {
   );
 }
 
-export function DeleteButton({ clip, label = false, size = "sm" }: {
+function DeleteButton({ clip, label = false, size = "sm" }: {
   clip: Clip; label?: boolean; size?: "sm" | "md";
 }) {
   const remove = useDeleteWithUndo();
@@ -275,7 +275,7 @@ function Preview({ clip, className }: { clip: Clip; className?: string }) {
 
 /* ---------- One copy-link button per post ---------- */
 
-export function LinkButtons({ posts, size = "sm", withLabel = true }: {
+function LinkButtons({ posts, size = "sm", withLabel = true }: {
   posts: Post[]; size?: "sm" | "md"; withLabel?: boolean;
 }) {
   return (

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 import yaml
@@ -139,7 +140,7 @@ def test_other_sites_cannot_change_anything(client, data_root):
 
 
 class TestCampaigns:
-    FORM = {"title": "My New Show", "reward_per_1k_usd": 2, "required_hashtags": ["#myshow"]}
+    FORM: ClassVar[dict] = {"title": "My New Show", "reward_per_1k_usd": 2, "required_hashtags": ["#myshow"]}
 
     def test_create_edit_and_delete(self, client, tmp_path):
         res = client.post("/api/campaigns", json=self.FORM)

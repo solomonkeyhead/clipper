@@ -51,7 +51,7 @@ function CampaignCard({ c }: { c: Campaign }) {
   );
 }
 
-export function NewCampaignButton() {
+function NewCampaignButton() {
   return (
     <Link to="/campaigns/new"
           className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">

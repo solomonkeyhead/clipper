@@ -64,14 +64,6 @@ class MediaInfo(Artifact):
     audio_sample_rate: int = 0
     size_bytes: int = 0
 
-    @property
-    def aspect(self) -> float:
-        return self.width / self.height if self.height else 0.0
-
-    @property
-    def is_vertical(self) -> bool:
-        return self.height > self.width
-
 
 class SourceInfo(Artifact):
     """``info.json``: everything known about the source before transcription."""
@@ -430,16 +422,6 @@ class ClipPlan(Artifact):
     @property
     def duration(self) -> float:
         return max(0.0, self.end - self.start)
-
-
-class Selection(Artifact):
-    """``selection.json``."""
-
-    source_id: str
-    clips: list[ClipPlan] = Field(default_factory=list)
-    # Ranked fallbacks, used when a clip fails QA and needs replacing.
-    reserves: list[str] = Field(default_factory=list)
-    stopped_because: str = ""
 
 
 # --------------------------------------------------------------------------

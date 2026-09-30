@@ -36,11 +36,6 @@ def source_id_for_file(path: Path | str) -> str:
     return h.hexdigest()[:ID_LENGTH]
 
 
-def source_id_for_url(url: str) -> str:
-    """Stable id for a URL, used before the file is downloaded."""
-    return hashlib.blake2b(url.strip().encode(), digest_size=16).hexdigest()[:ID_LENGTH]
-
-
 def content_hash(*parts: Any) -> str:
     """Hash arbitrary JSON-able parts. Used for LLM cache keys."""
     payload = json.dumps(parts, sort_keys=True, default=str, ensure_ascii=False)

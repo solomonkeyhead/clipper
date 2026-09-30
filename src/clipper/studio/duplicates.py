@@ -24,7 +24,7 @@ him she its it's i'm don't can't all out get got like know yeah okay well there 
 them from your one about would could should been were when who how why because really
 right going gonna want think see come look said say here now some more very too also
 did does doing make made take thing things time way even back still only into over
-""".split())
+""".split())  # noqa: SIM905 (a word list reads better as text)
 
 
 def _words(text: str) -> set[str]:

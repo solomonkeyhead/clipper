@@ -112,14 +112,5 @@ def download_missing(*, timeout: float = 120.0) -> tuple[list[Path], list[str]]:
     return downloaded, errors
 
 
-def font_file(family: str) -> Path | None:
-    """Locate a bundled font file by family name, case-insensitively."""
-    target = family.lower().replace(" ", "")
-    for path in sorted(fonts_dir().glob("*.ttf")) + sorted(fonts_dir().glob("*.otf")):
-        if path.stem.lower().replace(" ", "").replace("-regular", "").startswith(target):
-            return path
-    return None
-
-
 def face_model_path() -> Path:
     return models_dir() / "face_detection_yunet.onnx"

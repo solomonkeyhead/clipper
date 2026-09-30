@@ -172,11 +172,3 @@ def _assign_paragraphs(sentences: list[Sentence], cfg: SegmentConfig) -> None:
         sentences[position] = sentence.model_copy(update={"paragraph": paragraph})
 
 
-def sentences_between(sentences: list[Sentence], start: float, end: float) -> list[Sentence]:
-    """Sentences fully inside [start, end]."""
-    return [s for s in sentences if s.start >= start - 1e-6 and s.end <= end + 1e-6]
-
-
-def text_for_range(sentences: list[Sentence], lo: int, hi: int) -> str:
-    """Joined text for the sentence slice [lo, hi)."""
-    return " ".join(s.text for s in sentences[lo:hi]).strip()

@@ -74,10 +74,6 @@ def cache_dir() -> Path:
     return data_root() / "cache"
 
 
-def eval_cache_dir() -> Path:
-    return data_root() / "eval_cache"
-
-
 def examples_dir() -> Path:
     """Few-shot examples mined from top-performing clips (see `clipper learn`)."""
     return data_root() / "examples"

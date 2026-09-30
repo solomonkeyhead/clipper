@@ -11,7 +11,6 @@ from a URL or a folder.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -338,6 +337,3 @@ def describe_heatmap(info: SourceInfo) -> str:
     )
 
 
-def dump_info_json(info: SourceInfo) -> str:
-    """Pretty JSON, for `clipper explain` and debugging."""
-    return json.dumps(info.model_dump(mode="json"), indent=2, ensure_ascii=False)

@@ -381,9 +381,3 @@ def _before_black(t: float, floor: float, scan: CutScan) -> float:
     return t
 
 
-def scene_for(scenes: Scenes, start: float, end: float) -> Scene | None:
-    """The scene wholly containing [start, end], if any."""
-    for scene in scenes.scenes:
-        if scene.start - 0.05 <= start and end <= scene.end + 0.05:
-            return scene
-    return None

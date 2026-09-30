@@ -150,7 +150,7 @@ def _html(clip: dict, evidence: dict, posts: list[dict], history: dict[str, list
                 "The full brief is in <code>brief.yaml</code>.</p>")
     src = evidence.get("source") or {}
     rows.append(f"<h2>The clip</h2><p>{e(src.get('title') or '')} "
-                f"{src.get('start_s') or 0:.1f}s–{src.get('end_s') or 0:.1f}s · "
+                f"{src.get('start_s') or 0:.1f}s–{src.get('end_s') or 0:.1f}s · "  # noqa: RUF001
                 f"{evidence.get('duration_s') or 0:.1f}s long · file <code>clip.mp4</code></p>")
     if src.get("footage"):
         rows.append(f"<p>Footage downloaded from the campaign's link <a href='{e(src['footage']['link'])}'>"
