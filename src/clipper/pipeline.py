@@ -178,8 +178,9 @@ def compute_signals(
 
     # The LLM last: it is the slowest and the only one that can cost money, so
     # a failure in a cheap signal surfaces before any quota is spent.
+    # Moments with no dialogue have nothing to read; only watching judges them.
     llm_result = llm_signal.score_candidates(
-        items, backend, config.llm, cache=llm_cache,
+        [c for c in items if not c.quiet], backend, config.llm, cache=llm_cache,
         examples=_few_shot_examples(config),
     )
     if llm_result.totals or llm_result.drops:
@@ -206,6 +207,10 @@ def compute_signals(
         ))
 
     _watch(info, items, values, config, backend, llm_cache)
+    quiet = {c.candidate_id for c in items if c.quiet}
+    for v in values:
+        if v.candidate_id in quiet and v.watched is None:
+            v.dropped, v.drop_reason = True, "no dialogue, and it couldn't be watched"
 
     log.info(
         "signals available: %s (%d candidates, %d dropped by the LLM)",

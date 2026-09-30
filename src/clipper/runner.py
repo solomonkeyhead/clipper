@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .campaign import compliance
 from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
-from .candidates.boundaries import refine
+from .candidates.boundaries import RefinedBounds, refine
 from .config import CampaignConfig, Config
 from .ingest.download import IngestError, is_url, probe_rights
 from .ingest.probe import probe
@@ -705,20 +705,29 @@ def _build_plan(
     transcript: Transcript = outcome.transcript
     candidate = pick.candidate
 
-    bounds = refine(
-        candidate.start, candidate.end,
-        transcript=transcript,
-        sentences=sentences.sentences,
-        cfg=config.refine,
-        min_duration=campaign.duration.min_seconds,
-        max_duration=campaign.duration.max_seconds,
-        source_duration=outcome.info.media.duration,
-    )
+    if candidate.quiet:
+        # Found by its silence and judged by watching (D68): refinement snaps to
+        # sentences and trims wordless edges, which would cut the moment itself.
+        end = min(candidate.end, candidate.start + campaign.duration.max_seconds)
+        bounds = RefinedBounds(candidate.start, end, notes=["no dialogue: cut as found"])
+        if end - candidate.start < campaign.duration.min_seconds:
+            return None
+    else:
+        bounds = refine(
+            candidate.start, candidate.end,
+            transcript=transcript,
+            sentences=sentences.sentences,
+            cfg=config.refine,
+            min_duration=campaign.duration.min_seconds,
+            max_duration=campaign.duration.max_seconds,
+            source_duration=outcome.info.media.duration,
+        )
     if bounds.dropped:
         log.info("%s dropped during refinement: %s", candidate.candidate_id,
                  bounds.drop_reason)
         return None
-    if candidate.scene_start is not None and candidate.scene_end is not None:
+    if (not candidate.quiet and candidate.scene_start is not None
+            and candidate.scene_end is not None):
         # Refinement pads and snaps edges; for scripted TV that must never
         # reach into the neighbouring scene -- the "unrelated scene at the
         # beginning or end" reported on real clips.

@@ -75,6 +75,12 @@ class CandidatesConfig(StrictModel):
     # "Thanks, guys." with "I love you." 0.75s later -- a reply, not a beat.
     # Across four episodes 1.2s still leaves 26-46 end points each.
     beat_end_gap: float = Field(default=1.2, ge=0)
+    # Moments with no dialogue (a field play, a chase, a reaction held in
+    # silence): windows around wordless stretches of at least `quiet_gap`
+    # seconds, judged only by watching them (signals/visual.py, D68).
+    quiet_moments: bool = True
+    quiet_gap: float = Field(default=10.0, gt=0)
+    max_quiet: int = Field(default=6, ge=0)
 
     @model_validator(mode="after")
     def _check_bounds(self) -> CandidatesConfig:

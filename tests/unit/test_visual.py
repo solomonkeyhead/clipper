@@ -130,3 +130,69 @@ class TestUse:
         assert runner._hook(strong, scores) == "He looked RIGHT at him"
         assert runner._hook(weak, scores) == "Dinner gets awkward"
         assert runner._hook(None, None) == ""
+
+
+# ---- moments with no dialogue (D68) ----
+
+def talk(lines: list[tuple[float, float, str]]):
+    """Sentences and a transcript from (start, end, text) lines."""
+    from clipper.models import Sentence, Transcript, Word
+
+    words, sentences = [], []
+    for i, (start, end, text) in enumerate(lines):
+        sentences.append(Sentence(index=i, start=start, end=end, text=text, word_indices=(i, i + 1),
+                                  gap_before=start - lines[i - 1][1] if i else start))
+        words.append(Word(start=start, end=end, text=text))
+    return sentences, Transcript(source_id="s", language="en", words=words)
+
+
+FIELD = [(100.0, 101.0, "Tell me to walk away."), (103.5, 104.0, "Right now."),
+         (104.5, 106.0, "I promise you I will."), (144.0, 145.0, "See you tomorrow, Coach."),
+         (160.0, 161.0, "Bye.")]
+
+
+class TestQuiet:
+    def cfg(self, **kw):
+        from clipper.config import CandidatesConfig
+
+        return CandidatesConfig(min_seconds=12, max_seconds=75, target_seconds=(20, 45),
+                                edge_trim_seconds=0, **kw)
+
+    def test_the_silence_gets_a_window_with_its_setup_and_reaction(self):
+        from clipper.candidates.windows import quiet_windows
+
+        sentences, transcript = talk(FIELD)
+        (window,) = quiet_windows(sentences, transcript, self.cfg(), source_duration=170.0)
+        assert (window.start, window.end) == (100.0, 145.0) and window.quiet
+        assert window.text.startswith("Tell me to walk away.") and window.text.endswith("Coach.")
+
+    def test_short_pauses_and_too_short_windows_are_not_moments(self):
+        from clipper.candidates.windows import quiet_windows
+
+        sentences, transcript = talk([(0, 5, "a"), (8, 12, "b"), (15, 20, "c")])
+        assert quiet_windows(sentences, transcript, self.cfg(), source_duration=24.0) == []
+        assert quiet_windows(*talk(FIELD), self.cfg(quiet_moments=True, max_quiet=0),
+                             source_duration=170.0) == []
+
+    def test_quiet_moments_skip_reading_and_are_always_watched(self, data_root, no_ffmpeg):
+        quiet = Candidate(candidate_id="q000", start=100.0, end=145.0, sentence_indices=(0, 4),
+                          text="Tell me to walk away.", quiet=True)
+        backend = MockBackend(responses=[verdict(score=8, payoff=10)])
+        seen = visual.watch_candidates([cand(1), quiet], [value(1, None), SignalValues(candidate_id="q000")],
+                                       data_root / "src.mp4", backend, LLMConfig(watch_shortlist=1),
+                                       source_id="s")
+        assert list(seen) == ["q000"] and "no dialogue" in backend.calls[0].user
+
+    def test_an_unwatched_quiet_moment_is_dropped(self, data_root, monkeypatch):
+        monkeypatch.setattr(pipeline.llm_signal, "score_candidates",
+                            lambda items, *a, **k: SimpleNamespace(totals={}, drops={}, scores={}))
+        monkeypatch.setattr(pipeline.audio_signal, "score_candidates", lambda *a, **k: ({}, {}))
+        monkeypatch.setattr(pipeline.heatmap_signal, "score_candidates", lambda *a, **k: None)
+        quiet = Candidate(candidate_id="q000", start=100.0, end=145.0, sentence_indices=(0, 4),
+                          text="", quiet=True)
+        info = SimpleNamespace(source_id="s", audio_path=str(data_root / "a.wav"),
+                               media=SimpleNamespace(width=0, path=""))
+        signals = pipeline.compute_signals(info, None, SimpleNamespace(candidates=[quiet]), Config(),
+                                           backend=MockBackend())
+        (v,) = signals.values
+        assert v.dropped and "couldn't be watched" in v.drop_reason

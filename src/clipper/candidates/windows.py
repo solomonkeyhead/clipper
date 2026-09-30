@@ -17,6 +17,7 @@ Order matters and is deliberate:
 
 from __future__ import annotations
 
+import itertools
 import re
 
 from ..config import CandidatesConfig
@@ -50,6 +51,12 @@ _SPONSOR_RE = re.compile("|".join(SPONSOR_PATTERNS), re.IGNORECASE)
 # A window must carry at least this much of a sponsor signal to be dropped.
 # One "free trial" in an hour of conversation is not an ad read.
 SPONSOR_HIT_THRESHOLD = 2
+
+# The lines leading into a wordless stretch belong to it (its setup), back to a
+# real pause and at most this far; the reaction after it, if this close.
+SETUP_SECONDS = 15.0
+SETUP_PAUSE = 3.0
+REACTION_SECONDS = 8.0
 
 # Hook words that open a window strongly. Used only in the cheap pre-score;
 # the real judgement is the LLM's.
@@ -105,6 +112,12 @@ def generate(
 
     for position, candidate in enumerate(capped):
         candidate.candidate_id = f"c{position:03d}"
+
+    if cfg.quiet_moments:
+        quiet = quiet_windows(items, transcript, cfg, source_duration=source_duration, scenes=scenes)
+        if quiet:
+            log.info("%d moment(s) with no dialogue, to be judged by watching", len(quiet))
+        capped += quiet
 
     log.info(
         "generated %d candidates from %d sentences (%d enumerated, %d after filters)",
@@ -182,6 +195,72 @@ def _within_scenes(windows: list[Candidate], sentences: list[Sentence],
             "scene_start": scene.start, "scene_end": scene.end,
         }))
     return kept
+
+
+def quiet_windows(sentences: list[Sentence], transcript: Transcript, cfg: CandidatesConfig, *,
+                  source_duration: float, scenes: Scenes | None = None) -> list[Candidate]:
+    """Windows around the longest stretches with no dialogue.
+
+    Every other window is built from sentences, so a scene that plays out in
+    looks -- the Chad Powers brief's Episode 4 field scene, some 40 seconds
+    without a line -- never became a candidate. Each wordless gap of at least
+    `quiet_gap` seconds gets one window: the line before it (the setup) through
+    the line after it (the payoff), when each is close, kept inside its scene
+    and within the length bounds. Longest gaps first, at most `max_quiet`.
+    """
+    trim = source_duration >= cfg.edge_trim_min_source_seconds
+    head = cfg.edge_trim_seconds if trim else 0.0
+    tail = source_duration - cfg.edge_trim_seconds if trim else source_duration
+    # Between two lines only: before the first and after the last are titles,
+    # logos and credits far more often than a scene.
+    gaps = [(after.start - before.end, i, before, after)
+            for i, (before, after) in enumerate(itertools.pairwise(sentences), start=1)
+            if after.start - before.end >= cfg.quiet_gap]
+    out: list[Candidate] = []
+    for _, i, before, after in sorted(gaps, key=lambda g: -g[0]):
+        if len(out) >= cfg.max_quiet:
+            break
+        g_start, g_end = before.end, after.start
+        lo = _setup_start(sentences, i, g_start)
+        hi = i + 1 if after.end - g_end <= REACTION_SECONDS else i
+        start = sentences[lo].start if lo < i else g_start
+        end = sentences[hi - 1].end if hi > i else g_end
+        scene = _scene_at((g_start + g_end) / 2, scenes)
+        if scene is not None:
+            start, end = max(start, scene.start), min(end, scene.end)
+        end = min(end, start + cfg.max_seconds)
+        if end - start < cfg.min_seconds or start < head or end > tail:
+            continue
+        window = Candidate(
+            candidate_id=f"q{len(out):03d}", start=round(start, 3), end=round(end, 3),
+            sentence_indices=(lo, max(lo, hi)), quiet=True,
+            text=" ".join(w.text for w in transcript.words_between(start, end)).strip(),
+            scene_start=scene.start if scene else None, scene_end=scene.end if scene else None)
+        if any(window.overlaps(o) for o in out):
+            continue
+        out.append(window)
+    return sorted(out, key=lambda c: c.start)
+
+
+def _setup_start(sentences: list[Sentence], i: int, g_start: float) -> int:
+    """The first line of the exchange leading into a wordless stretch at `i`.
+
+    Walks back over lines said without a real pause (`SETUP_PAUSE`), at most
+    `SETUP_SECONDS` before the silence: in Chad Powers ep. 4 the 38s look follows
+    "Tell me to walk away. Right now. Tell me. I will walk away. I'll disappear.
+    I promise you I will." -- the silence means nothing without all of it.
+    """
+    lo = i
+    while (lo > 0 and g_start - sentences[lo - 1].start <= SETUP_SECONDS
+           and (lo == i or sentences[lo].gap_before < SETUP_PAUSE)):
+        lo -= 1
+    return lo
+
+
+def _scene_at(t: float, scenes: Scenes | None) -> Scene | None:
+    if scenes is None:
+        return None
+    return next((s for s in scenes.scenes if s.start <= t < s.end), None)
 
 
 def _continues(text: str) -> bool:

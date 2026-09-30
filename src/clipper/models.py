@@ -177,6 +177,9 @@ class Candidate(Artifact):
     # past it, so it cannot pick up a moment of the neighbouring scene.
     scene_start: float | None = None
     scene_end: float | None = None
+    # A window around a stretch with no dialogue (candidates/windows.py): its
+    # words say little, so it is judged only by watching it, and cut as found.
+    quiet: bool = False
 
     @property
     def duration(self) -> float:

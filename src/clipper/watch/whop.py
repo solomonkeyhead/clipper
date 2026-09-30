@@ -34,7 +34,8 @@ TOKEN_URL = "https://api.whop.com/oauth/token"
 PORT = 3456
 REDIRECT_URI = f"http://localhost:{PORT}/callback"
 ENV_ID, ENV_SECRET, ENV_SCOPES = "WHOP_CLIENT_ID", "WHOP_CLIENT_SECRET", "WHOP_SCOPES"
-SCOPES = "openid profile forum:read"
+# Read-only: your joined communities (member), their feeds (company), their posts (forum).
+SCOPES = "openid profile member:basic:read company:basic:read forum:read"
 
 
 class WhopError(RuntimeError):

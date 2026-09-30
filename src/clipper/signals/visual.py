@@ -100,7 +100,8 @@ def shortlist(values: list[SignalValues], candidates: dict[str, Candidate],
     version would spend the budget on one moment. The versions share a verdict.
     """
     ranked = [v.candidate_id for v in sorted(
-        (v for v in values if not v.dropped and v.llm_total is not None and v.candidate_id in candidates),
+        (v for v in values if not v.dropped and v.llm_total is not None
+         and v.candidate_id in candidates and not candidates[v.candidate_id].quiet),
         key=lambda v: v.llm_total, reverse=True)]
     chosen: list[str] = []
     same: dict[str, str] = {}
@@ -131,12 +132,17 @@ def watch_candidates(candidates: list[Candidate], values: list[SignalValues], so
         return {}
     by_id = {c.candidate_id: c for c in candidates}
     chosen, same = shortlist(values, by_id, cfg.watch_shortlist)
+    # Moments with no dialogue are always watched: nothing else can judge them.
+    chosen += [c.candidate_id for c in candidates if c.quiet and c.candidate_id not in chosen]
     variant = with_taste(with_focus(WATCH_PROMPT, cfg.campaign_focus), cfg.user_taste)
     out: dict[str, Watched] = {}
     with tempfile.TemporaryDirectory(prefix="clipper-watch-") as tmp:
         def one(c: Candidate) -> Watched | None:
+            words = c.text.strip() or "(no dialogue)"
             user = (f"Moment {c.start:.1f}s-{c.end:.1f}s ({c.duration:.0f}s; the video starts "
-                    f"{MARGIN}s early and ends {MARGIN}s late).\nTranscript:\n```\n{c.text.strip()}\n```")
+                    f"{MARGIN}s early and ends {MARGIN}s late).\nTranscript:\n```\n{words}\n```"
+                    + ("\nMost of this moment has no dialogue: judge it on what happens."
+                       if c.quiet else ""))
             key = None
             if cache is not None:
                 where = hashlib.sha256(f"{source_id}:{c.start:.2f}-{c.end:.2f}".encode()).hexdigest()
