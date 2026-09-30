@@ -31,6 +31,8 @@ KEYS = {
     "TAVILY_API_KEY": "Tavily (free): live web search for the Ask chat",
     "DISCORD_BOT_TOKEN": "Your Discord bot's token: reads the campaign channels you follow",
     "NTFY_TOPIC": "Your ntfy topic: campaign alerts on your phone",
+    "WHOP_CLIENT_ID": "Your Whop app's ID (app_...): reads campaign feeds you've joined",
+    "WHOP_CLIENT_SECRET": "Your Whop app's API key, used as its sign-in secret",
 }
 
 
@@ -97,11 +99,13 @@ def test_ai() -> tuple[bool, str]:
     return True, f"{backend.describe()} answered"
 
 
-class TikTokConnect:
-    """One TikTok login at a time, in the background; the page polls its state."""
+class BrowserConnect:
+    """One sign-in at a time through a platform's consent page, in the background;
+    the page polls its state. `login(open_browser=...)` hands over the consent URL
+    (the page opens it, not the server) and returns the token."""
 
-    def __init__(self, publish) -> None:
-        self.publish = publish
+    def __init__(self, publish, login, *, name: str, describe=lambda token: "") -> None:
+        self.publish, self.login, self.name, self.describe = publish, login, name, describe
         self.state = "idle"         # idle | waiting | done | failed
         self.message = ""
         self.url = ""
@@ -111,8 +115,6 @@ class TikTokConnect:
         return {"state": self.state, "message": self.message, "url": self.url}
 
     def start(self) -> dict:
-        from ..tiktok import api
-
         with self._lock:
             if self.state == "waiting":
                 return self.view()
@@ -125,19 +127,32 @@ class TikTokConnect:
 
             def run() -> None:
                 try:
-                    token = api.login(open_browser=capture)
+                    token = self.login(open_browser=capture)
                     self.state = "done"
-                    self.message = token.get("display_name") or "TikTok account"
+                    self.message = self.describe(token) or f"{self.name} account"
                 except Exception as exc:  # shown on the page
                     self.state, self.message = "failed", str(exc)
-                    log.info("TikTok connect failed: %s", exc)
+                    log.info("%s connect failed: %s", self.name, exc)
                 finally:
                     ready.set()
                     self.publish("accounts.changed")
 
-            threading.Thread(target=run, daemon=True, name="tiktok-login").start()
+            threading.Thread(target=run, daemon=True, name=f"{self.name.lower()}-login").start()
         ready.wait(10)
         return self.view()
+
+
+def tiktok_connect(publish) -> BrowserConnect:
+    from ..tiktok import api
+
+    return BrowserConnect(publish, lambda **kw: api.login(**kw), name="TikTok",
+                          describe=lambda token: token.get("display_name") or "")
+
+
+def whop_connect(publish) -> BrowserConnect:
+    from ..watch import whop
+
+    return BrowserConnect(publish, lambda **kw: whop.login(**kw), name="Whop")
 
 
 def system_check() -> list[dict]:

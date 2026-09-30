@@ -1361,3 +1361,32 @@ left that stretch out of every scene too.
   window (25:12-26:01, 49s, "Tell me to walk away..." through the look);
   Adults ep. 1, all dialogue, gets none. Not yet run end to end: the episode
   files need re-adding for the before/after (D67).
+
+## D69 -- Content Rewards campaigns from Whop feeds, through Whop's API (2026-09-30)
+
+The D66 experiment worked. The user made a Whop app (website type; redirect
+http://localhost:3456/callback; permissions oauth:token_exchange, forum:read,
+member:basic:read, company:basic:read) and signed in with it. Findings:
+
+- Whop's app "scopes" dialog is only a reference; nothing there is saved. The
+  sign-in must use the app's API key as the client secret, and that key needs
+  the oauth:token_exchange permission ("client_secret lacks oauth:token_exchange
+  permission" otherwise; with no secret, "client_secret is required").
+- A user token reads members-only feeds only while the membership is live: both
+  of the user's memberships had lapsed ("You do not have access to read these
+  posts") until they rejoined.
+- @contentrewardsbot posts each new campaign as a forum post with a fixed shape
+  (title; Budget; CPM; Platforms; Campaign link to contentrewards.com/discover).
+  The Content Rewards community's "New Campaigns" feed carried 50 posts in 2.3
+  days (~22 a day) -- in effect every new campaign; Whop Clips' "Content Rewards
+  New Campaigns" feed carries a hand-picked few (50 in a month). Content Rewards
+  has two identical "New Campaigns" feeds; the picker labels the second "(2)".
+
+Built: Whop is a second alert source beside Discord (studio/alerts.py shares one
+judge-keep-push path). Campaigns > Find campaigns > Set up alerts has a Whop tab:
+make the app (redirect URI and each permission's reason to copy), save its ID and
+key, "Sign in with Whop" from the page, join the communities, tick the feeds.
+Each check reads posts newer than the last one seen (up to 100, so a day with the
+PC off is caught up; the first check judges the newest 25 from the last 14
+days). All reading is through Whop's official API as the signed-in user; no site
+is scraped. A hosted Clipper would run one company app for everyone.

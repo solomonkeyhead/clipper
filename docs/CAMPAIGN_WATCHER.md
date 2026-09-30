@@ -9,10 +9,11 @@ rule forwards into a Gmail account used only for this. Whop sends no
 new-campaign emails (its notification settings have no such option), so Whop
 is not covered: check contentrewards.com/discover → New Campaigns by hand.
 
-> **Being replaced.** Campaign alerts now come from Discord channels you follow
-> (Campaigns > Find campaigns > Set up alerts, D65), and a Whop feed reader is
-> being tested (D66). The email watcher stays until those are running, then goes.
-> The never-installed Google Apps Script version was removed on 2026-09-30.
+> **Being replaced.** Campaign alerts now come from Whop feeds (Content
+> Rewards posts every new campaign there, D69) and Discord channels you follow
+> (D65), both set up at Campaigns > Find campaigns > Set up alerts. This email
+> watcher still covers Vyro's emails until Vyro is followed in Discord; then it
+> goes. The never-installed Google Apps Script version was removed on 2026-09-30.
 
 ## Setup
 

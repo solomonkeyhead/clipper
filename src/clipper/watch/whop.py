@@ -6,7 +6,7 @@ sanctioned way in: `GET /forum_posts` accepts a user's OAuth token with the
 user makes their own Whop app, signs in once, and Clipper reads feeds they've
 joined (e.g. Content Rewards' campaign posts) as them.
 
-Experimental (D66): kept only if the test against the Content Rewards feed works.
+Worked (D69): the sign-in and the feed picker live in the Control Center.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def token_path() -> Path:
 def client() -> tuple[str, str]:
     cid = os.environ.get(ENV_ID, "").strip()
     if not cid:
-        raise WhopError(f"add your Whop app's client ID to .env as {ENV_ID}")
+        raise WhopError("save your Whop app's ID first (Find campaigns > Set up alerts > Whop)")
     return cid, os.environ.get(ENV_SECRET, "").strip()
 
 
@@ -79,7 +79,7 @@ def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
             self.end_headers()
             ok = got.get("state") == state and "code" in got
             self.wfile.write(("<p style='font-family:sans-serif;padding:2em'>"
-                              + ("Connected. You can close this tab." if ok else
+                              + ("Approved. Go back to the terminal: it says when Clipper has finished connecting." if ok else
                                  "Login did not complete. Try again from Clipper.")
                               + "</p>").encode())
 
@@ -137,7 +137,7 @@ def access_token() -> str:
     """A valid access token; Whop's last an hour and refresh tokens rotate."""
     path = token_path()
     if not path.exists():
-        raise WhopError("not signed in to Whop yet: run `clipper whop login`")
+        raise WhopError("not signed in to Whop yet: Find campaigns > Set up alerts > Whop")
     token = json.loads(path.read_text(encoding="utf-8"))
     if time.time() - float(token.get("obtained_at", 0)) < float(token.get("expires_in", 3600)) - 300:
         return token["access_token"]
@@ -159,12 +159,63 @@ def get(path: str, params: dict | None = None) -> dict:
     return r.json()
 
 
-def experience_in(text: str) -> str | None:
-    """An experience id (exp_...) in a pasted Whop link, if there is one."""
-    found = re.search(r"exp_[A-Za-z0-9]+", text)
-    return found.group(0) if found else None
-
-
 def posts(experience_id: str, *, first: int = 20) -> list[dict]:
     """The newest top-level posts in a forum/feed experience."""
     return get("/forum_posts", {"experience_id": experience_id, "first": first}).get("data") or []
+
+
+def signed_in() -> bool:
+    return token_path().exists()
+
+
+def sign_out() -> None:
+    token_path().unlink(missing_ok=True)
+
+
+def feeds() -> list[dict]:
+    """Forum feeds in the communities the user belongs to: [{id, name, company}].
+
+    A canceled membership is left out: Whop refuses its members-only posts.
+    """
+    out, seen = [], set()
+    for m in get("/memberships", {"first": 100}).get("data") or []:
+        company = m.get("company") or {}
+        cid = company.get("id")
+        if not cid or cid in seen or m.get("status") == "canceled":
+            continue
+        seen.add(cid)
+        try:
+            listed = get("/experiences", {"account_id": cid, "first": 100}).get("data") or []
+        except WhopError:  # one community refusing shouldn't hide the others
+            continue
+        names: dict[str, int] = {}
+        for e in listed:
+            if "forum" in ((e.get("app") or {}).get("name") or "").lower():
+                name = e.get("name") or "Feed"
+                names[name] = names.get(name, 0) + 1
+                # Content Rewards has two feeds named "New Campaigns" (the same posts).
+                shown = name if names[name] == 1 else f"{name} ({names[name]})"
+                out.append({"id": e["id"], "name": shown, "company": company.get("title") or ""})
+    return out
+
+
+def new_posts(experience_id: str, *, after: str | None, first: int = 25) -> list[dict]:
+    """Top-level posts newer than `after` (an ISO time), oldest first."""
+    got = [p for p in posts(experience_id, first=first) if not p.get("parent_id")]
+    if after:
+        got = [p for p in got if (p.get("created_at") or "") > after]
+    return sorted(got, key=lambda p: p.get("created_at") or "")
+
+
+def text_of(post: dict) -> str:
+    return "\n".join(x.strip() for x in (post.get("title") or "", post.get("content") or "") if x and x.strip())
+
+
+def link_in(text: str) -> str:
+    """The campaign link a post carries, if it points at a campaign site."""
+    from .judge import safe_link
+
+    for url in re.findall(r"https://\S+", text):
+        if safe_link(url.rstrip(").,")):
+            return url.rstrip(").,")
+    return ""

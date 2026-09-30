@@ -83,6 +83,14 @@ CREATE TABLE IF NOT EXISTS discord_channels (
     last_id     TEXT,                     -- newest message already read
     added_at    TEXT NOT NULL
 );
+-- Whop forum feeds the campaign alerts read (studio/alerts.py, watch/whop.py).
+CREATE TABLE IF NOT EXISTS whop_feeds (
+    id          TEXT PRIMARY KEY,         -- experience id, exp_...
+    company     TEXT NOT NULL DEFAULT '',
+    name        TEXT NOT NULL DEFAULT '',
+    last_seen   TEXT,                     -- created_at of the newest post read
+    added_at    TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS found_campaigns (
     key         TEXT PRIMARY KEY,         -- watch.watcher.campaign_key
     source      TEXT NOT NULL DEFAULT '',
@@ -156,7 +164,7 @@ MIGRATIONS = [
     ("clips", "evidence", "ALTER TABLE clips ADD COLUMN evidence TEXT"),
     # Marked posted at: syncs run every 2 minutes until this passes or the post is found.
     ("clips", "watch_until", "ALTER TABLE clips ADD COLUMN watch_until TEXT"),
-    # Where a found campaign came from: "email" or "discord".
+    # Where a found campaign came from: "email", "discord" or "whop".
     ("found_campaigns", "via", "ALTER TABLE found_campaigns ADD COLUMN via TEXT NOT NULL DEFAULT 'email'"),
 ]
 TRASH_DAYS = 30

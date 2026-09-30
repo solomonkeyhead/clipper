@@ -369,6 +369,16 @@ export const watchChannels = (ids: string[]) => unwrap(api.PUT("/api/alerts/chan
 export const saveAlertPrefs = (profile: string, min_rate: number) =>
   unwrap(api.PUT("/api/alerts/prefs", { body: { profile, min_rate } }));
 export const checkAlerts = () => unwrap(api.POST("/api/alerts/check"));
+export type WhopFeed = components["schemas"]["WhopFeed"];
+/** Asks Whop, so only while the setup is open and signed in. */
+export const useWhopFeeds = (enabled: boolean) =>
+  useQuery({ queryKey: ["alerts", "whop"], enabled, retry: false, staleTime: 30_000,
+             queryFn: () => unwrap(api.GET("/api/alerts/whop")) });
+export const watchWhopFeeds = (ids: string[]) => unwrap(api.PUT("/api/alerts/whop/feeds", { body: { ids } }));
+type ConnectState = { state: string; message: string; url: string };
+export const startWhopConnect = () => unwrap(api.POST("/api/alerts/whop/connect")) as Promise<ConnectState>;
+export const whopConnectState = () => unwrap(api.GET("/api/alerts/whop/connect")) as Promise<ConnectState>;
+export const disconnectWhop = () => unwrap(api.POST("/api/alerts/whop/disconnect"));
 export const testAlertPush = () => unwrap(api.POST("/api/alerts/test-push"));
 
 /** Open the New campaign form already filled in (read once by CampaignEditor). */

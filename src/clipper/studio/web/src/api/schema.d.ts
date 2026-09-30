@@ -281,6 +281,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alerts/whop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whop Available
+         * @description Forum feeds in the Whop communities the user belongs to (asks Whop).
+         */
+        get: operations["whop_available_api_alerts_whop_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/whop/feeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Watch Whop */
+        put: operations["watch_whop_api_alerts_whop_feeds_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/whop/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whop Connect State */
+        get: operations["whop_connect_state_api_alerts_whop_connect_get"];
+        put?: never;
+        /** Whop Connect */
+        post: operations["whop_connect_api_alerts_whop_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/whop/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Whop Disconnect */
+        post: operations["whop_disconnect_api_alerts_whop_disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/alerts/test-push": {
         parameters: {
             query?: never;
@@ -1018,6 +1090,21 @@ export interface components {
             token_set: boolean;
             /** Watched */
             watched: components["schemas"]["AlertChannel"][];
+            /**
+             * Whop App
+             * @default false
+             */
+            whop_app: boolean;
+            /**
+             * Whop Signed In
+             * @default false
+             */
+            whop_signed_in: boolean;
+            /**
+             * Whop Feeds
+             * @default []
+             */
+            whop_feeds: components["schemas"]["WhopFeed"][];
             /** Checked At */
             checked_at: string;
             /** Error */
@@ -1714,6 +1801,15 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** WhopFeed */
+        WhopFeed: {
+            /** Id */
+            id: string;
+            /** Company */
+            company: string;
+            /** Name */
+            name: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2258,6 +2354,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AlertCheck"];
+                };
+            };
+        };
+    };
+    whop_available_api_alerts_whop_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhopFeed"][];
+                };
+            };
+        };
+    };
+    watch_whop_api_alerts_whop_feeds_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    whop_connect_state_api_alerts_whop_connect_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    whop_connect_api_alerts_whop_connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    whop_disconnect_api_alerts_whop_disconnect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
                 };
             };
         };

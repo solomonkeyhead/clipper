@@ -286,9 +286,18 @@ class AlertChannel(BaseModel):
     kind: str = "text"
 
 
+class WhopFeed(BaseModel):
+    id: str
+    company: str
+    name: str
+
+
 class Alerts(BaseModel):
     token_set: bool
     watched: list[AlertChannel]
+    whop_app: bool = False          # the Whop app's ID is saved
+    whop_signed_in: bool = False
+    whop_feeds: list[WhopFeed] = []
     checked_at: str
     error: str
     push_set: bool
@@ -616,7 +625,8 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     broker = Broker()
     last_problems: list[str] = []
     jobs = JobRunner(broker.publish)
-    tiktok = setup.TikTokConnect(broker.publish)
+    tiktok = setup.tiktok_connect(broker.publish)
+    whop_login = setup.whop_connect(lambda *a: broker.publish("alerts.changed"))
     from .imports import ImportRunner
 
     importer = ImportRunner(broker.publish)
@@ -950,6 +960,48 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         result = await asyncio.to_thread(alerts.check, publish=broker.publish)
         broker.publish("alerts.changed")
         return AlertCheck(**result)
+
+    @app.get("/api/alerts/whop")
+    async def whop_available() -> list[WhopFeed]:
+        """Forum feeds in the Whop communities the user belongs to (asks Whop)."""
+        from ..watch import whop
+
+        try:
+            return [WhopFeed(**f) for f in await asyncio.to_thread(whop.feeds)]
+        except whop.WhopError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.put("/api/alerts/whop/feeds")
+    async def watch_whop(body: dict) -> Alerts:
+        from ..watch import whop
+
+        ids = [str(i) for i in body.get("ids") or []]
+        try:
+            available = await asyncio.to_thread(whop.feeds) if ids else []
+            alerts.whop_watch(ids, available)
+        except (whop.WhopError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("alerts.changed")
+        return get_alerts()
+
+    @app.post("/api/alerts/whop/connect")
+    def whop_connect() -> dict[str, str]:
+        if not setup.key_set("WHOP_CLIENT_ID"):
+            raise HTTPException(400, "Save your Whop app's ID first")
+        return whop_login.start()
+
+    @app.get("/api/alerts/whop/connect")
+    def whop_connect_state() -> dict[str, str]:
+        return whop_login.view()
+
+    @app.post("/api/alerts/whop/disconnect")
+    def whop_disconnect() -> Alerts:
+        from ..watch import whop
+
+        whop.sign_out()
+        alerts.whop_watch([], [])
+        broker.publish("alerts.changed")
+        return get_alerts()
 
     @app.post("/api/alerts/test-push")
     async def alert_test_push() -> dict:
