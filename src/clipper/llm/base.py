@@ -17,7 +17,7 @@ import random
 import threading
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
@@ -64,6 +64,9 @@ class LLMRequest:
     # Either a pydantic model class or `list[Model]` -- the google-genai SDK
     # rejects a plain `[Model]` list literal with a pydantic ValidationError.
     response_schema: type[BaseModel] | Any | None = None
+    # Video or image to look at alongside `user`: (bytes, mime type) pairs. Only
+    # backends with `supports_video` accept them (signals/visual.py).
+    media: list[tuple[bytes, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -136,6 +139,7 @@ class LLMBackend(ABC):
 
     name: ClassVar[str] = "base"
     supports_schema: ClassVar[bool] = False
+    supports_video: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -236,6 +240,7 @@ class MockBackend(LLMBackend):
 
     name: ClassVar[str] = "mock"
     supports_schema: ClassVar[bool] = True
+    supports_video: ClassVar[bool] = True
 
     #: Words that push a candidate's scores up, simulating a good moment.
     BOOST: ClassVar[tuple[str, ...]] = (

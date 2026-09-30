@@ -1330,6 +1330,17 @@ export interface components {
              * @default unknown
              */
             picked_by: string;
+            /** Read */
+            read?: number | null;
+            /** Watched */
+            watched?: number | null;
+            /** Visual Payoff */
+            visual_payoff?: number | null;
+            /**
+             * Sees
+             * @default
+             */
+            sees: string;
             /** Rating */
             rating?: number | null;
             /**

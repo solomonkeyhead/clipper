@@ -70,5 +70,6 @@ markers = [
     "slow: takes more than a few seconds (render / transcribe / network)",
     "gpu: requires a working CUDA GPU",
     "network: requires internet access",
+    "watch: runs the \"watch it\" pass (off in other tests, see conftest)",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]

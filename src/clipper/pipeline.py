@@ -34,6 +34,7 @@ from .signals import audio as audio_signal
 from .signals import heatmap as heatmap_signal
 from .signals import llm as llm_signal
 from .signals import text as text_signal
+from .signals import visual as visual_signal
 from .signals.combine import combine
 from .transcribe.segment import segment as run_segment
 from .transcribe.whisper import TranscribeStats
@@ -204,11 +205,38 @@ def compute_signals(
             drop_reason=drop_reason,
         ))
 
+    _watch(info, items, values, config, backend, llm_cache)
+
     log.info(
         "signals available: %s (%d candidates, %d dropped by the LLM)",
         ", ".join(available), len(values), len(llm_result.drops),
     )
     return Signals(source_id=info.source_id, available=available, values=values)
+
+
+def _watch(info: SourceInfo, items, values: list[SignalValues], config: Config,
+           backend: LLMBackend, llm_cache: LLMCache | None) -> None:
+    """The "watch it" pass over the best-scoring moments (signals/visual.py)."""
+    if not config.llm.watch_video or not info.media.width:
+        return
+    watcher = backend
+    if config.llm.watch_model:
+        watcher = create_backend(backend.name, model=config.llm.watch_model,
+                                 max_retries=config.llm.max_retries,
+                                 requests_per_minute=config.llm.requests_per_minute)
+    try:
+        seen = visual_signal.watch_candidates(
+            items, values, Path(info.media.path), watcher, config.llm,
+            source_id=info.source_id, cache=llm_cache)
+    except Exception as exc:  # a bonus, never a reason to lose the run
+        log.warning("the watch pass failed; scoring from the transcript only: %s", exc)
+        return
+    weights = config.llm.rubric_weights.as_dict()
+    for v in values:
+        w = seen.get(v.candidate_id)
+        if w is not None:
+            v.watched = round(w.total(weights), 4)
+            v.visual_payoff, v.sees, v.visual_hook = w.visual_payoff, w.sees.strip(), w.hook_text.strip()
 
 
 def score(

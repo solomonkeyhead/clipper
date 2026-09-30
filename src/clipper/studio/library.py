@@ -79,7 +79,10 @@ def scores_of(record: ClipRecord) -> dict:
     return {"picked_by": "auto", "text": text, "text_v": 2,
             "score": round(llm, 2) if llm is not None else None,
             "rubric": record.rubric, "composite": round(record.plan.composite, 4),
-            "pool": record.pool, "pool_rank": record.pool_rank}
+            "pool": record.pool, "pool_rank": record.pool_rank,
+            # The watch pass: the rubric total from watching, and what it saw.
+            "watched": record.raw.get("watched"), "read": record.raw.get("llm_read"),
+            "sees": record.sees, "visual_payoff": record.visual_payoff}
 
 
 def backfill_text() -> int:

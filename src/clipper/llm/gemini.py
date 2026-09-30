@@ -57,6 +57,7 @@ MIN_DEADLINE_SECONDS = 10.0
 class GeminiBackend(LLMBackend):
     name: ClassVar[str] = "gemini"
     supports_schema: ClassVar[bool] = True
+    supports_video: ClassVar[bool] = True
 
     def __init__(self, *, api_key: str | None = None, **kwargs):
         super().__init__(**kwargs)
@@ -156,6 +157,13 @@ class GeminiBackend(LLMBackend):
             config_kwargs["response_schema"] = request.response_schema
         if request.max_output_tokens:
             config_kwargs["max_output_tokens"] = request.max_output_tokens
+        contents: object = request.user
+        if request.media:
+            # Low resolution: ~100 tokens a second of video instead of ~300, and
+            # plenty to see who looks at whom (measured on a 33s clip, D67).
+            config_kwargs["media_resolution"] = types.MediaResolution.MEDIA_RESOLUTION_LOW
+            contents = [*(types.Part.from_bytes(data=data, mime_type=mime)
+                          for data, mime in request.media), request.user]
 
         # Building the config can fail on a malformed response_schema. That is a
         # programming error, not a transient one, so it must not be retried --
@@ -173,7 +181,7 @@ class GeminiBackend(LLMBackend):
         try:
             response = self.client.models.generate_content(
                 model=model,
-                contents=request.user,
+                contents=contents,
                 config=generate_config,
             )
         except genai_errors.ClientError as exc:

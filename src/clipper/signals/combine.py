@@ -148,12 +148,10 @@ def combine(signals: Signals, config: Config, *,
     for name in SIGNAL_NAMES:
         if name not in signals.available:
             continue
-        attribute = "llm_total" if name == "llm" else name
-        collected = {
-            cid: getattr(v, attribute)
-            for cid, v in values.items()
-            if getattr(v, attribute) is not None and not v.dropped
-        }
+        def raw(v, name=name):
+            return v.rubric_total if name == "llm" else getattr(v, name)
+
+        collected = {cid: raw(v) for cid, v in values.items() if raw(v) is not None and not v.dropped}
         if collected:
             raws[name] = collected
 
@@ -213,9 +211,13 @@ def combine(signals: Signals, config: Config, *,
 def _raw_snapshot(value: SignalValues) -> dict[str, float]:
     """The pre-normalisation numbers, kept so `explain` can show its working."""
     snapshot: dict[str, float] = {}
-    for name, attribute in (("llm", "llm_total"), ("audio", "audio"),
-                            ("heatmap", "heatmap"), ("text", "text")):
+    for name, attribute in (("llm", "rubric_total"), ("audio", "audio"),
+                            ("heatmap", "heatmap"), ("text", "text"),
+                            # What was read and what was watched, before blending.
+                            ("llm_read", "llm_total"), ("watched", "watched")):
         raw = getattr(value, attribute)
         if raw is not None:
             snapshot[name] = round(float(raw), 5)
+    if value.watched is None:
+        snapshot.pop("llm_read", None)
     return snapshot

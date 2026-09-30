@@ -58,6 +58,9 @@ class ClipRecord:
     rubric: dict[str, float] = field(default_factory=dict)
     pool: int | None = None
     pool_rank: int | None = None
+    # From the "watch it" pass (signals/visual.py): what the picture adds.
+    sees: str = ""
+    visual_payoff: int | None = None
 
     @property
     def duration(self) -> float:

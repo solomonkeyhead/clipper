@@ -34,6 +34,17 @@ def _no_ratings_from_the_real_library(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_watching_unless_asked(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    """The mock backend can take video, so every scoring run would cut and "watch"
+    a dozen moments; only tests marked `watch` do (tests/unit/test_visual.py)."""
+    if request.node.get_closest_marker("watch"):
+        return
+    from clipper import pipeline
+
+    monkeypatch.setattr(pipeline, "_watch", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
 def _no_ambient_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     """A key in the developer's shell must not change test outcomes."""
     for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"):

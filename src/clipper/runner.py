@@ -42,6 +42,8 @@ from .utils.logging import get_logger
 from .utils.timecode import to_slug_timestamp
 
 log = get_logger(__name__)
+#: How much the picture must add (0-10) before its hook line replaces the transcript's.
+VISUAL_HOOK_MIN = 6
 
 
 @dataclass
@@ -524,6 +526,8 @@ def _produce_one(
     record.llm_a_total = values.llm_a.total(weights) if values and values.llm_a else None
     record.llm_b_total = values.llm_b.total(weights) if values and values.llm_b else None
     record.rubric = average_rubric(values)
+    if values is not None:
+        record.sees, record.visual_payoff = values.sees, values.visual_payoff
     ranked = sorted((s for s in outcome.scored.scored if not s.dropped),
                     key=lambda s: s.composite, reverse=True)
     record.pool = len(ranked)
@@ -757,7 +761,7 @@ def _build_plan(
         text=text,
         composite=pick.scored.composite,
         hook_text=(campaign.hook_texts[(rank - 1) % len(campaign.hook_texts)]
-                   if campaign.hook_texts else (scores.hook_text if scores else "")),
+                   if campaign.hook_texts else _hook(values, scores)),
         suggested_caption=scores.suggested_caption if scores else "",
         hashtags=list(scores.hashtags) if scores else [],
         caption_style=config.render.caption_style,
@@ -765,9 +769,16 @@ def _build_plan(
         lead_in=next((round(w.start - bounds.start, 2) for w in transcript.words
                       if bounds.start - 0.05 <= w.start < bounds.end), None),
         hook_shown=bool(config.render.show_hook_text
-                        and (campaign.hook_texts or (scores and scores.hook_text))),
+                        and (campaign.hook_texts or _hook(values, scores))),
     )
     return compliance.apply_campaign_caption(plan, campaign)
+
+
+def _hook(values, scores) -> str:
+    """The on-screen hook: the watched one when the picture carries the moment."""
+    if values is not None and values.visual_hook and (values.visual_payoff or 0) >= VISUAL_HOOK_MIN:
+        return values.visual_hook
+    return scores.hook_text if scores else ""
 
 
 class RightsError(IngestError):

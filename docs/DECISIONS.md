@@ -1310,3 +1310,33 @@ unused functions and classes found by vulture (and confirmed by search) and
 their tests; the per-post "submitted" endpoint and hook (clips carry it now);
 the Apps Script email watcher (never installed); the Playwright screenshot
 scripts and two unused front-end packages.
+
+## D67 -- The "watch it" pass: the model watches the shortlist (2026-09-30)
+
+Every score came from the transcript, so a joke carried by a look was invisible:
+in Adults S2 ep. 1 a guest asks for "black" beans and the host's eyes go to the
+one Black man in the room -- on paper a joke about a word, on screen the joke.
+Checked first on the user's free Gemini key: gemini-flash-lite-latest watched the
+33s finished clip (low media resolution, ~3,100 input tokens, 8s) and named the
+look and the table freezing. gemini-flash-latest answered 503 (overloaded).
+
+- After transcript scoring, the 12 best distinct moments (overlapping windows
+  share one verdict) are cut small -- 360p, 2 fps, mono, 1.5s margin each side --
+  and watched with their transcript, three at a time. The model re-scores the
+  same six-part rubric as a viewer, rates how much the picture adds (0-10), says
+  what it sees that the words miss, and may offer a hook line.
+- Selection gates and ranks on the blend: half the read total, half the watched
+  one (`SignalValues.rubric_total`). Unwatched candidates keep the read total.
+  The watched hook replaces the transcript's when the picture adds 6+/10 and the
+  campaign has no hook texts of its own.
+- Cached per source and window; any failure leaves the transcript score (never a
+  failed run). `llm.watch_video` turns it off, `watch_shortlist` sizes it,
+  `watch_model` picks another model. Backends without video (Ollama, Claude
+  here) skip it.
+- Measured on an 85 South podcast episode: 8 calls, ~35k input tokens, 62s
+  (6 minutes before parallel calls and de-duplication); picture scores 2-5 as a
+  podcast should get; one moment rose from 20th to 3rd on the couch's reactions.
+- The clip sheet shows read vs watched and "What the AI saw". Not yet built:
+  candidates for moments with no dialogue (the Chad Powers ep. 4 field scene),
+  and a before/after on the FX and Chad Powers episodes, whose source files were
+  cleaned up after clipping and need re-adding.

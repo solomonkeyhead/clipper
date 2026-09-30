@@ -118,6 +118,12 @@ class Clip(BaseModel):
     pool: int | None = None
     pool_rank: int | None = None
     picked_by: str = "unknown"      # auto | hand | unknown
+    # The watch pass (signals/visual.py): scores from reading and from watching,
+    # how much the picture adds (0-10), and what it showed.
+    read: float | None = None
+    watched: float | None = None
+    visual_payoff: int | None = None
+    sees: str = ""
     rating: int | None = None
     reasons: list[str] = []
     # The dispute pack (studio/evidence.py): when the brief was saved, how many of
@@ -448,6 +454,8 @@ class Snapshot:
                 score=scores.get("score"), rubric=scores.get("rubric") or {},
                 pool=scores.get("pool"), pool_rank=scores.get("pool_rank"),
                 picked_by=scores.get("picked_by") or "unknown", rating=c.get("rating"),
+                read=scores.get("read"), watched=scores.get("watched"),
+                visual_payoff=scores.get("visual_payoff"), sees=scores.get("sees") or "",
                 reasons=json.loads(c.get("reasons") or "[]"),
                 proof=Proof(**evidence.summary(json.loads(c.get("evidence") or "null"),
                                                [m.model_dump() for m in models])),

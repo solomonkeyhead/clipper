@@ -189,6 +189,12 @@ class LLMConfig(StrictModel):
     user_taste: str = ""
     # Caption fixes ruled wrong, as "heard -> replacement"; never applied.
     rejected_caption_fixes: list[str] = Field(default_factory=list)
+    # The "watch it" pass (signals/visual.py): the model watches the best-scoring
+    # moments -- picture and sound -- since a look or a reaction can make a joke
+    # the words alone don't. Backends that can't take video skip it.
+    watch_video: bool = True
+    watch_shortlist: int = Field(default=12, ge=1, le=40)
+    watch_model: str | None = None  # null = the scoring model
 
     @field_validator("rejected_caption_fixes")
     @classmethod

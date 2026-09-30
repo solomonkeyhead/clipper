@@ -67,6 +67,16 @@ export function ScoreBreakdown({ clip }: { clip: Clip }) {
           out of 10{clip.pool_rank && clip.pool ? <> · #{clip.pool_rank} of {clip.pool} moments in this video</> : null}
         </span>
       </div>
+      {clip.watched != null && (
+        <div className="rounded-md bg-surface-2/60 p-2.5 text-xs">
+          <div className="text-muted">
+            Read: <span className="tabular font-medium text-fg">{clip.read?.toFixed(1) ?? "?"}</span> · Watched:{" "}
+            <span className="tabular font-medium text-fg">{clip.watched.toFixed(1)}</span>
+            {clip.visual_payoff != null && <> · the picture adds <span className="tabular font-medium text-fg">{clip.visual_payoff}/10</span></>}
+          </div>
+          {clip.sees && <p className="mt-1">What the AI saw: {clip.sees}</p>}
+        </div>
+      )}
       {dims.length > 0 && (
         <dl className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
           {dims.map(([key, label]) => (

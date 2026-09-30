@@ -644,6 +644,11 @@ def _print_rubric(values) -> None:
 
     if values.llm_total is not None:
         console.print(f"  weighted total: [bold]{values.llm_total:.2f}/10[/bold]")
+    if values.watched is not None:
+        console.print(f"  watched: [bold]{values.watched:.2f}/10[/bold], picture adds "
+                      f"{values.visual_payoff}/10 -> selection uses {values.rubric_total:.2f}/10")
+        if values.sees:
+            console.print(f"  sees: {values.sees}")
 
     for label, scores in opinions:
         if scores is None:

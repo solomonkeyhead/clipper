@@ -263,6 +263,20 @@ class SignalValues(Artifact):
     heatmap_features: dict[str, float] = Field(default_factory=dict)
     dropped: bool = False
     drop_reason: str = ""
+    # The "watch it" pass (signals/visual.py), for shortlisted candidates: the
+    # rubric total from watching, how much the picture adds (0-10), what it
+    # showed that the words don't, and a hook line drawing on it.
+    watched: float | None = None
+    visual_payoff: int | None = None
+    sees: str = ""
+    visual_hook: str = ""
+
+    @property
+    def rubric_total(self) -> float | None:
+        """What selection gates and ranks on: the text total, blended with the watched one."""
+        from .signals.visual import blend
+
+        return blend(self.llm_total, self.watched)
 
 
 class Signals(Artifact):
