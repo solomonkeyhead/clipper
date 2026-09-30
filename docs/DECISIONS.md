@@ -1340,3 +1340,24 @@ look and the table freezing. gemini-flash-latest answered 503 (overloaded).
   candidates for moments with no dialogue (the Chad Powers ep. 4 field scene),
   and a before/after on the FX and Chad Powers episodes, whose source files were
   cleaned up after clipping and need re-adding.
+
+## D68 -- Moments with no dialogue become candidates (2026-09-30)
+
+Candidates were built from sentences, dropped when mostly silent, and scored
+from their words, so a scene that plays out in looks could never be picked --
+the Chad Powers brief's Episode 4 field scene (38s between "I promise you I
+will" and "See you tomorrow, Coach") was invisible, and scene detection had
+left that stretch out of every scene too.
+
+- Each wordless stretch of 10s+ between two lines (not before the first or
+  after the last: titles and credits) gets one "quiet" window: the exchange
+  leading into it, back to a 3s pause and at most 15s, through the line after it
+  if within 8s; kept inside its scene and the length bounds; longest stretches
+  first, at most 6 a source.
+- Quiet windows skip the transcript scorer and the silence filter, are always
+  watched (D67), and are dropped if they couldn't be watched. Selected ones are
+  cut as found: refinement would snap them to sentences and trim the silence.
+- On the saved Chad Powers ep. 4 transcript the field scene is the first quiet
+  window (25:12-26:01, 49s, "Tell me to walk away..." through the look);
+  Adults ep. 1, all dialogue, gets none. Not yet run end to end: the episode
+  files need re-adding for the before/after (D67).
