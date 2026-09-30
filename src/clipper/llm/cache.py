@@ -81,6 +81,10 @@ class LLMCache:
         self.hits += 1
         return entry
 
+    def forget(self, key: str) -> None:
+        """Drop one entry, e.g. an answer that turned out unusable."""
+        self._path(key).unlink(missing_ok=True)
+
     def put(self, key: str, *, text: str, model: str,
             prompt_tokens: int = 0, output_tokens: int = 0) -> None:
         if not self.enabled:

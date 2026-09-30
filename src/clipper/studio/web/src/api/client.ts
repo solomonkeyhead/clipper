@@ -87,24 +87,6 @@ export function useSetNote() {
   });
 }
 
-export function useSetSubmitted() {
-  const qc = useQueryClient();
-  const invalidate = useInvalidate();
-  return useMutation({
-    mutationFn: ({ url, submitted }: { url: string; submitted: boolean }) =>
-      unwrap(api.PUT("/api/posts/submitted", { body: { url, submitted } })),
-    onMutate: async ({ url, submitted }) => {
-      await qc.cancelQueries({ queryKey: keys.posts });
-      const previous = qc.getQueryData<Post[]>(keys.posts);
-      qc.setQueryData<Post[]>(keys.posts, (old) =>
-        old?.map((p) => (p.url === url ? { ...p, submitted_at: submitted ? "now" : null } : p)));
-      return { previous };
-    },
-    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.posts, context.previous),
-    onSettled: invalidate,
-  });
-}
-
 export function useSetCampaign() {
   const invalidate = useInvalidate();
   return useMutation({
@@ -371,6 +353,23 @@ export const checkFound = async (key: string) =>
   (await unwrap(api.POST("/api/found/{key}/check", { params: { path: { key } } }))) as unknown as CampaignCheck;
 export const dismissFound = (key: string) =>
   unwrap(api.POST("/api/found/{key}/dismiss", { params: { path: { key } } }));
+
+/* ---------- campaign alerts (Discord) ---------- */
+
+export type Alerts = components["schemas"]["Alerts"];
+export type DiscordBot = components["schemas"]["DiscordBot"];
+export type AlertCheck = components["schemas"]["AlertCheck"];
+
+export const useAlerts = () => useQuery({ queryKey: ["alerts"], queryFn: () => unwrap(api.GET("/api/alerts")) });
+/** Asks Discord, so only while the setup is open. */
+export const useDiscordBot = (enabled: boolean) =>
+  useQuery({ queryKey: ["alerts", "discord"], enabled, retry: false, staleTime: 30_000,
+             queryFn: () => unwrap(api.GET("/api/alerts/discord")) });
+export const watchChannels = (ids: string[]) => unwrap(api.PUT("/api/alerts/channels", { body: { ids } }));
+export const saveAlertPrefs = (profile: string, min_rate: number) =>
+  unwrap(api.PUT("/api/alerts/prefs", { body: { profile, min_rate } }));
+export const checkAlerts = () => unwrap(api.POST("/api/alerts/check"));
+export const testAlertPush = () => unwrap(api.POST("/api/alerts/test-push"));
 
 /** Open the New campaign form already filled in (read once by CampaignEditor). */
 export function prefillCampaign(value: { form?: CampaignForm; title?: string; brief?: string }) {

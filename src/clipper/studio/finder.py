@@ -1,8 +1,9 @@
-"""Finding campaigns: what the campaign watcher found, and a fit check for any brief.
+"""Finding campaigns: what the campaign alerts found, and a fit check for any brief.
 
-The watcher (clipper.watch) reads new-campaign emails and records each campaign
-it finds here; the Campaigns page lists them. "Check a campaign" reads a pasted
-brief (campaign/editor.read_brief) and compares it with the user's own record:
+The alerts (Discord channels the user follows, studio/alerts.py, and the older
+email watcher, clipper.watch) record each campaign they find here; the
+Campaigns page lists them. "Check a campaign" reads a pasted brief
+(campaign/editor.read_brief) and compares it with the user's own record:
 their connected platforms, the kinds of footage they've clipped, and their
 median views -- plain checks the page can explain, not a second opinion from
 the model. Nothing here visits Whop's or Vyro's sites (their terms forbid it).
@@ -22,18 +23,19 @@ PLATFORM_NAME = {"tiktok": "TikTok", "instagram_reels": "Instagram Reels",
                  "youtube_shorts": "YouTube Shorts"}
 
 
-def record_found(verdict, brief: str) -> None:
-    """Keep one campaign the watcher found (a watch.judge.Verdict)."""
+def record_found(verdict, brief: str, *, via: str = "email") -> bool:
+    """Keep one campaign an alert found (a watch.judge.Verdict). True if it's new."""
     from ..watch.watcher import campaign_key
 
     with db.connect() as con:
-        con.execute(
+        return con.execute(
             "INSERT INTO found_campaigns (key, source, name, owner, rate, rate_per_1k_usd, platforms, "
-            "budget, deadline, link, fit, why, brief, found_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(key) DO NOTHING",
+            "budget, deadline, link, fit, why, brief, found_at, via) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(key) DO NOTHING",
             (campaign_key(verdict), verdict.source, verdict.name, verdict.owner, verdict.rate,
              verdict.rate_per_1k_usd or None, json.dumps(verdict.platforms), verdict.budget,
-             verdict.deadline, verdict.link, verdict.fit, verdict.why, brief[:20_000], db.now()))
+             verdict.deadline, verdict.link, verdict.fit, verdict.why, brief[:20_000], db.now(),
+             via)).rowcount > 0
 
 
 def found(include_dismissed: bool = False) -> list[dict]:

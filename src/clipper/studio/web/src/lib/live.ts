@@ -48,6 +48,11 @@ export function useLiveUpdates() {
           [item, ...old.filter((i) => i.id !== item.id)].sort((a, b) => b.id - a.id));
       });
       source.addEventListener("sources.changed", () => qc.invalidateQueries({ queryKey: ["sources"] }));
+      source.addEventListener("found.changed", () => {
+        void qc.invalidateQueries({ queryKey: ["found"] });
+        void qc.invalidateQueries({ queryKey: ["alerts"], exact: true });
+      });
+      source.addEventListener("alerts.changed", () => qc.invalidateQueries({ queryKey: ["alerts"], exact: true }));
       source.addEventListener("settings.changed", () => {
         qc.invalidateQueries({ queryKey: keys.settings });
         qc.invalidateQueries({ queryKey: keys.status });

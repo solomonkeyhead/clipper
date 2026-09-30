@@ -7,6 +7,7 @@ import {
   checkCampaign, checkFound, dismissFound, prefillCampaign, useFound,
   type CampaignCheck, type FoundCampaign,
 } from "@/api/client";
+import { CampaignAlerts } from "@/components/alerts";
 import { TextArea } from "@/components/form";
 import { Button, Card, Chip } from "@/components/ui";
 import { ago, cn } from "@/lib/utils";
@@ -110,7 +111,8 @@ function FoundRow({ found }: { found: FoundCampaign }) {
           <div className="text-sm font-semibold">{found.name || "Unnamed campaign"}</div>
           <div className="text-xs text-muted">
             {[found.source !== "other" && found.source[0].toUpperCase() + found.source.slice(1), found.rate,
-              found.platforms.join(", "), `found ${ago(found.found_at)}`].filter(Boolean).join(" · ")}
+              found.platforms.join(", "), `found ${ago(found.found_at)}${found.via === "discord" ? " on Discord" : " by email"}`]
+              .filter(Boolean).join(" · ")}
           </div>
           {found.why && <p className="mt-1 text-xs text-muted">{found.why}</p>}
         </div>
@@ -137,6 +139,8 @@ function FoundRow({ found }: { found: FoundCampaign }) {
 export function FindCampaigns() {
   const { data: found = [] } = useFound();
   return (
+    <>
+    <CampaignAlerts />
     <div className={cn("mb-6 grid gap-4", found.length > 0 && "lg:grid-cols-2")}>
       <CheckBox />
       {found.length > 0 && (
@@ -146,5 +150,6 @@ export function FindCampaigns() {
         </Card>
       )}
     </div>
+    </>
   );
 }

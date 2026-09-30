@@ -74,6 +74,15 @@ CREATE TABLE IF NOT EXISTS jobs (
     data        TEXT NOT NULL,            -- the finished job, with its results report
     finished    TEXT NOT NULL
 );
+-- Discord channels the campaign alerts read (studio/alerts.py), in the user's own server.
+CREATE TABLE IF NOT EXISTS discord_channels (
+    id          TEXT PRIMARY KEY,
+    guild_id    TEXT NOT NULL,
+    guild       TEXT NOT NULL DEFAULT '',
+    name        TEXT NOT NULL DEFAULT '',
+    last_id     TEXT,                     -- newest message already read
+    added_at    TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS found_campaigns (
     key         TEXT PRIMARY KEY,         -- watch.watcher.campaign_key
     source      TEXT NOT NULL DEFAULT '',
@@ -125,6 +134,12 @@ DEFAULT_SETTINGS = {
     # Which plan's features are on (studio/plans.py). A local install is the
     # owner's, so everything; a hosted version would set this per account.
     "plan": "pro",
+    # Campaign alerts (studio/alerts.py): what the user clips, for the fit judge
+    # ("" = config's watch.profile), the lowest pay worth an alert, and the last check.
+    "alert_profile": "",
+    "alert_min_rate": "",
+    "alerts_checked": "",
+    "alerts_error": "",
 }
 
 
@@ -141,6 +156,8 @@ MIGRATIONS = [
     ("clips", "evidence", "ALTER TABLE clips ADD COLUMN evidence TEXT"),
     # Marked posted at: syncs run every 2 minutes until this passes or the post is found.
     ("clips", "watch_until", "ALTER TABLE clips ADD COLUMN watch_until TEXT"),
+    # Where a found campaign came from: "email" or "discord".
+    ("found_campaigns", "via", "ALTER TABLE found_campaigns ADD COLUMN via TEXT NOT NULL DEFAULT 'email'"),
 ]
 TRASH_DAYS = 30
 

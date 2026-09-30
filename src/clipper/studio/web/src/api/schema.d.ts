@@ -190,6 +190,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Alerts */
+        get: operations["get_alerts_api_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/discord": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discord Bot
+         * @description The bot behind the token, and every channel it can read (asks Discord).
+         */
+        get: operations["discord_bot_api_alerts_discord_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Watch Channels */
+        put: operations["watch_channels_api_alerts_channels_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Alert Prefs */
+        put: operations["alert_prefs_api_alerts_prefs_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Alerts
+         * @description Check the watched channels now, rather than at the next scheduled check.
+         */
+        post: operations["check_alerts_api_alerts_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/alerts/test-push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Alert Test Push */
+        post: operations["alert_test_push_api_alerts_test_push_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/found/{key}/dismiss": {
         parameters: {
             query?: never;
@@ -256,23 +364,6 @@ export interface paths {
         /** Posts */
         get: operations["posts_api_posts_get"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/posts/submitted": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Mark Submitted */
-        put: operations["mark_submitted_api_posts_submitted_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -872,6 +963,74 @@ export interface components {
             /** Expires In Days */
             expires_in_days?: number | null;
         };
+        /** AlertChannel */
+        AlertChannel: {
+            /** Id */
+            id: string;
+            /** Guild Id */
+            guild_id: string;
+            /** Guild */
+            guild: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @default text
+             */
+            kind: string;
+        };
+        /** AlertCheck */
+        AlertCheck: {
+            /**
+             * Busy
+             * @default false
+             */
+            busy: boolean;
+            /**
+             * Read
+             * @default 0
+             */
+            read: number;
+            /**
+             * Campaigns
+             * @default 0
+             */
+            campaigns: number;
+            /**
+             * New
+             * @default []
+             */
+            new: string[];
+            /**
+             * Pushed
+             * @default 0
+             */
+            pushed: number;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: string[];
+        };
+        /** Alerts */
+        Alerts: {
+            /** Token Set */
+            token_set: boolean;
+            /** Watched */
+            watched: components["schemas"]["AlertChannel"][];
+            /** Checked At */
+            checked_at: string;
+            /** Error */
+            error: string;
+            /** Push Set */
+            push_set: boolean;
+            /** Every Minutes */
+            every_minutes: number;
+            /** Profile */
+            profile: string;
+            /** Min Rate */
+            min_rate: number;
+        };
         /** Band */
         Band: {
             /** Label */
@@ -1203,6 +1362,19 @@ export interface components {
             /** Agreement */
             agreement?: number | null;
         };
+        /** DiscordBot */
+        DiscordBot: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Content Intent */
+            content_intent: boolean;
+            /** Invite */
+            invite: string;
+            /** Channels */
+            channels: components["schemas"]["AlertChannel"][];
+        };
         /** Duplicate */
         Duplicate: {
             /** Id */
@@ -1262,6 +1434,11 @@ export interface components {
             found_at: string;
             /** Dismissed */
             dismissed: number;
+            /**
+             * Via
+             * @default email
+             */
+            via: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1944,6 +2121,158 @@ export interface operations {
             };
         };
     };
+    get_alerts_api_alerts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+        };
+    };
+    discord_bot_api_alerts_discord_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscordBot"];
+                };
+            };
+        };
+    };
+    watch_channels_api_alerts_channels_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    alert_prefs_api_alerts_prefs_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_alerts_api_alerts_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertCheck"];
+                };
+            };
+        };
+    };
+    alert_test_push_api_alerts_test_push_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     dismiss_found_api_found__key__dismiss_post: {
         parameters: {
             query?: never;
@@ -2129,43 +2458,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Post"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    mark_submitted_api_posts_submitted_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
             /** @description Validation Error */

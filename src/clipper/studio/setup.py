@@ -29,6 +29,8 @@ KEYS = {
     "TIKTOK_CLIENT_KEY": "Your TikTok developer app's client key",
     "TIKTOK_CLIENT_SECRET": "Your TikTok developer app's client secret",
     "TAVILY_API_KEY": "Tavily (free): live web search for the Ask chat",
+    "DISCORD_BOT_TOKEN": "Your Discord bot's token: reads the campaign channels you follow",
+    "NTFY_TOPIC": "Your ntfy topic: campaign alerts on your phone",
 }
 
 
