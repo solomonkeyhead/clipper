@@ -28,11 +28,13 @@ const PLATFORMS: [string, string][] = [
   ["tiktok", "TikTok"], ["instagram_reels", "Instagram Reels"], ["youtube_shorts", "YouTube Shorts"],
 ];
 
+/** A value the brief actually gave (not empty, not the blank form's default). */
+const given = (key: keyof CampaignForm, v: unknown) =>
+  v !== null && v !== "" && !(Array.isArray(v) && v.length === 0) && JSON.stringify(v) !== JSON.stringify(BLANK[key]);
+
 /** How many fields the brief filled, to tell the user what to check. */
 function filled(form: CampaignForm) {
-  return Object.entries(form).filter(([key, v]) =>
-    v !== null && v !== "" && !(Array.isArray(v) && v.length === 0) &&
-    JSON.stringify(v) !== JSON.stringify(BLANK[key as keyof CampaignForm])).length;
+  return Object.entries(form).filter(([key, v]) => given(key as keyof CampaignForm, v)).length;
 }
 
 /** A new campaign handed over from Research ({title, brief}); read once. */
@@ -46,7 +48,9 @@ function takePrefill(): { title?: string; brief?: string; form?: CampaignForm } 
   }
 }
 
-function BriefReader({ onRead, initial = "" }: { onRead: (form: CampaignForm) => void; initial?: string }) {
+function BriefReader({ onRead, initial = "", from }: {
+  onRead: (form: CampaignForm) => void; initial?: string; from?: CampaignForm;
+}) {
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const read = async () => {
@@ -68,16 +72,26 @@ function BriefReader({ onRead, initial = "" }: { onRead: (form: CampaignForm) =>
         <h2 className="flex items-center gap-2 text-md font-semibold">
           <Sparkles className="size-4 text-accent" /> Fastest way: paste the brief
         </h2>
-        <p className="mt-0.5 text-sm text-muted">
-          Copy the campaign's whole page from Content Rewards, Vyro or wherever it's posted, paste it here, and
-          Clipper fills in the form for you. It skips passwords and footage links.
-        </p>
+        {from ? (
+          <p className="mt-0.5 text-sm text-muted">
+            The alert only had the pay and platforms. Open{" "}
+            {from.campaign_url ? (
+              <a href={from.campaign_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">the campaign page</a>
+            ) : "the campaign's page"}
+            , copy the whole brief, and paste it here to fill in its rules. What's already filled in stays unless the brief says otherwise.
+          </p>
+        ) : (
+          <p className="mt-0.5 text-sm text-muted">
+            Copy the campaign's whole page from Content Rewards, Vyro or wherever it's posted, paste it here, and
+            Clipper fills in the form for you. It skips passwords and footage links.
+          </p>
+        )}
       </div>
       <TextArea rows={5} value={text} onChange={(e) => setText(e.target.value)}
                 placeholder="Paste the campaign brief here…" aria-label="Campaign brief" />
       <div className="flex items-center justify-end gap-3">
         {busy && <span className="text-xs text-muted">Reading the brief (about 10 seconds)…</span>}
-        <Button variant="primary" disabled={busy || text.trim().length < 40} onClick={() => void read()}>
+        <Button type="button" variant="primary" disabled={busy || text.trim().length < 40} onClick={() => void read()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
           Fill in the form
         </Button>
@@ -112,7 +126,15 @@ export function CampaignEditorPage() {
     setForm((f) => ({ ...f, [key]: value }));
 
   const fromBrief = (read: CampaignForm) => {
-    setForm((f) => ({ ...read, name: f.name, title: read.title || f.title }));
+    // The brief fills what it gives; anything it doesn't (an alert's pay or link,
+    // or what the user typed) is kept.
+    setForm((f) => {
+      const next = { ...f };
+      for (const key of Object.keys(read) as (keyof CampaignForm)[]) {
+        if (given(key, read[key])) (next as Record<string, unknown>)[key] = read[key];
+      }
+      return { ...next, name: f.name, title: read.title || f.title };
+    });
     setMarket(MARKETS.includes(read.marketplace) ? read.marketplace : read.marketplace ? "other" : market);
   };
 
@@ -147,7 +169,7 @@ export function CampaignEditorPage() {
           "Tell Clipper about a campaign you've joined, so it clips and captions to that campaign's rules."} />
 
       <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        {!editing && !prefill.form && <BriefReader onRead={fromBrief} initial={prefill.brief} />}
+        {!editing && <BriefReader onRead={fromBrief} initial={prefill.brief} from={prefill.form} />}
 
         <Section title="The basics">
           <Field label="Campaign name" hint={editing ? "Rename it any time; its clips stay with it." : "What you'll call it in Clipper, e.g. \"Chad Powers S2\"."}>

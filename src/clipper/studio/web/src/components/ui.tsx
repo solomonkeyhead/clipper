@@ -14,6 +14,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 }>(({ variant = "secondary", size = "md", className, ...props }, ref) => (
   <button
     ref={ref}
+    // Not a form's submit unless it says so: a helper button inside a form
+    // ("Fill in the form") once saved the campaign it was meant to fill.
+    type="button"
     className={cn(
       "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-medium",
       "transition-[background-color,border-color,color,transform] duration-[var(--dur-fast)] ease-standard",
