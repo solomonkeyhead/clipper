@@ -621,9 +621,9 @@ export function ClipSheet() {
                   {clip.status === "ready" && <NotGoodButton clip={clip} size="md" />}
                 </div>
 
-                {clip.status === "ready" && <PostPanel clip={clip} />}
+                {clip.status === "ready" && <PostPanel key={clip.id} clip={clip} />}
 
-                {clip.caption && <CaptionSection clip={clip} />}
+                {clip.caption && <CaptionSection key={clip.id} clip={clip} />}
 
                 <section>
                   <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Your rating</h3>
@@ -640,7 +640,7 @@ export function ClipSheet() {
                   {clip.posts.length ? (
                     <div className="flex flex-col gap-2">
                       {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} />)}
-                      <PasteLink clip={clip} compact />
+                      <PasteLink key={clip.id} clip={clip} compact />
                     </div>
                   ) : (
                     <div className="flex flex-col gap-2 rounded-md border border-dashed border-line p-3">
@@ -650,7 +650,7 @@ export function ClipSheet() {
                           ? "Looking for your post every 2 minutes for the next half hour, so you can submit it fast."
                           : "Not posted yet. Press Mark posted once it's up and Clipper finds it within minutes, or paste its link."}
                       </p>
-                      <PasteLink clip={clip} />
+                      <PasteLink key={clip.id} clip={clip} />
                     </div>
                   )}
                 </section>

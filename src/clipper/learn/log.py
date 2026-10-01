@@ -123,8 +123,29 @@ def campaign_links(rows: list[dict[str, str]], campaign: str, *, since: str | No
     return sorted(out)
 
 
+#: The last read of each log file, by its size and modification time: the
+#: Control Center reads it on every page load, and parsing the workbook is
+#: most of that time. Callers change the rows they get, so each gets a copy.
+_cache: dict[Path, tuple[tuple[int, int], list[dict[str, str]]]] = {}
+
+
 def read(path: Path | None = None) -> list[dict[str, str]]:
     path = path or log_path()
+    try:
+        stat = path.stat()
+        stamp = (stat.st_mtime_ns, stat.st_size)
+    except OSError:
+        stamp = None
+    cached = _cache.get(path)
+    if stamp is not None and cached and cached[0] == stamp:
+        return [dict(r) for r in cached[1]]
+    rows = _read(path)
+    if stamp is not None:
+        _cache[path] = (stamp, [dict(r) for r in rows])
+    return rows
+
+
+def _read(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         legacy = path.with_suffix(".csv")
         if path.suffix == ".xlsx" and legacy.exists():

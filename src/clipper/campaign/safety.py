@@ -22,6 +22,7 @@ change, and subtitles follow the campaign's own `mask_profanity_in_captions`.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from ..config import CampaignConfig
 
@@ -46,6 +47,7 @@ tranny trannies dyke dykes chink chinks spic spics kike kikes
 #: Flagged phrases whose words are fine alone.
 PHRASES = ("kill myself", "kill yourself", "killing myself", "self harm", "self-harm", "jerk off", "jerking off")
 
+_PHRASES = [re.compile(rf"(?<!\w){re.escape(p)}(?!\w)", re.IGNORECASE) for p in PHRASES]
 _WORD = re.compile(r"(?<![@#\w/.])[A-Za-z]+(?:'[A-Za-z]+)?")
 _VOWELS = "aeiouAEIOU"
 
@@ -62,14 +64,18 @@ def _heavy(word: str) -> str:
     return word[0] + "*" * (len(word) - 1)
 
 
-def exempt(campaign: CampaignConfig | None) -> set[str]:
+def exempt(campaign: CampaignConfig | None) -> frozenset[str]:
     """Words the campaign itself uses, which stay as the brief writes them."""
     if campaign is None:
-        return set()
-    texts = [campaign.title, campaign.name.replace("-", " "), campaign.required_caption_text,
-             campaign.required_credit_text, *campaign.required_hashtags, *campaign.description_keywords,
-             *(r.text for r in campaign.caption_rules if r.must == "include")]
-    return {w.lower() for t in texts for w in re.findall(r"[A-Za-z]+", t or "")}
+        return frozenset()
+    return _words((campaign.title, campaign.name.replace("-", " "), campaign.required_caption_text,
+                   campaign.required_credit_text, *campaign.required_hashtags, *campaign.description_keywords,
+                   *(r.text for r in campaign.caption_rules if r.must == "include")))
+
+
+@lru_cache(maxsize=64)
+def _words(texts: tuple[str, ...]) -> frozenset[str]:
+    return frozenset(w.lower() for t in texts for w in re.findall(r"[A-Za-z]+", t or ""))
 
 
 def flagged(word: str) -> bool:
@@ -87,8 +93,8 @@ def clean(text: str, campaign: CampaignConfig | None = None) -> str:
         words = match.group(0).split(" ")
         return " ".join([_light(words[0]), *words[1:]]) if words[0].lower() not in keep else match.group(0)
 
-    for p in PHRASES:
-        text = re.sub(rf"(?<!\w){re.escape(p)}(?!\w)", phrase, text, flags=re.IGNORECASE)
+    for pattern in _PHRASES:
+        text = pattern.sub(phrase, text)
 
     def word(match: re.Match[str]) -> str:
         w = match.group(0)

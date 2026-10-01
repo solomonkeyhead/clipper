@@ -73,9 +73,11 @@ def texts(clip: dict, campaign: CampaignConfig) -> list[rules.PostText]:
     return rules.post_texts(clip["title"] or "", clip["caption"] or "", clip["hook"] or "", campaign)
 
 
-def audit_key(clip: dict, campaign: CampaignConfig, brief: str | None) -> tuple[str, str]:
-    """(the AI check's prompt for this clip, its key)."""
-    user = audit.build_user(audit.brief_text(campaign, brief), texts(clip, campaign), clip["hook"] or "",
+def audit_key(clip: dict, campaign: CampaignConfig, brief: str | None,
+              posts: list[rules.PostText] | None = None) -> tuple[str, str]:
+    """(the AI check's prompt for this clip, its key). `posts`: its texts, if already worked out."""
+    posts = texts(clip, campaign) if posts is None else posts
+    user = audit.build_user(audit.brief_text(campaign, brief), posts, clip["hook"] or "",
                             audit.code_checked(campaign))
     return user, audit.key(user)
 

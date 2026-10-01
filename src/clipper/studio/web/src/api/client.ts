@@ -2,7 +2,7 @@ import createClient from "openapi-fetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components, paths } from "./schema";
 
-export const api = createClient<paths>({ baseUrl: "" });
+const api = createClient<paths>({ baseUrl: "" });
 
 export type Clip = components["schemas"]["Clip"];
 export type Post = components["schemas"]["Post"];
@@ -331,8 +331,6 @@ export function useRateClip() {
     onSettled: () => { invalidate(); qc.invalidateQueries({ queryKey: ["learning"] }); },
   });
 }
-
-export const RATING_WORDS = ["", "Bad", "Weak", "OK", "Good", "Great"];
 
 /** The brief as pasted, kept whole for Ask (D76). */
 export const useCampaignBrief = (name: string | undefined) =>

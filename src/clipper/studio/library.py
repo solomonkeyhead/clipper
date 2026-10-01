@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..paths import data_root, ensure
+from ..paths import data_root, ensure, runs_dir
 from ..utils.cache import slugify
 from ..utils.logging import get_logger
 from . import db
@@ -50,7 +50,12 @@ def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignC
             plan = record.plan
             slug = slugify(plan.hook_text or plan.text, max_length=40)
             name = f"{plan.clip_id}_{slug}_{info.source_id[:6]}.mp4"
-            shutil.copy2(record.file, folder / name)
+            # From Clipper's own work area it moves: a second copy there was ~640 MB
+            # of duplicates after a week. A folder the user chose keeps its copy.
+            if record.file.resolve().is_relative_to(runs_dir().resolve()):
+                shutil.move(record.file, folder / name)
+            else:
+                shutil.copy2(record.file, folder / name)
             ids.append(db.upsert_clip(con, {
                 "campaign": campaign.name, "source_id": info.source_id,
                 "clip_id": plan.clip_id, "source_title": info.title or "",

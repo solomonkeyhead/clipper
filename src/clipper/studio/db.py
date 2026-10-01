@@ -192,17 +192,25 @@ def db_path() -> Path:
     return data_root() / "clipper.db"
 
 
+#: Database files whose schema this process has brought up to date.
+_ready: set[Path] = set()
+
+
 @contextmanager
 def connect(path: Path | None = None):
     path = path or db_path()
-    ensure(path.parent)
-    con = sqlite3.connect(path, timeout=10)
+    fresh = path not in _ready or not path.exists()  # a file replaced since gets its schema again
+    con = sqlite3.connect(ensure(path.parent) / path.name, timeout=10)
     con.row_factory = sqlite3.Row
     try:
-        con.executescript(SCHEMA)
-        for table, column, sql in MIGRATIONS:
-            if column not in {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}:
-                con.execute(sql)
+        if fresh:
+            con.execute("PRAGMA journal_mode=WAL")
+            con.executescript(SCHEMA)
+            for table, column, sql in MIGRATIONS:
+                if column not in {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}:
+                    con.execute(sql)
+            con.commit()
+            _ready.add(path)
         yield con
         con.commit()
     finally:

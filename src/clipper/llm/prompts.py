@@ -157,7 +157,6 @@ not a list of topics to require or avoid:
 
 PROMPT_A = PromptVariant("a", PROMPT_A_SYSTEM)
 PROMPT_B = PromptVariant("b", PROMPT_B_SYSTEM)
-VARIANTS = {"a": PROMPT_A, "b": PROMPT_B}
 
 
 def build_user_message(

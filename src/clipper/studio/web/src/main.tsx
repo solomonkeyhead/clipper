@@ -1,26 +1,29 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  createRootRoute, createRoute, createRouter, redirect, RouterProvider,
+  createRootRoute, createRoute, createRouter, lazyRouteComponent, redirect, RouterProvider,
 } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import { AppShell } from "./components/AppShell";
 import { useUI } from "./lib/store";
-import { CampaignEditorPage } from "./pages/CampaignEditor";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
-import { LearningPage } from "./pages/LearningPage";
 import { NewClipsPage } from "./pages/NewClipsPage";
-import { AccountsPage, SettingsPage } from "./pages/SettingsPages";
-import { StatsPage } from "./pages/StatsPage";
 import { ClipsPage, type ClipFilter } from "./pages/WorkPages";
 import "./styles.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 } },
 });
+
+// Pages opened now and then load when first opened, keeping the first screen quick.
+const CampaignEditorPage = lazyRouteComponent(() => import("./pages/CampaignEditor"), "CampaignEditorPage");
+const LearningPage = lazyRouteComponent(() => import("./pages/LearningPage"), "LearningPage");
+const AccountsPage = lazyRouteComponent(() => import("./pages/SettingsPages"), "AccountsPage");
+const SettingsPage = lazyRouteComponent(() => import("./pages/SettingsPages"), "SettingsPage");
+const StatsPage = lazyRouteComponent(() => import("./pages/StatsPage"), "StatsPage");
 
 const root = createRootRoute({ component: AppShell });
 const routes = [

@@ -93,7 +93,7 @@ export function PostPanel({ clip }: { clip: Clip }) {
         {(campaign?.posting_rules?.length ?? 0) > 0 && (
           <li className="flex gap-2">
             <span className="w-5 shrink-0 text-muted">3.</span>
-            <Checklist rules={campaign!.posting_rules!} id={clip.id} />
+            <Checklist rules={campaign!.posting_rules!} />
           </li>
         )}
         <li className="flex gap-2">
@@ -213,10 +213,10 @@ function Problem({ problem, campaign }: { problem: BriefProblem; campaign: strin
 }
 
 /** The brief's rules only the poster can follow; ticks last while the clip is open. */
-function Checklist({ rules, id }: { rules: string[]; id: number }) {
+function Checklist({ rules }: { rules: string[] }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   return (
-    <div className="flex flex-col gap-1" key={id}>
+    <div className="flex flex-col gap-1">
       <span className="text-muted">While posting, the brief also says:</span>
       {rules.map((r) => (
         <label key={r} className="flex cursor-pointer items-start gap-2 text-sm">

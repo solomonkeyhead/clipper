@@ -48,7 +48,7 @@ class FFmpegError(RuntimeError):
         super().__init__(message)
         self.returncode = returncode
         self.stderr = stderr
-        self.args_run = args
+        self.args_run = args  # the command, for whoever catches it
 
 
 def _search_fallbacks(name: str) -> Path | None:

@@ -410,17 +410,32 @@ def campaigns_dir() -> Path:
     return REPO_ROOT / "campaigns"
 
 
+#: Each campaign file as last parsed, by its modification time (they're read on
+#: every page load; campaigns are frozen, so sharing them is safe).
+_campaign_cache: dict[Path, tuple[int, CampaignConfig | None]] = {}
+
+
 def load_campaigns() -> dict[str, CampaignConfig]:
     out = {}
     for path in sorted(campaigns_dir().glob("*.yaml")):
         if path.name == "example.yaml":  # the template, not a campaign
             continue
         try:
-            campaign = CampaignConfig.load(path)
-        except (ValueError, OSError, yaml.YAMLError) as exc:  # one bad file mustn't hide the rest
-            log.warning("skipping %s: %s", path.name, exc)
+            stamp = path.stat().st_mtime_ns
+        except OSError:
             continue
-        out[campaign.name] = campaign
+        cached = _campaign_cache.get(path)
+        if cached and cached[0] == stamp:
+            campaign = cached[1]
+        else:
+            try:
+                campaign = CampaignConfig.load(path)
+            except (ValueError, OSError, yaml.YAMLError) as exc:  # one bad file mustn't hide the rest
+                log.warning("skipping %s: %s", path.name, exc)
+                campaign = None
+            _campaign_cache[path] = (stamp, campaign)
+        if campaign is not None:
+            out[campaign.name] = campaign
     return out
 
 
@@ -540,7 +555,7 @@ class Snapshot:
         copy = [PostCopy(platform=t.platform, title=t.title, caption=t.caption,
                          checks=[RuleCheck(name=r.name, passed=r.passed, detail=r.detail) for r in t.checks])
                 for t in texts]
-        _, key = rulecheck.audit_key(clip, campaign, self.briefs.get(campaign.name))
+        _, key = rulecheck.audit_key(clip, campaign, self.briefs.get(campaign.name), texts)
         found = rulecheck.stored(clip) or {}
         current = found.get("key") == key
         return copy, Rules(failed=caption_rules.summary(texts), checked=current and not found.get("refused"),

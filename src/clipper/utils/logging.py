@@ -8,6 +8,7 @@ scrolled off the terminal is still recoverable.
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import sys
 from pathlib import Path
 
@@ -21,6 +22,8 @@ console = Console(stderr=True)
 
 _LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)-28s %(message)s"
 _configured = False
+#: clipper.log is cut at this size, keeping this many older files (clipper.log.1, ...).
+LOG_BYTES, LOG_BACKUPS = 5_000_000, 3
 
 
 def setup_logging(verbose: bool = False, *, log_file: Path | None = None) -> Path:
@@ -48,7 +51,9 @@ def setup_logging(verbose: bool = False, *, log_file: Path | None = None) -> Pat
     root.addHandler(console_handler)
 
     try:
-        file_handler = logging.FileHandler(path, encoding="utf-8")
+        # Rotated: the Control Center runs for weeks and logs at DEBUG.
+        file_handler = logging.handlers.RotatingFileHandler(
+            path, maxBytes=LOG_BYTES, backupCount=LOG_BACKUPS, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
         root.addHandler(file_handler)

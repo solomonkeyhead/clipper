@@ -110,17 +110,7 @@ def run(
     rejected_dir = out_dir / "rejected"
     work = ensure(out_dir / "work")
 
-    corrector = None
-    recheck = None
-    if config.llm.correct_captions:
-        try:
-            corrector = _correction_backends(config, backend_override)
-        except Exception as exc:  # no key, backend not installed, ...
-            log.warning("caption correction disabled: %s", exc)
-        audio = Path(outcome.info.audio_path) if outcome.info.audio_path else None
-        if corrector and audio and audio.exists():
-            # Loads Whisper only if some proposal survives the text checks.
-            recheck = AudioRecheck(audio, config.transcription)
+    corrector, recheck = _correction(config, backend_override, outcome.info)
 
     render_started = time.perf_counter()
     _render_with_replacement(
@@ -206,16 +196,7 @@ def cut(
     clips_dir = ensure(out_dir / "clips")
     work = ensure(out_dir / "work")
 
-    corrector = None
-    recheck = None
-    if config.llm.correct_captions:
-        try:
-            corrector = _correction_backends(config, backend_override)
-        except Exception as exc:  # no key, backend not installed, ...
-            log.warning("caption correction disabled: %s", exc)
-        audio = Path(info.audio_path) if info.audio_path else None
-        if corrector and audio and audio.exists():
-            recheck = AudioRecheck(audio, config.transcription)
+    corrector, recheck = _correction(config, backend_override, info)
 
     audio = Path(info.audio_path) if info.audio_path else None
     listener = recheck or (AudioRecheck(audio, config.transcription)
@@ -937,6 +918,20 @@ def _description(plan: ClipPlan, words: list[Word], campaign: CampaignConfig,
             log.warning("no description: %s", exc)
             return ""
     return describe(text, campaign, plan.suggested_caption, backends)
+
+
+def _correction(config: Config, override: str | None, info) -> tuple[list[LLMBackend] | None, AudioRecheck | None]:
+    """The caption corrector and its audio re-listener, if correction is on and possible."""
+    if not config.llm.correct_captions:
+        return None, None
+    try:
+        corrector = _correction_backends(config, override)
+    except Exception as exc:  # no key, backend not installed, ...
+        log.warning("caption correction disabled: %s", exc)
+        return None, None
+    audio = Path(info.audio_path) if info.audio_path else None
+    # Loads Whisper only if some proposal survives the text checks.
+    return corrector, (AudioRecheck(audio, config.transcription) if audio and audio.exists() else None)
 
 
 def _correction_backends(config: Config, override: str | None) -> list[LLMBackend]:

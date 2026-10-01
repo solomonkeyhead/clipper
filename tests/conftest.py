@@ -44,6 +44,15 @@ def _no_watching_unless_asked(monkeypatch: pytest.MonkeyPatch, request: pytest.F
     monkeypatch.setattr(pipeline, "_watch", lambda *a, **k: None)
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _log_to_a_temporary_file(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Logging is configured once per process; configured first here, a test
+    run's lines go to a temporary file instead of the user's data/logs/clipper.log."""
+    from clipper.utils.logging import setup_logging
+
+    setup_logging(log_file=tmp_path_factory.mktemp("logs") / "clipper.log")
+
+
 @pytest.fixture(autouse=True)
 def _no_background_rule_checks(monkeypatch: pytest.MonkeyPatch) -> list:
     """Saving a campaign or finishing a run starts the rule check in a thread

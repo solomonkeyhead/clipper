@@ -204,8 +204,3 @@ def _recent(row: dict, cutoff: float) -> bool:
         return datetime.strptime(row.get("posted_at") or "", "%Y-%m-%d %H:%M").timestamp() >= cutoff
     except ValueError:
         return True  # no date yet: read it once more
-
-
-def status_id(url: str) -> str:
-    found = re.search(r"/status(?:es)?/(\d+)", url)
-    return found.group(1) if found else ""

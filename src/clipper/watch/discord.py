@@ -20,7 +20,6 @@ import time
 import httpx
 
 API = "https://discord.com/api/v10"
-PORTAL = "https://discord.com/developers/applications"
 #: View Channel + Read Message History: all the bot needs.
 PERMISSIONS = (1 << 10) | (1 << 16)
 #: Application flags: the Message Content intent, verified or not.

@@ -2,9 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, Copy, KeyRound, Loader2, Lock, MessageSquarePlus, Sparkles, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   askResearch, deleteThread, useResearchStatus, useSetKeys, useThread, useThreads,
@@ -33,14 +31,15 @@ function host(url: string) {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
 }
 
+const Markdown = lazy(() => import("./Markdown"));
+
 function Answer({ message }: { message: ResearchMessage }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="prose-answer text-sm leading-relaxed">
-        <Markdown remarkPlugins={[remarkGfm]}
-          components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{children}</a> }}>
-          {linkCitations(message.content, message.sources)}
-        </Markdown>
+        <Suspense fallback={<p className="whitespace-pre-wrap">{message.content}</p>}>
+          <Markdown>{linkCitations(message.content, message.sources)}</Markdown>
+        </Suspense>
       </div>
       {message.sources.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

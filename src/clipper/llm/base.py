@@ -133,7 +133,6 @@ class RateLimiter:
         self.min_interval = 60.0 / max(1, requests_per_minute)
         self._lock = threading.Lock()
         self._last = 0.0
-        self.total_waited = 0.0
 
     def acquire(self) -> float:
         """Block until the next request is allowed. Returns seconds waited."""
@@ -142,7 +141,6 @@ class RateLimiter:
             wait = max(0.0, self._last + self.min_interval - now)
             if wait > 0:
                 time.sleep(wait)
-                self.total_waited += wait
             self._last = time.monotonic()
             return wait
 

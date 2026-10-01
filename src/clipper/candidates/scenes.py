@@ -48,9 +48,6 @@ SCAN_W, SCAN_H = 128, 72
 # A frame this dark on average (0-255) is black: a fade or an act break.
 BLACK_LEVEL = 18.0
 
-# How far after the first line of a scene its opening cut may fall (the cut
-# usually precedes the line; a little slack covers transcription timing).
-CUT_AFTER_LINE = 0.35
 # A cut this long before the first line still counts even with no silence
 # recorded before it, covering a line that starts right on the cut.
 MIN_CUT_WINDOW = 1.0
