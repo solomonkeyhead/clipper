@@ -23,6 +23,8 @@ from . import safety
 from .compliance import RuleResult, _contains
 
 NAMES = {"tiktok": "TikTok", "instagram_reels": "Instagram", "youtube_shorts": "YouTube", "x": "X"}
+#: What each platform calls the text under a post, as its upload page labels it.
+TEXT_NAMES = {"tiktok": "Description", "instagram_reels": "Caption", "youtube_shorts": "Description", "x": "Post"}
 #: Platforms' own limits on a post's text.
 #: X counts 280 for an account without Premium.
 CAPTION_MAX = {"tiktok": 4000, "instagram_reels": 2200, "youtube_shorts": 5000, "x": 280}
@@ -210,8 +212,9 @@ def check(post: PostText, campaign: CampaignConfig, *, hook: str = "") -> list[R
     for rule in campaign.caption_rules:
         if not applies(rule, platform):
             continue
-        where = "Title" if in_title(rule, platform) else "Caption"
-        text = title if where == "Title" else caption
+        titled = in_title(rule, platform)
+        where = "Title" if titled else TEXT_NAMES.get(platform, "Caption")
+        text = title if titled else caption
         if rule.must == "include":
             results.append(RuleResult(f"{where} includes “{rule.text}”", _contains(text, rule.text), rule.quote))
         else:
@@ -237,7 +240,8 @@ def _limits(post: PostText) -> RuleResult:
     problems = []
     limit = CAPTION_MAX.get(post.platform)
     if limit and len(post.caption) > limit:
-        problems.append(f"the caption is {len(post.caption)} characters (most {limit})")
+        problems.append(f"the {TEXT_NAMES.get(post.platform, 'caption').lower()} is "
+                        f"{len(post.caption)} characters (most {limit})")
     if post.platform == "instagram_reels" and len(_tags_in(post.caption)) > INSTAGRAM_MAX_HASHTAGS:
         problems.append(f"more than {INSTAGRAM_MAX_HASHTAGS} hashtags")
     if has_title(post.platform):

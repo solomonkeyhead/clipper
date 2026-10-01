@@ -38,6 +38,10 @@ const UPLOAD: Record<string, { name: string; url: string; how: string; label: st
 };
 
 const key = (platform: string) => platform.split("_")[0];
+/** What each platform's upload page calls the text under a post (campaign/rules.py TEXT_NAMES). */
+const TEXT_NAME: Record<string, string> = {
+  tiktok: "description", instagram_reels: "caption", youtube_shorts: "description", x: "post",
+};
 const ORDER = Object.keys(UPLOAD);
 
 /** Download, copy each platform's text, open each platform the campaign pays for. */
@@ -101,8 +105,8 @@ function PlatformRow({ copy, onOpen }: { copy: PostCopy; onOpen: () => void }) {
           <PlatformIcon platform={copy.platform} className="size-3.5" /> {name}
         </span>
         {copy.title && <CopyButton text={copy.title} what={`${name} title`} label="Copy title" />}
-        <CopyButton text={copy.caption} what={`${name} ${copy.title ? "description" : "caption"}`}
-                    label={copy.title ? "Copy description" : "Copy caption"} />
+        <CopyButton text={copy.caption} what={`${name} ${TEXT_NAME[copy.platform] ?? "caption"}`}
+                    label={`Copy ${TEXT_NAME[copy.platform] ?? "caption"}`} />
         <Tip label={`${UPLOAD[key(copy.platform)]?.how ?? "Upload it"}. Opens in whichever account you're signed in to here.`}>
           <Button size="sm" variant="secondary" onClick={onOpen}>Open {name} <ExternalLink className="size-3" /></Button>
         </Tip>
