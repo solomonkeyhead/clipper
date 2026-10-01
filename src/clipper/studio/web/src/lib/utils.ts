@@ -62,3 +62,12 @@ export function isTyping(e: KeyboardEvent): boolean {
   if (!el) return false;
   return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
 }
+
+/** Open `url` in a new tab; false if the browser blocked it. No features string:
+ *  any (even "noopener") makes Chrome and Edge open a separate pop-up window. */
+export function openTab(url: string): boolean {
+  const tab = window.open(url, "_blank");
+  if (!tab) return false;
+  tab.opener = null; // the page it opens can't reach back into Clipper
+  return true;
+}

@@ -8,7 +8,7 @@ import {
   checkAlerts, disconnectWhop, saveAlertPrefs, startWhopConnect, testAlertPush, useAlerts, useDiscordBot,
   useSetKeys, useWhopFeeds, watchChannels, watchWhopFeeds, whopConnectState, type Alerts, type DiscordBot,
 } from "@/api/client";
-import { cn, ago } from "@/lib/utils";
+import { cn, ago, openTab } from "@/lib/utils";
 import { Field, NumberInput, Segmented, TextArea, TextInput } from "./form";
 import { Button, Card, CopyButton } from "./ui";
 
@@ -257,7 +257,7 @@ function WhopSignIn({ alerts }: { alerts: Alerts }) {
       const res = await startWhopConnect();
       if (res.state === "failed") throw new Error(res.message);
       setWaiting(true);
-      window.open(res.url, "_blank", "noopener");
+      openTab(res.url);
       window.clearInterval(poll.current);
       poll.current = window.setInterval(async () => {
         const now = await whopConnectState();

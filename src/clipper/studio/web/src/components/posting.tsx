@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   useAddCaptionRule, useAddPostLink, useCampaigns, useRecheckRules, type BriefProblem, type Clip, type PostCopy,
 } from "@/api/client";
-import { PLATFORM_NAME, cn } from "@/lib/utils";
+import { PLATFORM_NAME, cn, openTab } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
 import { Button, CopyButton, Tip } from "./ui";
 
@@ -51,7 +51,7 @@ export function PostPanel({ clip }: { clip: Clip }) {
 
   const open = (platforms: string[]) => {
     // Browsers allow one new tab per click unless the page may open pop-ups.
-    const blocked = platforms.filter((p) => !window.open(UPLOAD[p].url, "_blank", "noopener"));
+    const blocked = platforms.filter((p) => !openTab(UPLOAD[p].url));
     if (blocked.length && blocked.length < platforms.length) {
       toast.warning(`Your browser blocked ${blocked.map((p) => UPLOAD[p].name).join(" and ")}`, {
         description: "Allow pop-ups for Clipper (the icon at the end of the address bar), then press again.", duration: 9000,

@@ -12,7 +12,7 @@ import {
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
-import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney } from "@/lib/utils";
+import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney, openTab } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
@@ -115,7 +115,7 @@ function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy link &
       <Button size={size} variant="secondary" onClick={(e) => {
         e.stopPropagation();
         void copyText(post.url, `${PLATFORM_NAME[post.platform] ?? post.platform} link`);
-        window.open(campaignUrl, "_blank", "noopener");
+        openTab(campaignUrl);
       }}>
         <Send className="size-3.5" /> {label}
       </Button>

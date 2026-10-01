@@ -12,7 +12,7 @@ import { Field, TextInput } from "@/components/form";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, CopyButton, PageHeader, Skeleton, Switch } from "@/components/ui";
 import { useUI, type Theme } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { cn, openTab } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
 /* ---------- small pieces ---------- */
@@ -151,7 +151,7 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, intro
       const res = await start();
       if (res.state === "failed") throw new Error(res.message);
       setWaiting({ url: res.url });
-      window.open(res.url, "_blank", "noopener");
+      openTab(res.url);
       window.clearInterval(poll.current);
       poll.current = window.setInterval(async () => {
         const now = await state();
