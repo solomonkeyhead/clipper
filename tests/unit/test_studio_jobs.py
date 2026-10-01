@@ -113,7 +113,7 @@ def test_a_job_runs_the_pipeline_and_reports_progress(client, tmp_path, monkeypa
 
     monkeypatch.setattr(runner, "run", fake_run)
     job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video),
-                                          "mode": "top", "top": 2}).json()
+                                          "mode": "top", "top": 2}).json()[0]
     for _ in range(100):
         (latest,) = client.get("/api/jobs").json()
         if latest["status"] in ("done", "failed"):
@@ -238,7 +238,7 @@ class TestModes:
         monkeypatch.setattr(runner, "run", fake_run)
         video = tmp_path / "home_downloads" / "ep.mp4"
         video.write_bytes(b"x")
-        job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video)}).json()
+        job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video)}).json()[0]
         assert job["mode"] == "auto" and job["top"] is None
         done = self.run_job(client, job)
         assert seen["top"] is None  # the runner applies the campaign cap, if any (runner.clip_limit)
@@ -261,7 +261,7 @@ class TestModes:
         assert bad.status_code == 400
         job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video),
                                              "mode": "manual",
-                                             "ranges": [["24:45", "26:05"], ["90", "120.5"]]}).json()
+                                             "ranges": [["24:45", "26:05"], ["90", "120.5"]]}).json()[0]
         assert self.run_job(client, job)["clips"] == 2
         assert seen["ranges"] == [(1485.0, 1565.0), (90.0, 120.5)]
 
@@ -277,3 +277,41 @@ class TestRatings:
         assert client.put(f"/api/clips/{clip}/rating", json={"rating": 3, "reasons": ["x"]}).status_code == 400
         report = client.get("/api/learning").json()
         assert report["rated"] == 1 and report["reasons"][0]["key"] == "weak_hook"
+
+
+class TestBatches:
+    def videos(self, tmp_path, n):
+        out = []
+        for i in range(n):
+            v = tmp_path / "home_downloads" / f"ep{i}.mp4"
+            v.write_bytes(b"x")
+            out.append(str(v))
+        return out
+
+    def test_several_videos_queue_one_job_each(self, client, tmp_path, monkeypatch):
+        from clipper import runner
+
+        seen = []
+        monkeypatch.setattr(runner, "run", lambda source, **kw: seen.append(source) or SimpleNamespace(
+            accepted=[1], rejected=[], selection_note=""))
+        videos = self.videos(tmp_path, 3)
+        jobs = client.post("/api/jobs", json={"campaign": "test-campaign", "sources": videos + videos[:1]}).json()
+        assert [j["source"] for j in jobs] == videos  # a repeat is queued once
+        for _ in range(200):
+            if len(seen) == 3:
+                break
+            time.sleep(0.05)
+        assert sorted(seen) == sorted(videos)
+
+    def test_hand_picked_times_take_one_video(self, client, tmp_path):
+        res = client.post("/api/jobs", json={"campaign": "test-campaign", "sources": self.videos(tmp_path, 2),
+                                             "mode": "manual", "ranges": [["0:10", "0:40"]]})
+        assert res.status_code == 400 and "one video" in res.json()["detail"]
+
+    def test_plans_below_pro_have_a_batch_limit(self, client, tmp_path, data_root):
+        from clipper.studio import db
+
+        with db.connect() as con:
+            db.set_setting(con, "plan", "free")
+        res = client.post("/api/jobs", json={"campaign": "test-campaign", "sources": self.videos(tmp_path, 4)})
+        assert res.status_code == 402 and "3 videos" in res.json()["detail"]

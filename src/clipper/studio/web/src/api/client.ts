@@ -147,7 +147,11 @@ export function useDeleteClip() {
 
 /* ---------- new clips: footage, uploads, jobs ---------- */
 
-export interface Source { name: string; path: string; size_mb: number; modified: string; folder: string }
+export interface Source {
+  name: string; path: string; size_mb: number; modified: string; folder: string;
+  /** The campaign it belongs to, and how that's known: clipped | added | name | like (studio/footage.py). */
+  campaign: string | null; sorted_by: string;
+}
 export type JobMode = "auto" | "top" | "manual";
 export interface RunReport {
   mode: "auto" | "manual"; moments: number; cleared: number; bar: number | null; limit: number; made: number;
@@ -167,20 +171,21 @@ export const useSources = () =>
 export const useJobs = () =>
   useQuery({ queryKey: ["jobs"], queryFn: async () => (await fetch("/api/jobs")).json() as Promise<Job[]> });
 
-export async function startJob(campaign: string, source: string, mode: JobMode,
-                               options: { top?: number; ranges?: [string, string][] } = {}): Promise<Job> {
+/** One job per video, queued in turn. */
+export async function startJob(campaign: string, sources: string | string[], mode: JobMode,
+                               options: { top?: number; ranges?: [string, string][] } = {}): Promise<Job[]> {
   const res = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" },
-                                         body: JSON.stringify({ campaign, source, mode, ...options }) });
+                                         body: JSON.stringify({ campaign, sources: [sources].flat(), mode, ...options }) });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || res.statusText);
-  return data as Job;
+  return data as Job[];
 }
 
 /** Upload with progress (fetch can't report upload progress; XHR can). */
-export function uploadVideo(file: File, onProgress: (fraction: number) => void): Promise<Source> {
+export function uploadVideo(file: File, onProgress: (fraction: number) => void, campaign = ""): Promise<Source> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", `/api/uploads/${encodeURIComponent(file.name)}`);
+    xhr.open("PUT", `/api/uploads/${encodeURIComponent(file.name)}${campaign ? `?campaign=${encodeURIComponent(campaign)}` : ""}`);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => {
       try {
@@ -419,6 +424,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 }
 
 export const inspectLink = (url: string) => postJson<LinkContents>("/api/imports/inspect", { url });
-export const startImport = (url: string, files: string[]) => postJson<FootageImport>("/api/imports", { url, files });
+export const startImport = (url: string, files: string[], campaign = "") =>
+  postJson<FootageImport>("/api/imports", { url, files, campaign });
 export const useImports = () =>
   useQuery({ queryKey: ["imports"], queryFn: async () => (await fetch("/api/imports")).json() as Promise<FootageImport[]> });

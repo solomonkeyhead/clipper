@@ -41,7 +41,7 @@ function ImportRow({ item }: { item: FootageImport }) {
 }
 
 /** Paste a campaign's Drive/Dropbox link; pick videos; they download into Clipper's uploads. */
-export function LinkImport({ onImported }: { onImported: (names: string[]) => void }) {
+export function LinkImport({ onImported, campaign = "" }: { onImported: (names: string[]) => void; campaign?: string }) {
   const qc = useQueryClient();
   const { data: imports = [] } = useImports();
   const [url, setUrl] = useState("");
@@ -78,7 +78,7 @@ export function LinkImport({ onImported }: { onImported: (names: string[]) => vo
     }
   };
   const begin = async (files: string[]) => {
-    const item = await startImport(url, files);
+    const item = await startImport(url, files, campaign);
     setMine((m) => [...m, item.id]);
     void qc.invalidateQueries({ queryKey: ["imports"] });
     setContents(null);

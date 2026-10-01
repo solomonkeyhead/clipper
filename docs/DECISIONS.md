@@ -1437,3 +1437,27 @@ able to "milk as much content as possible". Four caps held a video to a handful:
 
 Cost scales with it: on paid Gemini a 2-hour source is roughly $0.30-0.40 to
 score, and each clip made adds about a cent of AI (caption fixes, description).
+
+## D72 -- Clip several videos in one go (2026-09-30)
+
+New clips takes any number of ticked videos and queues one job per video, run
+in turn (the job runner already ran one at a time), each with its own progress
+and results. A repeat in the list is queued once. "I'll pick them" stays one
+video: its times belong to that video. An import's videos are all ticked.
+Limits per "Make clips": Free 3 videos, Research 10, Pro none (plans.BATCH_LIMIT,
+enforced server-side, 402). A hosted Clipper's real limit would be minutes a
+month; this only stops one click queuing hours of footage on a free account.
+
+## D73 -- Footage sorted by campaign (2026-09-30)
+
+The video list (62 files, most in the user's Downloads) is grouped by campaign:
+the picked campaign's videos first and open, each other campaign folded, then
+"Not sorted yet". Files are never moved. A video's campaign (studio/footage.py)
+comes from: clips already made from it or a job run on it ("clipped", the
+`footage` table plus clips -> work/<id>/info.json); an upload or Drive/Dropbox
+import made with that campaign picked ("added"); a distinctive word or the
+initials of the campaign's title in the file name ("ADULTS 205", "ChadPowers_",
+"PLM_"); or the same name pattern as its neighbours (204.mov beside 201, 207 and
+208.mov). Clipper's own clip downloads ("<title> - <campaign>.mp4") are clips,
+not footage, and are left out. On the user's PC: 60 of 62 sorted; 1.mp4 and
+2.mp4 say nothing and stay unsorted until clipped for a campaign.

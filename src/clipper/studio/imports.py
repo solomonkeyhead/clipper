@@ -197,17 +197,18 @@ class ImportRunner:
     def list(self) -> list[dict]:
         return [i.view() for i in sorted(self.imports.values(), key=lambda i: -i.id)][:10]
 
-    def start(self, link: str, found: Found, pick: list[str] | None = None) -> Import:
+    def start(self, link: str, found: Found, pick: list[str] | None = None, *,
+              campaign: str = "") -> Import:
         files = [f for f in found.files if not pick or f.name in pick or found.zipped]
         item = Import(id=next(self._ids), link=link, kind=found.kind,
                       names=[f.name or "Drive file" for f in files])
         self.imports[item.id] = item
-        threading.Thread(target=self._run, args=(item, files, found.zipped), daemon=True,
+        threading.Thread(target=self._run, args=(item, files, found.zipped, campaign), daemon=True,
                          name=f"import-{item.id}").start()
         self.publish("import.progress", item.view())
         return item
 
-    def _run(self, item: Import, files: list[RemoteFile], zipped: bool) -> None:
+    def _run(self, item: Import, files: list[RemoteFile], zipped: bool, campaign: str = "") -> None:
         with self._lock:                      # one download at a time
             item.status = "running"
             try:
@@ -221,6 +222,10 @@ class ImportRunner:
                     item.files_done += 1
                 for name in item.saved:
                     remember(name, item.link)
+                if campaign:  # filed under the campaign it was imported for (studio/footage.py)
+                    from .footage import remember as file_under
+
+                    file_under([str(downloads_dir() / n) for n in item.saved], campaign, "added")
                 if not item.saved:
                     raise ImportError_("The download had no video files in it.")
                 item.status = "done"

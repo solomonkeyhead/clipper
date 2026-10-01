@@ -18,6 +18,9 @@ PLAN_NAMES = {"free": "Free", "research": "Research", "pro": "Pro"}
 FEATURES = {"research": "research", "unlimited_clips": "pro"}
 #: Clips a video can give below Pro (D71): enough to try, not to mine a 4 GB bank.
 CLIP_CAP = 10
+#: Videos one "Make clips" may queue (D72). A hosted Clipper meters minutes a
+#: month; this only stops one click queuing hours of footage on a free account.
+BATCH_LIMIT = {"free": 3, "research": 10, "pro": None}
 
 
 def current() -> str:
@@ -36,6 +39,11 @@ def clip_count(top: int | None, campaign_cap: int | None, plan: str | None = Non
     if has("unlimited_clips", plan):
         return top
     return min(top or campaign_cap or CLIP_CAP, CLIP_CAP)
+
+
+def batch_limit(plan: str | None = None) -> int | None:
+    """Videos one request may queue on this plan; None: no limit."""
+    return BATCH_LIMIT[plan or current()]
 
 
 def require(feature: str) -> None:

@@ -774,7 +774,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Sources */
+        /**
+         * Sources
+         * @description Footage on this PC, each with the campaign it belongs to (studio/footage.py).
+         */
         get: operations["sources_api_sources_get"];
         put?: never;
         post?: never;
@@ -855,7 +858,10 @@ export interface paths {
         /** List Jobs */
         get: operations["list_jobs_api_jobs_get"];
         put?: never;
-        /** Start Job */
+        /**
+         * Start Job
+         * @description One job per video, queued and run in turn (D72).
+         */
         post: operations["start_job_api_jobs_post"];
         delete?: never;
         options?: never;
@@ -3317,7 +3323,9 @@ export interface operations {
     };
     upload_api_uploads__filename__put: {
         parameters: {
-            query?: never;
+            query?: {
+                campaign?: string;
+            };
             header?: never;
             path: {
                 filename: string;
@@ -3489,7 +3497,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: unknown;
-                    };
+                    }[];
                 };
             };
             /** @description Validation Error */

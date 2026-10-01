@@ -91,6 +91,13 @@ CREATE TABLE IF NOT EXISTS whop_feeds (
     last_seen   TEXT,                     -- created_at of the newest post read
     added_at    TEXT NOT NULL
 );
+-- Which campaign a video belongs to (studio/footage.py); files are never moved.
+CREATE TABLE IF NOT EXISTS footage (
+    path        TEXT PRIMARY KEY,         -- resolved file path
+    campaign    TEXT NOT NULL,
+    how         TEXT NOT NULL,            -- clipped | added
+    at          TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS found_campaigns (
     key         TEXT PRIMARY KEY,         -- watch.watcher.campaign_key
     source      TEXT NOT NULL DEFAULT '',

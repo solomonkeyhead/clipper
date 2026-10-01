@@ -1271,10 +1271,13 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.get("/api/sources")
     def sources() -> list[dict]:
-        return list_sources()
+        """Footage on this PC, each with the campaign it belongs to (studio/footage.py)."""
+        from . import footage
+
+        return footage.sort(list_sources(), load_campaigns())
 
     @app.put("/api/uploads/{filename}")
-    async def upload(filename: str, request: Request) -> dict:
+    async def upload(filename: str, request: Request, campaign: str = "") -> dict:
         """Stream an uploaded video into Clipper's downloads folder (no size limit)."""
         from ..paths import downloads_dir, ensure
 
@@ -1287,6 +1290,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             async for chunk in request.stream():
                 out.write(chunk)
         partial.replace(target)
+        if campaign:
+            from . import footage
+
+            footage.remember([str(target)], campaign, "added")
         return next(s for s in list_sources() if Path(s["path"]) == target.resolve())
 
     @app.post("/api/imports/inspect")
@@ -1312,7 +1319,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         except imports.ImportError_ as exc:
             raise HTTPException(400, str(exc)) from exc
         pick = [str(n) for n in body.get("files") or []]
-        return importer.start(url, found, pick or None).view()
+        return importer.start(url, found, pick or None, campaign=str(body.get("campaign") or "")).view()
 
     @app.get("/api/imports")
     def list_imports() -> list[dict]:
@@ -1323,11 +1330,20 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         return jobs.list()
 
     @app.post("/api/jobs")
-    def start_job(body: dict) -> dict:
+    def start_job(body: dict) -> list[dict]:
+        """One job per video, queued and run in turn (D72)."""
+        from . import footage, plans
+
         campaign = load_campaigns().get(str(body.get("campaign") or ""))
         if campaign is None:
             raise HTTPException(400, "pick a campaign")
-        source = allowed_source(str(body.get("source") or ""))
+        wanted = [str(s) for s in body.get("sources") or [body.get("source") or ""] if s]
+        if not wanted:
+            raise HTTPException(400, "pick a video")
+        cap = plans.batch_limit()
+        if cap is not None and len(wanted) > cap:
+            raise HTTPException(402, f"Your plan clips up to {cap} videos at a time; Pro has no limit.")
+        sources = list(dict.fromkeys(str(allowed_source(s)) for s in wanted))
         mode = str(body.get("mode") or "auto")
         if mode == "manual":
             from ..runner import parse_range
@@ -1341,12 +1357,14 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             short = [r for r in ranges if r[1] - r[0] < 3]
             if short:
                 raise HTTPException(400, "each moment needs to be at least 3 seconds long")
-            return jobs.submit(campaign, str(source), None, ranges).view()
-        from . import plans
-
+            if len(sources) > 1:
+                raise HTTPException(400, "hand-picked times belong to one video; pick just that one")
+            footage.remember(sources, campaign.name, "clipped")
+            return [jobs.submit(campaign, sources[0], None, ranges).view()]
         top = max(1, min(500, int(body.get("top") or 4))) if mode == "top" else None
-        return jobs.submit(campaign, str(source),
-                           plans.clip_count(top, campaign.max_clips_per_source)).view()
+        top = plans.clip_count(top, campaign.max_clips_per_source)
+        footage.remember(sources, campaign.name, "clipped")
+        return [jobs.submit(campaign, s, top).view() for s in sources]
 
     @app.get("/api/sources/video")
     def source_video(path: str) -> FileResponse:

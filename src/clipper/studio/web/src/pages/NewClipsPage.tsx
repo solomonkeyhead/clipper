@@ -1,5 +1,5 @@
 import { Link, useSearch } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Film, Loader2, Plus, Scissors, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, Film, Loader2, Plus, Scissors, Square, UploadCloud, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -25,7 +25,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-function Dropzone({ onUploaded }: { onUploaded: (s: Source) => void }) {
+function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; campaign: string }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [progress, setProgress] = useState<{ name: string; pct: number } | null>(null);
@@ -35,7 +35,7 @@ function Dropzone({ onUploaded }: { onUploaded: (s: Source) => void }) {
     if (!file) return;
     setProgress({ name: file.name, pct: 0 });
     try {
-      const source = await uploadVideo(file, (f) => setProgress({ name: file.name, pct: f * 100 }));
+      const source = await uploadVideo(file, (f) => setProgress({ name: file.name, pct: f * 100 }), campaign);
       await qc.invalidateQueries({ queryKey: ["sources"] });
       toast.success(`${file.name} uploaded`);
       onUploaded(source);
@@ -149,6 +149,51 @@ function rangeProblem(r: Range): string | null {
   return null;
 }
 
+const SORTED_BY: Record<string, string> = {
+  clipped: "clipped for this campaign", added: "added for this campaign", name: "by its name", like: "named like its neighbours",
+};
+
+function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, onToggle, onAll }: {
+  title: string; videos: Source[]; open: boolean; hint?: string; picked: string[]; manual: boolean;
+  onToggle: (path: string) => void; onAll?: () => void;
+}) {
+  const [open, setOpen] = useState(startOpen);
+  useEffect(() => setOpen(startOpen), [startOpen]);
+  const chosen = videos.filter((v) => picked.includes(v.path)).length;
+  return (
+    <div className="rounded-md border border-line">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <ChevronDown className={cn("size-4 shrink-0 text-muted transition-transform", !open && "-rotate-90")} />
+          <span className="truncate">{title}</span>
+          <span className="shrink-0 text-xs font-normal text-muted">{videos.length} video{videos.length === 1 ? "" : "s"}{chosen ? ` · ${chosen} picked` : ""}</span>
+        </button>
+        {open && onAll && videos.length > 1 && (
+          <button className="shrink-0 text-xs text-accent hover:underline" onClick={onAll}>Select all</button>
+        )}
+      </div>
+      {open && (
+        <div className="flex max-h-72 flex-col gap-1 overflow-y-auto border-t border-line p-1">
+          {hint && <p className="px-2 py-1.5 text-xs text-muted">{hint}</p>}
+          {videos.map((s) => (
+            <button key={s.path} onClick={() => onToggle(s.path)} aria-pressed={picked.includes(s.path)}
+              className={cn("flex items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors",
+                picked.includes(s.path) ? "border-accent bg-accent-soft" : "border-transparent hover:bg-surface-2")}>
+              {manual ? <Film className="size-4 shrink-0 text-muted" />
+                : picked.includes(s.path) ? <CheckSquare className="size-4 shrink-0 text-accent" />
+                : <Square className="size-4 shrink-0 text-muted" />}
+              <span className="min-w-0 flex-1 truncate text-sm" title={s.sorted_by ? `Sorted ${SORTED_BY[s.sorted_by] ?? ""}` : undefined}>{s.name}</span>
+              <span className="tabular shrink-0 text-xs text-muted">
+                {s.size_mb >= 1024 ? `${(s.size_mb / 1024).toFixed(1)} GB` : `${Math.round(s.size_mb)} MB`} · {s.folder} · {ago(s.modified)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RangeEditor({ source, ranges, setRanges }: {
   source: string; ranges: Range[]; setRanges: (r: Range[]) => void;
 }) {
@@ -228,7 +273,9 @@ export function NewClipsPage() {
   const qc = useQueryClient();
   const active = campaigns.filter((c) => c.has_brief && !c.archived);
   const [campaign, setCampaign] = useState(search.campaign ?? "");
-  const [source, setSource] = useState("");
+  // The videos to clip, in the order picked; one job each (D72).
+  const [picked, setPicked] = useState<string[]>([]);
+  const source = picked[0] ?? "";
   const [mode, setMode] = useState<JobMode>("auto");
   const [top, setTop] = useState(4);
   const [ranges, setRanges] = useState<Range[]>([{ start: "", end: "" }]);
@@ -238,6 +285,11 @@ export function NewClipsPage() {
   const pro = (settings?.plan ?? "pro") === "pro";
   const counts = pro ? [1, 3, 5, 8, 10, 15, 20, 30] : [1, 2, 3, 4, 5, 6, 8, 10];
   const autoCap = pro ? chosen?.max_clips ?? null : Math.min(chosen?.max_clips ?? 10, 10);
+  const batchCap = { free: 3, research: 10 }[settings?.plan ?? "pro"] ?? null;
+  // Hand-picked times belong to one video, so that mode picks one.
+  const toggle = (path: string) => setPicked((p) =>
+    mode === "manual" ? [path] : p.includes(path) ? p.filter((x) => x !== path) : [...p, path]);
+  useEffect(() => { if (mode === "manual") setPicked((p) => p.slice(0, 1)); }, [mode]);
   // An import's videos join the list a moment after it finishes; select the first then.
   const [imported, setImported] = useState<string[]>([]);
   const onImported = useCallback((names: string[]) => {
@@ -245,24 +297,45 @@ export function NewClipsPage() {
     toast.success(`Imported ${names.join(", ")}`, { description: "Selected below, ready to clip." });
   }, []);
   useEffect(() => {
-    const first = sources.find((s) => imported.includes(s.name));
-    if (first) {
-      setSource(first.path);
+    // Every video an import brought in is picked: a footage folder is a batch.
+    const found = sources.filter((s) => imported.includes(s.name)).map((s) => s.path);
+    if (found.length) {
+      setPicked((p) => mode === "manual" ? found.slice(0, 1) : [...new Set([...p, ...found])]);
       setImported([]);
     }
-  }, [sources, imported]);
+  }, [sources, imported, mode]);
   const filled = ranges.filter((r) => r.start || r.end);
   const rangesOk = filled.length > 0 && filled.every((r) => !rangeProblem(r));
-  const ready = Boolean(campaign && source && (mode !== "manual" || rangesOk));
+  const overCap = batchCap !== null && picked.length > batchCap;
+  // Footage by campaign (studio/footage.py): the picked campaign's first and open,
+  // then each other campaign folded, then anything not sorted yet (D73).
+  const titleOf = (name: string) => campaigns.find((c) => c.name === name)?.title ?? name;
+  const groups = (() => {
+    const by = new Map<string, Source[]>();
+    for (const s of sources) by.set(s.campaign ?? "", [...(by.get(s.campaign ?? "") ?? []), s]);
+    const mine = by.get(campaign) ?? [];
+    const out = [] as { key: string; title: string; videos: Source[]; open: boolean; hint?: string }[];
+    if (campaign) {
+      out.push({ key: campaign, title: `For ${titleOf(campaign)}`, videos: mine, open: true,
+                 hint: mine.length ? undefined : "None yet. Upload or import above, or pick from the other groups: whatever you clip is filed here." });
+    }
+    for (const [key, videos] of by) {
+      if (key && key !== campaign) out.push({ key, title: titleOf(key), videos, open: !campaign && by.size === 1 });
+    }
+    if (by.get("")?.length) out.push({ key: "", title: "Not sorted yet", videos: by.get("") ?? [], open: !campaign || !mine.length });
+    return out;
+  })();
+  const ready = Boolean(campaign && picked.length && !overCap && (mode !== "manual" || rangesOk));
 
   const make = async () => {
     setBusy(true);
     try {
-      await startJob(campaign, source, mode, mode === "manual"
+      const started = await startJob(campaign, picked, mode, mode === "manual"
         ? { ranges: filled.map((r) => [r.start, r.end] as [string, string]) }
         : mode === "top" ? { top } : {});
       await qc.invalidateQueries({ queryKey: ["jobs"] });
-      toast.success("Clipping started", { description: "You can keep using Clipper; progress shows below." });
+      toast.success(started.length > 1 ? `Clipping ${started.length} videos` : "Clipping started",
+        { description: started.length > 1 ? "One after another; each shows its progress below." : "You can keep using Clipper; progress shows below." });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -316,22 +389,23 @@ export function NewClipsPage() {
         </Step>
 
         <Step n={2} title="Footage">
-          <Dropzone onUploaded={(s) => setSource(s.path)} />
-          <LinkImport onImported={onImported} />
+          <Dropzone onUploaded={(s) => toggle(s.path)} campaign={campaign} />
+          <LinkImport onImported={onImported} campaign={campaign} />
           {sources.length > 0 && (
             <>
-              <div className="mt-4 mb-2 text-xs font-medium text-muted">Or pick a video already on this PC</div>
-              <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-                {sources.map((s) => (
-                  <button key={s.path} onClick={() => setSource(s.path)}
-                    className={cn("flex items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors",
-                      source === s.path ? "border-accent bg-accent-soft" : "border-transparent hover:bg-surface-2")}>
-                    <Film className="size-4 shrink-0 text-muted" />
-                    <span className="min-w-0 flex-1 truncate text-sm">{s.name}</span>
-                    <span className="tabular shrink-0 text-xs text-muted">
-                      {s.size_mb >= 1024 ? `${(s.size_mb / 1024).toFixed(1)} GB` : `${Math.round(s.size_mb)} MB`} · {s.folder} · {ago(s.modified)}
-                    </span>
-                  </button>
+              <div className="mt-4 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <span className="font-medium text-muted">
+                  {mode === "manual" ? "Or pick a video already on this PC" : "Or pick videos already on this PC"}
+                </span>
+                {picked.length > 0 && mode !== "manual" && (
+                  <button className="text-muted hover:text-fg" onClick={() => setPicked([])}>Clear ({picked.length} picked)</button>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                {groups.map((g) => (
+                  <FootageGroup key={g.key} title={g.title} videos={g.videos} open={g.open} hint={g.hint}
+                    picked={picked} manual={mode === "manual"} onToggle={toggle}
+                    onAll={mode === "manual" ? undefined : () => setPicked((p) => [...new Set([...p, ...g.videos.map((v) => v.path)])].slice(0, batchCap ?? undefined))} />
                 ))}
               </div>
             </>
@@ -377,11 +451,13 @@ export function NewClipsPage() {
         <div className="flex items-center justify-end gap-3">
           {!ready && (
             <span className="text-xs text-muted">
-              {!campaign ? "Pick a campaign" : !source ? "Pick a video" : "Add at least one moment's start and end"}
+              {!campaign ? "Pick a campaign" : !picked.length ? "Pick a video"
+                : overCap ? `Your plan clips up to ${batchCap} videos at a time; Pro has no limit`
+                : "Add at least one moment's start and end"}
             </span>
           )}
           <Button variant="primary" disabled={!ready || busy} onClick={() => void make()}>
-            <Scissors className="size-4" /> Make clips
+            <Scissors className="size-4" /> {picked.length > 1 ? `Make clips from ${picked.length} videos` : "Make clips"}
           </Button>
         </div>
 
