@@ -1566,3 +1566,19 @@ the live accounts: TikTok 11 of 11 posts matched, Instagram 6 of 6.
 The Clips page opens on "Ready to post" (the user clicked it first every time),
 and its filters follow a clip's path: Ready to post, To submit, Submitted,
 Skipped, then All.
+
+## D79 -- YouTube setup guide that actually gets through Google's checks (2026-09-30)
+
+Following the first guide, the user hit "Valid app name, support email,
+homepage url, and privacy policy url are required for switching the app to
+external production mode", and some steps were missing. Publishing (needed so
+the sign-in doesn't lapse every 7 days) requires Branding with a public
+homepage and privacy policy on an authorized domain. Clipper now ships both
+pages (docs/site/index.html, privacy.html: read-only scopes, data kept on the
+user's PC, Limited Use statement, how to revoke), served for copying at
+/api/setup/site/<page>. The Accounts guide is six parts with every sub-step and
+the exact value for each field: project, the two APIs, the Get started wizard,
+GitHub Pages (free; repository YOUR-USERNAME.github.io), Branding (authorized
+domain, home page, privacy link, no logo so no review) and Publish, then the
+Desktop client and its keys. A hosted Clipper would use one verified company
+app instead.

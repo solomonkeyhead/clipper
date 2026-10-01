@@ -703,6 +703,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup/site/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Site Page
+         * @description The homepage and privacy policy a Google app needs to be published (docs/site, D79).
+         */
+        get: operations["site_page_api_setup_site__page__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/test-ai": {
         parameters: {
             query?: never;
@@ -3250,6 +3270,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Setup"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    site_page_api_setup_site__page__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

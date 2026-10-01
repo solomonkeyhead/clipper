@@ -24,7 +24,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -1226,6 +1226,13 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             raise HTTPException(400, str(exc)) from exc
         broker.publish("settings.changed")
         return get_setup()
+
+    @app.get("/api/setup/site/{page}")
+    def site_page(page: str) -> PlainTextResponse:
+        """The homepage and privacy policy a Google app needs to be published (docs/site, D79)."""
+        if page not in ("index.html", "privacy.html"):
+            raise HTTPException(404, "no such page")
+        return PlainTextResponse((REPO_ROOT / "docs" / "site" / page).read_text(encoding="utf-8"))
 
     @app.post("/api/setup/test-ai")
     async def test_ai() -> dict:

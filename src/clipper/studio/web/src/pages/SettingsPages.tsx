@@ -23,6 +23,31 @@ const Ext = ({ href, children }: { href: string; children: ReactNode }) => (
   </a>
 );
 
+/** One titled group of numbered steps in a setup guide. */
+function Part({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 text-sm font-medium">{title}</div>
+      <Steps>{children}</Steps>
+    </div>
+  );
+}
+
+/** Copy one of the web pages Clipper wrote for a Google app (docs/site). */
+function SiteCopy({ page }: { page: string }) {
+  const copy = async () => {
+    const text = await (await fetch(`/api/setup/site/${page}`)).text();
+    await navigator.clipboard.writeText(text);
+    toast.success(`${page} copied`, { description: "Paste it into GitHub's file editor." });
+  };
+  return (
+    <button type="button" onClick={() => void copy()}
+            className="ml-1 inline-flex h-6 items-center gap-1 rounded-sm border border-line bg-surface-2 px-2 text-xs font-medium text-fg hover:bg-surface-3">
+      Copy page
+    </button>
+  );
+}
+
 function Steps({ children }: { children: ReactNode }) {
   return <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm text-muted marker:text-subtle [&_b]:text-fg">{children}</ol>;
 }
@@ -194,16 +219,54 @@ function YouTubeAppKeys() {
     <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
       <div>
         <div className="text-sm font-semibold">One-time setup: a free Google Cloud app</div>
-        <p className="mt-0.5 text-sm text-muted">YouTube shares your Shorts' stats with an app you register. About 5 minutes, once; no card needed.</p>
+        <p className="mt-0.5 text-sm text-muted">
+          YouTube only shares your Shorts' stats with an app you register. About 20 minutes, once, in your browser; no card
+          needed. Do the parts in order, and check the project picker at the top of Google Cloud says <b>Clipper</b> each time.
+        </p>
       </div>
-      <Steps>
-        <li>Open the <Ext href="https://console.cloud.google.com/projectcreate">Google Cloud console</Ext> and create a project called "Clipper".</li>
-        <li>In <b>APIs &amp; Services → Library</b>, enable <Ext href="https://console.cloud.google.com/apis/library/youtube.googleapis.com">YouTube Data API v3</Ext> and <Ext href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com">YouTube Analytics API</Ext>.</li>
-        <li>Open <Ext href="https://console.cloud.google.com/auth/overview">Google Auth Platform</Ext> → <b>Get started</b>: name "Clipper", your email, audience <b>External</b>.</li>
-        <li>Under <b>Audience</b>, press <b>Publish app</b> so it's <b>In production</b>. Left in Testing, Google signs you out every 7 days.</li>
-        <li>Under <b>Clients</b>, <b>Create client</b> → type <b>Desktop app</b> → name it "Clipper", then copy its <b>Client ID</b> and <b>Client secret</b> here.</li>
-      </Steps>
-      <p className="text-xs text-muted">When you connect, Google will say it hasn't verified the app. It's your own app: press <b>Advanced → Go to Clipper</b>.</p>
+
+      <Part title="1. Create the project">
+        <li>Open <Ext href="https://console.cloud.google.com/projectcreate">New project</Ext>. <b>Project name:</b> Clipper. Press <b>Create</b>.</li>
+        <li>Wait for the bell notification "Create Project: Clipper", then pick <b>Clipper</b> in the project picker at the top.</li>
+      </Part>
+
+      <Part title="2. Turn on the two YouTube APIs">
+        <li>Open <Ext href="https://console.cloud.google.com/apis/library/youtube.googleapis.com">YouTube Data API v3</Ext> and press <b>Enable</b>.</li>
+        <li>Open <Ext href="https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com">YouTube Analytics API</Ext> and press <b>Enable</b>.</li>
+      </Part>
+
+      <Part title="3. Set up the sign-in screen">
+        <li>Open <Ext href="https://console.cloud.google.com/auth/overview">Google Auth Platform</Ext> and press <b>Get started</b>.</li>
+        <li><b>App information:</b> App name <b>Clipper</b>, User support email = your Gmail. <b>Next</b>.</li>
+        <li><b>Audience:</b> choose <b>External</b>. <b>Next</b>.</li>
+        <li><b>Contact information:</b> your email. <b>Next</b>.</li>
+        <li><b>Finish:</b> tick that you agree to the Google API Services User Data Policy, press <b>Continue</b>, then <b>Create</b>.</li>
+      </Part>
+
+      <Part title="4. Make the app's two web pages (GitHub Pages, free)">
+        <li>Google needs a public homepage and privacy policy before it lets the app stay signed in. Clipper has written both.</li>
+        <li>Make a free account at <Ext href="https://github.com/signup">github.com</Ext>. Your username goes in the web address below.</li>
+        <li>Open <Ext href="https://github.com/new">a new repository</Ext>. <b>Name:</b> exactly <code className="rounded bg-surface-3 px-1">YOUR-USERNAME.github.io</code>, <b>Public</b>, tick <b>Add a README file</b>, press <b>Create repository</b>.</li>
+        <li>Press <b>Add file → Create new file</b>. Name it <b>privacy.html</b>, paste the page <SiteCopy page="privacy.html" />, replace both <b>YOUR-EMAIL-HERE</b> with the email you want shown, then <b>Commit changes</b> twice.</li>
+        <li>Again for <b>index.html</b> <SiteCopy page="index.html" />.</li>
+        <li>After a minute, check <code className="rounded bg-surface-3 px-1">https://YOUR-USERNAME.github.io/privacy.html</code> opens.</li>
+      </Part>
+
+      <Part title="5. Branding, and publish">
+        <li>Open <Ext href="https://console.cloud.google.com/auth/branding">Branding</Ext>. <b>Authorized domains:</b> press <b>Add domain</b> and enter <code className="rounded bg-surface-3 px-1">YOUR-USERNAME.github.io</code>.</li>
+        <li><b>Application home page:</b> <code className="rounded bg-surface-3 px-1">https://YOUR-USERNAME.github.io/</code>. <b>Application privacy policy link:</b> <code className="rounded bg-surface-3 px-1">https://YOUR-USERNAME.github.io/privacy.html</code>. Leave the logo empty (a logo sends the app to Google's review). <b>Save</b>.</li>
+        <li>Open <Ext href="https://console.cloud.google.com/auth/audience">Audience</Ext>, press <b>Publish app</b>, then <b>Confirm</b>. It should say <b>In production</b>. (Left in Testing, Google signs you out every 7 days.)</li>
+      </Part>
+
+      <Part title="6. The keys">
+        <li>Open <Ext href="https://console.cloud.google.com/auth/clients">Clients</Ext>, press <b>Create client</b>. <b>Application type:</b> Desktop app. <b>Name:</b> Clipper. <b>Create</b>.</li>
+        <li>Copy the <b>Client ID</b> and <b>Client secret</b> from the box that opens into the two fields below, and press <b>Save keys</b>.</li>
+      </Part>
+
+      <p className="text-xs text-muted">
+        When you connect, Google says it hasn't verified the app. It's your own app: press <b>Advanced → Go to Clipper</b>, then pick
+        the <b>channel you post Shorts on</b> (a Brand Account channel is listed on its own).
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Client ID">{(fid) => <SecretInput id={fid} value={id} onChange={setId} isSet={setup?.keys.YOUTUBE_CLIENT_ID} />}</Field>
         <Field label="Client secret">{(fid) => <SecretInput id={fid} value={secret} onChange={setSecret} isSet={setup?.keys.YOUTUBE_CLIENT_SECRET} />}</Field>

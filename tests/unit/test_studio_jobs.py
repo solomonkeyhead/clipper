@@ -351,3 +351,9 @@ class TestBriefsForAsk:
         from clipper.studio import research_api
 
         assert research_api.toolbox().brief("test")["campaign"] == "test-campaign"
+
+
+def test_the_google_app_pages_are_served_and_nothing_else(client):
+    page = client.get("/api/setup/site/privacy.html")
+    assert page.status_code == 200 and "Limited Use" in page.text
+    assert client.get("/api/setup/site/secrets.txt").status_code == 404
