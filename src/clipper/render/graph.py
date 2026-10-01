@@ -21,6 +21,8 @@ from .ffmpeg import escape_filter_path
 
 # Blur strength for the blurred_fit background, at the reference 1080 width.
 BACKGROUND_BLUR_SIGMA = 40.0
+# The fill is blurred at 1/BLUR_DOWNSCALE size: it's out of focus anyway.
+BLUR_DOWNSCALE = 4
 # Enough to separate the foreground strip from the fill without crushing a dark
 # source to solid black -- which also risks tripping the QA blackdetect check.
 BACKGROUND_DARKEN = -0.15
@@ -218,10 +220,15 @@ def _blurred_fit_chain(spec: RenderSpec, src: str, tag: str,
     if layout is not None and layout.keyframes:
         kf = layout.keyframes[0]
         region = f"crop={layout.crop_width}:{layout.crop_height}:{kf.x}:{kf.y},"
+    # Blurred at a quarter size and scaled back up (D75): the same soft fill --
+    # compared frame by frame on a 16:9 episode -- at under half the render time;
+    # a full-size gblur was the slowest part of a render.
+    w, h = spec.width // BLUR_DOWNSCALE // 2 * 2, spec.height // BLUR_DOWNSCALE // 2 * 2
     return (
         f"{src}{region}split=2[bg{tag}][fg{tag}];"
-        f"[bg{tag}]scale={spec.width}:{spec.height}:force_original_aspect_ratio=increase,"
-        f"crop={spec.width}:{spec.height},gblur=sigma={sigma},"
+        f"[bg{tag}]scale={w}:{h}:force_original_aspect_ratio=increase,"
+        f"crop={w}:{h},gblur=sigma={round(sigma / BLUR_DOWNSCALE, 1)},"
+        f"scale={spec.width}:{spec.height}:flags=bicubic,"
         f"eq=brightness={BACKGROUND_DARKEN}[bgb{tag}];"
         f"[fg{tag}]scale={spec.width}:-2:flags=lanczos[fgs{tag}];"
         f"[bgb{tag}][fgs{tag}]overlay=(W-w)/2:(H-h)/2:shortest=1"

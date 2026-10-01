@@ -1514,3 +1514,9 @@ rendered one at a time, and videos one at a time. Transcription itself was fast.
 - Not done: NVENC. The bundled FFmpeg needs NVIDIA driver 610+ (NVENC API 13.1);
   this PC's driver has 13.0, so renders use libx264. A driver update moves
   encoding to the GPU.
+- Follow-up: the user updated the NVIDIA driver (617.14) and NVENC now passes
+  its probe. On a 37s clip that alone saved little (13.4s -> 12.0s): the full-
+  size gblur behind blurred_fit/fit_crop was the slow part. The fill is now
+  blurred at quarter size and scaled up (graph.BLUR_DOWNSCALE); frames compared
+  side by side on a 16:9 Adults episode look the same, and 30s of it renders in
+  5.4s instead of 9.9s.
