@@ -232,6 +232,59 @@ def cut(
     return result
 
 
+class RerenderError(RuntimeError):
+    """A clip couldn't be made again; the message says why."""
+
+
+def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
+             out_root: Path, backend_override: str | None = None) -> Path:
+    """Make a library clip again with a different on-screen hook (D90).
+
+    Same range, framing and edits; only the hook line changes. Works from the
+    video's kept working files (transcript, info), so the source must still be on
+    this PC. Returns the new file, rendered in the work area; the caller files it.
+    """
+    from .paths import work_dir
+
+    work_src = work_dir(clip["source_id"])
+    if not (work_src / "info.json").exists() or not (work_src / "transcript.json").exists():
+        raise RerenderError("this clip's working files are gone; clip its video again instead")
+    info = SourceInfo.load(work_src / "info.json")
+    if not Path(info.media.path).exists():
+        raise RerenderError(f"its video isn't on this PC any more ({Path(info.media.path).name})")
+    if clip.get("start_s") is None or clip.get("end_s") is None:
+        raise RerenderError("this clip has no time range on record")
+    transcript = Transcript.load(work_src / "transcript.json")
+    config = campaign_config(config, campaign)
+    start, end = float(clip["start_s"]), float(clip["end_s"])
+    corrector, recheck = _correction(config, backend_override, info)
+    audio = Path(info.audio_path) if info.audio_path else None
+    listener = recheck or (AudioRecheck(audio, config.transcription) if audio and audio.exists() else None)
+    words = transcript.words
+    if listener is not None:
+        words = with_range_transcript(words, start, end, listener.words_between(start, end))
+    # The brief's lines aren't handed out again (campaign/rotation.py): the hook is
+    # the one asked for, and the clip keeps the caption it has.
+    plan = manual_plan(start, end, words, config=config,
+                       campaign=campaign.model_copy(update={"hook_texts": (), "fallback_captions": ()}),
+                       rank=1, attempt=1)
+    if campaign.censor_flagged_words:
+        from .campaign.safety import clean
+
+        hook = clean(hook, campaign)
+    plan = plan.model_copy(update={"clip_id": clip["clip_id"], "hook_text": hook.strip(),
+                                   "hook_shown": bool(hook.strip()) and config.render.show_hook_text})
+    out_dir = ensure(out_root / clip["source_id"] / "rerender")
+    # No new description: the clip keeps its caption, and it's an AI call saved.
+    record = _render_plan(plan, info, words, config=config,
+                          campaign=campaign.model_copy(update={"long_description": False}),
+                          clips_dir=ensure(out_dir / "clips"), work=ensure(out_dir / "work"), draft=False,
+                          corrector=corrector, recheck=recheck)
+    if record.qa.status == "fail":
+        raise RerenderError(f"the new render failed its checks: {summarize(record.qa)}")
+    return record.file
+
+
 def with_range_transcript(words: list[Word], start: float, end: float,
                           heard: list[Word] | None) -> list[Word]:
     """`words` with `start`-`end` replaced by `heard`, when that heard more.

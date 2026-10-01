@@ -71,3 +71,18 @@ export function openTab(url: string): boolean {
   tab.opener = null; // the page it opens can't reach back into Clipper
   return true;
 }
+
+/** Open `url` in a tab behind Clipper, which stays in front. Pages can't do that
+ *  with window.open; a Ctrl-click (Cmd on a Mac) on a link can, so this clicks a
+ *  link that way. Browsers that ignore it still open the tab. */
+export function openBehind(url: string): void {
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  a.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window, ctrlKey: !mac, metaKey: mac }));
+  a.remove();
+}

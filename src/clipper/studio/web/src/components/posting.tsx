@@ -6,7 +6,7 @@ import {
   type Account, type BriefProblem, type Clip, type PostCopy,
 } from "@/api/client";
 import { useUI } from "@/lib/store";
-import { PLATFORM_NAME, cn, openTab } from "@/lib/utils";
+import { PLATFORM_NAME, cn, openBehind } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
 import { Button, CopyButton, Tip } from "./ui";
 
@@ -56,14 +56,11 @@ export function PostPanel({ clip }: { clip: Clip }) {
   const targets = [...new Set(allowed.map(key))].filter((p) => p in UPLOAD);
   const shown = (targets.length ? targets : ORDER).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
 
+  // Behind Clipper, which stays in front: you come back here to copy and check.
   const open = (platforms: string[]) => {
-    // Browsers allow one new tab per click unless the page may open pop-ups.
-    const blocked = platforms.filter((p) => !openTab(UPLOAD[p].url));
-    if (blocked.length && blocked.length < platforms.length) {
-      toast.warning(`Your browser blocked ${blocked.map((p) => UPLOAD[p].name).join(" and ")}`, {
-        description: "Allow pop-ups for Clipper (the icon at the end of the address bar), then press again.", duration: 9000,
-      });
-    }
+    platforms.forEach((p) => openBehind(UPLOAD[p].url));
+    toast(`${platforms.map((p) => UPLOAD[p].name).join(", ")} opened in ${platforms.length > 1 ? "tabs" : "a tab"} behind this one`,
+          { duration: 2500 });
   };
 
   return (
@@ -74,7 +71,7 @@ export function PostPanel({ clip }: { clip: Clip }) {
         <div className="flex min-w-0 flex-col gap-1.5">
           {copies.length ? copies.map((c) => (
             <PlatformRow key={c.platform} copy={c} accounts={postOn(key(c.platform))}
-                         onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
+                         url={UPLOAD[key(c.platform)]?.url} onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
           )) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
           {shown.length > 1 && (
             <Button size="sm" variant="ghost" className="w-fit" onClick={() => open(shown)}>
@@ -116,7 +113,9 @@ function usePostOn(campaign: string) {
   };
 }
 
-function PlatformRow({ copy, accounts, onOpen }: { copy: PostCopy; accounts: Account[]; onOpen: () => void }) {
+function PlatformRow({ copy, accounts, url, onOpen }: {
+  copy: PostCopy; accounts: Account[]; url?: string; onOpen: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const failed = copy.checks.filter((c) => !c.passed);
   const name = UPLOAD[key(copy.platform)]?.name ?? copy.platform;
@@ -130,7 +129,12 @@ function PlatformRow({ copy, accounts, onOpen }: { copy: PostCopy; accounts: Acc
         <CopyButton text={copy.caption} what={`${name} ${TEXT_NAME[copy.platform] ?? "caption"}`}
                     label={`Copy ${TEXT_NAME[copy.platform] ?? "caption"}`} />
         <Tip label={`${UPLOAD[key(copy.platform)]?.how ?? "Upload it"}. Opens in whichever account you're signed in to here.`}>
-          <Button size="sm" variant="secondary" onClick={onOpen}>Open {name} <ExternalLink className="size-3" /></Button>
+          {/* A real link, so middle-click and Ctrl-click work as usual too. */}
+          <a href={url} target="_blank" rel="noopener noreferrer"
+             onClick={(e) => { if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) { e.preventDefault(); onOpen(); } }}
+             className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
+            Open {name} <ExternalLink className="size-3" />
+          </a>
         </Tip>
         <button type="button" onClick={() => setOpen(!open)}
                 className={cn("ml-auto inline-flex items-center gap-1 text-xs", failed.length ? "text-danger" : "text-success")}>

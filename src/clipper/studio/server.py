@@ -35,7 +35,7 @@ from ..learn import log as perf
 from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
 from . import accounts as account_groups
-from . import alerts, db, evidence, library, rulecheck, setup, stats
+from . import alerts, db, evidence, library, rerender, rulecheck, setup, stats
 from .events import Broker
 
 log = get_logger(__name__)
@@ -172,6 +172,8 @@ class Clip(BaseModel):
     # Not posted yet: each platform's text, and the brief's rules checked (D81).
     post_copy: list[PostCopy] = []
     rules: Rules | None = None
+    rerendering: str | None = None     # queued | rendering: a new hook on its way (D90)
+    rerender_error: str | None = None  # why the last re-render failed
 
 
 class CampaignCounts(BaseModel):
@@ -532,6 +534,11 @@ class Snapshot:
                 # A post found after the clip was marked submitted still needs submitting.
                 status = "submitted" if all(m.submitted_at for m in models) else "posted"
             scores = json.loads(c.get("scores") or "{}")
+            # The file's change time, in its links: a re-rendered clip's new frame shows at once.
+            try:
+                version = int(library.clip_path(c["file"]).stat().st_mtime)
+            except OSError:
+                version = 0
             copy, rule_state = self._rules(c, brief) if brief and status in ("ready", "skipped") else ([], None)
             self.clips.append(Clip(
                 post_copy=copy, rules=rule_state,
@@ -548,8 +555,9 @@ class Snapshot:
                 hook=c["hook"], caption=c["caption"], duration_s=c["duration_s"],
                 source_title=display_source(c["source_title"]), status=status,
                 marked=c["status"], notes=c["notes"], created_at=c["created_at"],
-                file_exists=library.clip_path(c["file"]).exists(),
-                video=f"/media/{c['id']}", thumb=f"/thumb/{c['id']}", posts=models))
+                file_exists=bool(version), video=f"/media/{c['id']}?v={version}",
+                thumb=f"/thumb/{c['id']}?v={version}", posts=models,
+                rerendering=rerender.state_of(c["id"])[0], rerender_error=rerender.state_of(c["id"])[1]))
         # Before posting: which already-posted clips each one repeats (studio/duplicates.py).
         from . import duplicates
 
@@ -768,6 +776,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     from .imports import ImportRunner
 
     importer = ImportRunner(broker.publish)
+    rerenders = rerender.start(broker.publish)
 
     async def sync_now() -> dict:
         broker.publish("sync.started")
@@ -1235,10 +1244,52 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         broker.publish("clips.changed", {"id": clip_id})
         return {"ok": True}
 
+    @app.post("/api/clips/{clip_id}/rerender")
+    def rerender_clip(clip_id: int, body: dict | None = None) -> dict:
+        """Make the clip again with a new on-screen hook (D90): the one given (a paid
+        choice), or the brief's line its campaign has used least."""
+        from ..campaign import rotation
+        from . import plans
+
+        hook = str((body or {}).get("hook") or "").strip()
+        found = next((c for c in Snapshot().clips if c.id == clip_id), None)
+        if found is None:
+            raise HTTPException(404, "no such clip")
+        if found.posts or found.status in ("posted", "submitted"):
+            raise HTTPException(400, "it's posted: its video is what's live")
+        if hook and hook != found.title:  # showing its own title fixes a mismatch: free
+            plans.require("choose_lines")
+        else:
+            campaign = load_campaigns().get(found.campaign)
+            lines = [h for h in (campaign.hook_texts if campaign else ()) if h != found.hook]
+            if not lines:
+                raise HTTPException(400, "the brief has no other on-screen lines; type one to use instead")
+            hook = rotation.pick(campaign, "hook", lines)
+        rerenders.submit(clip_id, hook)
+        return {"queued": True, "hook": hook}
+
+    @app.post("/api/campaigns/{name}/rerender-hooks")
+    def rerender_hooks(name: str) -> dict:
+        """Every unposted clip whose title is one of the brief's lines but whose
+        video shows another: made again showing its title (D85, D90)."""
+        campaign = load_campaigns().get(name)
+        if campaign is None:
+            raise HTTPException(404, f"no campaign {name!r}")
+        todo = [c for c in Snapshot().clips if c.campaign == name and not c.posts
+                and c.status in ("ready", "skipped") and c.title in campaign.hook_texts
+                and c.hook and c.hook != c.title]
+        for c in todo:
+            rerenders.submit(c.id, c.title)
+        return {"queued": len(todo)}
+
     @app.put("/api/clips/{clip_id}/caption")
     def edit_caption(clip_id: int, body: dict) -> dict:
-        """The user's own caption for a clip not yet posted; the rules still apply (D81)."""
+        """The user's own caption for a clip not yet posted; the rules still apply (D81).
+        Choosing or writing captions is part of the paid plans (D90)."""
         from ..campaign import rules as caption_rules
+        from . import plans
+
+        plans.require("choose_lines")
 
         text = str(body.get("caption") or "").strip()
         if not text:

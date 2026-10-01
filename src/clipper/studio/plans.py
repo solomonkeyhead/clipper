@@ -17,7 +17,9 @@ PLAN_NAMES = {"free": "Free", "research": "Research", "pro": "Pro"}
 #: feature -> the lowest plan that has it
 FEATURES = {"research": "research", "unlimited_clips": "pro",
             # More than one account per platform, and account groups (D89).
-            "multi_account": "pro"}
+            "multi_account": "pro",
+            # Choosing a clip's hook or caption, and writing your own (D90).
+            "choose_lines": "research"}
 #: Clips a video can give below Pro (D71): enough to try, not to mine a 4 GB bank.
 CLIP_CAP = 10
 #: Videos one "Make clips" may queue (D72). A hosted Clipper meters minutes a

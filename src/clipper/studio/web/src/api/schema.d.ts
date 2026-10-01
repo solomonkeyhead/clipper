@@ -484,6 +484,48 @@ export interface paths {
         patch: operations["update_clip_api_clips__clip_id__patch"];
         trace?: never;
     };
+    "/api/clips/{clip_id}/rerender": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rerender Clip
+         * @description Make the clip again with a new on-screen hook (D90): the one given (a paid
+         *     choice), or the brief's line its campaign has used least.
+         */
+        post: operations["rerender_clip_api_clips__clip_id__rerender_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/campaigns/{name}/rerender-hooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rerender Hooks
+         * @description Every unposted clip whose title is one of the brief's lines but whose
+         *     video shows another: made again showing its title (D85, D90).
+         */
+        post: operations["rerender_hooks_api_campaigns__name__rerender_hooks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/clips/{clip_id}/caption": {
         parameters: {
             query?: never;
@@ -495,6 +537,7 @@ export interface paths {
         /**
          * Edit Caption
          * @description The user's own caption for a clip not yet posted; the rules still apply (D81).
+         *     Choosing or writing captions is part of the paid plans (D90).
          */
         put: operations["edit_caption_api_clips__clip_id__caption_put"];
         post?: never;
@@ -1768,6 +1811,10 @@ export interface components {
              */
             post_copy: components["schemas"]["PostCopy"][];
             rules?: components["schemas"]["Rules"] | null;
+            /** Rerendering */
+            rerendering?: string | null;
+            /** Rerender Error */
+            rerender_error?: string | null;
         };
         /** Dimension */
         Dimension: {
@@ -3187,6 +3234,78 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rerender_clip_api_clips__clip_id__rerender_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                } | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rerender_hooks_api_campaigns__name__rerender_hooks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

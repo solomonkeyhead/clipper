@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   AlertTriangle, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
-  Pencil, ShieldAlert, Upload, X, XCircle,
+  Lock, Pencil, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney, openTab } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
+import { CaptionChoice, HookControl, usePaid } from "./lines";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
@@ -157,6 +158,7 @@ const breaksBrief = (clip: Clip) => Boolean(clip.rules && (clip.rules.failed.len
 function CaptionSection({ clip }: { clip: Clip }) {
   const [draft, setDraft] = useState<string | null>(null);
   const edit = useEditCaption();
+  const paid = usePaid();
   const editable = clip.status === "ready" || clip.status === "skipped";
   const save = () => {
     if (draft === null) return;
@@ -169,8 +171,11 @@ function CaptionSection({ clip }: { clip: Clip }) {
     <section>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Caption</h3>
-        <span className="flex gap-1.5">
-          {editable && draft === null && <Button size="sm" variant="ghost" onClick={() => setDraft(clip.caption)}><Pencil className="size-3.5" /> Edit</Button>}
+        <span className="flex items-center gap-1.5">
+          {draft === null && <CaptionChoice clip={clip} />}
+          {editable && draft === null && (paid
+            ? <Button size="sm" variant="ghost" onClick={() => setDraft(clip.caption)}><Pencil className="size-3.5" /> Edit</Button>
+            : <Tip label="Writing your own caption is part of the paid plans"><span className="inline-flex items-center gap-1 text-xs text-subtle"><Lock className="size-3" /> Edit</span></Tip>)}
           {draft === null && !(clip.post_copy?.length && clip.status === "ready") &&
             <CopyButton text={clip.caption} what="Caption" label="Copy caption" keys="C" />}
         </span>
@@ -591,6 +596,7 @@ export function ClipSheet() {
                     {clip.hook && clip.hook !== clip.title && (
                       <p className="mt-1 text-sm text-muted">On screen: {clip.hook}</p>
                     )}
+                    <div className="mt-2"><HookControl clip={clip} /></div>
                   </div>
                   <Dialog.Close asChild>
                     <Button variant="ghost" size="icon" aria-label="Close"><X className="size-4" /></Button>

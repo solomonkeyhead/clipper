@@ -19,13 +19,13 @@ duration:
   min_seconds: 10.0
   max_seconds: 60.0
 selection_focus: Create and post videos from the approved assets folder to drive awareness
-  of Please Like Me. The show ran on Netflix and Hulu for years and is now FREE on YouTube,
-  and every clip should send people there. Stolen clips get you banned.
+  of Please Like Me. The show ran on Netflix and Hulu for years and is now FREE on YouTube.
+  Every clip should send people there.
 required_caption_text: ''
 required_hashtags:
 - '#pleaselikeme'
+- '#gay'
 - '#underratedshows'
-- '#lgbtq'
 only_required_hashtags: false
 required_credit_text: ''
 fallback_captions:
@@ -50,7 +50,7 @@ hook_texts:
 hook_overlay: true
 keep_original_audio: false
 brief_rules: Pull footage from the approved assets folder. Cut a clip at least 10 seconds
-  long. Add on-screen text that matches the clip. Write your caption.
+  long. Add on-screen text that matches the clip.
 long_description: true
 description_context: Please Like Me is an award-winning Australian comedy created by and starring
   Josh Thomas, based on his own life. It follows a 20-something guy who figures out he’s gay,
@@ -59,27 +59,28 @@ description_context: Please Like Me is an award-winning Australian comedy create
 description_keywords:
 - Please Like Me
 - Josh Thomas
-- Netflix
-- Hulu
-- YouTube
+- Rose
+- Alan
+- Mae
 notes: |-
-  - No dedicated page required, movie, tv and culture pages preferred.
-  - Tag @JoshThomasChannel in the YouTube title.
-  - If people ask what the show is, pin a comment with the name and where to watch.
-  - Keep likes and comments ON.
-  - Tier 1 majority audience, English only.
-  - Submit video analytics after 2,000 views showing watch time, all view graphs, and locations.
-  - Low effort edits, stolen clips, spam posting, story boosting, collab posts, and AI-generated Reel covers are not allowed.
+  - Approved assets only. Stolen clips get you BANNED.
+  - Tier 1 majority audience, English only
+  - Hit the minimum engagement for your view tier
+  - Wait until your video passes 2,000 views, then screen-record your video analytics (watch time, all view graphs, and locations) and submit
+  - Account-level analytics are rejected every time
+  - No NSFW, sexual, aggressive, weird, mean or rude content toward anyone
 burn_credit_in_video: false
-
-# D81: the brief's caption rules, enforced and checked on every platform.
 caption_rules:
-  - text: "@JoshThomasChannel"
-    must: include
-    place: title
-    platforms: [youtube_shorts]
-    quote: "On YouTube, tag @JoshThomasChannel in the title."
+- text: '@JoshThomasChannel'
+  must: include
+  place: title
+  platforms:
+  - youtube_shorts
+  quote: 'YouTube: tag @JoshThomasChannel in the title of every post.'
 posting_rules:
-  - "If people ask what the show is, pin a comment with the name and where to watch."
-  - "Keep likes and comments ON."
-  - "No collab posts, story boosting or AI-generated Reel covers."
+- Keep likes and comments ON
+- If people ask what the show is, pin a comment with the name and where to watch.
+- Do not make collab posts
+- Do not use AI-generated Reel covers
+- Do not spam post or story boost
+censor_flagged_words: true

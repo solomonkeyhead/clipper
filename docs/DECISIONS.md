@@ -1730,3 +1730,17 @@ only appears once there's something to choose (a group, or two accounts on one
 platform). Post it names the account(s) to post from when a platform has several.
 More than one account per platform and groups are Pro ("multi_account"); a
 sign-in past the plan's limit is undone afterwards, so reconnecting always works.
+
+## D90 -- Re-rendering a clip's hook; choosing hooks and captions is paid; tabs open behind (2026-10-01)
+
+The hook is burned into the video, so after D85 retitled 37 clips their videos
+still showed the old line. runner.rerender makes a clip again from its kept range
+and working files with a new hook only (same framing and edits; no new description
+or caption), one at a time in the background (studio/rerender.py); the old video
+goes to the Recycle Bin and the clip keeps its id, caption, ratings and notes. Thumbnail
+and video links carry the file's change time so the new frame shows at once.
+"New hook" (the brief's least-used line) and "Show the title" are free; choosing a
+line, writing a hook, and choosing or writing a caption are the paid
+"choose_lines" feature (Research plan up). Upload pages now open in a tab behind
+Clipper: window.open can't, so a Ctrl/Cmd-click is dispatched on a link, and the
+buttons are real links, so middle-click works anywhere.
