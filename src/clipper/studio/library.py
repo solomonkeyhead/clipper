@@ -102,13 +102,16 @@ def backfill_text() -> int:
                 and clip_path(c["file"]).exists()]
     if not todo:
         return 0
+    from ..transcribe.whisper import GPU_LOCK
+
     model, *_ = load_model(TranscriptionConfig(model="small", compute_type="int8_float16"))
     done = 0
     for clip in todo:
         try:
-            segments, _info = model.transcribe(str(clip_path(clip["file"])), vad_filter=True,
-                                               beam_size=1)
-            text = " ".join(s.text.strip() for s in segments)[:TEXT_CHARS]
+            with GPU_LOCK:  # clipping jobs use the GPU too (transcribe.whisper)
+                segments, _info = model.transcribe(str(clip_path(clip["file"])), vad_filter=True,
+                                                   beam_size=1)
+                text = " ".join(s.text.strip() for s in segments)[:TEXT_CHARS]
         except Exception as exc:  # one unreadable file mustn't stop the rest
             log.info("no words for clip %s: %s", clip["id"], exc)
             continue

@@ -41,7 +41,7 @@ selection:
 llm:
   backend: gemini            # gemini | ollama | anthropic | mock
   model: null                # null = resolve the best available free model at runtime
-  batch_size: 8              # candidates per call
+  batch_size: 15             # candidates per call (8 took twice the calls; D75)
   max_retries: 5
   temperature: 0.2
   requests_per_minute: 10    # client-side limiter; keep under the free-tier RPM

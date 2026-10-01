@@ -111,7 +111,23 @@ class UsageStats:
 
 
 class RateLimiter:
-    """A simple requests-per-minute gate, safe across threads."""
+    """A simple requests-per-minute gate, safe across threads.
+
+    `shared` hands every backend for the same provider the same gate (D75): two
+    jobs at once, or a job's parallel calls, share the account's per-minute
+    budget instead of each assuming it has all of it and drawing 429s.
+    """
+
+    _shared: ClassVar[dict[tuple[str, int], RateLimiter]] = {}
+    _shared_lock: ClassVar[threading.Lock] = threading.Lock()
+
+    @classmethod
+    def shared(cls, provider: str, requests_per_minute: int) -> RateLimiter:
+        with cls._shared_lock:
+            key = (provider, requests_per_minute)
+            if key not in cls._shared:
+                cls._shared[key] = cls(requests_per_minute)
+            return cls._shared[key]
 
     def __init__(self, requests_per_minute: int):
         self.min_interval = 60.0 / max(1, requests_per_minute)
@@ -147,12 +163,13 @@ class LLMBackend(ABC):
         model: str | None = None,
         max_retries: int = 5,
         requests_per_minute: int = 10,
-        timeout: float = 120.0,
+        # A hung request cost 2+ minutes at 120s; calls, video included, take ~5-30s (D75).
+        timeout: float = 60.0,
     ):
         self.model = model or ""
         self.max_retries = max_retries
         self.timeout = timeout
-        self.limiter = RateLimiter(requests_per_minute)
+        self.limiter = RateLimiter.shared(self.name, requests_per_minute)
         self.usage = UsageStats()
 
     @abstractmethod
@@ -183,8 +200,30 @@ class LLMBackend(ABC):
         except Exception:  # offline, no key: the key must still be computable
             return self.model or "auto"
 
+    #: (backend, model) -> when a "try first" model may be tried again (D75).
+    _resting: ClassVar[dict[tuple[str, str], float]] = {}
+    #: How long a try-first model that failed sits out.
+    REST_SECONDS: ClassVar[float] = 15 * 60
+
     def complete(self, request: LLMRequest) -> LLMResponse:
-        """Call the provider, retrying transient failures with backoff."""
+        """Call the provider, retrying transient failures with backoff.
+
+        A backend with no retries is a "try first, fall back" model (the stronger
+        preview models for caption fixes and descriptions). When one fails it
+        rests for REST_SECONDS: an overloaded preview model timed out on every
+        clip, costing about a minute a clip before the fallback answered.
+        """
+        key = (self.name, self.model)
+        if self.max_retries == 0 and time.monotonic() < self._resting.get(key, 0.0):
+            raise LLMError(f"{self.describe()} is resting after a recent failure")
+        try:
+            return self._complete_with_retries(request)
+        except LLMError:
+            if self.max_retries == 0:
+                self._resting[key] = time.monotonic() + self.REST_SECONDS
+            raise
+
+    def _complete_with_retries(self, request: LLMRequest) -> LLMResponse:
         self.usage.rate_limit_waits += self.limiter.acquire()
 
         last: Exception | None = None

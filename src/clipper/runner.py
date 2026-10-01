@@ -14,7 +14,9 @@ A reserve is only ever a candidate that already cleared the quality gate
 from __future__ import annotations
 
 import dataclasses
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -42,6 +44,8 @@ from .utils.logging import get_logger
 from .utils.timecode import to_slug_timestamp
 
 log = get_logger(__name__)
+#: Clips rendered at once (D75): an 8-core CPU and the GPU encoder had room for more.
+RENDER_WORKERS = 3
 #: How much the picture must add (0-10) before its hook line replaces the transcript's.
 VISUAL_HOOK_MIN = 6
 
@@ -442,53 +446,68 @@ def _render_with_replacement(
     corrector: list[LLMBackend] | None = None,
     recheck: AudioRecheck | None = None,
 ) -> None:
-    """Render, QA, and pull a reserve for each failure until the quota is met."""
+    """Render, QA, and pull a reserve for each failure until the quota is met.
+
+    Clips render RENDER_WORKERS at a time (D75): each is FFmpeg, a face scan and
+    some AI calls, and one after another left most of the CPU and the encoder
+    idle. A wave starts only as many as the quota still needs, so nothing extra
+    is rendered; a rejection queues a reserve for the next wave.
+    """
     queue = list(picks)
     spare = list(reserves)
     attempted: set[str] = set()
     attempt = 0
+    prefix = f"{threading.current_thread().name}-render"
 
-    while queue and len(result.accepted) < limit:
-        pick = queue.pop(0)
-        if pick.candidate.candidate_id in attempted:
-            continue
-        attempted.add(pick.candidate.candidate_id)
+    with ThreadPoolExecutor(max_workers=RENDER_WORKERS, thread_name_prefix=prefix) as pool:
+        while queue and len(result.accepted) < limit:
+            wave = []
+            while queue and len(wave) < min(RENDER_WORKERS, limit - len(result.accepted)):
+                pick = queue.pop(0)
+                if pick.candidate.candidate_id in attempted:
+                    continue
+                attempted.add(pick.candidate.candidate_id)
+                # `attempt` only ever increases, so ids are unique even when a
+                # clip is rejected and replaced. Reusing the accepted-clip rank
+                # made two rejected files collide on both id and filename.
+                attempt += 1
+                rank = len(result.accepted) + len(wave) + 1
+                wave.append(pool.submit(
+                    _produce_one, pick, outcome, config=config, campaign=campaign,
+                    clips_dir=clips_dir, work=work, draft=draft,
+                    rank=rank, attempt=attempt, corrector=corrector, recheck=recheck))
+            for future in wave:
+                _settle(future.result(), queue, spare, result, rejected_dir, config)
 
-        # `attempt` only ever increases, so ids are unique even when a clip is
-        # rejected and replaced. Reusing the accepted-clip rank for this made
-        # two rejected files collide on both id and filename.
-        attempt += 1
-        rank = len(result.accepted) + 1
-        record = _produce_one(
-            pick, outcome, config=config, campaign=campaign,
-            clips_dir=clips_dir, work=work, draft=draft,
-            rank=rank, attempt=attempt, corrector=corrector, recheck=recheck,
-        )
-        if record is None:
-            reserve = _next_reserve(spare, result, queue, config.candidates.min_gap_seconds)
-            if reserve is not None:
-                queue.append(reserve)
-            continue
 
-        if record.qa.status == "fail" or record.compliance.status == "fail":
-            _reject(record, rejected_dir, result)
-            replacement = _next_reserve(spare, result, queue,
-                                        config.candidates.min_gap_seconds)
-            if replacement is not None:
-                log.info(
-                    "replacing %s with reserve %s",
-                    record.plan.clip_id, replacement.candidate.candidate_id,
-                )
-                queue.append(replacement)
-            else:
-                log.warning(
-                    "%s failed QA and no reserve is available; the run will "
-                    "return fewer clips", record.plan.clip_id,
-                )
-            continue
+def _settle(record, queue: list[Pick], spare: list[Pick], result: RunResult,
+            rejected_dir: Path, config: Config) -> None:
+    """Keep one rendered clip, or reject it and queue a replacement."""
+    if record is None:
+        reserve = _next_reserve(spare, result, queue, config.candidates.min_gap_seconds)
+        if reserve is not None:
+            queue.append(reserve)
+        return
 
-        result.accepted.append(record)
-        log.info("%s accepted: %s", record.plan.clip_id, summarize(record.qa))
+    if record.qa.status == "fail" or record.compliance.status == "fail":
+        _reject(record, rejected_dir, result)
+        replacement = _next_reserve(spare, result, queue,
+                                    config.candidates.min_gap_seconds)
+        if replacement is not None:
+            log.info(
+                "replacing %s with reserve %s",
+                record.plan.clip_id, replacement.candidate.candidate_id,
+            )
+            queue.append(replacement)
+        else:
+            log.warning(
+                "%s failed QA and no reserve is available; the run will "
+                "return fewer clips", record.plan.clip_id,
+            )
+        return
+
+    result.accepted.append(record)
+    log.info("%s accepted: %s", record.plan.clip_id, summarize(record.qa))
 
 
 def _next_reserve(spare: list[Pick], result: RunResult, queue: list[Pick],

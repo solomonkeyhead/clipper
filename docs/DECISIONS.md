@@ -1485,3 +1485,32 @@ not footage, and are left out. On the user's PC: 60 of 62 sorted; 1.mp4 and
 - **The Learning tab** was mostly a statistics page and a list of clips to rate.
   It left the sidebar: its switch and a one-line summary ("Learning from 11
   clips") are in Settings, linking to the trimmed details page (no rating list).
+
+## D75 -- Clipping about 3x faster (2026-09-30)
+
+Measured first. The user's batch of short Please Like Me sources took 244s,
+121s and 73s; the log showed where: ~29s per clip waiting on the overloaded
+gemini-3-flash-preview for caption fixes, ~29s more for the description (both
+then fell back to flash-lite), one hung request costing 130s at a 120s timeout,
+Whisper large-v3 reloaded for every video (~4s) and again for rechecks, clips
+rendered one at a time, and videos one at a time. Transcription itself was fast.
+
+- A "try first" model (no retries) that fails rests for 15 minutes
+  (LLMBackend._resting); calls go straight to the fallback meanwhile.
+- Request timeout 120s -> 60s; calls, video included, take ~5-30s.
+- One Whisper model stays loaded for the process (whisper.shared_model), used by
+  transcription and caption-fix rechecks; all Whisper GPU work is serialised by
+  whisper.GPU_LOCK (8 GB card). A local Ollama LLM would now share the GPU with
+  a resident Whisper -- not used here; revisit if it is.
+- Clips render 3 at a time within a job (runner.RENDER_WORKERS), in waves that
+  never render more than the quota needs.
+- Two videos clip at once (jobs.JOB_WORKERS). Job threads are named after the
+  job and the threads they start inherit the name, so each job's progress only
+  reads its own log lines. The AI's per-minute budget is shared across all of
+  them (RateLimiter.shared), so concurrency doesn't draw 429s.
+- Scoring batches of 15 moments instead of 8: half the calls.
+- Measured on the same three videos, fresh data folder (no caches): 135s for
+  all three against 438s before -- about 3.2x.
+- Not done: NVENC. The bundled FFmpeg needs NVIDIA driver 610+ (NVENC API 13.1);
+  this PC's driver has 13.0, so renders use libx264. A driver update moves
+  encoding to the GPU.

@@ -160,7 +160,7 @@ class SelectionConfig(StrictModel):
 class LLMConfig(StrictModel):
     backend: LLMBackend = "gemini"
     model: str | None = None  # None => resolve the best free model at runtime
-    batch_size: int = Field(default=8, ge=1, le=32)
+    batch_size: int = Field(default=15, ge=1, le=32)
     max_retries: int = Field(default=5, ge=0)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     requests_per_minute: int = Field(default=10, ge=1)

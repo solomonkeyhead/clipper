@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -169,7 +170,9 @@ def watch_candidates(candidates: list[Candidate], values: list[SignalValues], so
 
         # A video call takes ~15-20s; three at once stay under the free tier's
         # requests a minute (the backend's limiter spaces them anyway).
-        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        # Named after the calling thread, so a job's progress log still sees them.
+        with ThreadPoolExecutor(max_workers=WORKERS,
+                                thread_name_prefix=f"{threading.current_thread().name}-watch") as pool:
             for c, watched in zip(chosen, pool.map(one, [by_id[i] for i in chosen]), strict=True):
                 if watched is not None:
                     out[c] = watched

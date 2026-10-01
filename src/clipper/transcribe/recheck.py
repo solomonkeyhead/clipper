@@ -39,6 +39,7 @@ import numpy as np
 from ..config import TranscriptionConfig
 from ..models import Word
 from ..utils.logging import get_logger
+from .whisper import GPU_LOCK
 
 log = get_logger(__name__)
 
@@ -104,11 +105,13 @@ class AudioRecheck:
             audio = self._load_audio()
             a = max(0, int(start * self._rate))
             b = min(len(audio), int(end * self._rate))
-            segments, _ = model.transcribe(
-                audio[a:b], language=self.cfg.language if self.cfg.language != "auto" else None,
-                beam_size=5, temperature=0.0, word_timestamps=True,
-                condition_on_previous_text=False, vad_filter=True,
-            )
+            with GPU_LOCK:
+                segments, _ = model.transcribe(
+                    audio[a:b], language=self.cfg.language if self.cfg.language != "auto" else None,
+                    beam_size=5, temperature=0.0, word_timestamps=True,
+                    condition_on_previous_text=False, vad_filter=True,
+                )
+                segments = list(segments)  # decoding is lazy: finish it inside the lock
             words = [Word(start=start + float(w.start),
                           end=start + max(float(w.end), float(w.start)),
                           text=w.word.strip(),
@@ -128,11 +131,13 @@ class AudioRecheck:
         audio = self._load_audio()
         a = max(0, int((word.start - WINDOW_BEFORE) * self._rate))
         b = min(len(audio), int((word.end + WINDOW_AFTER) * self._rate))
-        segments, _ = model.transcribe(
-            audio[a:b], language="en", beam_size=5, temperature=0.0,
-            initial_prompt=f"Vocabulary: {replacement.strip()}.",
-            condition_on_previous_text=False, vad_filter=False,
-        )
+        with GPU_LOCK:
+            segments, _ = model.transcribe(
+                audio[a:b], language="en", beam_size=5, temperature=0.0,
+                initial_prompt=f"Vocabulary: {replacement.strip()}.",
+                condition_on_previous_text=False, vad_filter=False,
+            )
+            segments = list(segments)  # decoding is lazy: finish it inside the lock
         text = " ".join(s.text.strip() for s in segments)
         if _is_loop(text):
             log.info("audio recheck for %r looped; treating as no evidence",
@@ -142,9 +147,9 @@ class AudioRecheck:
 
     def _load_model(self):
         if self._model is None:
-            from .whisper import load_model
+            from .whisper import shared_model
 
-            self._model, *_ = load_model(self.cfg)
+            self._model = shared_model(self.cfg)[0]
         return self._model
 
     def _load_audio(self) -> np.ndarray:

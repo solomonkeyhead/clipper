@@ -74,8 +74,13 @@ class _Progress(logging.Handler):
         super().__init__(logging.INFO)
         self.job, self.publish = job, publish
         self.total, self.done = 0, 0
+        # Two jobs run at once (D75): only this job's thread, and the threads it
+        # starts (named after it), are this job's progress.
+        self.thread = threading.current_thread().name
 
     def emit(self, record: logging.LogRecord) -> None:
+        if record.threadName != self.thread and not record.threadName.startswith(self.thread + "-"):
+            return
         try:
             text = record.getMessage().strip()
         except Exception:
@@ -137,8 +142,14 @@ def _save_finished(job: Job) -> None:
         log.warning("could not keep job %s: %s", job.id, exc)
 
 
+#: Videos clipped at once (D75). One job waits on the AI while another uses the
+#: GPU and CPU; Whisper still runs one at a time (transcribe.whisper.GPU_LOCK)
+#: and the AI's per-minute budget is shared (llm.base.RateLimiter.shared).
+JOB_WORKERS = 2
+
+
 class JobRunner:
-    """A single worker thread and its queue; jobs are kept for the session."""
+    """JOB_WORKERS worker threads on one queue, oldest job first; jobs are kept for the session."""
 
     def __init__(self, publish) -> None:
         self.publish = publish
@@ -148,7 +159,7 @@ class JobRunner:
         # Finished jobs are kept in the database, so their results outlive a restart.
         self._done = _load_finished()
         self._ids = itertools.count(max([0, *self._done]) + 1)
-        self._thread: threading.Thread | None = None
+        self._threads: list[threading.Thread] = []
         self._lock = threading.Lock()
 
     def submit(self, campaign, source: str, top: int | None,
@@ -165,9 +176,11 @@ class JobRunner:
         self._configs[job.id] = campaign
         self._queue.put(job)
         with self._lock:
-            if self._thread is None or not self._thread.is_alive():
-                self._thread = threading.Thread(target=self._work, daemon=True, name="clip-jobs")
-                self._thread.start()
+            self._threads = [t for t in self._threads if t.is_alive()]
+            if len(self._threads) < JOB_WORKERS:
+                worker = threading.Thread(target=self._work, daemon=True, name="clip-jobs")
+                worker.start()
+                self._threads.append(worker)
         self.publish("job.progress", job.view())
         return job
 
@@ -182,6 +195,9 @@ class JobRunner:
                 job = self._queue.get(timeout=5)
             except queue.Empty:
                 return
+            # The thread carries the job's id, so its log lines (and those of
+            # the threads it starts) reach only this job's progress.
+            threading.current_thread().name = f"clip-job-{job.id}"
             self._run(job)
 
     def _run(self, job: Job) -> None:
@@ -191,9 +207,9 @@ class JobRunner:
 
         pipeline = logging.getLogger("clipper")
         handler = _Progress(job, self.publish)
-        previous = pipeline.level
         pipeline.addHandler(handler)
-        pipeline.setLevel(logging.INFO)
+        if pipeline.getEffectiveLevel() > logging.INFO:  # the progress reads INFO lines
+            pipeline.setLevel(logging.INFO)
         job.status, job.stage = "running", "Starting"
         self.publish("job.progress", job.view())
         campaign = self._configs.pop(job.id)
@@ -225,7 +241,6 @@ class JobRunner:
             log.error("clip job %s failed:\n%s", job.id, traceback.format_exc())
         finally:
             pipeline.removeHandler(handler)
-            pipeline.setLevel(previous)
             job.finished = datetime.now().strftime("%Y-%m-%d %H:%M")
             _save_finished(job)
             self.publish("job.progress", job.view())

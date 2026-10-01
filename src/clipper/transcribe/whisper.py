@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import gc
 import os
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -159,6 +160,28 @@ def _is_oom(exc: Exception) -> bool:
     return any(s in text for s in ("out of memory", "cuda_error_out_of_memory", "cublas_status_alloc"))
 
 
+#: Whisper work on the GPU, one at a time (D75). Two clipping jobs run at once
+#: and a job renders clips in parallel; all of them may want Whisper (the main
+#: transcription, caption-fix rechecks) and an 8 GB card can't hold several.
+GPU_LOCK = threading.RLock()
+
+
+_models: dict[tuple, tuple] = {}
+
+
+def shared_model(cfg: TranscriptionConfig) -> tuple[WhisperModel, str, str, str]:
+    """The process's one Whisper model for `cfg`, loaded on first use (D75).
+
+    Loading large-v3 took ~4s for every video in a batch, and caption-fix
+    rechecks loaded their own copy as well; one resident copy serves both.
+    """
+    key = (cfg.model, cfg.device, cfg.compute_type)
+    with GPU_LOCK:
+        if key not in _models:
+            _models[key] = load_model(cfg)
+        return _models[key]
+
+
 def free_gpu_memory() -> None:
     """Release VRAM between stages. The brief requires stages not to overlap."""
     gc.collect()
@@ -198,13 +221,10 @@ def transcribe(
     if not audio.is_file():
         raise TranscriptionError(f"analysis audio missing: {audio}. Re-run ingest.")
 
-    model, model_name, compute_type, device = load_model(cfg)
-    started = time.perf_counter()
-    try:
+    with GPU_LOCK:
+        model, model_name, compute_type, device = shared_model(cfg)
+        started = time.perf_counter()
         words, language, language_probability = _run(model, audio, info.media.duration, cfg)
-    finally:
-        del model
-        free_gpu_memory()
 
     wall = time.perf_counter() - started
     if not words:
