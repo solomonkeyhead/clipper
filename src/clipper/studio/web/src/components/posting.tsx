@@ -1,9 +1,10 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Link2, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useAccountGroups, useAccounts, useAddCaptionRule, useAddPostLink, useCampaigns, useRecheckRules,
-  type Account, type BriefProblem, type Clip, type PostCopy,
+  useAccountGroups, useAccounts, useAddPostLink, useCampaigns, useRecheckRules,
+  type Account, type Clip, type PostCopy,
 } from "@/api/client";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, cn, openBehind } from "@/lib/utils";
@@ -169,13 +170,22 @@ function BriefCheck({ clip }: { clip: Clip }) {
   const recheck = useRecheckRules();
   const rules = clip.rules;
   if (!rules) return null;
-  if (rules.brief.length) {
+  if (rules.brief.length || rules.failed.length) {
     return (
       <div className="mb-3 flex flex-col gap-2 rounded-md border border-danger/40 bg-danger/5 p-2.5 text-sm">
-        <div className="flex items-center gap-1.5 font-medium text-danger">
-          <AlertTriangle className="size-4" /> Breaks the brief: fix before posting
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 font-medium text-danger">
+            <AlertTriangle className="size-4" /> Breaks the brief: fix before posting
+          </span>
+          <FixButton clip={clip} />
         </div>
-        {rules.brief.map((p, i) => <Problem key={i} problem={p} campaign={clip.campaign} />)}
+        {rules.failed.map((f) => <span key={f}>{f}</span>)}
+        {rules.brief.map((p, i) => (
+          <div key={i} className="flex flex-col gap-0.5">
+            <span>{p.problem}</span>
+            <span className="text-xs text-muted">The brief: “{p.rule}”</span>
+          </div>
+        ))}
       </div>
     );
   }
@@ -198,31 +208,27 @@ function BriefCheck({ clip }: { clip: Clip }) {
   );
 }
 
-const PLACE: Record<string, "caption" | "title"> = { title: "title", caption: "caption" };
-
-function Problem({ problem, campaign }: { problem: BriefProblem; campaign: string }) {
-  const add = useAddCaptionRule();
-  const platform = problem.platform === "all" ? null : problem.platform;
-  const where = platform ? (UPLOAD[key(platform)]?.name ?? platform) : "every platform";
-  const place = PLACE[problem.where] ?? "caption";
+/** Text the brief says is missing becomes a rule for every clip; anything else,
+ *  the AI rewrites the caption to follow (D91). The checks run again after. */
+function FixButton({ clip }: { clip: Clip }) {
+  const qc = useQueryClient();
+  const fix = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/clips/${clip.id}/fix`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || res.statusText);
+      return data as { fixed: string[] };
+    },
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: ["clips"] });
+      toast.success("Fixed", { description: `${res.fixed.join("; ") || "Nothing needed"}. Checking it against the brief again.` });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
   return (
-    <div className="flex flex-col gap-1">
-      <span>{problem.problem}</span>
-      <span className="text-xs text-muted">The brief: “{problem.rule}”</span>
-      {problem.add ? (
-        <Button size="sm" variant="secondary" className="w-fit" disabled={add.isPending}
-                onClick={() => add.mutate({ name: campaign, rule: {
-                  text: problem.add, must: "include", place, platforms: platform ? [platform] : [], quote: problem.rule,
-                } }, {
-                  onSuccess: () => toast.success("Rule added", { description: `Every clip of this campaign gets “${problem.add}” in its ${place} on ${where}.` }),
-                  onError: (e) => toast.error("Couldn't add the rule", { description: String(e.message ?? e) }),
-                })}>
-          Add “{problem.add}” to the {place} on {where}, for every clip
-        </Button>
-      ) : (
-        <span className="text-xs text-muted">Edit the caption below, or add the rule on the campaign's page.</span>
-      )}
-    </div>
+    <Button size="sm" variant="primary" disabled={fix.isPending} onClick={() => fix.mutate()}>
+      {fix.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />} Fix it
+    </Button>
   );
 }
 

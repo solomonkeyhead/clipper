@@ -408,9 +408,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
             )}
             {clip.status === "ready" && breaksBrief(clip) && (
               <Tip label={`Breaks the brief: ${[...(clip.rules?.failed ?? []), ...(clip.rules?.brief ?? []).map((p) => p.problem)].join("; ")}`}>
-                <span aria-label="Breaks the brief" className="flex items-center gap-1 text-xs font-medium text-danger">
-                  <ShieldAlert className="size-3.5" /> Brief
-                </span>
+                <span aria-label="Breaks the brief" className="text-danger"><ShieldAlert className="size-4" /></span>
               </Tip>
             )}
             <ScoreBadge clip={clip} />
@@ -629,7 +627,7 @@ export function ClipSheet() {
                     {clip.posts.length ? (
                       <div className="flex flex-col gap-2">
                         {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} />)}
-                        <PasteLink key={clip.id} clip={clip} compact />
+                        <PasteLink key={`paste-${clip.id}`} clip={clip} compact />
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2 rounded-md border border-dashed border-line p-3">
@@ -637,15 +635,15 @@ export function ClipSheet() {
                           <Loader2 className="size-4 shrink-0 animate-spin text-accent" />
                           Looking for your post every 2 minutes for the next half hour, so you can submit it fast.
                         </p>
-                        <PasteLink key={clip.id} clip={clip} />
+                        <PasteLink key={`paste-${clip.id}`} clip={clip} />
                       </div>
                     )}
                   </section>
                 )}
 
-                {clip.status === "ready" && <PostPanel key={clip.id} clip={clip} />}
+                {clip.status === "ready" && <PostPanel key={`post-${clip.id}`} clip={clip} />}
 
-                {clip.caption && <CaptionSection key={clip.id} clip={clip} />}
+                {clip.caption && <CaptionSection key={`caption-${clip.id}`} clip={clip} />}
 
                 {(clip.status === "posted" || clip.status === "submitted") && (
                   <section>
@@ -661,7 +659,7 @@ export function ClipSheet() {
                   <div className="mt-2"><ScoreBreakdown clip={clip} /></div>
                 </details>
 
-                <NoteField key={clip.id} note={note} saved={clip.notes} onChange={setNoteText}
+                <NoteField key={`note-${clip.id}`} note={note} saved={clip.notes} onChange={setNoteText}
                   onSave={() => note !== clip.notes && setNote.mutate({ id: clip.id, notes: note },
                     { onSuccess: () => toast.success("Note saved", { duration: 1500 }) })} />
 

@@ -993,18 +993,6 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         rulecheck.start(name, broker.publish)  # the rules may have changed (D81)
         return {"name": campaign.name}
 
-    @app.post("/api/campaigns/{name}/caption-rules")
-    def add_caption_rule(name: str, rule: CaptionRule) -> dict:
-        """A rule the AI check found missing, made a rule for every clip (D81)."""
-        try:
-            editor.add_caption_rule(campaigns_dir(), name, rule.model_dump(mode="json"))
-        except (CampaignError, ValueError) as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("campaigns.changed")
-        broker.publish("clips.changed")
-        rulecheck.start(name, broker.publish)
-        return {"ok": True}
-
     @app.post("/api/campaigns/{name}/recheck")
     def recheck_campaign(name: str) -> dict:
         if name not in load_campaigns():
@@ -1286,7 +1274,6 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def edit_caption(clip_id: int, body: dict) -> dict:
         """The user's own caption for a clip not yet posted; the rules still apply (D81).
         Choosing or writing captions is part of the paid plans (D90)."""
-        from ..campaign import rules as caption_rules
         from . import plans
 
         plans.require("choose_lines")
@@ -1294,11 +1281,22 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         text = str(body.get("caption") or "").strip()
         if not text:
             raise HTTPException(400, "the caption is empty")
+        return {"caption": save_caption(unposted(clip_id), text)}
+
+    def unposted(clip_id: int) -> Clip:
         found = next((c for c in Snapshot().clips if c.id == clip_id), None)
         if found is None:
             raise HTTPException(404, "no such clip")
         if found.posts or found.status in ("posted", "submitted"):
             raise HTTPException(400, "it's posted: the caption is what's live")
+        return found
+
+    def save_caption(found: Clip, text: str) -> str:
+        """A new caption for an unposted clip: the rules applied, in the library and
+        the performance log, then read against the brief again."""
+        from ..campaign import rules as caption_rules
+
+        clip_id = found.id
         campaign = load_campaigns().get(found.campaign)
         caption = caption_rules.enforce(text, campaign) if campaign else text
         with stats.log_lock:
@@ -1314,7 +1312,47 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 perf.write(rows)
         broker.publish("clips.changed", {"id": clip_id})
         rulecheck.start(found.campaign, broker.publish)
-        return {"caption": caption}
+        return caption
+
+    @app.post("/api/clips/{clip_id}/fix")
+    def fix_clip(clip_id: int) -> dict:
+        """One click for a flagged clip (D91): text the brief says is missing becomes
+        a rule for every clip; anything else, the AI rewrites the caption to follow."""
+        from ..campaign import fix
+        from ..config import Config
+        from ..runner import _correction_backends
+
+        found = unposted(clip_id)
+        rules_state = found.rules
+        if rules_state is None or rules_state.ok:
+            return {"fixed": [], "note": "nothing to fix"}
+        fixed: list[str] = []
+        rest = list(rules_state.failed)
+        for problem in rules_state.brief:
+            if problem.add.strip():
+                platforms = [problem.platform] if problem.platform != "all" else []
+                editor.add_caption_rule(campaigns_dir(), found.campaign, {
+                    "text": problem.add.strip(), "must": "include",
+                    "place": "title" if problem.where == "title" else "caption",
+                    "platforms": platforms, "quote": problem.rule})
+                fixed.append(f"“{problem.add.strip()}” added for every clip")
+            else:
+                rest.append(f"{problem.rule} ({problem.problem})" if problem.problem else problem.rule)
+        if rest:
+            campaign = load_campaigns().get(found.campaign)
+            try:
+                backends = _correction_backends(Config.load(), None)
+            except Exception as exc:  # no AI key
+                raise HTTPException(400, f"the AI isn't set up ({str(exc).splitlines()[0]}); edit the caption yourself") from exc
+            new = fix.rewrite(found.caption, rest, campaign, backends) if campaign else None
+            if new is None:
+                raise HTTPException(502, "the AI couldn't rewrite it just now; try again, or edit the caption yourself")
+            save_caption(found, new)
+            fixed.append("caption rewritten")
+        broker.publish("campaigns.changed")
+        broker.publish("clips.changed", {"id": clip_id})
+        rulecheck.start(found.campaign, broker.publish)
+        return {"fixed": fixed}
 
     @app.get("/api/posts")
     def posts(campaign: str | None = None, scope: str | None = None) -> list[Post]:

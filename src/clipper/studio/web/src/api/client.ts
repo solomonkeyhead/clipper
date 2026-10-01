@@ -484,19 +484,6 @@ export function useEditCaption() {
   });
 }
 
-/** A rule the AI check found missing, made a rule for every clip of the campaign (D81). */
-export function useAddCaptionRule() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ name, rule }: { name: string; rule: CaptionRule }) =>
-      unwrap(api.POST("/api/campaigns/{name}/caption-rules", { params: { path: { name } }, body: rule })),
-    onSuccess: () => {
-      CLIP_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey }));
-      qc.invalidateQueries({ queryKey: ["campaign-form"] });
-    },
-  });
-}
-
 export function useRecheckRules() {
   const invalidate = useInvalidate();
   return useMutation({

@@ -283,14 +283,6 @@ class TestTheAPI:
         clip_id = add_clip(data_root, status="posted")
         assert client.put(f"/api/clips/{clip_id}/caption", json={"caption": "x"}).status_code == 400
 
-    def test_a_finding_becomes_a_rule_for_every_clip(self, client, campaigns, _no_background_rule_checks):
-        res = client.post("/api/campaigns/please-like-me/caption-rules",
-                          json={"text": "#ad", "quote": "Include #ad."})
-        assert res.status_code == 200
-        saved = yaml.safe_load((campaigns / "please-like-me.yaml").read_text(encoding="utf-8"))
-        assert [r["text"] for r in saved["caption_rules"]] == ["@JoshThomasChannel", "#ad"]
-        assert _no_background_rule_checks == ["please-like-me"]
-
 
 def test_the_mock_answers_in_order():
     """The helpers above rely on MockBackend's scripted replies."""
@@ -310,3 +302,43 @@ def test_a_post_the_models_filters_refuse_is_said_so_not_left_pending():
 
     with pytest.raises(audit.Refused):
         audit.audit("u", rules.post_texts(HOOK, CAPTION, HOOK, plm()), [Refusing()])
+
+
+class TestFixIt:
+    """D91: one click on a flagged clip."""
+
+    @pytest.fixture
+    def client(self, data_root, tmp_path, monkeypatch):
+        folder = tmp_path / "campaigns"
+        folder.mkdir()
+        (folder / "please-like-me.yaml").write_text(yaml.safe_dump(plm(caption_rules=[
+            TAG_RULE, {"text": "Netflix", "must": "avoid", "quote": "Don't mention Netflix."}]).model_dump(mode="json")),
+            encoding="utf-8")
+        from clipper import runner
+        from clipper.studio import server
+
+        monkeypatch.setattr(server, "campaigns_dir", lambda: folder)
+        fixed = json.dumps({"line": "full series is free on youtube", "description": "Josh and Tom talk."})
+        monkeypatch.setattr(runner, "_correction_backends", lambda config, override: [MockBackend(responses=[fixed])])
+        self.folder = folder
+        return TestClient(server.create_app())
+
+    def test_a_broken_rule_is_rewritten_and_a_missing_text_becomes_a_rule(self, client, data_root):
+        clip_id = add_clip(data_root, caption="full series on Netflix\n\nJosh and Tom talk on Netflix.\n\n#pleaselikeme")
+        with db.connect() as con:
+            clip = db.clip(con, clip_id)
+            _, key = rulecheck.audit_key(clip, CampaignConfig.load(self.folder / "please-like-me.yaml"), None)
+            db.set_audit(con, clip_id, {"key": key, "problems": [
+                {"rule": "Use #ad.", "platform": "all", "where": "caption", "problem": "no #ad", "add": "#ad"}]})
+        before = client.get(f"/api/clips/{clip_id}").json()["rules"]
+        assert before["failed"] and before["brief"]
+        res = client.post(f"/api/clips/{clip_id}/fix").json()
+        assert res["fixed"] == ["“#ad” added for every clip", "caption rewritten"]
+        clip = client.get(f"/api/clips/{clip_id}").json()
+        assert "Netflix" not in clip["caption"] and clip["caption"].startswith("full series is free on youtube")
+        saved = yaml.safe_load((self.folder / "please-like-me.yaml").read_text(encoding="utf-8"))
+        assert "#ad" in [r["text"] for r in saved["caption_rules"]]
+
+    def test_a_clean_clip_has_nothing_to_fix(self, client, data_root):
+        clip_id = add_clip(data_root)
+        assert client.post(f"/api/clips/{clip_id}/fix").json()["fixed"] == []

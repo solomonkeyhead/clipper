@@ -122,8 +122,8 @@ const STATUS_LABEL = { ready: "Ready to post", posted: "Posted", submitted: "Sub
 export function StatusChip({ status }: { status: string }) {
   const s = (status in STATUS_TONE ? status : "ready") as keyof typeof STATUS_TONE;
   return (
-    <Chip tone={STATUS_TONE[s]}>
-      <span className="size-1.5 rounded-full bg-current" aria-hidden />
+    <Chip tone={STATUS_TONE[s]} className="whitespace-nowrap">
+      <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden />
       {STATUS_LABEL[s]}
     </Chip>
   );

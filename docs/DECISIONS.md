@@ -1744,3 +1744,15 @@ line, writing a hook, and choosing or writing a caption are the paid
 "choose_lines" feature (Research plan up). Upload pages now open in a tab behind
 Clipper: window.open can't, so a Ctrl/Cmd-click is dispatched on a link, and the
 buttons are real links, so middle-click works anywhere.
+
+## D91 -- One "Fix it" for a flagged clip; sections drawn twice (2026-10-01)
+
+A clip flagged against its brief now has one Fix it button rather than a fix per
+problem, and no silent rewriting: text the brief says is missing becomes a
+caption rule for every clip, and anything else (a banned word, a phrase the brief
+forbids, a caption too long) has the AI rewrite the caption line and description
+to follow the broken rules, keeping meaning, tone and hashtags (campaign/fix.py);
+the clip is checked again after. Failed rule checks now show in the same box.
+The clip window's Post it, caption and note sections shared one React key, so a
+refresh could draw them twice; each has its own now. The card's brief warning is
+an icon, so the status pill no longer wraps.

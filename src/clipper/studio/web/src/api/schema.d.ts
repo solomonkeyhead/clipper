@@ -116,26 +116,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/campaigns/{name}/caption-rules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Add Caption Rule
-         * @description A rule the AI check found missing, made a rule for every clip (D81).
-         */
-        post: operations["add_caption_rule_api_campaigns__name__caption_rules_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/campaigns/{name}/recheck": {
         parameters: {
             query?: never;
@@ -541,6 +521,27 @@ export interface paths {
          */
         put: operations["edit_caption_api_clips__clip_id__caption_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clips/{clip_id}/fix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fix Clip
+         * @description One click for a flagged clip (D91): text the brief says is missing becomes
+         *     a rule for every clip; anything else, the AI rewrites the caption to follow.
+         */
+        post: operations["fix_clip_api_clips__clip_id__fix_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2555,43 +2556,6 @@ export interface operations {
             };
         };
     };
-    add_caption_rule_api_campaigns__name__caption_rules_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CaptionRule"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     recheck_campaign_api_campaigns__name__recheck_post: {
         parameters: {
             query?: never;
@@ -3345,6 +3309,39 @@ export interface operations {
                 };
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fix_clip_api_clips__clip_id__fix_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
