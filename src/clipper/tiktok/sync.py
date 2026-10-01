@@ -49,6 +49,16 @@ def normalise(text: str) -> str:
 WHOLE_MIN, WHOLE_MARGIN = 0.8, 0.05
 
 
+#: A shorter opening than MATCH_CHARS still counts from this long: an X post is
+#: the caption cut to 280 characters, so a short caption's hashtags may be gone.
+MIN_MATCH_CHARS = 20
+
+
+def _same_start(post: str, row: str) -> bool:
+    n = min(MATCH_CHARS, len(post), len(row))
+    return post == row if n < MIN_MATCH_CHARS else post[:n] == row[:n]
+
+
 def best_row(caption: str, candidates: list[tuple[int, str]]) -> tuple[int | None, bool]:
     """The row a post's caption belongs to: (index, ambiguous).
 
@@ -60,7 +70,7 @@ def best_row(caption: str, candidates: list[tuple[int, str]]) -> tuple[int | Non
     key = normalise(caption)
     if not key:
         return None, False
-    hits = [(i, normalise(c)) for i, c in candidates if normalise(c)[:MATCH_CHARS] == key[:MATCH_CHARS]]
+    hits = [(i, text) for i, text in ((i, normalise(c)) for i, c in candidates) if _same_start(key, text)]
     if len(hits) == 1:
         return hits[0][0], False
     if not hits:

@@ -31,6 +31,10 @@ const UPLOAD: Record<string, { name: string; url: string; how: string; label: st
     name: "YouTube Shorts", url: "https://www.youtube.com/upload",
     how: "Pick the channel you post Shorts on, then drop the video in", label: "Details → Show more → Paid promotion",
   },
+  x: {
+    name: "X", url: "https://x.com/compose/post",
+    how: "Attach the video with the picture icon", label: "X has no label switch, so keep the brief's #ad in the post",
+  },
 };
 
 const key = (platform: string) => platform.split("_")[0];
@@ -165,6 +169,8 @@ function BriefCheck({ clip }: { clip: Clip }) {
     <p className="mb-2 flex items-center gap-1.5 text-xs text-muted">
       {rules.checked ? (
         <><ShieldCheck className="size-3.5 text-success" /> The AI read this post against the brief: nothing broken.</>
+      ) : rules.refused ? (
+        <><AlertTriangle className="size-3.5 text-warning" /> The AI's content filter wouldn't read this post. The rule checks below still ran; read the brief yourself for anything else.</>
       ) : rules.checking ? (
         <><Loader2 className="size-3.5 animate-spin" /> Reading this post against the brief…</>
       ) : (

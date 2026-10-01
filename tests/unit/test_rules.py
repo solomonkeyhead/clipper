@@ -266,7 +266,7 @@ class TestTheAPI:
         copy = {c["platform"]: c for c in clip["post_copy"]}
         assert copy["youtube_shorts"]["title"].endswith("@JoshThomasChannel")
         assert all(ch["passed"] for c in copy.values() for ch in c["checks"])
-        assert clip["rules"] == {"failed": [], "checked": False, "checking": False, "brief": []}
+        assert clip["rules"] == {"failed": [], "checked": False, "checking": False, "refused": False, "brief": []}
 
     def test_the_ai_checks_findings_show_until_the_texts_change(self, client, data_root):
         clip_id = add_clip(data_root)
@@ -299,3 +299,14 @@ def test_the_mock_answers_in_order():
 
     assert [backend.complete(LLMRequest(system="", user="")).text for _ in range(2)] == ["a", "b"]
     assert isinstance(backend.complete(LLMRequest(system="", user="")), LLMResponse)
+
+
+def test_a_post_the_models_filters_refuse_is_said_so_not_left_pending():
+    from clipper.llm.base import ContentBlocked
+
+    class Refusing(MockBackend):
+        def complete(self, request):
+            raise ContentBlocked("Gemini refused the input (PROHIBITED_CONTENT)")
+
+    with pytest.raises(audit.Refused):
+        audit.audit("u", rules.post_texts(HOOK, CAPTION, HOOK, plm()), [Refusing()])

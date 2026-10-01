@@ -58,13 +58,13 @@ class TestSave:
 
 
 def test_a_brief_fills_the_form_without_private_links():
-    found = BriefFields(title="Chad Powers S2", reward_per_1k_usd=2.5, platforms=["tiktok", "x"],
+    found = BriefFields(title="Chad Powers S2", reward_per_1k_usd=2.5, platforms=["tiktok", "x", "snapchat"],
                         campaign_url="https://drive.google.com/drive/folders/abc",
                         required_hashtags=["chadpowers"], approved_captions=["a caption"],
                         min_seconds=60, max_seconds=7, deadline="next friday",
                         other_rules=["Tier 1 audience", "- keep posts up 30 days"])
     form = editor.form_from_brief(found)
-    assert form.platform_targets == ["tiktok"] and form.campaign_url == ""
+    assert form.platform_targets == ["tiktok", "x"] and form.campaign_url == ""
     assert form.required_hashtags == ["#chadpowers"] and form.fixed_captions
     assert (form.min_seconds, form.max_seconds) == (7, 60) and form.deadline == ""
     assert form.notes == "- Tier 1 audience\n- keep posts up 30 days"

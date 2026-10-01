@@ -22,9 +22,10 @@ from ..config import CampaignConfig, CaptionRule
 from . import safety
 from .compliance import RuleResult, _contains
 
-NAMES = {"tiktok": "TikTok", "instagram_reels": "Instagram", "youtube_shorts": "YouTube"}
+NAMES = {"tiktok": "TikTok", "instagram_reels": "Instagram", "youtube_shorts": "YouTube", "x": "X"}
 #: Platforms' own limits on a post's text.
-CAPTION_MAX = {"tiktok": 4000, "instagram_reels": 2200, "youtube_shorts": 5000}
+#: X counts 280 for an account without Premium.
+CAPTION_MAX = {"tiktok": 4000, "instagram_reels": 2200, "youtube_shorts": 5000, "x": 280}
 TITLE_MAX = 100
 INSTAGRAM_MAX_HASHTAGS = 30
 #: YouTube refuses a title or description containing these.
@@ -141,9 +142,24 @@ def enforce(caption: str, campaign: CampaignConfig, platform: str | None = None)
     tags = " ".join(required + [w for w in words if w.lower() not in
                                 {t.lower() for t in campaign.required_hashtags}])
     text = join(line, description, tags)
+    if platform == "x":
+        text = _fit_x(line, tags, campaign)
     if platform == "youtube_shorts":
         text = _no_angles(text)
     return text
+
+
+def _fit_x(line: str, tags: str, campaign: CampaignConfig) -> str:
+    """An X post: the caption line and its hashtags, no description, and the
+    optional hashtags dropped from the end until it fits 280 characters."""
+    required = {t.lower() for t in campaign.required_hashtags}
+    words = tags.split()
+    while len(join(line, "", " ".join(words))) > CAPTION_MAX["x"]:
+        optional = [i for i, w in enumerate(words) if w.lower() not in required]
+        if not optional:
+            break
+        words.pop(optional[-1])
+    return join(line, "", " ".join(words))
 
 
 def _no_angles(text: str) -> str:

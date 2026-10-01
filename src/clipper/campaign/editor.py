@@ -371,7 +371,8 @@ plus season if given).
 - reward_per_1k_usd: pay per 1,000 views in US dollars (e.g. "$2.50 CPM" -> 2.5). \
 min_payout_usd / max_payout_usd: the minimum payout and the maximum per post, if given.
 - deadline: YYYY-MM-DD if the brief gives an end date.
-- platforms: any of "tiktok", "instagram_reels", "youtube_shorts" that the brief allows.
+- platforms: any of "tiktok", "instagram_reels", "youtube_shorts", "x" (X / Twitter) that the \
+brief allows.
 - content_type: "scripted" for TV shows and films, "podcast" for podcasts, interviews, \
 streams and talking-head creators, "other" otherwise.
 - min_seconds / max_seconds: the clip length the brief asks for.

@@ -27,7 +27,7 @@ import re
 from pydantic import BaseModel, Field
 
 from ..config import CampaignConfig
-from ..llm.base import LLMBackend, LLMRequest
+from ..llm.base import ContentBlocked, LLMBackend, LLMRequest
 from ..utils.logging import get_logger
 from .compliance import _contains
 from .rules import NAMES, PostText
@@ -66,6 +66,10 @@ is not a hashtag. If the rule doesn't apply to this text, or the text follows it
 answer is no.
 
 Return JSON: {"breaks": true | false, "why": "one short sentence"}"""
+
+
+class Refused(RuntimeError):
+    """Every model refused to read the post (a provider's own content filter)."""
 
 
 class Problem(BaseModel):
@@ -137,7 +141,8 @@ def key(user: str) -> str:
 
 def audit(user: str, posts: list[PostText], backends: list[LLMBackend], *,
           cache=None, hook: str = "") -> list[Problem] | None:
-    """The problems found and confirmed, [] for none, or None when no model gave a usable answer."""
+    """The problems found and confirmed, [] for none, or None when no model gave a usable
+    answer. Raises Refused when the models' own filters won't read it."""
     found = _ask(SYSTEM, user, backends, cache, lambda text: _parse(text, posts))
     if found is None:
         return None
@@ -154,6 +159,7 @@ def audit(user: str, posts: list[PostText], backends: list[LLMBackend], *,
 
 def _ask(system: str, user: str, backends: list[LLMBackend], cache, parse):
     schema = _Answer if system is SYSTEM else _Verdict
+    refused = False
     for backend in backends:
         cache_key = None
         if cache is not None:
@@ -168,6 +174,10 @@ def _ask(system: str, user: str, backends: list[LLMBackend], cache, parse):
         try:
             response = backend.complete(LLMRequest(system=system, user=user, temperature=0.0,
                                                    response_schema=schema))
+        except ContentBlocked as exc:
+            refused = True
+            log.info("rule check: %s refused to read it (%s)", backend.describe(), str(exc)[:160])
+            continue
         except Exception as exc:  # a check that couldn't run says so; it never blocks
             log.warning("rule check: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             continue
@@ -177,6 +187,8 @@ def _ask(system: str, user: str, backends: list[LLMBackend], cache, parse):
                 cache.put(cache_key, text=response.text, model=response.model)
             return found
         log.info("rule check from %s was unusable: %r", backend.describe(), response.text[:120])
+    if refused and system is SYSTEM:
+        raise Refused("the AI's content filter wouldn't read this post")
     return None
 
 

@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  connectInstagram, runSystemCheck, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
+  connectInstagram, connectX, runSystemCheck, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
   useLearning, useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
@@ -336,6 +336,64 @@ function AddInstagram() {
   );
 }
 
+/** X: the app's Bearer Token and the account's username (D83). Paid per post read. */
+function AddX() {
+  const qc = useQueryClient();
+  const { data: setup } = useSetup();
+  const setKeys = useSetKeys();
+  const [open, setOpen] = useState(false);
+  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [busy, setBusy] = useState(false);
+  const haveToken = Boolean(setup?.keys.X_BEARER_TOKEN);
+  const connect = async () => {
+    setBusy(true);
+    try {
+      if (token.trim()) await setKeys.mutateAsync({ X_BEARER_TOKEN: token.trim() });
+      const res = await connectX(username);
+      setToken("");
+      setUsername("");
+      setOpen(false);
+      await qc.invalidateQueries({ queryKey: ["accounts"] });
+      toast.success(`Connected @${res.username}`, { description: "Its posts and their views arrive within the hour." });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open) {
+    return <Button variant="secondary" onClick={() => setOpen(true)}><Plus className="size-4" /> Add an X account</Button>;
+  }
+  return (
+    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+      <p className="text-sm text-muted">
+        X charges for its API: <b>$0.005 per post read</b>, each post at most once a day. Clipper only reads posts up to two weeks
+        old, so one clip a day costs about <b>$2 a month</b>. About 5 minutes, once.
+      </p>
+      <Steps>
+        <li>Open <Ext href="https://console.x.com">console.x.com</Ext> and sign in with the X account you post clips on. Accept the Developer Agreement.</li>
+        <li>Press <b>New App</b>. <b>Name:</b> Clipper. <b>Description:</b> Reads my own posts' view counts. Create it.</li>
+        <li>On the screen that opens, copy the <b>Bearer Token</b> (it's shown once; you can regenerate it later under the app's <b>Keys and tokens</b>).</li>
+        <li>Press <b>View pricing &amp; purchase credits</b> and buy credits yourself ($5 lasts months). X asks for a verified phone number.</li>
+        <li>Paste the token and your username below, then <b>Connect</b>.</li>
+      </Steps>
+      <Field label="Bearer Token" hint={haveToken ? "Saved already. Paste a new one only to replace it." : undefined}>
+        {(id) => <SecretInput id={id} value={token} onChange={setToken} placeholder="AAAAAAAAAAAAAAAAAAAAA…" isSet={setup?.keys.X_BEARER_TOKEN} />}
+      </Field>
+      <Field label="Your X username">
+        {(id) => <TextInput id={id} value={username} placeholder="@solomonkeyclips" onChange={(e) => setUsername(e.target.value)} />}
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+        <Button variant="primary" disabled={busy || !username.trim() || (!haveToken && token.trim().length < 30)} onClick={() => void connect()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="x" className="size-4" />} Connect
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function PlatformCard({ platform, title, accounts, add }: {
   platform: string; title: string; accounts: Account[]; add: ReactNode;
 }) {
@@ -365,6 +423,7 @@ export function AccountsPage() {
           <PlatformCard platform="tiktok" title="TikTok" accounts={list.filter((a) => a.platform === "tiktok")} add={<AddTikTok />} />
           <PlatformCard platform="instagram" title="Instagram" accounts={list.filter((a) => a.platform === "instagram")} add={<AddInstagram />} />
           <PlatformCard platform="youtube" title="YouTube Shorts" accounts={list.filter((a) => a.platform === "youtube")} add={<AddYouTube />} />
+          <PlatformCard platform="x" title="X" accounts={list.filter((a) => a.platform === "x")} add={<AddX />} />
           <p className="text-xs text-subtle">
             Clipper only reads stats through each platform's official API. Logins are stored on this PC only, in Clipper's data folder.
           </p>

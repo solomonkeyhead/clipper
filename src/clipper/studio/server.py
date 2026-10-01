@@ -116,6 +116,7 @@ class Rules(BaseModel):
     failed: list[str] = []         # the rule checks that fail, one line each
     checked: bool = False          # the AI check has read these exact texts against the brief
     checking: bool = False         # ...and is running for the campaign now
+    refused: bool = False          # ...but the AI's content filter wouldn't read it
     brief: list[BriefProblem] = []  # what it found
 
     @property
@@ -542,7 +543,8 @@ class Snapshot:
         _, key = rulecheck.audit_key(clip, campaign, self.briefs.get(campaign.name))
         found = rulecheck.stored(clip) or {}
         current = found.get("key") == key
-        return copy, Rules(failed=caption_rules.summary(texts), checked=current,
+        return copy, Rules(failed=caption_rules.summary(texts), checked=current and not found.get("refused"),
+                           refused=current and bool(found.get("refused")),
                            checking=rulecheck.checking(campaign.name),
                            brief=[BriefProblem(**p) for p in found.get("problems") or []] if current else [])
 
@@ -630,6 +632,17 @@ def accounts() -> list[Account]:
         out.append(Account(
             id=path.stem, platform="youtube", connected=True, handle=yt_api.name(path), health="ok",
             detail="Stats: views, likes, comments, and a day or two later watch time and shares.",
+            expires_in_days=None))
+    from ..x import api as x_api
+
+    for path in x_api.account_files():
+        account = x_api.read(path)
+        read_so_far = int(account.get("posts_read") or 0)
+        out.append(Account(
+            id=path.stem, platform="x", connected=True, handle=account.get("username", ""), health="ok",
+            detail=(f"Stats: views, likes, replies, reposts, bookmarks, hourly, for posts up to "
+                    f"{x_api.REFRESH_DAYS} days old. X charges per post read: {read_so_far} so far, "
+                    f"at most ${read_so_far * x_api.PRICE_PER_POST:.2f}."),
             expires_in_days=None))
     return out
 
@@ -1288,9 +1301,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def disconnect(platform: str, account: str) -> dict:
         from ..instagram import api as ig_api
         from ..tiktok import api as tt_api
+        from ..x import api as x_api
         from ..youtube import api as yt_api
 
-        module = {"tiktok": tt_api, "instagram": ig_api, "youtube": yt_api}.get(platform)
+        module = {"tiktok": tt_api, "instagram": ig_api, "youtube": yt_api, "x": x_api}.get(platform)
         if module is None or not module.remove(account):
             raise HTTPException(404, "no such account")
         broker.publish("accounts.changed")
@@ -1315,6 +1329,18 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.get("/api/accounts/youtube/connect")
     def youtube_connect_state() -> dict[str, str]:
         return youtube.view()
+
+    @app.post("/api/accounts/x")
+    def x_connect(body: dict) -> dict:
+        """An X account by its username, read with the app's Bearer Token (D83)."""
+        from ..x import api as x_api
+
+        try:
+            account = x_api.connect(str(body.get("username") or ""))
+        except x_api.XError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("accounts.changed")
+        return {"username": account["username"]}
 
     @app.post("/api/accounts/instagram")
     def instagram_connect(body: dict) -> dict:

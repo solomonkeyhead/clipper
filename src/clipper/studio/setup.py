@@ -35,6 +35,7 @@ KEYS = {
     "YOUTUBE_CLIENT_SECRET": "Your Google app's client secret",
     "WHOP_CLIENT_ID": "Your Whop app's ID (app_...): reads campaign feeds you've joined",
     "WHOP_CLIENT_SECRET": "Your Whop app's API key, used as its sign-in secret",
+    "X_BEARER_TOKEN": "Your X app's Bearer Token: reads your X posts' views (paid per post read)",
 }
 
 

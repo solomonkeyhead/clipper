@@ -454,7 +454,7 @@ class EditPermissions(StrictModel):
 
 
 #: Where a campaign's clips can be posted (CampaignConfig.platform_targets).
-PLATFORMS = ("tiktok", "instagram_reels", "youtube_shorts")
+PLATFORMS = ("tiktok", "instagram_reels", "youtube_shorts", "x")
 
 
 class CaptionRule(StrictModel):

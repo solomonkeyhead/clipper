@@ -137,7 +137,7 @@ function PasteLink({ clip, compact = false }: { clip: Clip; compact?: boolean })
         onError: (err) => toast.error((err as Error).message),
       });
     }}>
-      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the post's link (TikTok, Instagram or YouTube)"
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the post's link (TikTok, Instagram, YouTube, X, Facebook, Snapchat or Threads)"
              aria-label="Post link" className="h-9 flex-1 rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
       <Button type="submit" variant="secondary" disabled={!url.trim() || add.isPending}>Add</Button>
     </form>
@@ -455,11 +455,15 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
 
 /* ---------- Detail sheet ---------- */
 
+/** Platforms a link is filed for without numbers (studio/posts.py). */
+const NO_STATS = ["facebook", "snapchat", "threads"];
+
 function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
   const na = (why: string) => (
     <Tip label={why}><span className="text-subtle">n/a</span></Tip>
   );
-  const tiktokNa = "TikTok's API doesn't provide this";
+  const tiktokNa = post.platform === "x" ? "X's API doesn't provide this" : "TikTok's API doesn't provide this";
+  const noStats = NO_STATS.includes(post.platform);
   return (
     <div className="rounded-md border border-line bg-surface-2 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -480,6 +484,11 @@ function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
           </Tip>
         </span>
       </div>
+      {noStats ? (
+        <p className="text-sm text-muted">
+          {PLATFORM_NAME[post.platform] ?? post.platform} has no official way for Clipper to read a post's numbers: check its views in the app.
+        </p>
+      ) : (
       <dl className="tabular grid grid-cols-3 gap-x-3 gap-y-2 text-sm sm:grid-cols-4">
         <Stat label="Views" value={formatCount(post.views)} extra={post.x_median ? `${post.x_median}× median` : undefined} />
         <Stat label="Avg watch" value={post.avg_watch_s !== null && post.avg_watch_s !== undefined ? `${post.avg_watch_s}s` : na(tiktokNa)} />
@@ -490,6 +499,7 @@ function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
         <Stat label="Shares" value={formatCount(post.shares)} />
         <Stat label="Saves" value={post.saves !== null && post.saves !== undefined ? formatCount(post.saves) : na(tiktokNa)} />
       </dl>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>Posted {ago(post.posted_at)}</span>
         {post.settling && <Chip tone="warning">Stats still settling (Instagram reports up to 48 h late)</Chip>}

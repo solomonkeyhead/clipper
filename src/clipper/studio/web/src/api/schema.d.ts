@@ -709,6 +709,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/x": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * X Connect
+         * @description An X account by its username, read with the app's Bearer Token (D83).
+         */
+        post: operations["x_connect_api_accounts_x_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/instagram": {
         parameters: {
             query?: never;
@@ -1988,6 +2008,11 @@ export interface components {
              * @default false
              */
             checking: boolean;
+            /**
+             * Refused
+             * @default false
+             */
+            refused: boolean;
             /**
              * Brief
              * @default []
@@ -3495,6 +3520,43 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    x_connect_api_accounts_x_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

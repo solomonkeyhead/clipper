@@ -27,7 +27,7 @@ const BLANK: CampaignForm = {
 
 const MARKETS = ["Content Rewards", "Vyro"];
 const PLATFORMS: [string, string][] = [
-  ["tiktok", "TikTok"], ["instagram_reels", "Instagram Reels"], ["youtube_shorts", "YouTube Shorts"],
+  ["tiktok", "TikTok"], ["instagram_reels", "Instagram Reels"], ["youtube_shorts", "YouTube Shorts"], ["x", "X"],
 ];
 
 const RULE_SELECT = "h-9 rounded-md border border-line bg-surface-1 px-2 text-sm";

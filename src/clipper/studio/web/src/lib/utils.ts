@@ -41,7 +41,8 @@ export function ago(stamp: string | null | undefined, now = Date.now()): string 
 
 export const PLATFORM_NAME: Record<string, string> = {
   tiktok: "TikTok", instagram: "Instagram", instagram_reels: "Instagram",
-  youtube_shorts: "YouTube Shorts",
+  youtube: "YouTube", youtube_shorts: "YouTube Shorts", x: "X",
+  facebook: "Facebook", snapchat: "Snapchat", threads: "Threads",
 };
 
 export async function copyText(text: string, what: string): Promise<boolean> {

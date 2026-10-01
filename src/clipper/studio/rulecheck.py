@@ -111,11 +111,16 @@ def check_clips(campaign: CampaignConfig, *, backends=None, cache=None, publish=
         cache = LLMCache()
     done = 0
     for clip, user, key in todo:
-        problems = audit.audit(user, texts(clip, campaign), backends, cache=cache, hook=clip["hook"] or "")
+        refused = False
+        try:
+            problems = audit.audit(user, texts(clip, campaign), backends, cache=cache, hook=clip["hook"] or "")
+        except audit.Refused:
+            problems, refused = [], True  # said on the clip: check it by hand
         if problems is None:
             continue  # unchecked: tried again next time
         with db.connect() as con:
             db.set_audit(con, clip["id"], {"key": key, "problems": [p.model_dump() for p in problems],
+                                           "refused": refused,
                                            "at": datetime.now().strftime("%Y-%m-%d %H:%M")})
         done += 1
         if publish and done % 5 == 0:

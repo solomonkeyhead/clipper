@@ -1635,3 +1635,21 @@ campaign (censor_flagged_words). Burned-in subtitles keep following
 mask_profanity_in_captions; hooks already rendered into a video can't change.
 On the user's clips it masked nine Please Like Me descriptions (sex, penis, slut,
 suicide, porn).
+
+## D83 -- X posts found and synced; links filed for every platform (2026-10-01)
+
+"Link grabbers for every single possible platform": of the 25 campaigns Clipper
+had found, 3 allowed X and none Facebook, Snapchat or Threads. X is now a full
+platform: campaigns can target it, its post text is the caption line and hashtags
+cut to 280 characters (optional tags dropped first, required ones kept), and a
+connected account's posts are found and their numbers synced (x/api.py). X's API
+is pay-per-use since February 2026 ($0.005 per post read, each post charged once
+per UTC day, empty requests free, no free tier), so Clipper asks only for posts
+newer than the last one it saw, hourly, and refreshes views only for posts up to
+14 days old: about $2 a month at one clip a day. It reads with the app's Bearer
+Token (public metrics carry impressions); the user buys the credits themselves.
+Facebook, Snapchat and Threads links can be pasted and are filed for submitting,
+marked as having no numbers: none has an official API that gives a post's views
+to a personal account. Matching a post to its clip now compares the openings up
+to the shorter one (20 characters at least), since a cut-down X post may lose the
+hashtags of a short caption.

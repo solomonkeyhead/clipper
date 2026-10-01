@@ -32,7 +32,7 @@ log = get_logger(__name__)
 RULE_FIELDS = ("required_hashtags", "required_caption_text", "required_credit_text",
                "forbidden_terms", "only_required_hashtags", "caption_rules", "fallback_captions")
 #: A post's platform (instagram/sync.py) as a campaign names it.
-CAMPAIGN_PLATFORM = {"tiktok": "tiktok", "instagram": "instagram_reels", "youtube": "youtube_shorts"}
+CAMPAIGN_PLATFORM = {"tiktok": "tiktok", "instagram": "instagram_reels", "youtube": "youtube_shorts", "x": "x"}
 
 
 def _campaign_part(campaign) -> dict:
