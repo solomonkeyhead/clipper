@@ -101,6 +101,15 @@ CREATE TABLE IF NOT EXISTS footage (
 );
 -- The brief as the user pasted it, whole (D76): the form keeps what Clipper
 -- acts on; Ask reads this for everything else (eligibility, payout terms...).
+-- Accounts gathered into groups (studio/accounts.py): members are
+-- "<platform>:<handle>" keys, campaigns the ones the group posts for.
+CREATE TABLE IF NOT EXISTS account_groups (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    members     TEXT NOT NULL DEFAULT '[]',
+    campaigns   TEXT NOT NULL DEFAULT '[]',
+    created_at  TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS campaign_briefs (
     campaign    TEXT PRIMARY KEY,
     text        TEXT NOT NULL,

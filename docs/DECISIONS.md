@@ -1716,3 +1716,17 @@ same"); old repeats were pruned to 127. Instagram costs one insights call per re
 per sync against a per-account daily cap, so reels up to 14 days old are read every
 sync and older ones once a day. A reel whose insights weren't read (skipped, or
 refused by Instagram) now keeps its logged numbers: before, a refusal wrote 0 views.
+
+## D89 -- Several accounts per platform, kept manageable (2026-10-01)
+
+Clipper already synced any number of accounts; nothing helped manage them. Now
+(studio/accounts.py): each account has a key ("tiktok:handle", what its posts
+carry) and its own posts and views on the Accounts page. Groups bundle accounts
+that post together, optionally tied to the campaigns they post for. One "viewing"
+switcher in the top bar narrows the dashboard, clips and stats (server-side, so
+they always agree) to a group or an account: posts on its accounts, and ready clips
+of its campaigns (a group's own, or those posting on the account's platform). It
+only appears once there's something to choose (a group, or two accounts on one
+platform). Post it names the account(s) to post from when a platform has several.
+More than one account per platform and groups are Pro ("multi_account"); a
+sign-in past the plan's limit is undone afterwards, so reconnecting always works.

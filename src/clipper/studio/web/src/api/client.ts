@@ -1,6 +1,7 @@
 import createClient from "openapi-fetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components, paths } from "./schema";
+import { useUI } from "@/lib/store";
 
 const api = createClient<paths>({ baseUrl: "" });
 
@@ -38,14 +39,34 @@ export const keys = {
 export const useStatus = () =>
   useQuery({ queryKey: keys.status, queryFn: () => unwrap(api.GET("/api/status")),
              refetchInterval: 60_000 });
-export const useHome = () => useQuery({ queryKey: keys.home, queryFn: () => unwrap(api.GET("/api/home")) });
+/** The clip list on screen: its cache key carries the viewing scope. */
+const clipsKey = () => [...keys.clips, useUI.getState().accountScope];
+
+/** The "viewing" switcher's scope, sent with the lists it narrows (D89). */
+const scopeParam = () => {
+  const scope = useUI.getState().accountScope;
+  return scope && scope !== "all" ? scope : undefined;
+};
+export const useHome = () => {
+  const scope = useUI((s) => s.accountScope);
+  return useQuery({ queryKey: [...keys.home, scope],
+                    queryFn: () => unwrap(api.GET("/api/home", { params: { query: { scope: scopeParam() } } })) });
+};
 export const useCampaigns = () =>
   useQuery({ queryKey: keys.campaigns, queryFn: () => unwrap(api.GET("/api/campaigns")) });
 export const useCampaign = (name: string) =>
   useQuery({ queryKey: keys.campaign(name),
              queryFn: () => unwrap(api.GET("/api/campaigns/{name}", { params: { path: { name } } })) });
-export const useClips = () => useQuery({ queryKey: keys.clips, queryFn: () => unwrap(api.GET("/api/clips")) });
-export const usePosts = () => useQuery({ queryKey: keys.posts, queryFn: () => unwrap(api.GET("/api/posts")) });
+export const useClips = () => {
+  const scope = useUI((s) => s.accountScope);
+  return useQuery({ queryKey: [...keys.clips, scope],
+                    queryFn: () => unwrap(api.GET("/api/clips", { params: { query: { scope: scopeParam() } } })) });
+};
+export const usePosts = () => {
+  const scope = useUI((s) => s.accountScope);
+  return useQuery({ queryKey: [...keys.posts, scope],
+                    queryFn: () => unwrap(api.GET("/api/posts", { params: { query: { scope: scopeParam() } } })) });
+};
 export const useAccounts = () =>
   useQuery({ queryKey: keys.accounts, queryFn: () => unwrap(api.GET("/api/accounts")) });
 export const useSettings = () =>
@@ -68,12 +89,12 @@ export function useSetClipStatus() {
       unwrap(api.PATCH("/api/clips/{clip_id}", { params: { path: { clip_id: id } }, body: { status } })),
     onMutate: async ({ id, status }) => {
       await qc.cancelQueries({ queryKey: keys.clips });
-      const previous = qc.getQueryData<Clip[]>(keys.clips);
-      qc.setQueryData<Clip[]>(keys.clips, (old) =>
+      const previous = qc.getQueryData<Clip[]>(clipsKey());
+      qc.setQueryData<Clip[]>(clipsKey(), (old) =>
         old?.map((c) => (c.id === id ? { ...c, status, marked: status } : c)));
       return { previous };
     },
-    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(clipsKey(), context.previous),
     onSettled: invalidate,
   });
 }
@@ -136,11 +157,11 @@ export function useDeleteClip() {
     onMutate: async ({ id, restore }) => {
       if (restore) return {};
       await qc.cancelQueries({ queryKey: keys.clips });
-      const previous = qc.getQueryData<Clip[]>(keys.clips);
-      qc.setQueryData<Clip[]>(keys.clips, (old) => old?.filter((c) => c.id !== id));
+      const previous = qc.getQueryData<Clip[]>(clipsKey());
+      qc.setQueryData<Clip[]>(clipsKey(), (old) => old?.filter((c) => c.id !== id));
       return { previous };
     },
-    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(clipsKey(), context.previous),
     onSettled: invalidate,
   });
 }
@@ -254,12 +275,12 @@ export function useSetClipSubmitted() {
       unwrap(api.PUT("/api/clips/{clip_id}/submitted", { params: { path: { clip_id: id } }, body: { submitted } })),
     onMutate: async ({ id, submitted }) => {
       await qc.cancelQueries({ queryKey: keys.clips });
-      const previous = qc.getQueryData<Clip[]>(keys.clips);
-      qc.setQueryData<Clip[]>(keys.clips, (old) => old?.map((c) => c.id === id
+      const previous = qc.getQueryData<Clip[]>(clipsKey());
+      qc.setQueryData<Clip[]>(clipsKey(), (old) => old?.map((c) => c.id === id
         ? { ...c, status: submitted ? "submitted" : c.posts.length ? "posted" : "ready" } : c));
       return { previous };
     },
-    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(clipsKey(), context.previous),
     onSettled: invalidate,
   });
 }
@@ -323,11 +344,11 @@ export function useRateClip() {
       unwrap(api.PUT("/api/clips/{clip_id}/rating", { params: { path: { clip_id: id } }, body: { rating, reasons } })),
     onMutate: async ({ id, rating, reasons }) => {
       await qc.cancelQueries({ queryKey: keys.clips });
-      const previous = qc.getQueryData<Clip[]>(keys.clips);
-      qc.setQueryData<Clip[]>(keys.clips, (old) => old?.map((c) => (c.id === id ? { ...c, rating, reasons } : c)));
+      const previous = qc.getQueryData<Clip[]>(clipsKey());
+      qc.setQueryData<Clip[]>(clipsKey(), (old) => old?.map((c) => (c.id === id ? { ...c, rating, reasons } : c)));
       return { previous };
     },
-    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.clips, context.previous),
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(clipsKey(), context.previous),
     onSettled: () => { invalidate(); qc.invalidateQueries({ queryKey: ["learning"] }); },
   });
 }
@@ -481,5 +502,27 @@ export function useRecheckRules() {
   return useMutation({
     mutationFn: (name: string) => unwrap(api.POST("/api/campaigns/{name}/recheck", { params: { path: { name } } })),
     onSettled: invalidate,
+  });
+}
+
+export type AccountGroup = components["schemas"]["AccountGroup"];
+
+export const useAccountGroups = () =>
+  useQuery({ queryKey: ["account-groups"], queryFn: () => unwrap(api.GET("/api/account-groups")) });
+
+/** Create a group, or change one (with its id). */
+export function useSaveGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (group: AccountGroup) => unwrap(api.POST("/api/account-groups", { body: group })),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["account-groups"] }); qc.invalidateQueries({ queryKey: keys.accounts }); },
+  });
+}
+
+export function useDeleteGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(api.DELETE("/api/account-groups/{group_id}", { params: { path: { group_id: id } } })),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["account-groups"] }); qc.invalidateQueries({ queryKey: keys.accounts }); },
   });
 }

@@ -650,6 +650,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/account-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Groups */
+        get: operations["list_groups_api_account_groups_get"];
+        put?: never;
+        /**
+         * Save Group
+         * @description Create a group, or rename/re-fill one (its id set). Part of Pro (D89).
+         */
+        post: operations["save_group_api_account_groups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/account-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Group */
+        delete: operations["delete_group_api_account_groups__group_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/{platform}/{account}": {
         parameters: {
             query?: never;
@@ -1200,6 +1238,40 @@ export interface components {
             detail: string;
             /** Expires In Days */
             expires_in_days?: number | null;
+            /**
+             * Key
+             * @default
+             */
+            key: string;
+            /**
+             * Posts
+             * @default 0
+             */
+            posts: number;
+            /**
+             * Views
+             * @default 0
+             */
+            views: number;
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+        };
+        /** AccountGroup */
+        AccountGroup: {
+            /** Id */
+            id?: number | null;
+            /** Name */
+            name: string;
+            /** Members */
+            members: string[];
+            /**
+             * Campaigns
+             * @default []
+             */
+            campaigns: string[];
         };
         /** AlertChannel */
         AlertChannel: {
@@ -2159,7 +2231,9 @@ export interface operations {
     };
     home_api_home_get: {
         parameters: {
-            query?: never;
+            query?: {
+                scope?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2173,6 +2247,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Home"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2996,6 +3079,7 @@ export interface operations {
         parameters: {
             query?: {
                 campaign?: string | null;
+                scope?: string | null;
             };
             header?: never;
             path?: never;
@@ -3169,6 +3253,7 @@ export interface operations {
         parameters: {
             query?: {
                 campaign?: string | null;
+                scope?: string | null;
             };
             header?: never;
             path?: never;
@@ -3404,6 +3489,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Account"][];
+                };
+            };
+        };
+    };
+    list_groups_api_account_groups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountGroup"][];
+                };
+            };
+        };
+    };
+    save_group_api_account_groups_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountGroup"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountGroup"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_group_api_account_groups__group_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

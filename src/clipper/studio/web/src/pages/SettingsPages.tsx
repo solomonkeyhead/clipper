@@ -1,5 +1,5 @@
 import {
-  AlertTriangle, CheckCircle2, ExternalLink, KeyRound, Loader2, Monitor, Moon, Plus, Stethoscope, Sun, XCircle,
+  AlertTriangle, CheckCircle2, ExternalLink, Eye, KeyRound, Loader2, Monitor, Moon, Plus, Stethoscope, Sun, XCircle,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -9,8 +9,9 @@ import {
   useLearning, useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
+import { GroupsCard } from "@/components/groups";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Button, Card, CopyButton, PageHeader, Skeleton, Switch } from "@/components/ui";
+import { Button, Card, CopyButton, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { useUI, type Theme } from "@/lib/store";
 import { cn, openTab } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -67,6 +68,7 @@ function SecretInput({ id, value, onChange, placeholder, isSet }: {
 
 function AccountRow({ account }: { account: Account }) {
   const disconnect = useDisconnect();
+  const setScope = useUI((s) => s.setAccountScope);
   const [confirm, setConfirm] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface-2 px-3 py-2.5">
@@ -81,7 +83,17 @@ function AccountRow({ account }: { account: Account }) {
           {account.detail}
           {account.expires_in_days != null && account.connected && ` Login good for ${Math.floor(account.expires_in_days)} more days.`}
         </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-muted">{account.posts} post{account.posts === 1 ? "" : "s"} · {Intl.NumberFormat("en", { notation: "compact" }).format(account.views)} views</span>
+          {account.groups.map((g) => <span key={g} className="rounded-full border border-line px-2 py-0.5 text-subtle">{g}</span>)}
+        </div>
       </div>
+      <Tip label="Show only this account across Clipper">
+        <Button size="icon" variant="ghost" aria-label="View this account" onClick={() => {
+          setScope(`account:${account.key}`);
+          toast(`Viewing @${account.handle}`, { description: "Switch back with the button in the top bar." });
+        }}><Eye className="size-4" /></Button>
+      </Tip>
       {confirm ? (
         <span className="flex items-center gap-1.5 text-xs">
           <span className="text-muted">Stop syncing this account?</span>
@@ -417,9 +429,10 @@ export function AccountsPage() {
   return (
     <div className="fade-in max-w-3xl">
       <PageHeader title="Accounts"
-        subtitle="Connect the accounts you post from, as many as you like. Clipper reads each post's views to track earnings, find your posts' links, and learn what works." />
+        subtitle="Connect the accounts you post from. Clipper reads each post's views to track earnings, find your posts' links, and learn what works. With several accounts, group the ones that post together." />
       {isLoading ? <Skeleton className="h-40" /> : (
         <div className="flex flex-col gap-4">
+          <GroupsCard accounts={list} />
           <PlatformCard platform="tiktok" title="TikTok" accounts={list.filter((a) => a.platform === "tiktok")} add={<AddTikTok />} />
           <PlatformCard platform="instagram" title="Instagram" accounts={list.filter((a) => a.platform === "instagram")} add={<AddInstagram />} />
           <PlatformCard platform="youtube" title="YouTube Shorts" accounts={list.filter((a) => a.platform === "youtube")} add={<AddYouTube />} />

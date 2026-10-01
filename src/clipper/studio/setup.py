@@ -107,8 +107,10 @@ class BrowserConnect:
     the page polls its state. `login(open_browser=...)` hands over the consent URL
     (the page opens it, not the server) and returns the token."""
 
-    def __init__(self, publish, login, *, name: str, describe=lambda token: "") -> None:
+    def __init__(self, publish, login, *, name: str, describe=lambda token: "",
+                 platform: str | None = None) -> None:
         self.publish, self.login, self.name, self.describe = publish, login, name, describe
+        self.platform = platform  # checked against the plan's accounts-per-platform (D89)
         self.state = "idle"         # idle | waiting | done | failed
         self.message = ""
         self.url = ""
@@ -129,8 +131,14 @@ class BrowserConnect:
                 ready.set()
 
             def run() -> None:
+                from . import accounts
+
+                before = set(accounts.token_files(self.platform)()) if self.platform else set()
                 try:
                     token = self.login(open_browser=capture)
+                    refused = accounts.undo_if_over(self.platform, before) if self.platform else None
+                    if refused:
+                        raise RuntimeError(refused)
                     self.state = "done"
                     self.message = self.describe(token) or f"{self.name} account"
                 except Exception as exc:  # shown on the page
@@ -148,14 +156,14 @@ class BrowserConnect:
 def tiktok_connect(publish) -> BrowserConnect:
     from ..tiktok import api
 
-    return BrowserConnect(publish, lambda **kw: api.login(**kw), name="TikTok",
+    return BrowserConnect(publish, lambda **kw: api.login(**kw), name="TikTok", platform="tiktok",
                           describe=lambda token: token.get("display_name") or "")
 
 
 def youtube_connect(publish) -> BrowserConnect:
     from ..youtube import api
 
-    return BrowserConnect(publish, lambda **kw: api.login(**kw), name="YouTube",
+    return BrowserConnect(publish, lambda **kw: api.login(**kw), name="YouTube", platform="youtube",
                           describe=lambda token: token.get("display_name") or "")
 
 

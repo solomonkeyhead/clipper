@@ -2,8 +2,10 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Link2, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useAddCaptionRule, useAddPostLink, useCampaigns, useRecheckRules, type BriefProblem, type Clip, type PostCopy,
+  useAccountGroups, useAccounts, useAddCaptionRule, useAddPostLink, useCampaigns, useRecheckRules,
+  type Account, type BriefProblem, type Clip, type PostCopy,
 } from "@/api/client";
+import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, cn, openTab } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
 import { Button, CopyButton, Tip } from "./ui";
@@ -47,6 +49,7 @@ const ORDER = Object.keys(UPLOAD);
 /** Download, copy each platform's text, open each platform the campaign pays for. */
 export function PostPanel({ clip }: { clip: Clip }) {
   const { data: campaigns = [] } = useCampaigns();
+  const postOn = usePostOn(clip.campaign);
   const campaign = campaigns.find((c) => c.name === clip.campaign);
   const copies = [...(clip.post_copy ?? [])].sort((a, b) => ORDER.indexOf(key(a.platform)) - ORDER.indexOf(key(b.platform)));
   const allowed = campaign?.platforms ?? [];
@@ -70,7 +73,8 @@ export function PostPanel({ clip }: { clip: Clip }) {
       <div className="flex flex-col gap-2.5 text-sm">
         <div className="flex min-w-0 flex-col gap-1.5">
           {copies.length ? copies.map((c) => (
-            <PlatformRow key={c.platform} copy={c} onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
+            <PlatformRow key={c.platform} copy={c} accounts={postOn(key(c.platform))}
+                         onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
           )) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
           {shown.length > 1 && (
             <Button size="sm" variant="ghost" className="w-fit" onClick={() => open(shown)}>
@@ -94,7 +98,25 @@ export function PostPanel({ clip }: { clip: Clip }) {
 }
 
 /** One platform: its text to copy, its rule checks, and its upload page. */
-function PlatformRow({ copy, onOpen }: { copy: PostCopy; onOpen: () => void }) {
+/** Which accounts a campaign's clips go to on a platform (D89): the viewing
+ *  switcher's, else those in groups posting for the campaign, else all of them.
+ *  Empty when there's only one account there: nothing to choose. */
+function usePostOn(campaign: string) {
+  const { data: accounts = [] } = useAccounts();
+  const { data: groups = [] } = useAccountGroups();
+  const scope = useUI((s) => s.accountScope);
+  return (platform: string) => {
+    const here = accounts.filter((a) => a.platform === platform);
+    if (here.length < 2) return [];
+    const scoped = scope.startsWith("account:") ? [scope.slice(8)]
+      : groups.find((g) => `group:${g.id}` === scope)?.members;
+    const assigned = groups.filter((g) => g.campaigns.includes(campaign)).flatMap((g) => g.members);
+    const keys = scoped ?? (assigned.length ? assigned : null);
+    return keys ? here.filter((a) => keys.includes(a.key)) : here;
+  };
+}
+
+function PlatformRow({ copy, accounts, onOpen }: { copy: PostCopy; accounts: Account[]; onOpen: () => void }) {
   const [open, setOpen] = useState(false);
   const failed = copy.checks.filter((c) => !c.passed);
   const name = UPLOAD[key(copy.platform)]?.name ?? copy.platform;
@@ -117,6 +139,12 @@ function PlatformRow({ copy, onOpen }: { copy: PostCopy; onOpen: () => void }) {
           <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} />
         </button>
       </div>
+      {accounts.length > 0 && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted">
+          Post from {accounts.map((a) => <span key={a.key} className="rounded-full border border-line px-2 py-0.5 text-fg">@{a.handle}</span>)}
+          {accounts.length > 1 && <span>(one post each)</span>}
+        </p>
+      )}
       {copy.title && <p className="mt-1.5 truncate text-xs text-muted" title={copy.title}>Title: <span className="text-fg">{copy.title}</span></p>}
       {open && (
         <ul className="mt-2 flex flex-col gap-1 border-t border-line pt-2 text-xs">

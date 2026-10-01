@@ -9,6 +9,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
 import { useUI } from "@/lib/store";
 import { ago, cn } from "@/lib/utils";
+import { AccountScope } from "./AccountScope";
 import { AskPanel } from "./AskPanel";
 import { ClipSheet } from "./clips";
 import { CommandPalette, ShortcutSheet } from "./Palette";
@@ -223,6 +224,7 @@ export function AppShell() {
                 <Sparkles className="size-3.5 text-accent" /> Ask
               </button>
             </Tip>
+            <AccountScope />
             <ClippingPill />
             <AutoPostPill />
             <SyncPill />

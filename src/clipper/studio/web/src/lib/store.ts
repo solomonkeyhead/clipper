@@ -47,6 +47,9 @@ interface UI {
   toggleCollapsed: () => void;
   setTheme: (t: Theme) => void;
   setShortcutKeys: (on: boolean) => void;
+  /** "Viewing": "all", "group:<id>" or "account:<platform>:<handle>" (D89). */
+  accountScope: string;
+  setAccountScope: (scope: string) => void;
 }
 
 export const useUI = create<UI>((set) => ({
@@ -79,5 +82,10 @@ export const useUI = create<UI>((set) => ({
   setShortcutKeys: (shortcuts) => {
     write("clipper.shortcuts", shortcuts ? "1" : "0");
     set({ shortcuts });
+  },
+  accountScope: read<string>("clipper.scope", "all"),
+  setAccountScope: (accountScope) => {
+    write("clipper.scope", accountScope);
+    set({ accountScope });
   },
 }));

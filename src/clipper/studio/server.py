@@ -34,6 +34,7 @@ from ..config import CampaignConfig, CaptionRule
 from ..learn import log as perf
 from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
+from . import accounts as account_groups
 from . import alerts, db, evidence, library, rulecheck, setup, stats
 from .events import Broker
 
@@ -258,6 +259,17 @@ class Account(BaseModel):
     health: str            # ok | warn | error
     detail: str
     expires_in_days: float | None = None
+    key: str = ""          # "<platform>:<handle>", as its posts and groups know it (D89)
+    posts: int = 0
+    views: float = 0
+    groups: list[str] = []
+
+
+class AccountGroup(BaseModel):
+    id: int | None = None
+    name: str
+    members: list[str]            # account keys
+    campaigns: list[str] = []     # the campaigns it posts for; empty: any
 
 
 class Band(BaseModel):
@@ -615,6 +627,24 @@ def yt_has_app() -> bool:
     return yt_api.has_app()
 
 
+def scoped(snap: Snapshot, scope: str | None) -> list[Clip]:
+    """The clips the viewing switcher shows (studio/accounts.py): posted ones with
+    their posts on its accounts, the rest when their campaign posts there."""
+    view = account_groups.Scope(scope)
+    if view.everything:
+        return snap.clips
+    out = []
+    for clip in snap.clips:
+        mine = [p for p in clip.posts if view.has_post(p.platform, p.account)]
+        if mine:
+            out.append(clip.model_copy(update={"posts": mine}))
+        elif not clip.posts and clip.status in ("ready", "skipped"):
+            campaign = snap.campaigns.get(clip.campaign)
+            if view.wants_campaign(clip.campaign, campaign.platform_targets if campaign else ()):
+                out.append(clip)
+    return out
+
+
 def accounts() -> list[Account]:
     """Every connected account's health, from its stored token."""
     out = []
@@ -852,11 +882,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                       accounts=accounts())
 
     @app.get("/api/home")
-    def home() -> Home:
+    def home(scope: str | None = None) -> Home:
         snap = Snapshot()
         active = {n for n in snap.campaign_names()
                   if not snap.state.get(n, {}).get("archived")}
-        clips = [c for c in snap.clips if c.campaign in active]
+        clips = [c for c in scoped(snap, scope) if c.campaign in active]
         posts = [p for c in clips for p in c.posts]
         earnings = [p.est_earnings for p in posts if p.est_earnings is not None]
         views = [p.views for p in posts if p.views is not None]
@@ -1176,8 +1206,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         return {"ok": True}
 
     @app.get("/api/clips")
-    def clips(campaign: str | None = None) -> list[Clip]:
-        return [c for c in Snapshot().clips if campaign is None or c.campaign == campaign]
+    def clips(campaign: str | None = None, scope: str | None = None) -> list[Clip]:
+        snap = Snapshot()
+        return [c for c in scoped(snap, scope) if campaign is None or c.campaign == campaign]
 
     @app.get("/api/clips/{clip_id}")
     def clip(clip_id: int) -> Clip:
@@ -1235,8 +1266,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         return {"caption": caption}
 
     @app.get("/api/posts")
-    def posts(campaign: str | None = None) -> list[Post]:
-        return [p for p in Snapshot().posts if campaign is None or p.campaign == campaign]
+    def posts(campaign: str | None = None, scope: str | None = None) -> list[Post]:
+        return [p for c in scoped(Snapshot(), scope) for p in c.posts
+                if campaign is None or p.campaign == campaign]
 
     @app.put("/api/clips/{clip_id}/submitted")
     def clip_submitted(clip_id: int, changes: dict) -> dict:
@@ -1317,7 +1349,41 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.get("/api/accounts")
     def get_accounts() -> list[Account]:
-        return accounts()
+        found = accounts()
+        posts = Snapshot().posts
+        groups = account_groups.groups()
+        for a in found:
+            a.key = account_groups.key(a.platform, a.handle)
+            mine = [p for p in posts if account_groups.key(p.platform, p.account) == a.key]
+            a.posts, a.views = len(mine), sum(p.views or 0 for p in mine)
+            a.groups = [g["name"] for g in groups if a.key in g["members"]]
+        return found
+
+    @app.get("/api/account-groups")
+    def list_groups() -> list[AccountGroup]:
+        return [AccountGroup(**g) for g in account_groups.groups()]
+
+    @app.post("/api/account-groups")
+    def save_group(group: AccountGroup) -> AccountGroup:
+        """Create a group, or rename/re-fill one (its id set). Part of Pro (D89)."""
+        from . import plans
+
+        plans.require("multi_account")
+        try:
+            group.id = account_groups.save_group(group.name, group.members, group.campaigns, group.id)
+        except LookupError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("accounts.changed")
+        return group
+
+    @app.delete("/api/account-groups/{group_id}")
+    def delete_group(group_id: int) -> dict:
+        if not account_groups.delete_group(group_id):
+            raise HTTPException(404, "no such group")
+        broker.publish("accounts.changed")
+        return {"ok": True}
 
     @app.delete("/api/accounts/{platform}/{account}")
     def disconnect(platform: str, account: str) -> dict:
@@ -1344,7 +1410,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.post("/api/accounts/youtube/connect")
     def youtube_connect() -> dict[str, str]:
         """Start Google's sign-in; the page opens the returned consent link."""
-        if not (setup.key_set("YOUTUBE_CLIENT_ID") and setup.key_set("YOUTUBE_CLIENT_SECRET")):
+        if not yt_has_app():
             raise HTTPException(400, "Save your Google app's client ID and secret first")
         return youtube.start()
 
@@ -1357,10 +1423,14 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         """An X account by its username, read with the app's Bearer Token (D83)."""
         from ..x import api as x_api
 
+        before = set(x_api.account_files())
         try:
             account = x_api.connect(str(body.get("username") or ""))
         except x_api.XError as exc:
             raise HTTPException(400, str(exc)) from exc
+        refused = account_groups.undo_if_over("x", before)
+        if refused:
+            raise HTTPException(402, refused)
         broker.publish("accounts.changed")
         return {"username": account["username"]}
 
@@ -1368,10 +1438,14 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def instagram_connect(body: dict) -> dict:
         from ..instagram import api as ig_api
 
+        before = set(ig_api.token_files())
         try:
             username = ig_api.login(str(body.get("token") or ""))
         except ig_api.InstagramError as exc:
             raise HTTPException(400, f"Instagram refused the token: {exc}") from exc
+        refused = account_groups.undo_if_over("instagram", before)
+        if refused:
+            raise HTTPException(402, refused)
         broker.publish("accounts.changed")
         return {"username": username}
 

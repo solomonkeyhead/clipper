@@ -71,7 +71,7 @@ export function useLiveUpdates() {
         qc.setQueryData(["research", "progress"], JSON.parse((e as MessageEvent).data || "null"));
       });
       source.addEventListener("accounts.changed", () => {
-        [keys.accounts, keys.setup, keys.status, keys.home].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
+        [keys.accounts, keys.setup, keys.status, keys.home, ["account-groups"]].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
       });
       source.onerror = () => {
         failures += 1;
