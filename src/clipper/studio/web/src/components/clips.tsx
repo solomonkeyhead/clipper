@@ -14,6 +14,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
+import { PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
 
@@ -559,6 +560,8 @@ export function ClipSheet() {
                   )}
                   {clip.status === "ready" && <NotGoodButton clip={clip} size="md" />}
                 </div>
+
+                {clip.status === "ready" && <PostPanel clip={clip} />}
 
                 {clip.caption && (
                   <section>

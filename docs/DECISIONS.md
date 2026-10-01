@@ -1534,3 +1534,18 @@ until then, and unrelated questions cost what they did. The edit page has a
 folded "Paste the brief" so existing campaigns can get theirs. Checked live:
 "what hashtags ... and what gets rejected" for Chad Powers answered from the
 rules (#chadpowers #hulu #tvedits, #ad; football, comedy-only, no Ricky+Russ).
+
+## D77 -- "Post it": the platforms' upload pages, one click each (2026-09-30)
+
+The user asked for tabs per platform a campaign allows, or the sites inside
+Clipper. Embedding isn't possible or proper: TikTok, Instagram and YouTube
+refuse to be framed (X-Frame-Options / frame-ancestors), Google blocks sign-in
+from embedded browsers, and proxying around either would break logins and
+their terms. So a ready clip's panel has "Post it": download the video, copy
+the caption, open the upload page for each platform the campaign pays for
+(TikTok Studio upload, instagram.com's Create, youtube.com/upload) or "Open
+all" -- a browser may block the extra tabs until pop-ups are allowed for
+Clipper, which it says -- then Mark posted or paste the link. A folded note
+names each platform's paid-partnership switch: paid clipping is advertising,
+and the FTC (US) and the platforms expect it labelled beyond any #ad. Posting
+for the user stays the official-API route, waiting on platform app reviews.
