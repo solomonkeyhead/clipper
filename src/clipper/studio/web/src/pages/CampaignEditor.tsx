@@ -20,7 +20,7 @@ const BLANK: CampaignForm = {
   required_hashtags: [], only_required_hashtags: false, required_credit_text: "",
   fallback_captions: [], fixed_captions: false, hook_texts: [], hook_overlay: true,
   keep_original_audio: false, brief_rules: "", long_description: true, description_context: "",
-  description_keywords: [], max_clips_per_source: 6, notes: "",
+  description_keywords: [], max_clips_per_source: null, notes: "",
 };
 
 const MARKETS = ["Content Rewards", "Vyro"];
@@ -267,9 +267,9 @@ export function CampaignEditorPage() {
               {(id) => <NumberInput id={id} suffix="sec" min="5" value={form.max_seconds}
                                     onChange={(v) => set("max_seconds", v ?? 60)} />}
             </Field>
-            <Field label="Most clips per video" hint="When Clipper decides how many.">
-              {(id) => <NumberInput id={id} min="1" max="20" value={form.max_clips_per_source}
-                                    onChange={(v) => set("max_clips_per_source", v ?? 6)} />}
+            <Field label="Most clips per video" optional hint="When Clipper decides how many. Empty: every moment good enough.">
+              {(id) => <NumberInput id={id} min="1" max="500" value={form.max_clips_per_source} placeholder="No limit"
+                                    onChange={(v) => set("max_clips_per_source", v)} />}
             </Field>
           </div>
           <Field label="What should the clips be about?" optional

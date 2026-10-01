@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, Film, Loader2, Plus, Scissors, UploadCloud
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  sourceVideoUrl, startJob, uploadVideo, useCampaignTitle, useCampaigns, useJobs, useSetup, useSources,
+  sourceVideoUrl, startJob, uploadVideo, useCampaignTitle, useCampaigns, useJobs, useSettings, useSetup, useSources,
   type Job, type JobMode, type Source,
 } from "@/api/client";
 import { JobResults, LinkImport } from "@/components/footage";
@@ -224,6 +224,7 @@ export function NewClipsPage() {
   const { data: sources = [] } = useSources();
   const { data: jobs = [] } = useJobs();
   const { data: setup } = useSetup();
+  const { data: settings } = useSettings();
   const qc = useQueryClient();
   const active = campaigns.filter((c) => c.has_brief && !c.archived);
   const [campaign, setCampaign] = useState(search.campaign ?? "");
@@ -233,6 +234,10 @@ export function NewClipsPage() {
   const [ranges, setRanges] = useState<Range[]>([{ start: "", end: "" }]);
   const [busy, setBusy] = useState(false);
   const chosen = active.find((c) => c.name === campaign);
+  // Below Pro a video gives at most 10 clips; Pro gets every moment that qualifies (D71).
+  const pro = (settings?.plan ?? "pro") === "pro";
+  const counts = pro ? [1, 3, 5, 8, 10, 15, 20, 30] : [1, 2, 3, 4, 5, 6, 8, 10];
+  const autoCap = pro ? chosen?.max_clips ?? null : Math.min(chosen?.max_clips ?? 10, 10);
   // An import's videos join the list a moment after it finishes; select the first then.
   const [imported, setImported] = useState<string[]>([]);
   const onImported = useCallback((names: string[]) => {
@@ -335,7 +340,7 @@ export function NewClipsPage() {
 
         <Step n={3} title="Which moments">
           <Segmented label="Which moments" value={mode} onChange={setMode}
-            options={[["auto", "Let Clipper decide", `Every moment good enough, up to ${chosen?.max_clips ?? "the campaign's max"}`],
+            options={[["auto", "Let Clipper decide", autoCap ? `Every moment good enough, up to ${autoCap}` : "Every moment good enough, no limit"],
                       ["top", "Set a number", "The best ones, up to your count"],
                       ["manual", "I'll pick them", "Type or mark start and end times"]]} />
           <div className="mt-4">
@@ -347,14 +352,22 @@ export function NewClipsPage() {
             )}
             {mode === "top" && (
               <div className="flex flex-wrap items-center gap-2">
-                {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => (
+                {counts.map((n) => (
                   <button key={n} onClick={() => setTop(n)}
                     className={cn("h-9 min-w-11 rounded-md border px-3 text-sm font-medium",
                       top === n ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
                     {n}
                   </button>
                 ))}
-                <span className="text-xs text-muted">at most; fewer if nothing else is good enough</span>
+                {pro && (
+                  <input type="number" min={1} max={500} aria-label="Another number" placeholder="Other"
+                         value={counts.includes(top) ? "" : top}
+                         onChange={(e) => e.target.value && setTop(Math.max(1, Math.min(500, Number(e.target.value))))}
+                         className="h-9 w-20 rounded-md border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+                )}
+                <span className="text-xs text-muted">
+                  at most; fewer if nothing else is good enough{pro ? "" : ". Pro makes as many as qualify."}
+                </span>
               </div>
             )}
             {mode === "manual" && <RangeEditor source={source} ranges={ranges} setRanges={setRanges} />}

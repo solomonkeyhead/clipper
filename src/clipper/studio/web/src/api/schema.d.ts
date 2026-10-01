@@ -1206,11 +1206,8 @@ export interface components {
             platforms: string[];
             /** Reward Per 1K Usd */
             reward_per_1k_usd?: number | null;
-            /**
-             * Max Clips
-             * @default 8
-             */
-            max_clips: number;
+            /** Max Clips */
+            max_clips?: number | null;
             /** Clips */
             clips: number;
             counts: components["schemas"]["CampaignCounts"];
@@ -1377,11 +1374,8 @@ export interface components {
             description_context: string;
             /** Description Keywords */
             description_keywords?: string[];
-            /**
-             * Max Clips Per Source
-             * @default 6
-             */
-            max_clips_per_source: number;
+            /** Max Clips Per Source */
+            max_clips_per_source?: number | null;
             /**
              * Notes
              * @default

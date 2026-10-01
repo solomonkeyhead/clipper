@@ -149,7 +149,7 @@ class Campaign(BaseModel):
     auto_post: bool | None
     platforms: list[str]
     reward_per_1k_usd: float | None = None
-    max_clips: int = 8             # most clips per video when Clipper decides
+    max_clips: int | None = None   # most clips per video when Clipper decides; None: no limit
     clips: int
     counts: CampaignCounts
     views: float
@@ -505,7 +505,7 @@ class Snapshot:
             auto_post=None if auto is None else bool(auto),
             platforms=list(brief.platform_targets) if brief else [],
             reward_per_1k_usd=brief.reward_per_1k_usd if brief else None,
-            max_clips=brief.max_clips_per_source if brief else 8,
+            max_clips=brief.max_clips_per_source if brief else None,
             campaign_url=brief.campaign_url if brief else "",
             clips=len(mine), counts=counts,
             views=sum(p.views or 0 for p in posts),
@@ -1342,8 +1342,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             if short:
                 raise HTTPException(400, "each moment needs to be at least 3 seconds long")
             return jobs.submit(campaign, str(source), None, ranges).view()
-        top = max(1, min(20, int(body.get("top") or 4))) if mode == "top" else None
-        return jobs.submit(campaign, str(source), top).view()
+        from . import plans
+
+        top = max(1, min(500, int(body.get("top") or 4))) if mode == "top" else None
+        return jobs.submit(campaign, str(source),
+                           plans.clip_count(top, campaign.max_clips_per_source)).view()
 
     @app.get("/api/sources/video")
     def source_video(path: str) -> FileResponse:

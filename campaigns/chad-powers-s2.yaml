@@ -105,7 +105,6 @@ brand_mentions:
   terms: []
 
 language: en
-max_clips_per_source: 4
 
 notes: |
   Before joining: audience must be at least 50% Tier 1 countries (TikTok Studio

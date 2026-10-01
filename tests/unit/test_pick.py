@@ -132,11 +132,19 @@ class TestConstraints:
         assert result.count == 2
 
     def test_picks_are_spread_across_thirds(self):
-        # Five strong candidates all in the first third.
+        # Three strong candidates early, two a little weaker later: the later
+        # ones are preferred over a third early one.
+        specs = [(f"c{i}", 100 + i * 100, 0.9 - i * 0.01, 8.0) for i in range(3)]
+        specs += [("m", 1300, 0.80, 7.0), ("f", 2500, 0.79, 7.0)]
+        result = run(specs, SelectionConfig(top_n=4, max_from_same_third=2), min_gap=30.0)
+        assert {p.candidate.candidate_id for p in result.picks} == {"c0", "c1", "m", "f"}
+
+    def test_a_crowded_third_still_fills_the_count(self):
+        # Five strong candidates all in the first third: spreading is a
+        # preference, so all five are made rather than two (D71).
         specs = [(f"c{i}", 100 + i * 100, 0.9 - i * 0.01, 8.0) for i in range(5)]
         result = run(specs, SelectionConfig(top_n=5, max_from_same_third=2), min_gap=30.0)
-        assert result.count <= 2
-        assert any("third already has" in r for r in result.rejections.values())
+        assert result.count == 5 and not result.reserves
 
     def test_each_third_gets_its_own_allowance(self):
         specs = [

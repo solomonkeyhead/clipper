@@ -107,7 +107,9 @@ def generate(
     deduped = dedupe(kept, cfg.dedupe_iou)
     log.debug("dedupe kept %d of %d", len(deduped), len(kept))
 
-    capped = spread_cap(deduped, cfg.max_candidates, MAX_COVERAGE)
+    # 60 is plenty for an episode; a two-hour source needs a pool its size (D71).
+    pool = max(cfg.max_candidates, round(source_duration / 60 * CANDIDATES_PER_MINUTE))
+    capped = spread_cap(deduped, pool, MAX_COVERAGE)
     capped.sort(key=lambda c: c.start)
 
     for position, candidate in enumerate(capped):
@@ -392,6 +394,8 @@ def pre_score(candidate: Candidate, transcript: Transcript) -> float:
 
 # No instant of the source may be covered by more than this many candidates.
 MAX_COVERAGE = 3
+#: Candidate windows per minute of source, once past `max_candidates`.
+CANDIDATES_PER_MINUTE = 2.5
 
 
 def spread_cap(candidates: list[Candidate], limit: int, max_coverage: int) -> list[Candidate]:

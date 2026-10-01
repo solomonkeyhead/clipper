@@ -241,7 +241,7 @@ class TestModes:
         job = client.post("/api/jobs", json={"campaign": "test-campaign", "source": str(video)}).json()
         assert job["mode"] == "auto" and job["top"] is None
         done = self.run_job(client, job)
-        assert seen["top"] == 8  # the campaign's max_clips_per_source default
+        assert seen["top"] is None  # the runner applies the campaign cap, if any (runner.clip_limit)
         assert done["clips"] == 3 and "quality bar" in done["message"]
 
     def test_manual_cuts_the_given_ranges(self, client, tmp_path, monkeypatch):

@@ -482,7 +482,9 @@ class CampaignConfig(StrictModel):
     mask_profanity_in_captions: bool = True
     brand_mentions: BrandMentions = BrandMentions()
     language: str = "en"
-    max_clips_per_source: int = Field(default=8, ge=1)
+    # Most clips from one video when Clipper decides how many; None = every
+    # moment that clears the quality bar (D71).
+    max_clips_per_source: int | None = Field(default=None, ge=1)
     # Text the post caption must contain, e.g. a tune-in line a brief requires.
     required_caption_text: str = ""
     # Leave the audio exactly as delivered: no loudness normalisation. For

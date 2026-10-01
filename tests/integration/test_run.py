@@ -141,10 +141,15 @@ class TestRun:
             "source_authorization": "Locally synthesised fixture for testing",
             "max_clips_per_source": 1,
         })
+        # The cap is for when Clipper decides how many; a count the user asks
+        # for wins over it (D71).
         result = runner.run(str(long_source.video), config=cfg, campaign=capped,
-                            out_root=tmp_path, top=5, draft=True,
+                            out_root=tmp_path, top=None, draft=True,
                             backend_override="mock")
         assert result.clip_count <= 1
+        assert runner.clip_limit(5, capped) == 5
+        assert runner.clip_limit(None, capped.model_copy(update={"max_clips_per_source": None})) \
+            == runner.EVERY_GOOD_MOMENT
 
 
 @needs_sapi

@@ -32,7 +32,6 @@ brand_mentions:
   terms: []
 
 language: en
-max_clips_per_source: 5
 
 notes: |
   Chosen for: a Creative Commons licence from the owner's channel; the

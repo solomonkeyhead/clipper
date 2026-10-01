@@ -86,6 +86,10 @@ def select(
 
     taken: list[Candidate] = []
     per_third = {0: 0, 1: 0, 2: 0}
+    # Good moments passed over only because their third was full: spreading is a
+    # preference, so they fill whatever the other thirds couldn't (D71). As a
+    # hard cap it held any video to 9 clips, and 5 strong moments early to 2.
+    crowded: list[tuple[Candidate, ScoredCandidate]] = []
 
     for entry in ranked:
         candidate = by_id.get(entry.candidate_id)
@@ -102,6 +106,8 @@ def select(
             candidate, taken, per_third, cfg,
             min_gap_seconds=min_gap_seconds, source_duration=source_duration,
         )
+        if constraint and "third already has" in constraint:
+            crowded.append((candidate, entry))
         if constraint:
             # Passed quality but lost on placement: a valid replacement if a
             # picked clip later fails QA.
@@ -116,6 +122,17 @@ def select(
 
         taken.append(candidate)
         per_third[_third(candidate, source_duration)] += 1
+        result.picks.append(Pick(candidate, entry, rank=len(result.picks) + 1))
+
+    for candidate, entry in crowded:
+        if len(result.picks) >= target:
+            break
+        if _constraint_violation(candidate, taken, per_third, cfg, thirds=False,
+                                 min_gap_seconds=min_gap_seconds, source_duration=source_duration):
+            continue
+        taken.append(candidate)
+        result.reserves = [r for r in result.reserves if r.candidate is not candidate]
+        result.rejections.pop(candidate.candidate_id, None)
         result.picks.append(Pick(candidate, entry, rank=len(result.picks) + 1))
 
     result.stopped_because = _describe_stop(result, ranked, cfg, target)
@@ -153,6 +170,7 @@ def _constraint_violation(
     per_third: dict[int, int],
     cfg: SelectionConfig,
     *,
+    thirds: bool = True,
     min_gap_seconds: float,
     source_duration: float,
 ) -> str:
@@ -170,11 +188,9 @@ def _constraint_violation(
             )
 
     third = _third(candidate, source_duration)
-    if per_third[third] >= cfg.max_from_same_third:
-        return (
-            f"the {_third_name(third)} third already has "
-            f"{cfg.max_from_same_third} clip(s)"
-        )
+    if thirds and per_third[third] >= cfg.max_from_same_third:
+        return (f"the {_third_name(third)} third already has "
+                f"{cfg.max_from_same_third} clip(s)")
     return ""
 
 

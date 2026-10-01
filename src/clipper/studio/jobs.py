@@ -203,10 +203,10 @@ class JobRunner:
                 result = runner.cut(job.source, job.ranges, config=Config.load(),
                                     campaign=campaign, out_root=runs_dir())
             else:
-                # Auto: the quality bar decides how many, up to the campaign's maximum.
+                # Auto: the quality bar decides how many, up to the campaign's
+                # maximum if it has one (runner.clip_limit).
                 result = runner.run(job.source, config=Config.load(), campaign=campaign,
-                                    out_root=runs_dir(),
-                                    top=job.top or campaign.max_clips_per_source)
+                                    out_root=runs_dir(), top=job.top)
             job.clips = len(result.accepted)
             job.report = getattr(result, "report", None) or {}
             job.status, job.pct = "done", 100.0

@@ -15,7 +15,9 @@ from . import db
 PLANS = ["free", "research", "pro"]
 PLAN_NAMES = {"free": "Free", "research": "Research", "pro": "Pro"}
 #: feature -> the lowest plan that has it
-FEATURES = {"research": "research"}
+FEATURES = {"research": "research", "unlimited_clips": "pro"}
+#: Clips a video can give below Pro (D71): enough to try, not to mine a 4 GB bank.
+CLIP_CAP = 10
 
 
 def current() -> str:
@@ -27,6 +29,13 @@ def current() -> str:
 def has(feature: str, plan: str | None = None) -> bool:
     plan = plan or current()
     return PLANS.index(plan) >= PLANS.index(FEATURES[feature])
+
+
+def clip_count(top: int | None, campaign_cap: int | None, plan: str | None = None) -> int | None:
+    """The count a job may ask for on this plan: Pro unchanged, others at most CLIP_CAP."""
+    if has("unlimited_clips", plan):
+        return top
+    return min(top or campaign_cap or CLIP_CAP, CLIP_CAP)
 
 
 def require(feature: str) -> None:

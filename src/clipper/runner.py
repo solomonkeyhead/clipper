@@ -83,6 +83,11 @@ def run(
     config = campaign_config(config, campaign)
     check_rights(source, campaign)
 
+    limit = clip_limit(top, campaign)
+    # Watch at least twice as many moments as will be made (up to 40), so a
+    # long source asked for many clips isn't ranked on its words alone.
+    shortlist = min(40, max(config.llm.watch_shortlist, 2 * min(limit, 20)))
+    config = config.model_copy(update={"llm": config.llm.model_copy(update={"watch_shortlist": shortlist})})
     score_started = time.perf_counter()
     outcome = score(source, config, backend_override=backend_override, force=force)
     timings["score"] = time.perf_counter() - score_started
@@ -93,7 +98,6 @@ def run(
         weights_used=outcome.scored.weights_used,
     )
 
-    limit = min(top or config.selection.top_n, campaign.max_clips_per_source)
     selection = choose(outcome, config, limit=limit)
     result.selection_note = selection.stopped_because
 
@@ -149,6 +153,17 @@ def run(
         len(result.accepted), len(result.rejected), timings["total"],
     )
     return result
+
+
+#: "No limit": selection stops only when nothing else clears the quality bar.
+EVERY_GOOD_MOMENT = 500
+
+
+def clip_limit(top: int | None, campaign: CampaignConfig) -> int:
+    """How many clips to make at most: an explicit count wins over the campaign's
+    cap (asking for 10 used to give 4 when the campaign said 4); with neither,
+    every moment good enough (D71)."""
+    return top or campaign.max_clips_per_source or EVERY_GOOD_MOMENT
 
 
 def cut(

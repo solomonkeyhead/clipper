@@ -1413,3 +1413,27 @@ none). Its Shorts sync like TikTok and Instagram:
   description) the first time and by video id after.
 - Accounts page: a YouTube Shorts card with the one-time Google Cloud setup
   steps. The TikTok and YouTube "add account" flows are one component.
+
+## D71 -- As many clips as qualify, on Pro (2026-09-30)
+
+The user, with a 3.8 GB footage bank for one campaign: paying users should be
+able to "milk as much content as possible". Four caps held a video to a handful:
+
+- "Set a number" stopped at 10 -- and the campaign's max_clips_per_source
+  silently overrode it (asking for 10 on a campaign capped at 4 gave 4). An
+  explicit count now wins (runner.clip_limit); the campaign cap only bounds
+  "Let Clipper decide", and is optional: empty means every moment that clears
+  the quality bar. The user's six campaigns had 4-6 with no recorded reason and
+  now have none (backups in campaigns/.history).
+- At most 3 clips per third of the video meant at most 9 a video. Spreading is
+  now a preference: a candidate passed over for a full third fills whatever the
+  other thirds couldn't, so five strong early moments give five clips, not two.
+- 60 candidate windows whatever the length: the pool is now 2.5 per minute when
+  that's more (a 2-hour source gets ~300), and the watch pass sees at least
+  twice the requested count (12-40 moments).
+- Plans: Pro (the local install) has no cap -- counts 1-30 or any number to
+  500, auto has no limit. Below Pro, every job is held to 10 clips a video,
+  server-side (plans.clip_count); the page says "Pro makes as many as qualify".
+
+Cost scales with it: on paid Gemini a 2-hour source is roughly $0.30-0.40 to
+score, and each clip made adds about a cent of AI (caption fixes, description).

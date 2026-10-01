@@ -49,7 +49,6 @@ brand_mentions:
   terms: []
 
 language: en
-max_clips_per_source: 5
 
 notes: |
   Not a paid campaign: these posts build the account and the performance log

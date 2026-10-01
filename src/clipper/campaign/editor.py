@@ -64,7 +64,7 @@ class CampaignForm(BaseModel):
     long_description: bool = True
     description_context: str = ""
     description_keywords: list[str] = Field(default_factory=list)
-    max_clips_per_source: int = 6
+    max_clips_per_source: int | None = None  # None: no limit
     notes: str = ""
 
 
@@ -170,7 +170,8 @@ def merged(form: CampaignForm, existing: dict | None) -> dict:
         "long_description": form.long_description,
         "description_context": form.description_context.strip(),
         "description_keywords": _lines(form.description_keywords),
-        "max_clips_per_source": max(1, min(20, int(form.max_clips_per_source))),
+        "max_clips_per_source": (max(1, min(500, int(form.max_clips_per_source)))
+                                 if form.max_clips_per_source else None),
         "notes": form.notes.strip(),
     }
     data.update(updates)

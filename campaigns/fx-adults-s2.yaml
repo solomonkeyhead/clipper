@@ -73,7 +73,6 @@ brand_mentions:
   terms: []
 
 language: en
-max_clips_per_source: 4
 
 notes: |
   Brief rules the pipeline cannot enforce and you must follow when posting:

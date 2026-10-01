@@ -6,6 +6,7 @@ YouTube's APIs are replaced by canned answers; nothing touches the network.
 from __future__ import annotations
 
 import time
+from typing import ClassVar
 
 import pytest
 
@@ -70,7 +71,7 @@ class TestReading:
 
 
 class TestLog:
-    ROW = {"caption": "Never invite these friends to dinner s1 #adults", "clip_id": "c1", "campaign": "fx",
+    ROW: ClassVar[dict] = {"caption": "Never invite these friends to dinner s1 #adults", "clip_id": "c1", "campaign": "fx",
            "platform": "", "url": "https://www.tiktok.com/@s/video/1", "video_id": "1"}
 
     def test_a_short_gets_its_own_row_from_the_clips(self, monkeypatch):
