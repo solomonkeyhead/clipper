@@ -1653,3 +1653,18 @@ marked as having no numbers: none has an official API that gives a post's views
 to a personal account. Matching a post to its clip now compares the openings up
 to the shorter one (20 characters at least), since a cut-down X post may lose the
 hashtags of a short caption.
+
+## D84 -- One-click YouTube for a packaged copy (2026-10-01)
+
+Connecting YouTube took a six-part Google Cloud setup (D79). A copy of Clipper
+packaged for someone else can now carry its owner's Google app:
+`clipper youtube bundle` writes src/clipper/youtube/app.json from .env, and
+youtube.api.client() falls back to it when the user has no app of their own, so
+the Accounts page goes straight to "Connect with YouTube". Google treats a desktop
+app's secret as not confidential (PKCE protects the sign-in), but the user's rule
+is that secrets stay out of the code, so the file is git-ignored and only written
+when packaging. Until Google verifies the app (homepage and privacy policy on an
+owned domain, a review of the two read-only scopes), its users see "Google hasn't
+verified this app" and it is capped at 100 users. TikTok and Instagram still need
+each user's own developer app until Clipper's own apps pass review (business
+registration needed).

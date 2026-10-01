@@ -110,3 +110,23 @@ def test_a_title_above_the_caption_still_finds_the_clip():
     result = post_sync.apply([short], rows, platform="youtube")
     assert len(result.matched) == 1 and rows[-1]["source_id"] == "s1"
     assert "@JoshThomasChannel" in rows[-1]["posted_caption"]  # the proof pack checks the whole text
+
+
+def test_a_google_app_built_into_this_copy_makes_connecting_one_click(monkeypatch, tmp_path):
+    """D84: a packaged copy carries its owner's app; the user's own .env app wins."""
+    built_in = tmp_path / "app.json"
+    monkeypatch.setattr(api, "BUNDLED", built_in)
+    monkeypatch.delenv(api.ENV_ID, raising=False)
+    monkeypatch.delenv(api.ENV_SECRET, raising=False)
+    assert not api.has_app()
+    with pytest.raises(api.YouTubeError, match=r"in .env first"):
+        api.bundle(built_in)
+    monkeypatch.setenv(api.ENV_ID, "owner-id")
+    monkeypatch.setenv(api.ENV_SECRET, "owner-secret")
+    api.bundle(built_in)
+    monkeypatch.delenv(api.ENV_ID)
+    monkeypatch.delenv(api.ENV_SECRET)
+    assert api.client() == ("owner-id", "owner-secret") and api.has_app()
+    monkeypatch.setenv(api.ENV_ID, "mine")
+    monkeypatch.setenv(api.ENV_SECRET, "my-secret")
+    assert api.client() == ("mine", "my-secret")

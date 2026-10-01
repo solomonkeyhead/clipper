@@ -11,6 +11,13 @@ channel is picked on Google's consent page. One token file per channel.
 
 Keep the app's consent screen "In production": in "Testing", Google expires
 the refresh token after 7 days and the channel would need reconnecting weekly.
+
+One click for everyone else (D84): a copy of Clipper packaged for other people
+can carry its owner's Google app in `app.json` next to this file, written by
+`clipper youtube bundle` and never committed. Google treats a desktop app's
+secret as not confidential (it ships inside the app; PKCE protects the
+sign-in). Until Google verifies the app, its users see "Google hasn't verified
+this app" and it is capped at 100 users.
 """
 
 from __future__ import annotations
@@ -43,6 +50,7 @@ SCOPES = ("https://www.googleapis.com/auth/youtube.readonly "
 PORT = 3457
 REDIRECT_URI = f"http://127.0.0.1:{PORT}/callback"
 ENV_ID, ENV_SECRET = "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"
+BUNDLED = Path(__file__).with_name("app.json")
 #: Shorts can run up to 3 minutes; anything longer is a regular upload.
 SHORT_MAX_SECONDS = 180
 
@@ -108,10 +116,34 @@ def _safe(name: str) -> str:
 
 
 def client() -> tuple[str, str]:
+    """The user's own Google app (.env), else the one built into this copy."""
     cid, secret = os.environ.get(ENV_ID, "").strip(), os.environ.get(ENV_SECRET, "").strip()
+    if (not cid or not secret) and BUNDLED.exists():
+        try:
+            built_in = json.loads(BUNDLED.read_text(encoding="utf-8"))
+            cid, secret = built_in.get("client_id", "").strip(), built_in.get("client_secret", "").strip()
+        except (ValueError, OSError, AttributeError):
+            cid = secret = ""
     if not cid or not secret:
         raise YouTubeError("add your Google app's client ID and secret on the Accounts page first")
     return cid, secret
+
+
+def has_app() -> bool:
+    try:
+        client()
+    except YouTubeError:
+        return False
+    return True
+
+
+def bundle(path: Path = BUNDLED) -> Path:
+    """Build this copy's Google app (from .env) into it, for packaging Clipper for others."""
+    cid, secret = os.environ.get(ENV_ID, "").strip(), os.environ.get(ENV_SECRET, "").strip()
+    if not cid or not secret:
+        raise YouTubeError(f"set {ENV_ID} and {ENV_SECRET} in .env first")
+    path.write_text(json.dumps({"client_id": cid, "client_secret": secret}, indent=1), encoding="utf-8")
+    return path
 
 
 def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:

@@ -592,6 +592,13 @@ def brief_of(campaign: CampaignConfig) -> Brief:
         posting_rules=list(campaign.posting_rules))
 
 
+def yt_has_app() -> bool:
+    """A Google app to sign in with: the user's own, or one built into Clipper (D84)."""
+    from ..youtube import api as yt_api
+
+    return yt_api.has_app()
+
+
 def accounts() -> list[Account]:
     """Every connected account's health, from its stored token."""
     out = []
@@ -1361,7 +1368,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                      tiktok_app=setup.key_set("TIKTOK_CLIENT_KEY")
                      and setup.key_set("TIKTOK_CLIENT_SECRET"),
                      tiktok_connect=tiktok.view(),
-                     youtube_app=setup.key_set("YOUTUBE_CLIENT_ID") and setup.key_set("YOUTUBE_CLIENT_SECRET"))
+                     youtube_app=yt_has_app())
 
     @app.put("/api/setup/keys")
     def put_keys(values: dict[str, str]) -> Setup:

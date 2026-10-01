@@ -985,6 +985,29 @@ def library_describe(
     console.print(f"{len(done)} clip(s) described. Posted clips keep their caption.")
 
 
+youtube_app = typer.Typer(help="Your YouTube Shorts' stats, via YouTube's official APIs.",
+                          no_args_is_help=True)
+app.add_typer(youtube_app, name="youtube")
+
+
+@youtube_app.command("bundle")
+def youtube_bundle() -> None:
+    """Build your Google app into this copy, so its users connect YouTube in one click (D84).
+
+    For packaging Clipper for other people: writes src/clipper/youtube/app.json
+    (git-ignored) from YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET in .env.
+    """
+    from .youtube import api
+
+    try:
+        path = api.bundle()
+    except api.YouTubeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Wrote {path}.[/green] Anyone using this copy connects YouTube with one "
+                  "click. Google caps an unverified app at 100 users.")
+
+
 instagram_app = typer.Typer(help="Your Instagram Reels' stats and links, via Instagram's "
                                  "official API.", no_args_is_help=True)
 app.add_typer(instagram_app, name="instagram")

@@ -6,6 +6,8 @@ eval_cache/
 
 # secrets
 .env
+# A Google app built into a packaged copy (clipper youtube bundle, D84).
+src/clipper/youtube/app.json
 *.key
 
 # python
