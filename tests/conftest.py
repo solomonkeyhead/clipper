@@ -54,6 +54,14 @@ def _log_to_a_temporary_file(tmp_path_factory: pytest.TempPathFactory) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _fresh_brief_line_rotation() -> None:
+    """Each test starts the brief's hooks and captions from the top (campaign/rotation.py)."""
+    from clipper.campaign import rotation
+
+    rotation.forget()
+
+
+@pytest.fixture(autouse=True)
 def _no_background_rule_checks(monkeypatch: pytest.MonkeyPatch) -> list:
     """Saving a campaign or finishing a run starts the rule check in a thread
     (studio/rulecheck.py), which could outlive the test's temporary data dir and

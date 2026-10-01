@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Download, ExternalLink, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Link2, Loader2, ShieldCheck, Upload, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
-  downloadUrl, useAddCaptionRule, useCampaigns, useRecheckRules, type BriefProblem, type Clip, type PostCopy,
+  useAddCaptionRule, useAddPostLink, useCampaigns, useRecheckRules, type BriefProblem, type Clip, type PostCopy,
 } from "@/api/client";
-import { cn } from "@/lib/utils";
+import { PLATFORM_NAME, cn } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
-import { Button, CopyButton } from "./ui";
+import { Button, CopyButton, Tip } from "./ui";
 
 /**
  * Posting by hand, in one place (D77): the platforms' own upload pages, opened
@@ -63,45 +63,21 @@ export function PostPanel({ clip }: { clip: Clip }) {
     <section className="rounded-md border border-line p-3">
       <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Post it</h3>
       <BriefCheck clip={clip} />
-      <ol className="flex flex-col gap-2.5 text-sm">
-        <li className="flex flex-wrap items-center gap-2">
-          <span className="w-5 text-muted">1.</span>
-          {clip.file_exists ? (
-            <a href={downloadUrl(clip.id)} download
-               className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
-              <Download className="size-3.5" /> Download the video
-            </a>
-          ) : <span className="text-muted">The video file is missing.</span>}
-        </li>
-        <li className="flex gap-2">
-          <span className="w-5 shrink-0 text-muted">2.</span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            {copies.length ? copies.map((c) => (
-              <PlatformRow key={c.platform} copy={c} onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
-            )) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
-            {shown.length > 1 && (
-              <Button size="sm" variant="ghost" className="w-fit" onClick={() => open(shown)}>
-                <Upload className="size-3.5" /> Open all {shown.length}
-              </Button>
-            )}
-            <p className="text-xs text-muted">
-              {shown.map((p) => `${UPLOAD[p].name}: ${UPLOAD[p].how}.`).join(" ")} Each opens in whichever account
-              you're signed in to in this browser.
-            </p>
-          </div>
-        </li>
-        {(campaign?.posting_rules?.length ?? 0) > 0 && (
-          <li className="flex gap-2">
-            <span className="w-5 shrink-0 text-muted">3.</span>
-            <Checklist rules={campaign!.posting_rules!} />
-          </li>
-        )}
-        <li className="flex gap-2">
-          <span className="w-5 shrink-0 text-muted">{(campaign?.posting_rules?.length ?? 0) > 0 ? "4." : "3."}</span>
-          <span className="text-muted">Back here: <b className="text-fg">Mark posted</b>, or paste the post's link below.</span>
-        </li>
-      </ol>
-      <details className="mt-2 pl-7 text-xs text-muted">
+      <div className="flex flex-col gap-2.5 text-sm">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          {copies.length ? copies.map((c) => (
+            <PlatformRow key={c.platform} copy={c} onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
+          )) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
+          {shown.length > 1 && (
+            <Button size="sm" variant="ghost" className="w-fit" onClick={() => open(shown)}>
+              <Upload className="size-3.5" /> Open all {shown.length}
+            </Button>
+          )}
+        </div>
+        {(campaign?.posting_rules?.length ?? 0) > 0 && <Checklist rules={campaign!.posting_rules!} />}
+        <PasteLink clip={clip} compact />
+      </div>
+      <details className="mt-2 text-xs text-muted">
         <summary className="cursor-pointer hover:text-fg">Paid clipping is an ad: turn on the paid-partnership label</summary>
         <p className="mt-1">
           Campaigns pay you to post, so the platforms (and the FTC in the US) expect it labelled, besides any #ad the
@@ -127,7 +103,9 @@ function PlatformRow({ copy, onOpen }: { copy: PostCopy; onOpen: () => void }) {
         {copy.title && <CopyButton text={copy.title} what={`${name} title`} label="Copy title" />}
         <CopyButton text={copy.caption} what={`${name} ${copy.title ? "description" : "caption"}`}
                     label={copy.title ? "Copy description" : "Copy caption"} />
-        <Button size="sm" variant="secondary" onClick={onOpen}>Open {name} <ExternalLink className="size-3" /></Button>
+        <Tip label={`${UPLOAD[key(copy.platform)]?.how ?? "Upload it"}. Opens in whichever account you're signed in to here.`}>
+          <Button size="sm" variant="secondary" onClick={onOpen}>Open {name} <ExternalLink className="size-3" /></Button>
+        </Tip>
         <button type="button" onClick={() => setOpen(!open)}
                 className={cn("ml-auto inline-flex items-center gap-1 text-xs", failed.length ? "text-danger" : "text-success")}>
           {failed.length ? <XCircle className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
@@ -226,5 +204,28 @@ function Checklist({ rules }: { rules: string[] }) {
         </label>
       ))}
     </div>
+  );
+}
+
+/** A post's link, pasted: filed like a synced post (studio/posts.py). */
+export function PasteLink({ clip, compact = false }: { clip: Clip; compact?: boolean }) {
+  const add = useAddPostLink();
+  const [open, setOpen] = useState(!compact);
+  const [url, setUrl] = useState("");
+  if (!open) {
+    return <Button size="sm" variant="ghost" onClick={() => setOpen(true)}><Link2 className="size-3.5" /> Already posted? Add its link</Button>;
+  }
+  return (
+    <form className="flex gap-2" onSubmit={(e) => {
+      e.preventDefault();
+      add.mutate({ id: clip.id, url }, {
+        onSuccess: (res) => { setUrl(""); if (compact) setOpen(false); toast.success(`${PLATFORM_NAME[(res as { platform: string }).platform] ?? "Post"} link added`, { description: "Its stats update on the next sync." }); },
+        onError: (err) => toast.error((err as Error).message),
+      });
+    }}>
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the post's link (TikTok, Instagram, YouTube, X, Facebook, Snapchat or Threads)"
+             aria-label="Post link" className="h-9 flex-1 rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
+      <Button type="submit" variant="secondary" disabled={!url.trim() || add.isPending}>Add</Button>
+    </form>
   );
 }

@@ -1668,3 +1668,41 @@ owned domain, a review of the two read-only scopes), its users see "Google hasn'
 verified this app" and it is capped at 100 users. TikTok and Instagram still need
 each user's own developer app until Clipper's own apps pass review (business
 registration needed).
+
+## D85 -- The brief's hooks and captions spread across a campaign (2026-10-01)
+
+A "select all" batch of 40 short Please Like Me videos made 39 clips with the same
+title and on-screen hook, and nearly the same caption: the brief's lines rotated by
+a clip's rank within its own video, which restarts at 1 for each video. Each clip
+now gets the line its campaign has used least, counting the library and what has
+been handed out since (campaign/rotation.py, shared by parallel jobs under a lock).
+The 37 unposted Please Like Me clips were spread across the 13 hooks (as titles,
+which the YouTube title uses) and 3 captions; the hook already burned into those
+videos is unchanged and shows as "On screen".
+
+## D86 -- Learning teaches about the moment, and from views (2026-10-01)
+
+One rating per clip taught everything about the moment, so a good moment skipped
+for bad framing taught Clipper to avoid good moments. Reasons are now aspects
+on any clip, skipped ones included: what worked, what didn't in the moment, and
+what didn't in the edit (framing, caption mistakes, on-screen text). A Not good whose
+reasons are all about the edit says nothing against the moment (with a good reason
+it counts as a good moment); edit problems are counted on the Learning page for
+fixing, never taught. "Wrong for the campaign" steers only that campaign. A bare
+Not good still counts in full. Views are the goal: a posted clip 3+ days old moves
+up one at 1.5x the usual views for its platform and campaign, down one at half
+(studio/stats.clip_performance), in both the rubric weights and the scorer's taste
+examples ("got 2.5x their usual views").
+
+## D87 -- Trimmed clip window, one Not good, compact lists (2026-10-01)
+
+The clip window repeated itself: two downloads, two Not goods (only one skipped),
+a Mark posted reminder, a generic Copy caption beside per-platform ones (which can
+miss a platform-only rule), an empty Posts box and dispute proof before posting.
+Now: one download; one Good / Not good row (Not good skips a ready clip everywhere,
+reasons show after a verdict); Post it without numbered steps (upload tips in each
+Open button's tooltip, the paste-a-link box inside it); Posts and proof only once
+posted; the score breakdown and note collapsed. The card's Not good toast offers
+"Say why". New clips' Finished list is one line per video (8 shown, then Show all),
+and stop notes no longer say "1 of 500 requested" (500 is the internal no-limit).
+The dashboard's To submit tile and "ready to post" footnote repeated Next up.

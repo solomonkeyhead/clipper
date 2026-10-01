@@ -343,10 +343,11 @@ export async function saveCampaignBrief(name: string, text: string) {
 }
 
 /** One click on a ready clip: skip it and learn from it; `undo` restores it (D74). */
-export async function markNotGood(id: number, undo?: { status: string }) {
+/** Not good: skip a ready clip and learn from it, with what worked and what didn't (D86). */
+export async function markNotGood(id: number, undo?: { status: string }, reasons: string[] = []) {
   const res = await fetch(`/api/clips/${id}/not-good`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(undo ? { undo: true, status: undo.status } : {}) });
+    body: JSON.stringify(undo ? { undo: true, status: undo.status } : { reasons }) });
   if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
 }
 

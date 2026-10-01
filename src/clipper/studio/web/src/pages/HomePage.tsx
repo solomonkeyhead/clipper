@@ -93,7 +93,7 @@ export function DashboardPage() {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-8 w-64" />
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)}</div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}</div>
         <Skeleton className="h-40" />
       </div>
     );
@@ -110,14 +110,13 @@ export function DashboardPage() {
       {firstRun && <GetStarted done={home.first_run} />}
       {home.first_run.clips && <>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Metric label="Est. earnings" tone="money" value={formatMoney(m.est_earnings)}
                 hint="Estimate: views ÷ 1,000 × each campaign's rate. Campaigns verify views themselves."
                 sub={m.est_earnings === null ? "Add a campaign's pay rate" : "active campaigns"} />
         <Metric label="Views" value={formatCount(m.views)} sub="active campaigns" />
-        <Metric label="Posts" value={m.posts} sub={`${m.ready} clips ready to post`} />
-        <Metric label="Median views / post" value={formatCount(m.median_views)} />
-        <Metric label="To submit" value={m.to_submit} sub={m.to_submit ? "links waiting" : "all caught up"} />
+        <Metric label="Posts" value={m.posts} sub="active campaigns" />
+        <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

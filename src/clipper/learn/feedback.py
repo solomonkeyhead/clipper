@@ -4,7 +4,22 @@ Rating every clip is a chore nobody keeps up (D74), so most of the signal is
 implicit: a clip the user posted counts as a 4 (they judged it good enough to
 post), and "Not good" -- one click on a ready clip -- is a 1. A rating they do
 give (Good / Not good in the clip panel, or the older 1-5 stars), with optional
-reasons ("weak hook", "needs context", ...), always wins. Three things come out:
+reasons ("weak hook", "needs context", ...), always wins.
+
+What a rating teaches is about the *moment* Clipper picked (D86), so:
+
+* A clip can be good and still skipped. Reasons are aspects, not a verdict: what
+  worked ("great hook") and what didn't, on any clip. "Not good" for the edit
+  alone -- framing, caption mistakes, the on-screen text -- says nothing against
+  the moment; with a good reason too, the moment counts as good. Those edit
+  problems are counted apart, for fixing the pipeline, never taught as taste.
+* "Wrong for the campaign" is about that brief, not taste: it only steers that
+  campaign's own prompt.
+* Views are the goal. A posted clip's views, once it's 3 days old, compared with
+  the median for its platform and campaign, move its rating: a hit (1.5x the
+  median or more) up one, a miss (half or less) down one.
+
+Three things come out:
 
 * **A report** -- does Clipper's score agree with the user's ratings, and with
   the views the posts got? Rank correlations, and a table of score bands.
@@ -32,6 +47,14 @@ RUBRIC = ["hook_strength", "standalone_clarity", "payoff", "emotional_intensity"
 RUBRIC_LABELS = {"hook_strength": "Hook", "standalone_clarity": "Makes sense alone",
                  "payoff": "Payoff", "emotional_intensity": "Emotion",
                  "quotability": "Quotable", "ending_completeness": "Ending"}
+#: Reasons about the moment itself, good and bad, and about the edit (D86).
+GOOD = ("great_hook", "funny", "emotional", "good_ending", "on_brief")
+MOMENT_BAD = ("weak_hook", "boring", "bad_ending", "needs_context", "off_brief")
+EDIT = ("bad_framing", "caption_errors", "wrong_text")
+#: About one brief, so it steers only that campaign.
+BRIEF_ONLY = ("on_brief", "off_brief")
+#: Views as a multiple of the usual for that platform and campaign (studio/stats.py).
+HIT, MISS = 1.5, 0.5
 #: Ratings before weights move at all; below this, noise dominates.
 MIN_FOR_WEIGHTS = 8
 #: Evidence weight: with n ratings the learnt weights count n / (n + PRIOR).
@@ -96,13 +119,32 @@ class Rated:
     rated_at: str = ""
     #: Rated by posting it rather than by the user saying so.
     implicit: bool = False
+    #: Its best post's views over the usual (studio/stats.clip_performance), once settled.
+    performance: float | None = None
+
+    @property
+    def moment(self) -> float | None:
+        """What this clip says about the moment, 1-5, or None for nothing (D86)."""
+        if self.rating is None:
+            return None
+        good = any(r in GOOD for r in self.reasons)
+        bad = any(r in MOMENT_BAD and r not in BRIEF_ONLY for r in self.reasons)
+        if self.rating <= 2 and self.reasons and not bad:
+            # Skipped for the edit or the brief, not the moment.
+            return 4.0 if good else None
+        value = 2.0 if self.rating <= 2 and good else float(self.rating)  # no reasons: as said
+        if self.performance is not None:
+            value += 1 if self.performance >= HIT else -1 if self.performance <= MISS else 0
+        return max(1.0, min(5.0, value))
 
 #: What posting a clip says about it, when the user hasn't rated it.
 POSTED_AS = 4
 
 
-def from_rows(rows: list[dict], views: dict[int, float] | None = None) -> list[Rated]:
-    """Clips (db rows) with their stored scores, ratings and total views."""
+def from_rows(rows: list[dict], views: dict[int, float] | None = None,
+              performance: dict[int, float] | None = None) -> list[Rated]:
+    """Clips (db rows) with their stored scores, ratings, total views and how
+    their posts did against the usual."""
     out = []
     for row in rows:
         scores = json.loads(row.get("scores") or "{}")
@@ -114,17 +156,17 @@ def from_rows(rows: list[dict], views: dict[int, float] | None = None) -> list[R
             rating=rating, implicit=implicit, reasons=json.loads(row.get("reasons") or "[]"),
             score=scores.get("score"), rubric=scores.get("rubric") or {},
             text=scores.get("text") or "", views=(views or {}).get(row["id"]),
-            rated_at=row.get("rated_at") or ""))
+            performance=(performance or {}).get(row["id"]), rated_at=row.get("rated_at") or ""))
     return out
 
 
 def learned_weights(clips: list[Rated], defaults: dict[str, float]) -> tuple[dict[str, float], int]:
     """Rubric weights moved toward what the ratings favour. Returns (weights, n used)."""
-    rated = [c for c in clips if c.rating is not None and all(k in c.rubric for k in RUBRIC)]
+    rated = [c for c in clips if c.moment is not None and all(k in c.rubric for k in RUBRIC)]
     n = len(rated)
     if n < MIN_FOR_WEIGHTS:
         return dict(defaults), n
-    ratings = [float(c.rating) for c in rated]
+    ratings = [c.moment for c in rated]
     implied = {}
     for dim in RUBRIC:
         rho = spearman([c.rubric[dim] for c in rated], ratings)
@@ -146,36 +188,50 @@ def total(rubric: dict[str, float], weights: dict[str, float]) -> float | None:
 
 
 def taste(clips: list[Rated], campaign: str | None = None) -> str:
-    """The prompt block: rated examples (this campaign's first) and common reasons."""
-    rated = [c for c in clips if c.rating is not None]
+    """The prompt block: examples of moments they liked and didn't (this campaign's
+    first), how posted ones did, and the reasons they give most. Edit problems
+    are left out: the scorer picks moments, it doesn't frame or caption them."""
+    rated = [c for c in clips if c.moment is not None]
     if len(rated) < MIN_FOR_TASTE:
         return ""
 
+    def mine(c: Rated) -> bool:
+        # A brief's fit is that brief's business.
+        return c.campaign == campaign or not any(r in BRIEF_ONLY for r in c.reasons)
+
     def pick(cond, limit=4):
-        chosen = sorted((c for c in rated if cond(c)),
-                        key=lambda c: (c.campaign != campaign, -abs(c.rating - 3), c.rated_at),
-                        reverse=False)
+        chosen = sorted((c for c in rated if cond(c) and mine(c)),
+                        key=lambda c: (c.campaign != campaign, -abs(c.moment - 3), c.performance is None,
+                                       c.rated_at))
         return chosen[:limit]
 
+    def why(c: Rated) -> str:
+        reasons = [REASONS.get(r, r).lower() for r in c.reasons if r not in EDIT]
+        return ", ".join(reasons)
+
     def line(c: Rated) -> str:
-        why = ", ".join(REASONS.get(r, r).lower() for r in c.reasons)
-        text = " ".join(c.text.split())[:220]
         said = ("posted it" if c.implicit else "marked it not good" if c.rating == 1
-                else f"rated it {c.rating}/5")
-        return (f'- {said}: "{c.title}"' + (f" ({why})" if why else "")
+                else "said it was good" if c.rating >= 4 else f"rated it {c.rating}/5")
+        if c.performance is not None:
+            said += f", and it got {c.performance:g}x their usual views"
+        text = " ".join(c.text.split())[:220]
+        return (f'- {said}: "{c.title}"' + (f" ({why(c)})" if why(c) else "")
                 + (f"\n  {text}" if text else ""))
 
-    liked = pick(lambda c: c.rating >= 4)
-    disliked = pick(lambda c: c.rating <= 2)
+    liked = pick(lambda c: c.moment >= 4)
+    disliked = pick(lambda c: c.moment <= 2)
     parts = []
     if liked:
-        parts.append("Clips they liked (posted, or rated well):\n" + "\n".join(line(c) for c in liked))
+        parts.append("Moments they liked (posted, rated well, or that did well):\n"
+                     + "\n".join(line(c) for c in liked))
     if disliked:
-        parts.append("Clips they didn't like:\n" + "\n".join(line(c) for c in disliked))
+        parts.append("Moments they didn't like, or that flopped:\n" + "\n".join(line(c) for c in disliked))
     counts: dict[str, int] = {}
     for c in rated:
-        for r in c.reasons:
-            counts[r] = counts.get(r, 0) + 1
+        if mine(c):
+            for r in c.reasons:
+                if r not in EDIT:
+                    counts[r] = counts.get(r, 0) + 1
     common = sorted(counts.items(), key=lambda kv: -kv[1])[:5]
     if common:
         parts.append("Reasons they give most: " + ", ".join(
@@ -199,25 +255,28 @@ class Report:
     reasons: list[dict] = field(default_factory=list)
     taste: str = ""
     weights_n: int = 0
+    #: Edit problems the user flagged (framing, captions, on-screen text): for fixing, not taste.
+    edit_problems: list[dict] = field(default_factory=list)
+    #: Posted clips whose views have settled enough to count (D86).
+    outcomes: int = 0
 
 
 def report(clips: list[Rated], defaults: dict[str, float], *, active: bool = True) -> Report:
-    rated = [c for c in clips if c.rating is not None]
+    rated = [c for c in clips if c.moment is not None]
     both = [c for c in rated if c.score is not None]
     viewed = [c for c in clips if c.score is not None and c.views is not None]
     out = Report(rated=len(rated), unrated=sum(1 for c in clips if c.rating is None),
                  scored_and_rated=len(both), with_views=len(viewed))
-    out.agreement = spearman([c.score for c in both], [float(c.rating) for c in both])
+    out.agreement = spearman([c.score for c in both], [c.moment for c in both])
     out.agreement_verdict = verdict(out.agreement, len(both))
     out.views_agreement = spearman([c.score for c in viewed], [c.views for c in viewed])
     out.views_verdict = verdict(out.views_agreement, len(viewed))
     rated_viewed = [c for c in rated if c.views is not None]
-    out.rating_vs_views = spearman([float(c.rating) for c in rated_viewed],
-                                   [c.views for c in rated_viewed])
+    out.rating_vs_views = spearman([c.moment for c in rated_viewed], [c.views for c in rated_viewed])
     for label, low, high in BANDS:
         members = [c for c in clips if c.score is not None
                    and (low is None or c.score >= low) and (high is None or c.score < high)]
-        ratings = [c.rating for c in members if c.rating is not None]
+        ratings = [c.moment for c in members if c.moment is not None]
         views = [c.views for c in members if c.views is not None]
         out.bands.append({"label": label, "clips": len(members),
                           "avg_rating": round(statistics.fmean(ratings), 1) if ratings else None,
@@ -226,15 +285,20 @@ def report(clips: list[Rated], defaults: dict[str, float], *, active: bool = Tru
     weights, out.weights_n = learned_weights(clips, defaults)
     rubric_rated = [c for c in rated if all(k in c.rubric for k in RUBRIC)]
     for dim in RUBRIC:
-        rho = spearman([c.rubric[dim] for c in rubric_rated], [float(c.rating) for c in rubric_rated])
+        rho = spearman([c.rubric[dim] for c in rubric_rated], [c.moment for c in rubric_rated])
         out.dimensions.append({"key": dim, "label": RUBRIC_LABELS[dim], "default": defaults[dim],
                                "learned": weights[dim] if active else defaults[dim],
                                "agreement": rho})
     counts: dict[str, int] = {}
-    for c in rated:
+    edits: dict[str, int] = {}
+    for c in clips:
         for r in c.reasons:
-            counts[r] = counts.get(r, 0) + 1
+            bucket = edits if r in EDIT else counts
+            bucket[r] = bucket.get(r, 0) + 1
     out.reasons = [{"key": k, "label": REASONS.get(k, k), "count": n}
                    for k, n in sorted(counts.items(), key=lambda kv: -kv[1])]
+    out.edit_problems = [{"key": k, "label": REASONS.get(k, k), "count": n}
+                         for k, n in sorted(edits.items(), key=lambda kv: -kv[1])]
+    out.outcomes = sum(1 for c in clips if c.performance is not None)
     out.taste = taste(clips)
     return out

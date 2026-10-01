@@ -1,5 +1,7 @@
 import { Hand, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useRateClip, type Clip } from "@/api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { markNotGood, useRateClip, type Clip } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { Tip } from "./ui";
 
@@ -8,14 +10,16 @@ const RUBRIC_LABELS: Record<string, string> = {
   emotional_intensity: "Emotion", quotability: "Quotable", ending_completeness: "Ending",
 };
 
-const GOOD_REASONS: [string, string][] = [
-  ["great_hook", "Great hook"], ["funny", "Funny"], ["emotional", "Emotional"],
-  ["good_ending", "Good ending"], ["on_brief", "Right for the campaign"],
-];
-const BAD_REASONS: [string, string][] = [
-  ["weak_hook", "Weak hook"], ["boring", "Boring / slow"], ["bad_ending", "Cut off / bad ending"],
-  ["needs_context", "Needs context"], ["off_brief", "Wrong for the campaign"],
-  ["bad_framing", "Bad framing"], ["caption_errors", "Caption mistakes"],
+/** What worked, what didn't in the moment, and what didn't in the edit (learn/feedback.py, D86). */
+const GROUPS: { label: string; tone: "good" | "bad" | "edit"; reasons: [string, string][] }[] = [
+  { label: "What worked", tone: "good", reasons: [
+    ["great_hook", "Great hook"], ["funny", "Funny"], ["emotional", "Emotional"],
+    ["good_ending", "Good ending"], ["on_brief", "Right for the campaign"]] },
+  { label: "What didn't", tone: "bad", reasons: [
+    ["weak_hook", "Weak hook"], ["boring", "Boring / slow"], ["bad_ending", "Cut off / bad ending"],
+    ["needs_context", "Needs context"], ["off_brief", "Wrong for the campaign"]] },
+  { label: "In the edit", tone: "edit", reasons: [
+    ["bad_framing", "Bad framing"], ["caption_errors", "Caption mistakes"], ["wrong_text", "On-screen text doesn't fit"]] },
 ];
 
 const scoreTone = (score: number) =>
@@ -100,45 +104,68 @@ export function ScoreBreakdown({ clip }: { clip: Clip }) {
 
 export function RatingPanel({ clip }: { clip: Clip }) {
   const rate = useRateClip();
+  const qc = useQueryClient();
   const reasons = clip.reasons ?? [];
-  const set = (rating: number | null, next = reasons) => rate.mutate({ id: clip.id, rating, reasons: next });
-  const toggle = (key: string) => {
-    const next = reasons.includes(key) ? reasons.filter((r) => r !== key) : [...reasons, key];
-    set(clip.rating ?? null, next);
-  };
-  const chip = ([key, label]: [string, string], tone: "good" | "bad") => (
-    <button key={key} onClick={() => toggle(key)} disabled={!clip.rating} aria-pressed={reasons.includes(key)}
-      className={cn("h-7 rounded-full border px-2.5 text-xs font-medium transition-colors disabled:opacity-40",
-        reasons.includes(key)
-          ? tone === "good" ? "border-success/50 bg-[color-mix(in_oklch,var(--success)_14%,transparent)] text-success"
-            : "border-warning/50 bg-[color-mix(in_oklch,var(--warning)_14%,transparent)] text-warning"
-          : "border-line text-muted hover:text-fg")}>
-      {label}
-    </button>
-  );
   // Good / Not good: two clear choices instead of five stars (D74). Older 1-5
   // ratings still count: 4-5 read as good, 1-2 as not good.
   const verdict = clip.rating == null || clip.rating === 3 ? null : clip.rating >= 4 ? "good" : "bad";
-  const choose = (v: "good" | "bad") => set(verdict === v ? null : v === "good" ? 5 : 1, []);
+  const set = (rating: number | null, next: string[]) => rate.mutate({ id: clip.id, rating, reasons: next });
+  const notGood = async (next: string[]) => {
+    // On a ready clip, Not good also skips it, the same as the card's button.
+    await markNotGood(clip.id, undefined, next);
+    void qc.invalidateQueries({ queryKey: ["clips"] });
+    toast("Marked not good", { description: "Skipped. Tap what worked too: Clipper keeps those.", duration: 4000 });
+  };
+  const choose = (v: "good" | "bad") => {
+    if (verdict === v) return set(null, []);
+    if (v === "bad" && clip.status === "ready") return void notGood(reasons);
+    set(v === "good" ? 5 : 1, reasons);
+  };
+  const toggle = (key: string) => {
+    const next = reasons.includes(key) ? reasons.filter((r) => r !== key) : [...reasons, key];
+    // A reason on an unrated clip rates it: a skipped clip as not good, otherwise by the reason.
+    const rating = clip.rating ?? (clip.status === "skipped" || !GROUPS[0].reasons.some(([k]) => k === key) ? 1 : 5);
+    set(rating, next);
+  };
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Your verdict">
         {(["good", "bad"] as const).map((v) => (
           <button key={v} role="radio" aria-checked={verdict === v} onClick={() => choose(v)}
-            className={cn("flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors",
+            className={cn("flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors",
               verdict === v ? v === "good" ? "border-success/50 bg-[color-mix(in_oklch,var(--success)_14%,transparent)] text-success"
                 : "border-warning/50 bg-[color-mix(in_oklch,var(--warning)_14%,transparent)] text-warning"
                 : "border-line text-muted hover:text-fg")}>
             {v === "good" ? <><ThumbsUp className="size-4" /> Good</> : <><ThumbsDown className="size-4" /> Not good</>}
           </button>
         ))}
+        <span className="text-xs text-subtle">
+          {clip.status === "ready" ? "Not good skips it and teaches Clipper."
+            : clip.status === "skipped" ? "Skipped clips can have good parts too: tap what worked."
+            : "Posting it already counts as good."}
+        </span>
       </div>
-      {verdict && (
-        <div className="flex flex-wrap gap-1.5">{(verdict === "good" ? GOOD_REASONS : BAD_REASONS).map((r) => chip(r, verdict))}</div>
-      )}
-      <p className="text-xs text-subtle">
-        Optional: clips you post already count as good. Clipper learns your taste from both{verdict ? "; tap reasons that fit" : ""}.
-      </p>
+      {(verdict || reasons.length > 0) && <div className="flex flex-col gap-1.5">
+        {GROUPS.map((g) => (
+          <div key={g.label} className="flex flex-wrap items-center gap-1.5">
+            <span className="w-24 shrink-0 text-xs text-muted">{g.label}</span>
+            {g.reasons.map(([key, label]) => (
+              <button key={key} onClick={() => toggle(key)} aria-pressed={reasons.includes(key)}
+                className={cn("h-7 rounded-full border px-2.5 text-xs font-medium transition-colors",
+                  reasons.includes(key)
+                    ? g.tone === "good" ? "border-success/50 bg-[color-mix(in_oklch,var(--success)_14%,transparent)] text-success"
+                      : "border-warning/50 bg-[color-mix(in_oklch,var(--warning)_14%,transparent)] text-warning"
+                    : "border-line text-muted hover:text-fg")}>
+                {label}
+              </button>
+            ))}
+          </div>
+        ))}
+        <p className="text-xs text-subtle">
+          Tap any that fit, good and bad. Edit problems are fixed, not learnt: a good moment with bad framing still
+          counts as a good moment.
+        </p>
+      </div>}
     </div>
   );
 }

@@ -1831,6 +1831,16 @@ export interface components {
             dimensions: components["schemas"]["Dimension"][];
             /** Reasons */
             reasons: components["schemas"]["ReasonCount"][];
+            /**
+             * Edit Problems
+             * @default []
+             */
+            edit_problems: components["schemas"]["ReasonCount"][];
+            /**
+             * Outcomes
+             * @default 0
+             */
+            outcomes: number;
             /** Taste */
             taste: string;
             /** Weights N */
@@ -1839,10 +1849,6 @@ export interface components {
             min_for_weights: number;
             /** Min For Agreement */
             min_for_agreement: number;
-            /** Reason Labels */
-            reason_labels: {
-                [key: string]: string;
-            };
         };
         /** Message */
         Message: {

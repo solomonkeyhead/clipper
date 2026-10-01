@@ -177,11 +177,13 @@ def _contains(text: str, term: str) -> bool:
     return re.search(pattern, text, re.IGNORECASE) is not None
 
 
-def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan:
+def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig, *, pick=None) -> ClipPlan:
     """Fold the campaign's required hashtags and credit into the suggested caption.
 
     Returns an updated copy. Existing hashtags are preserved and deduplicated
-    case-insensitively, with the campaign's required ones first.
+    case-insensitively, with the campaign's required ones first. `pick` chooses
+    among the brief's own captions (campaign/rotation.py); without it they go
+    by the clip's rank.
     """
     tags: list[str] = []
     seen: set[str] = set()
@@ -212,8 +214,8 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
                  plan.clip_id)
         caption = ""
     if not caption and campaign.fallback_captions:
-        caption = campaign.fallback_captions[
-            (plan.rank - 1) % len(campaign.fallback_captions)].strip()
+        caption = (pick(campaign, "caption", campaign.fallback_captions) if pick else
+                   campaign.fallback_captions[(plan.rank - 1) % len(campaign.fallback_captions)]).strip()
     from .rules import append, required_texts
 
     # The tune-in line, the credit and every caption rule for all platforms;

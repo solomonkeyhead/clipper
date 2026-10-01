@@ -1,5 +1,5 @@
 import { Link, useSearch } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, Film, Loader2, Plus, Scissors, Square, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Film, Loader2, Plus, Scissors, Square, UploadCloud, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -84,6 +84,60 @@ function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; c
 const modeLabel = (job: Job) =>
   job.mode === "manual" ? `${job.ranges.length} hand-picked`
     : job.mode === "top" ? `up to ${job.top} clips` : "Clipper decides how many";
+
+/** A finished video: one line, its details on a click (the list can run to dozens after a batch). */
+function FinishedRow({ job }: { job: Job }) {
+  const title = useCampaignTitle();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-line bg-surface-1">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
+              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-2">
+        <ChevronRight className={cn("size-3.5 shrink-0 text-muted transition-transform", open && "rotate-90")} />
+        <span className="min-w-0 flex-1 truncate text-sm">{job.name}</span>
+        <span className="hidden shrink-0 text-xs text-muted sm:inline">{title(job.campaign)} · {ago(job.created)}</span>
+        {job.status === "failed" ? <Chip tone="danger">Failed</Chip>
+          : job.clips > 0 ? <Chip tone="success">{job.clips} clip{job.clips === 1 ? "" : "s"}</Chip>
+          : <Chip tone="warning">No clips</Chip>}
+      </button>
+      {open && (
+        <div className="flex flex-col gap-2 border-t border-line px-3 py-2.5 pl-9">
+          <div className="text-xs text-muted">{modeLabel(job)}</div>
+          {job.message && <p className="text-xs text-muted">{job.message}</p>}
+          {job.status === "done" && <JobResults job={job} />}
+          {job.clips > 0 && (
+            <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium text-accent hover:underline">
+              See its clips →
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** How many finished videos show before "Show all". */
+const FINISHED_SHOWN = 8;
+
+function FinishedList({ jobs }: { jobs: Job[] }) {
+  const [all, setAll] = useState(false);
+  const made = jobs.reduce((n, j) => n + j.clips, 0);
+  return (
+    <>
+      <h2 className="mb-3 flex items-baseline gap-2 text-md font-semibold">
+        Finished <span className="text-xs font-normal text-muted">{jobs.length} video{jobs.length === 1 ? "" : "s"} · {made} clip{made === 1 ? "" : "s"}</span>
+      </h2>
+      <div className="flex flex-col gap-1.5">
+        {(all ? jobs : jobs.slice(0, FINISHED_SHOWN)).map((j) => <FinishedRow key={j.id} job={j} />)}
+      </div>
+      {jobs.length > FINISHED_SHOWN && (
+        <Button variant="ghost" size="sm" className="mt-2" onClick={() => setAll(!all)}>
+          {all ? "Show fewer" : `Show all ${jobs.length}`}
+        </Button>
+      )}
+    </>
+  );
+}
 
 function JobCard({ job }: { job: Job }) {
   const title = useCampaignTitle();
@@ -472,10 +526,8 @@ export function NewClipsPage() {
               <div className="mb-6 flex flex-col gap-2">{queue.map((j) => <JobCard key={j.id} job={j} />)}</div>
             </>
           )}
-          {finished.length > 0 && <h2 className="mb-3 text-md font-semibold">Finished</h2>}
-          {jobs.length ? (
-            <div className="flex flex-col gap-2">{finished.map((j) => <JobCard key={j.id} job={j} />)}</div>
-          ) : (
+          {finished.length > 0 && <FinishedList jobs={finished} />}
+          {!jobs.length && (
             <EmptyState icon={<Scissors className="size-5" />} title="Nothing clipping yet"
               body="A full episode takes a few minutes: transcribing, finding scenes, scoring moments, then rendering each clip." />
           )}

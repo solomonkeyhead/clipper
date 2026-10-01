@@ -38,7 +38,7 @@ export function LearningPage() {
   return (
     <div className="fade-in flex max-w-5xl flex-col gap-6">
       <PageHeader title="Learning"
-        subtitle="Clipper learns from the clips you post and the ones you mark not good. This page shows whether its scores match your taste and your views." />
+        subtitle="Clipper learns which moments to pick from the clips you post, the ones you mark not good, and how many views your posts get. This page shows whether its scores match your taste and your views." />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="flex flex-col gap-1 p-4">
@@ -134,6 +134,17 @@ export function LearningPage() {
             <div className="flex flex-wrap gap-1.5">
               {report.reasons.map((r) => (
                 <span key={r.key} className="rounded-full border border-line px-2.5 py-1 text-xs">{r.label} <b className="tabular">{r.count}</b></span>
+              ))}
+            </div>
+          </div>
+        )}
+        {(report.edit_problems ?? []).length > 0 && (
+          <div>
+            <h3 className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Edit problems you've flagged</h3>
+            <p className="mb-1.5 text-xs text-subtle">About how a clip was made, not which moment: kept out of your taste so good moments aren't avoided.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(report.edit_problems ?? []).map((r) => (
+                <span key={r.key} className="rounded-full border border-warning/40 px-2.5 py-1 text-xs">{r.label} <b className="tabular">{r.count}</b></span>
               ))}
             </div>
           </div>

@@ -31,7 +31,7 @@ class TestParseRange:
 
 
 class TestManualPlan:
-    def test_cut_as_given_with_the_campaigns_hooks_and_captions(self):
+    def test_cut_as_given_with_the_campaigns_hooks_and_captions(self, data_root):  # an empty library
         campaign = CampaignConfig.load(CHAD_POWERS)
         config = campaign_config(Config(), campaign)
         # A long wordless stretch after the last line: the Ep 4 field scene.

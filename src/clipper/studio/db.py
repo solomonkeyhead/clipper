@@ -296,6 +296,7 @@ REASONS = {
     "weak_hook": "Weak hook", "boring": "Boring / slow", "bad_ending": "Cut off / bad ending",
     "needs_context": "Needs context", "off_brief": "Wrong for the campaign",
     "bad_framing": "Bad framing", "caption_errors": "Caption mistakes",
+    "wrong_text": "On-screen text doesn't fit",
 }
 
 

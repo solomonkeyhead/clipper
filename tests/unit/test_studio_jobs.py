@@ -357,3 +357,13 @@ def test_the_google_app_pages_are_served_and_nothing_else(client):
     page = client.get("/api/setup/site/privacy.html")
     assert page.status_code == 200 and "Limited Use" in page.text
     assert client.get("/api/setup/site/secrets.txt").status_code == 404
+
+
+def test_stop_notes_read_plainly():
+    """The internal "no limit" (500) never shows as a number the user asked for."""
+    from clipper.studio.jobs import explain_stop, tidy
+
+    assert explain_stop("produced 1 of 500 requested; the rest were 2 overlapping or too close to a better clip, "
+                        "1 below the relative composite threshold", 1) == \
+        "The others were 2 overlapping or too close to a better clip, 1 well below this video's best"
+    assert tidy("Produced 1 of 500 requested") == ""

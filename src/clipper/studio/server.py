@@ -296,11 +296,12 @@ class Learning(BaseModel):
     bands: list[Band]
     dimensions: list[Dimension]
     reasons: list[ReasonCount]
+    edit_problems: list[ReasonCount] = []  # framing, captions, on-screen text: fixed, not learnt (D86)
+    outcomes: int = 0                      # posted clips whose views count toward learning
     taste: str
     weights_n: int
     min_for_weights: int
     min_for_agreement: int
-    reason_labels: dict[str, str]
 
 
 class FoundCampaign(BaseModel):
@@ -1300,11 +1301,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         views = {c.id: sum(p.views or 0 for p in c.posts) for c in snap.clips if c.posts}
         with db.connect() as con:
             active = db.settings(con).get("learn_from_feedback", "1") == "1"
-        clips = feedback.from_rows(snap.raw_clips, views)
+        clips = feedback.from_rows(snap.raw_clips, views, stats.clip_performance(snap.raw_clips, snap.rows))
         result = feedback.report(clips, Config.load().llm.rubric_weights.as_dict(), active=active)
         return Learning(active=active, min_for_weights=feedback.MIN_FOR_WEIGHTS,
-                        min_for_agreement=feedback.MIN_FOR_AGREEMENT,
-                        reason_labels=db.REASONS, **result.__dict__)
+                        min_for_agreement=feedback.MIN_FOR_AGREEMENT, **result.__dict__)
 
     @app.get("/api/posts/history")
     def post_history(url: str) -> list[dict]:

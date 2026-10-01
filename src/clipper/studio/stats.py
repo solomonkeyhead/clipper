@@ -147,6 +147,37 @@ def estimate_earnings(views: float | None, rate: float | None, minimum: float | 
     return round(amount, 2)
 
 
+#: A post's views are compared with others' once it's this old: a short gets
+#: most of its views in its first days, so younger posts would look like flops.
+OUTCOME_HOURS = 72
+
+
+def clip_performance(clips: list[dict], rows: list[dict[str, str]],
+                     now: datetime | None = None) -> dict[int, float]:
+    """Clip id -> its best post's views as a multiple of the median for that
+    platform and campaign, among posts at least OUTCOME_HOURS old (learn/feedback.py)."""
+    found = posts_by_clip(rows)
+    now = now or datetime.now()
+    mature: list[dict] = []
+    by_clip: dict[int, list[dict]] = {}
+    for clip in clips:
+        for post in found.get((clip["campaign"], clip["source_id"], clip["clip_id"]), []):
+            age = age_hours(post.get("posted_at"), now)
+            if age is None or age < OUTCOME_HOURS or post.get("views_latest") is None:
+                continue
+            post = {**post, "campaign": clip["campaign"]}
+            mature.append(post)
+            by_clip.setdefault(clip["id"], []).append(post)
+    med = medians(mature)
+    out = {}
+    for clip_id, posts in by_clip.items():
+        ratios = [p["views_latest"] / med[(p["platform"], p["campaign"])] for p in posts
+                  if (p["platform"], p["campaign"]) in med]
+        if ratios:
+            out[clip_id] = round(max(ratios), 2)
+    return out
+
+
 def medians(posts: list[dict]) -> dict[tuple[str, str], float]:
     """(platform, campaign) -> median views, where there are enough posts to say."""
     groups: dict[tuple[str, str], list[float]] = {}

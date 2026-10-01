@@ -1,20 +1,20 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  AlertTriangle, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Link2, Loader2, Send, SkipForward, Trash2, Undo2,
+  AlertTriangle, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
   Pencil, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  downloadUrl, markNotGood, proofUrl, revealClip, useAddPostLink, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
+  downloadUrl, markNotGood, proofUrl, revealClip, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
-import { PostPanel } from "./posting";
+import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
 
@@ -48,8 +48,9 @@ function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }
       await markNotGood(clip.id);
       void refresh();
       toast("Marked not good", {
-        description: "Skipped. Clipper will pick fewer clips like it.", duration: 5000,
-        action: { label: "Undo", onClick: () => void markNotGood(clip.id, { status: before }).then(refresh) },
+        description: "Skipped. Say why, and what was good about it, so Clipper learns the right thing.", duration: 6000,
+        action: { label: "Say why", onClick: () => useUI.getState().setOpenClip(clip.id) },
+        cancel: { label: "Undo", onClick: () => void markNotGood(clip.id, { status: before }).then(refresh) },
       });
     } catch (err) {
       toast.error((err as Error).message);
@@ -122,28 +123,6 @@ function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy link &
   );
 }
 
-function PasteLink({ clip, compact = false }: { clip: Clip; compact?: boolean }) {
-  const add = useAddPostLink();
-  const [open, setOpen] = useState(!compact);
-  const [url, setUrl] = useState("");
-  if (!open) {
-    return <Button size="sm" variant="ghost" onClick={() => setOpen(true)}><Link2 className="size-3.5" /> Add a post link</Button>;
-  }
-  return (
-    <form className="flex gap-2" onSubmit={(e) => {
-      e.preventDefault();
-      add.mutate({ id: clip.id, url }, {
-        onSuccess: (res) => { setUrl(""); if (compact) setOpen(false); toast.success(`${PLATFORM_NAME[(res as { platform: string }).platform] ?? "Post"} link added`, { description: "Its stats update on the next sync." }); },
-        onError: (err) => toast.error((err as Error).message),
-      });
-    }}>
-      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the post's link (TikTok, Instagram, YouTube, X, Facebook, Snapchat or Threads)"
-             aria-label="Post link" className="h-9 flex-1 rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
-      <Button type="submit" variant="secondary" disabled={!url.trim() || add.isPending}>Add</Button>
-    </form>
-  );
-}
-
 /** Already posted: the clips this one repeats, and where they're up. */
 function DuplicateWarning({ clip }: { clip: Clip }) {
   const open = useUI((s) => s.setOpenClip);
@@ -192,7 +171,8 @@ function CaptionSection({ clip }: { clip: Clip }) {
         <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Caption</h3>
         <span className="flex gap-1.5">
           {editable && draft === null && <Button size="sm" variant="ghost" onClick={() => setDraft(clip.caption)}><Pencil className="size-3.5" /> Edit</Button>}
-          {draft === null && <CopyButton text={clip.caption} what="Caption" label="Copy caption" keys="C" />}
+          {draft === null && !(clip.post_copy?.length && clip.status === "ready") &&
+            <CopyButton text={clip.caption} what="Caption" label="Copy caption" keys="C" />}
         </span>
       </div>
       {draft === null ? (
@@ -211,6 +191,21 @@ function CaptionSection({ clip }: { clip: Clip }) {
         </div>
       )}
     </section>
+  );
+}
+
+/** A note: a link to add one, the box once there's something in it. */
+function NoteField({ note, saved, onChange, onSave }: {
+  note: string; saved: string; onChange: (v: string) => void; onSave: () => void;
+}) {
+  const [open, setOpen] = useState(Boolean(saved));
+  if (!open) {
+    return <button type="button" className="w-fit text-xs text-muted hover:text-fg" onClick={() => setOpen(true)}>+ Add a note</button>;
+  }
+  return (
+    <textarea value={note} onChange={(e) => onChange(e.target.value)} onBlur={onSave} autoFocus={!saved}
+      placeholder="Add a note…" rows={2} aria-label="Note"
+      className="w-full resize-y rounded-md border border-line bg-surface-1 p-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
   );
 }
 
@@ -572,17 +567,17 @@ export function ClipSheet() {
                 ) : (
                   <div className="grid aspect-[9/16] place-items-center rounded-lg bg-surface-2 text-sm text-muted">File missing</div>
                 )}
-                {clip.file_exists && (
-                  <a href={downloadUrl(clip.id)} download
-                     className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
-                    <Download className="size-4" /> Download video <Kbd className="ml-auto border-white/30 bg-white/10 text-white">D</Kbd>
-                  </a>
-                )}
                 <div className="flex gap-2">
-                  <Button variant="secondary" className="flex-1" onClick={() => void showFile(clip.id)}>
-                    <FolderOpen className="size-4" /> Show in folder
-                  </Button>
-                  <DeleteButton clip={clip} label size="md" />
+                  {clip.file_exists && (
+                    <a href={downloadUrl(clip.id)} download
+                       className="inline-flex h-9 flex-1 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                      <Download className="size-4" /> Download <Kbd className="ml-auto border-white/30 bg-white/10 text-white">D</Kbd>
+                    </a>
+                  )}
+                  <Tip label="Show in folder"><Button variant="secondary" size="icon" aria-label="Show in folder" onClick={() => void showFile(clip.id)}>
+                    <FolderOpen className="size-4" />
+                  </Button></Tip>
+                  <DeleteButton clip={clip} size="md" />
                 </div>
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -618,65 +613,57 @@ export function ClipSheet() {
                       <SkipForward className="size-4" /> Skip <Kbd>X</Kbd>
                     </Button>
                   )}
-                  {clip.status === "ready" && <NotGoodButton clip={clip} size="md" />}
                 </div>
+
+                <RatingPanel clip={clip} />
+
+                {(clip.posts.length > 0 || clip.watching) && (
+                  <section>
+                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Posts</h3>
+                    {clip.posts.length ? (
+                      <div className="flex flex-col gap-2">
+                        {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} />)}
+                        <PasteLink key={clip.id} clip={clip} compact />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 rounded-md border border-dashed border-line p-3">
+                        <p className="flex items-center gap-2 text-sm text-muted">
+                          <Loader2 className="size-4 shrink-0 animate-spin text-accent" />
+                          Looking for your post every 2 minutes for the next half hour, so you can submit it fast.
+                        </p>
+                        <PasteLink key={clip.id} clip={clip} />
+                      </div>
+                    )}
+                  </section>
+                )}
 
                 {clip.status === "ready" && <PostPanel key={clip.id} clip={clip} />}
 
                 {clip.caption && <CaptionSection key={clip.id} clip={clip} />}
 
-                <section>
-                  <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Your rating</h3>
-                  <RatingPanel clip={clip} />
-                </section>
+                {(clip.status === "posted" || clip.status === "submitted") && (
+                  <section>
+                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Proof for disputes</h3>
+                    <ProofPanel clip={clip} />
+                  </section>
+                )}
 
-                <section>
-                  <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Clipper's score</h3>
-                  <ScoreBreakdown clip={clip} />
-                </section>
+                <details className="group">
+                  <summary className="cursor-pointer text-xs font-semibold tracking-wide text-muted uppercase hover:text-fg">
+                    Why Clipper picked it{clip.score != null && <span className="ml-1.5 normal-case">· {clip.score.toFixed(1)}</span>}
+                  </summary>
+                  <div className="mt-2"><ScoreBreakdown clip={clip} /></div>
+                </details>
 
-                <section>
-                  <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Posts</h3>
-                  {clip.posts.length ? (
-                    <div className="flex flex-col gap-2">
-                      {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} />)}
-                      <PasteLink key={clip.id} clip={clip} compact />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 rounded-md border border-dashed border-line p-3">
-                      <p className="flex items-center gap-2 text-sm text-muted">
-                        {clip.watching ? <Loader2 className="size-4 shrink-0 animate-spin text-accent" /> : <Info className="size-4 shrink-0" />}
-                        {clip.watching
-                          ? "Looking for your post every 2 minutes for the next half hour, so you can submit it fast."
-                          : "Not posted yet. Press Mark posted once it's up and Clipper finds it within minutes, or paste its link."}
-                      </p>
-                      <PasteLink key={clip.id} clip={clip} />
-                    </div>
-                  )}
-                </section>
-
-                <section>
-                  <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Proof for disputes</h3>
-                  <ProofPanel clip={clip} />
-                </section>
-
-                <section>
-                  <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Note</h3>
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    onBlur={() => note !== clip.notes && setNote.mutate({ id: clip.id, notes: note },
-                      { onSuccess: () => toast.success("Note saved", { duration: 1500 }) })}
-                    placeholder="Add a note…"
-                    rows={3}
-                    className="w-full resize-y rounded-md border border-line bg-surface-1 p-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none"
-                  />
-                </section>
+                <NoteField key={clip.id} note={note} saved={clip.notes} onChange={setNoteText}
+                  onSave={() => note !== clip.notes && setNote.mutate({ id: clip.id, notes: note },
+                    { onSuccess: () => toast.success("Note saved", { duration: 1500 }) })} />
 
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
                   <span><Kbd>J</Kbd> <Kbd>K</Kbd> next / previous</span>
-                  <span><Kbd>L</Kbd> copy link</span>
-                  <span><Kbd>1</Kbd>–<Kbd>5</Kbd> rate</span>
+                  <span><Kbd>P</Kbd> posted</span>
+                  <span><Kbd>X</Kbd> skip</span>
+                  <span><Kbd>D</Kbd> download</span>
                   <span><Kbd>Esc</Kbd> close</span>
                 </p>
               </div>

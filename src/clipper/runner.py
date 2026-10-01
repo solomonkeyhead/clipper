@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .campaign import compliance
+from .campaign import compliance, rotation
 from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
 from .candidates.boundaries import RefinedBounds, refine
 from .config import CampaignConfig, Config
@@ -261,15 +261,14 @@ def manual_plan(start: float, end: float, words: list[Word], *, config: Config,
         start=start,
         end=end,
         text=text,
-        hook_text=(campaign.hook_texts[(rank - 1) % len(campaign.hook_texts)]
-                   if campaign.hook_texts else ""),
+        hook_text=rotation.pick(campaign, "hook", campaign.hook_texts) if campaign.hook_texts else "",
         caption_style=config.render.caption_style,
         refine_notes=["range chosen by hand"],
         lead_in=next((round(w.start - start, 2) for w in words
                       if start - 0.05 <= w.start < end), None),
         hook_shown=bool(config.render.show_hook_text and campaign.hook_texts),
     )
-    return compliance.apply_campaign_caption(plan, campaign)
+    return compliance.apply_campaign_caption(plan, campaign, pick=rotation.pick)
 
 
 def parse_range(text: str) -> tuple[float, float]:
@@ -403,7 +402,15 @@ def _learning(config: Config, campaign: CampaignConfig) -> tuple[dict[str, float
     except Exception as exc:  # learning is optional; a run must not fail on it
         log.warning("not using clip ratings: %s", exc)
         return None, ""
-    clips = feedback.from_rows(rows)
+    try:  # how posted clips did, once their views have settled (D86)
+        from .learn import log as perf_log
+        from .studio import stats
+
+        performance = stats.clip_performance(rows, perf_log.read())
+    except Exception as exc:  # optional, like the rest of learning
+        log.warning("not using post views to learn: %s", exc)
+        performance = {}
+    clips = feedback.from_rows(rows, performance=performance)
     weights, n = feedback.learned_weights(clips, config.llm.rubric_weights.as_dict())
     if n >= feedback.MIN_FOR_WEIGHTS:
         log.info("rubric weights learnt from %d rated clip(s): %s", n,
@@ -784,7 +791,7 @@ def _build_plan(
         end=bounds.end,
         text=text,
         composite=pick.scored.composite,
-        hook_text=(campaign.hook_texts[(rank - 1) % len(campaign.hook_texts)]
+        hook_text=(rotation.pick(campaign, "hook", campaign.hook_texts)
                    if campaign.hook_texts else _hook(values, scores)),
         suggested_caption=scores.suggested_caption if scores else "",
         hashtags=list(scores.hashtags) if scores else [],
@@ -795,7 +802,7 @@ def _build_plan(
         hook_shown=bool(config.render.show_hook_text
                         and (campaign.hook_texts or _hook(values, scores))),
     )
-    return compliance.apply_campaign_caption(plan, campaign)
+    return compliance.apply_campaign_caption(plan, campaign, pick=rotation.pick)
 
 
 def _hook(values, scores) -> str:

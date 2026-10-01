@@ -104,16 +104,32 @@ class _Progress(logging.Handler):
         self.publish("job.progress", job.view())
 
 
+#: The selection's own terms, in plain words.
+PLAIN = {"below the relative composite threshold": "well below this video's best",
+         "below the absolute quality bar": "below the quality bar"}
+
+
 def explain_stop(note: str, made: int) -> str:
     """The selection's reason for stopping, in plain words, for an auto job."""
     if note.startswith("reached the requested"):
         return (f"Stopped at the campaign's maximum of {made}; raise \"Most clips per video\" "
                 "on the campaign to allow more")
-    if "below the absolute quality bar" in note:
+    if "below the absolute quality bar" in note and not note.startswith("produced"):
         return "Every other moment scored below the quality bar"
     if "no candidate survived" in note:
         return "Nothing in this video scored well enough to clip"
-    return note[:1].upper() + note[1:]
+    return tidy(note)
+
+
+def tidy(message: str) -> str:
+    """"Produced 1 of 500 requested; the rest were 2 overlapping" -- 500 is the
+    internal "no limit" -- as "The others were 2 overlapping"."""
+    match = re.match(r"(?i)produced \d+ of \d+ requested(?:; the rest were (.*))?$", message.strip())
+    if match:
+        message = f"The others were {match.group(1)}" if match.group(1) else ""
+    for term, plain in PLAIN.items():
+        message = message.replace(term, plain)
+    return message[:1].upper() + message[1:]
 
 
 KEEP = 30
@@ -126,7 +142,12 @@ def _load_finished() -> dict[int, dict]:
 
     with db.connect() as con:
         rows = con.execute("SELECT id, data FROM jobs ORDER BY id DESC LIMIT ?", (KEEP,)).fetchall()
-    return {r["id"]: json.loads(r["data"]) for r in rows}
+    out = {}
+    for r in rows:
+        job = json.loads(r["data"])
+        job["message"] = ". ".join(t for t in (tidy(part) for part in (job.get("message") or "").split(". ")) if t)
+        out[r["id"]] = job
+    return out
 
 
 def _save_finished(job: Job) -> None:
