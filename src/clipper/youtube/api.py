@@ -66,6 +66,20 @@ class Short:
     saves: int = 0
     avg_watch_s: float | None = None
     skip_rate_pct: float | None = None
+    title: str = ""
+    description: str = ""
+
+    @property
+    def alternatives(self) -> list[str]:
+        """Other texts the post may match its clip by (instagram.sync.apply): a Short's
+        title is usually the clip's title or hook, and the caption goes in the
+        description -- or both run together (D80)."""
+        return [t for t in (f"{self.title} {self.description}".strip(), self.title) if t and t != self.caption]
+
+    @property
+    def full_text(self) -> str:
+        """Everything a viewer reads: title, then description (the proof pack checks it)."""
+        return "\n\n".join(t for t in (self.title, self.description) if t)
 
 
 def accounts_dir() -> Path:
@@ -254,8 +268,9 @@ def list_shorts(token: str, *, limit: int = 200) -> list[Short]:
             sn, st = v["snippet"], v.get("statistics") or {}
             shorts.append(Short(
                 id=v["id"], url=f"https://www.youtube.com/shorts/{v['id']}",
-                # The title is where a Short's caption goes; the description follows it.
-                caption=" ".join(x for x in (sn.get("title"), sn.get("description")) if x).strip(),
+                # The clip's caption usually goes in the description, under a title.
+                caption=(sn.get("description") or sn.get("title") or "").strip(),
+                title=(sn.get("title") or "").strip(), description=(sn.get("description") or "").strip(),
                 created=datetime.fromisoformat(sn["publishedAt"].replace("Z", "+00:00")).timestamp(),
                 views=int(st.get("viewCount", 0)), likes=int(st.get("likeCount", 0)),
                 comments=int(st.get("commentCount", 0))))

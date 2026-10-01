@@ -1582,3 +1582,13 @@ GitHub Pages (free; repository YOUR-USERNAME.github.io), Branding (authorized
 domain, home page, privacy link, no logo so no review) and Publish, then the
 Desktop client and its keys. A hosted Clipper would use one verified company
 app instead.
+
+## D80 -- YouTube Shorts found when the title sits above the caption (2026-09-30)
+
+The user connected the channel (solomonkey_clips) and its one Short didn't show
+on its clip: the sync matched by caption, and a Short's text started with its
+title ("the most underrated gay show ... @JoshThomasChannel") with the clip's
+caption in the description. A Short now matches by its description first, then
+title + description, then the title (Short.alternatives); the proof pack keeps
+title and description together (Short.full_text). Live: the Short matched the
+same clip as its TikTok and Instagram posts.

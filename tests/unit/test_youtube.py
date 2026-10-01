@@ -46,7 +46,8 @@ class TestReading:
         assert [s.id for s in shorts] == ["s1", "s2"]  # the 12-minute upload isn't a Short
         s1, s2 = shorts
         assert s1.url == "https://www.youtube.com/shorts/s1" and s1.views == 1500 and s1.likes == 90
-        assert s1.caption.startswith("Never invite these friends to dinner s1")
+        assert s1.title == "Never invite these friends to dinner s1" and s1.caption == "#adults"
+        assert s1.full_text == "Never invite these friends to dinner s1\n\n#adults"
         assert (s1.avg_watch_s, s1.shares) == (14.5, 7)
         assert s2.avg_watch_s is None  # too new for Analytics
 
@@ -94,3 +95,18 @@ class TestLog:
         assert stats.sync_all(rows) == []
         assert any(r.get("platform") == "youtube" for r in rows)
         assert api.remove("UC1") and api.token_files() == []
+
+
+def test_a_title_above_the_caption_still_finds_the_clip():
+    """The user's Short: the clip's title (with a mention) as the title, the
+    caption in the description (D80)."""
+    caption = "full series is free on youtube (Josh Thomas channel) In this clip from Please Like Me, Josh doubts."
+    short = api.Short(id="v", url="https://www.youtube.com/shorts/v", created=time.time(), caption=caption,
+                      title="the most underrated gay show is free on youtube! @JoshThomasChannel",
+                      description=caption)
+    rows = [{"caption": caption, "clip_id": "001_0m00s", "source_id": "s1"},
+            {"caption": "full series is free on youtube (Josh Thomas channel) In this clip, Tom cooks.",
+             "clip_id": "001_0m00s", "source_id": "s2"}]
+    result = post_sync.apply([short], rows, platform="youtube")
+    assert len(result.matched) == 1 and rows[-1]["source_id"] == "s1"
+    assert "@JoshThomasChannel" in rows[-1]["posted_caption"]  # the proof pack checks the whole text

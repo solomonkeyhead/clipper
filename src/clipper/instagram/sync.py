@@ -48,7 +48,12 @@ def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
             # Clip ids repeat across sources ("001_0m00s"), so a clip is its source and id.
             clips = {(r.get("source_id"), r.get("clip_id")) if r.get("clip_id") else i: i
                      for i, r in enumerate(rows) if r.get("platform") != platform}
-            found, ambiguous = best_row(reel.caption, [(i, rows[i].get("caption", "")) for i in clips.values()])
+            candidates = [(i, rows[i].get("caption", "")) for i in clips.values()]
+            found, ambiguous = best_row(reel.caption, candidates)
+            for text in getattr(reel, "alternatives", []):  # a Short: title + description
+                if found is not None or ambiguous:
+                    break
+                found, ambiguous = best_row(text, candidates)
             if ambiguous:
                 result.ambiguous.append(reel)
                 continue
@@ -81,7 +86,7 @@ def _update(row: dict[str, str], reel: Reel, now: float) -> list[str]:
             filled.append(column)
 
     put("url", reel.url)
-    put("posted_caption", reel.caption, only_if_empty=False)
+    put("posted_caption", getattr(reel, "full_text", reel.caption), only_if_empty=False)
     if reel.created:
         put("posted_at", datetime.fromtimestamp(reel.created).strftime("%Y-%m-%d %H:%M"))
     age = now - reel.created if reel.created else -1
