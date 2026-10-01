@@ -66,7 +66,22 @@ def check_clip(plan: ClipPlan, campaign: CampaignConfig, *,
     report.rules.append(_check_brand_mentions(plan.text, campaign))
     report.rules.append(_check_hashtags(plan, campaign))
     report.rules.append(_check_credit(plan, campaign))
+    report.rules += _check_posts(plan, campaign)
     return report
+
+
+def _check_posts(plan: ClipPlan, campaign: CampaignConfig) -> list[RuleResult]:
+    """Each platform's text against every caption rule (campaign/rules.py)."""
+    from .rules import NAMES, post_texts
+
+    out = []
+    for post in post_texts(plan.hook_text or plan.text[:60], full_caption(plan), plan.hook_text, campaign):
+        failed = [c.name + (f" ({c.detail})" if c.detail and "“" not in c.name else "")
+                  for c in post.checks if not c.passed]
+        out.append(RuleResult(f"post_text:{post.platform}", not failed,
+                              "; ".join(failed) or f"{NAMES.get(post.platform, post.platform)}: "
+                              f"all {len(post.checks)} checks pass"))
+    return out
 
 
 def _check_duration(duration: float, campaign: CampaignConfig) -> RuleResult:
@@ -170,6 +185,7 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
     """
     tags: list[str] = []
     seen: set[str] = set()
+    banned = [*campaign.forbidden_terms, *(r.text for r in campaign.caption_rules if r.must == "avoid")]
     suggested = [] if campaign.only_required_hashtags else list(plan.hashtags)
     for tag in list(campaign.required_hashtags) + suggested:
         cleaned = tag.strip()
@@ -178,6 +194,8 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
         if not cleaned.startswith("#"):
             cleaned = "#" + cleaned
         if cleaned.lower() in seen:
+            continue
+        if tag in suggested and any(_contains(cleaned, term) for term in banned):
             continue
         seen.add(cleaned.lower())
         tags.append(cleaned)
@@ -189,20 +207,20 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
         caption = " ".join(w for w in caption.split() if not w.startswith("#"))
     if campaign.fixed_captions and campaign.fallback_captions:
         caption = ""  # the brief's own captions only
+    if any(_contains(caption, term) for term in banned):
+        log.info("%s: the written caption says something the brief bans; using the brief's own",
+                 plan.clip_id)
+        caption = ""
     if not caption and campaign.fallback_captions:
         caption = campaign.fallback_captions[
             (plan.rank - 1) % len(campaign.fallback_captions)].strip()
-    required = campaign.required_caption_text.strip()
-    if required and required.lower() not in caption.lower():
-        # "That escalated quickly Watch Adults season 2..." read as one sentence.
-        last = caption.split()[-1] if caption else ""
-        if (caption and not caption.endswith((".", "!", "?", "…", ":"))
-                and not last.startswith(("#", "@"))):  # "...@chadpowershulu." reads wrong
-            caption += "."
-        caption = f"{caption} {required}".strip()
-    credit = campaign.required_credit_text.strip()
-    if credit and not campaign.burn_credit_in_video and credit.lower() not in caption.lower():
-        caption = f"{caption} {credit}".strip()
+    from .rules import append, required_texts
+
+    # The tune-in line, the credit and every caption rule for all platforms;
+    # per-platform ones are added when posting (campaign/rules.py).
+    for text in required_texts(campaign, None):
+        if not _contains(caption, text):
+            caption = append(caption, text)
 
     return plan.model_copy(update={"suggested_caption": caption, "hashtags": tags})
 

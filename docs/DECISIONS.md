@@ -1592,3 +1592,30 @@ caption in the description. A Short now matches by its description first, then
 title + description, then the title (Short.alternatives); the proof pack keeps
 title and description together (Short.full_text). Live: the Short matched the
 same clip as its TikTok and Instagram posts.
+
+## D81 -- Brief rules followed to a T, per platform (2026-10-01)
+
+The AI's captions missed a brief rule ("On YouTube, tag @JoshThomasChannel in the
+title") on 40 clips: it sat in free text nothing checked. Rules on a post's text
+are now structured (CampaignConfig.caption_rules: text, include/avoid, caption or
+YouTube title, which platforms, the brief's quote) next to the existing required
+text, hashtags, credit and banned words. Each platform's text is worked out from
+the stored caption and the campaign's current rules (campaign/rules.py): missing
+requirements are added, banned hashtags dropped, YouTube gets a title (the clip's
+hook plus any title rule, cut to 100 characters), and every rule plus each
+platform's limits is checked one by one. Banned words are never silently removed;
+the check fails and the user edits the caption (now editable until posted).
+
+A second reader (campaign/audit.py) reads each clip's texts against the brief as
+pasted, for rules the structured ones miss. A small model raised false alarms (an
+@mention called an extra hashtag, an example caption read as mandatory), so it is
+told which rules code already checks and to skip them, and each problem is asked
+again as one yes/no question before it is shown. Live on the user's clips it found
+nothing; with the YouTube rule removed it reported it, with "add @JoshThomasChannel".
+A finding with text to add becomes a caption rule for every clip in one click.
+
+studio/rulecheck.py keeps unposted clips current: on start, after a run, and when
+a campaign or its brief is saved, stored captions get the every-platform rules
+(library and performance log), and the AI check re-reads only clips whose texts or
+brief changed. The brief reader now fills caption_rules and posting_rules (what
+only the poster can do, shown as a checklist when posting) and is told to drop none.

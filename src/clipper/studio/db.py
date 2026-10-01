@@ -12,6 +12,7 @@ Center joins the two on (campaign, source_id, clip_id).
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -178,6 +179,9 @@ MIGRATIONS = [
     ("clips", "evidence", "ALTER TABLE clips ADD COLUMN evidence TEXT"),
     # Marked posted at: syncs run every 2 minutes until this passes or the post is found.
     ("clips", "watch_until", "ALTER TABLE clips ADD COLUMN watch_until TEXT"),
+    # The AI check of a clip's post texts against its brief (studio/rulecheck.py):
+    # JSON {key, problems, at}; `key` says which texts and brief it read.
+    ("clips", "audit", "ALTER TABLE clips ADD COLUMN audit TEXT"),
     # Where a found campaign came from: "email", "discord" or "whop".
     ("found_campaigns", "via", "ALTER TABLE found_campaigns ADD COLUMN via TEXT NOT NULL DEFAULT 'email'"),
 ]
@@ -378,6 +382,16 @@ def save_brief(con: sqlite3.Connection, campaign: str, text: str) -> None:
     con.execute("INSERT INTO campaign_briefs (campaign, text, saved_at) VALUES (?,?,?) "
                 "ON CONFLICT(campaign) DO UPDATE SET text=excluded.text, saved_at=excluded.saved_at",
                 (campaign, text.strip()[:BRIEF_CHARS], now()))
+
+
+def briefs(con: sqlite3.Connection) -> dict[str, str]:
+    """Every pasted brief's text, by campaign."""
+    return {r["campaign"]: r["text"] for r in con.execute("SELECT campaign, text FROM campaign_briefs")}
+
+
+def set_audit(con: sqlite3.Connection, clip_id: int, audit: dict | None) -> None:
+    con.execute("UPDATE clips SET audit=? WHERE id=?",
+                (json.dumps(audit, ensure_ascii=False) if audit is not None else None, clip_id))
 
 
 def brief(con: sqlite3.Connection, campaign: str) -> dict | None:

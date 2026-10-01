@@ -45,6 +45,19 @@ def _no_watching_unless_asked(monkeypatch: pytest.MonkeyPatch, request: pytest.F
 
 
 @pytest.fixture(autouse=True)
+def _no_background_rule_checks(monkeypatch: pytest.MonkeyPatch) -> list:
+    """Saving a campaign or finishing a run starts the rule check in a thread
+    (studio/rulecheck.py), which could outlive the test's temporary data dir and
+    reach the real library. Tests call `rulecheck.recheck` directly instead;
+    the names asked for are kept here."""
+    from clipper.studio import rulecheck
+
+    asked: list = []
+    monkeypatch.setattr(rulecheck, "start", lambda names, publish=None: asked.append(names))
+    return asked
+
+
+@pytest.fixture(autouse=True)
 def _no_ambient_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     """A key in the developer's shell must not change test outcomes."""
     for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"):

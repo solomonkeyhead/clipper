@@ -30,7 +30,9 @@ from ..utils.logging import get_logger
 log = get_logger(__name__)
 
 RULE_FIELDS = ("required_hashtags", "required_caption_text", "required_credit_text",
-               "forbidden_terms", "only_required_hashtags")
+               "forbidden_terms", "only_required_hashtags", "caption_rules", "fallback_captions")
+#: A post's platform (instagram/sync.py) as a campaign names it.
+CAMPAIGN_PLATFORM = {"tiktok": "tiktok", "instagram": "instagram_reels", "youtube": "youtube_shorts"}
 
 
 def _campaign_part(campaign) -> dict:
@@ -88,8 +90,11 @@ def _words(text: str) -> set[str]:
     return {w.lower() for w in re.findall(r"#\w+", text or "")}
 
 
-def caption_checks(caption: str, rules: dict) -> list[dict]:
-    """The posted caption against the saved rules: what a reviewer would look for."""
+def caption_checks(caption: str, rules: dict, platform: str = "") -> list[dict]:
+    """The posted caption against the saved rules: what a reviewer would look for.
+
+    A YouTube post's caption is its title and description together.
+    """
     out = []
     tags = _words(caption)
     for tag in rules.get("required_hashtags") or []:
@@ -102,14 +107,33 @@ def caption_checks(caption: str, rules: dict) -> list[dict]:
         out.append({"name": f"Credits “{credit}”", "passed": credit.lower() in (caption or "").lower()})
     for term in rules.get("forbidden_terms") or []:
         out.append({"name": f"Doesn't mention “{term}”", "passed": term.lower() not in (caption or "").lower()})
+    where = CAMPAIGN_PLATFORM.get(platform, platform)
+    for rule in rules.get("caption_rules") or []:
+        if rule.get("platforms") and where not in rule["platforms"]:
+            continue
+        has = _says(caption, rule["text"])
+        if rule.get("must", "include") == "include":
+            out.append({"name": f"Includes “{rule['text']}”", "passed": has, "detail": rule.get("quote") or ""})
+        else:
+            out.append({"name": f"Doesn't say “{rule['text']}”", "passed": not has,
+                        "detail": rule.get("quote") or ""})
     if rules.get("only_required_hashtags"):
         # A tag the required text itself contains (e.g. "#ad") is required, not extra.
         allowed = ({t.lower() for t in rules.get("required_hashtags") or []}
-                   | _words(required) | _words(credit))
+                   | _words(required) | _words(credit)
+                   | {t for r in rules.get("caption_rules") or [] for t in _words(r.get("text", ""))}
+                   # The brief's own captions may carry tags of their own (#RICKYRUSS).
+                   | {t for c in rules.get("fallback_captions") or [] for t in _words(c)})
         extra = sorted(tags - allowed)
         out.append({"name": "No hashtags beyond the required ones", "passed": not extra,
                     "detail": ", ".join(extra)})
     return out
+
+
+def _says(text: str, term: str) -> bool:
+    from ..campaign.compliance import _contains
+
+    return _contains(text or "", term)
 
 
 def summary(evidence: dict | None, posts: list[dict]) -> dict:
@@ -118,7 +142,8 @@ def summary(evidence: dict | None, posts: list[dict]) -> dict:
         return {"saved_at": None, "late": False, "passed": 0, "total": 0, "posted_ok": None}
     made = evidence.get("checks") or []
     rules = (evidence.get("campaign") or {}).get("rules") or {}
-    posted = [c for p in posts if p.get("posted_caption") for c in caption_checks(p["posted_caption"], rules)]
+    posted = [c for p in posts if p.get("posted_caption")
+              for c in caption_checks(p["posted_caption"], rules, p.get("platform", ""))]
     return {"saved_at": evidence.get("saved_at"), "late": bool(evidence.get("late")),
             "passed": sum(1 for c in made if c["passed"]), "total": len(made),
             "posted_ok": (all(c["passed"] for c in posted) if posted else None)}
@@ -168,7 +193,7 @@ def _html(clip: dict, evidence: dict, posts: list[dict], history: dict[str, list
                     f"<br>Marked submitted: {e(post.get('submitted_at') or 'not yet')}</p>")
         if post.get("posted_caption"):
             rows.append(f"<p>Caption as posted:</p><blockquote>{e(post['posted_caption'])}</blockquote>")
-            checks = caption_checks(post["posted_caption"], rules)
+            checks = caption_checks(post["posted_caption"], rules, post.get("platform", ""))
             if checks:
                 rows.append("<ul>" + "".join(f"<li>{tick(c['passed'])} {e(c['name'])}"
                                              f"{(': ' + e(c['detail'])) if c.get('detail') else ''}</li>"

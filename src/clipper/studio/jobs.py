@@ -245,3 +245,7 @@ class JobRunner:
             _save_finished(job)
             self.publish("job.progress", job.view())
             self.publish("clips.changed")
+            if job.clips:  # the AI rule check reads the new clips (D81)
+                from . import rulecheck
+
+                rulecheck.start(job.campaign, self.publish)

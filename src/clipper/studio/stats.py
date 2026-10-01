@@ -20,6 +20,8 @@ SETTLING_HOURS = {"instagram": 48, "youtube": 48}
 MEDIAN_MIN_POSTS = 3
 
 _sync_lock = threading.Lock()
+#: Held by anything that rewrites the performance log, so a sync never overwrites it.
+log_lock = _sync_lock
 
 
 def sync_all(rows: list[dict[str, str]]) -> list[str]:

@@ -30,11 +30,11 @@ from pydantic import BaseModel
 
 from ..campaign import editor
 from ..campaign.editor import CampaignError, CampaignForm
-from ..config import CampaignConfig
+from ..config import CampaignConfig, CaptionRule
 from ..learn import log as perf
 from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
-from . import alerts, db, evidence, library, setup, stats
+from . import alerts, db, evidence, library, rulecheck, setup, stats
 from .events import Broker
 
 log = get_logger(__name__)
@@ -87,6 +87,42 @@ class Duplicate(BaseModel):
 PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube"}
 
 
+class RuleCheck(BaseModel):
+    name: str
+    passed: bool
+    detail: str = ""
+
+
+class PostCopy(BaseModel):
+    """What to paste on one platform, with every rule checked (campaign/rules.py)."""
+
+    platform: str          # tiktok | instagram_reels | youtube_shorts
+    title: str = ""        # YouTube's title
+    caption: str
+    checks: list[RuleCheck]
+
+
+class BriefProblem(BaseModel):
+    """Something the AI check found the post breaking (campaign/audit.py)."""
+
+    rule: str
+    platform: str = "all"
+    where: str = "caption"
+    problem: str = ""
+    add: str = ""
+
+
+class Rules(BaseModel):
+    failed: list[str] = []         # the rule checks that fail, one line each
+    checked: bool = False          # the AI check has read these exact texts against the brief
+    checking: bool = False         # ...and is running for the campaign now
+    brief: list[BriefProblem] = []  # what it found
+
+    @property
+    def ok(self) -> bool:
+        return not self.failed and not self.brief
+
+
 class Proof(BaseModel):
     saved_at: str | None = None
     late: bool = False
@@ -131,6 +167,9 @@ class Clip(BaseModel):
     proof: Proof | None = None
     watching: bool = False         # marked posted; looking for the post every 2 minutes
     duplicates: list[Duplicate] = []  # already-posted clips this one repeats
+    # Not posted yet: each platform's text, and the brief's rules checked (D81).
+    post_copy: list[PostCopy] = []
+    rules: Rules | None = None
 
 
 class CampaignCounts(BaseModel):
@@ -157,6 +196,7 @@ class Campaign(BaseModel):
     to_submit: int
     last_post: str | None = None
     campaign_url: str = ""         # where the user submits post links
+    posting_rules: list[str] = []  # the brief's rules only the poster can follow
 
 
 class Brief(BaseModel):
@@ -175,6 +215,8 @@ class Brief(BaseModel):
     deadline: str
     authorization: str
     notes: str
+    caption_rules: list[CaptionRule] = []
+    posting_rules: list[str] = []
 
 
 class CampaignDetail(BaseModel):
@@ -416,6 +458,7 @@ class Snapshot:
             self.state = db.campaign_state(con)
             self.settings = db.settings(con)
             self.submitted = db.submitted(con)
+            self.briefs = db.briefs(con)
         now = datetime.now()
         self.clips: list[Clip] = []
         all_posts: list[dict] = []
@@ -460,7 +503,9 @@ class Snapshot:
                 # A post found after the clip was marked submitted still needs submitting.
                 status = "submitted" if all(m.submitted_at for m in models) else "posted"
             scores = json.loads(c.get("scores") or "{}")
+            copy, rule_state = self._rules(c, brief) if brief and status in ("ready", "skipped") else ([], None)
             self.clips.append(Clip(
+                post_copy=copy, rules=rule_state,
                 score=scores.get("score"), rubric=scores.get("rubric") or {},
                 pool=scores.get("pool"), pool_rank=scores.get("pool_rank"),
                 picked_by=scores.get("picked_by") or "unknown", rating=c.get("rating"),
@@ -487,6 +532,20 @@ class Snapshot:
         for clip in self.clips:
             clip.duplicates = [Duplicate(**d) for d in found.get(clip.id, [])]
 
+    def _rules(self, clip: dict, campaign: CampaignConfig) -> tuple[list[PostCopy], Rules]:
+        from ..campaign import rules as caption_rules
+
+        texts = rulecheck.texts(clip, campaign)
+        copy = [PostCopy(platform=t.platform, title=t.title, caption=t.caption,
+                         checks=[RuleCheck(name=r.name, passed=r.passed, detail=r.detail) for r in t.checks])
+                for t in texts]
+        _, key = rulecheck.audit_key(clip, campaign, self.briefs.get(campaign.name))
+        found = rulecheck.stored(clip) or {}
+        current = found.get("key") == key
+        return copy, Rules(failed=caption_rules.summary(texts), checked=current,
+                           checking=rulecheck.checking(campaign.name),
+                           brief=[BriefProblem(**p) for p in found.get("problems") or []] if current else [])
+
     @property
     def posts(self) -> list[Post]:
         return [p for c in self.clips for p in c.posts]
@@ -507,6 +566,7 @@ class Snapshot:
             reward_per_1k_usd=brief.reward_per_1k_usd if brief else None,
             max_clips=brief.max_clips_per_source if brief else None,
             campaign_url=brief.campaign_url if brief else "",
+            posting_rules=list(brief.posting_rules) if brief else [],
             clips=len(mine), counts=counts,
             views=sum(p.views or 0 for p in posts),
             est_earnings=round(sum(earnings), 2) if earnings else None,
@@ -526,7 +586,8 @@ def brief_of(campaign: CampaignConfig) -> Brief:
         long_description=campaign.long_description, min_payout_usd=campaign.min_payout_usd,
         max_payout_usd=campaign.max_payout_usd, campaign_url=campaign.campaign_url,
         deadline=campaign.deadline, authorization=campaign.source_authorization,
-        notes=campaign.notes)
+        notes=campaign.notes, caption_rules=list(campaign.caption_rules),
+        posting_rules=list(campaign.posting_rules))
 
 
 def accounts() -> list[Account]:
@@ -710,6 +771,12 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         task = asyncio.create_task(sync_loop()) if auto_sync else None
         watcher = asyncio.create_task(alerts_loop()) if auto_sync else None
         if auto_sync:
+            # Clips made before a rule existed, or never read by the AI check (D81).
+            with contextlib.suppress(Exception):
+                with db.connect() as con:
+                    state = db.campaign_state(con)
+                rulecheck.start([n for n in load_campaigns() if not state.get(n, {}).get("archived")],
+                                broker.publish)
             with contextlib.suppress(Exception):
                 purged = await asyncio.to_thread(purge_trash)
                 if purged:
@@ -848,7 +915,28 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         except CampaignError as exc:
             raise HTTPException(400, str(exc)) from exc
         broker.publish("campaigns.changed")
+        rulecheck.start(name, broker.publish)  # the rules may have changed (D81)
         return {"name": campaign.name}
+
+    @app.post("/api/campaigns/{name}/caption-rules")
+    def add_caption_rule(name: str, rule: CaptionRule) -> dict:
+        """A rule the AI check found missing, made a rule for every clip (D81)."""
+        try:
+            editor.add_caption_rule(campaigns_dir(), name, rule.model_dump(mode="json"))
+        except (CampaignError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        broker.publish("campaigns.changed")
+        broker.publish("clips.changed")
+        rulecheck.start(name, broker.publish)
+        return {"ok": True}
+
+    @app.post("/api/campaigns/{name}/recheck")
+    def recheck_campaign(name: str) -> dict:
+        if name not in load_campaigns():
+            raise HTTPException(404, f"no campaign {name!r}")
+        rulecheck.start(name, broker.publish)
+        broker.publish("clips.changed")
+        return {"ok": True}
 
     @app.put("/api/campaigns/{name}/brief")
     def save_campaign_brief(name: str, body: dict) -> dict:
@@ -860,6 +948,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             raise HTTPException(400, "that's too short to be a brief")
         with db.connect() as con:
             db.save_brief(con, name, text)
+        rulecheck.start(name, broker.publish)  # the AI check reads the brief itself
         return {"ok": True, "saved_at": db.now()}
 
     @app.get("/api/campaigns/{name}/brief")
@@ -1078,6 +1167,36 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 raise HTTPException(400, str(exc)) from exc
         broker.publish("clips.changed", {"id": clip_id})
         return {"ok": True}
+
+    @app.put("/api/clips/{clip_id}/caption")
+    def edit_caption(clip_id: int, body: dict) -> dict:
+        """The user's own caption for a clip not yet posted; the rules still apply (D81)."""
+        from ..campaign import rules as caption_rules
+
+        text = str(body.get("caption") or "").strip()
+        if not text:
+            raise HTTPException(400, "the caption is empty")
+        found = next((c for c in Snapshot().clips if c.id == clip_id), None)
+        if found is None:
+            raise HTTPException(404, "no such clip")
+        if found.posts or found.status in ("posted", "submitted"):
+            raise HTTPException(400, "it's posted: the caption is what's live")
+        campaign = load_campaigns().get(found.campaign)
+        caption = caption_rules.enforce(text, campaign) if campaign else text
+        with stats.log_lock:
+            rows = perf.read()
+            with db.connect() as con:
+                raw = db.clip(con, clip_id)
+                db.update_clip(con, clip_id, caption=caption)
+            for row in rows:  # what the syncs match the post by
+                if (not row.get("url") and (row.get("campaign"), row.get("source_id"), row.get("clip_id"))
+                        == (raw["campaign"], raw["source_id"], raw["clip_id"])):
+                    row["caption"] = caption
+            with contextlib.suppress(PermissionError):
+                perf.write(rows)
+        broker.publish("clips.changed", {"id": clip_id})
+        rulecheck.start(found.campaign, broker.publish)
+        return {"caption": caption}
 
     @app.get("/api/posts")
     def posts(campaign: str | None = None) -> list[Post]:

@@ -111,3 +111,10 @@ notes: |
   -> Analytics -> Viewers); engagement at least 0.20%; posts stay up 30 days;
   one account per platform; no paid boosting. Use only the official footage
   folder -- no ripped or outside clips. Contact: Amplify Media's Discord.
+
+# D81: rules only the poster can follow, shown as a checklist when posting.
+posting_rules:
+  - "Turn on TikTok's content disclosure toggle (paid partnership)."
+  - "Keep each post up for at least 30 days."
+  - "No paid boosting."
+  - "One account per platform."

@@ -195,7 +195,7 @@ class TestComplianceReport:
     def test_a_clean_clip_passes_every_rule(self):
         report = compliance.check_clip(plan(), campaign(), duration=30.0)
         assert report.passed
-        assert len(report.rules) == 5
+        assert len(report.rules) == 5 + len(campaign().platform_targets)  # + each platform's text (D81)
 
     def test_a_duration_violation_fails(self):
         report = compliance.check_clip(plan(), campaign(), duration=5.0)

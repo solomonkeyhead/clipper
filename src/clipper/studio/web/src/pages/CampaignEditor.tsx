@@ -1,9 +1,10 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Loader2, Save, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  readBrief, saveCampaignBrief, useCampaign, useCampaignBrief, useCampaignForm, useDeleteCampaign, useSaveCampaign, type CampaignForm,
+  readBrief, saveCampaignBrief, useCampaign, useCampaignBrief, useCampaignForm, useDeleteCampaign, useSaveCampaign,
+  type CampaignForm, type CaptionRule,
 } from "@/api/client";
 import {
   Field, LinesInput, NumberInput, Section, Segmented, SwitchRow, TextArea, TextInput,
@@ -19,7 +20,8 @@ const BLANK: CampaignForm = {
   min_seconds: 15, max_seconds: 60, selection_focus: "", required_caption_text: "",
   required_hashtags: [], only_required_hashtags: false, required_credit_text: "",
   fallback_captions: [], fixed_captions: false, hook_texts: [], hook_overlay: true,
-  keep_original_audio: false, brief_rules: "", long_description: true, description_context: "",
+  keep_original_audio: false, brief_rules: "", caption_rules: [], posting_rules: [],
+  long_description: true, description_context: "",
   description_keywords: [], max_clips_per_source: null, notes: "",
 };
 
@@ -27,6 +29,50 @@ const MARKETS = ["Content Rewards", "Vyro"];
 const PLATFORMS: [string, string][] = [
   ["tiktok", "TikTok"], ["instagram_reels", "Instagram Reels"], ["youtube_shorts", "YouTube Shorts"],
 ];
+
+const RULE_SELECT = "h-9 rounded-md border border-line bg-surface-1 px-2 text-sm";
+
+/** The brief's other caption rules (config.CaptionRule), one row each (D81). */
+function CaptionRules({ rules, platforms, onChange }: {
+  rules: CaptionRule[]; platforms: string[]; onChange: (rules: CaptionRule[]) => void;
+}) {
+  const update = (i: number, change: Partial<CaptionRule>) => onChange(rules.map((r, j) => (j === i ? { ...r, ...change } : r)));
+  const names = PLATFORMS.filter(([k]) => platforms.includes(k));
+  return (
+    <div className="flex flex-col gap-2">
+      {rules.map((r, i) => (
+        <div key={i} className="flex flex-col gap-1 rounded-md border border-line p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <select aria-label="Must" className={RULE_SELECT} value={r.must ?? "include"}
+                    onChange={(e) => update(i, { must: e.target.value as CaptionRule["must"] })}>
+              <option value="include">Must include</option>
+              <option value="avoid">Must never say</option>
+            </select>
+            <TextInput aria-label="Text" className="min-w-40 flex-1" value={r.text} placeholder="@JoshThomasChannel"
+                       onChange={(e) => update(i, { text: e.target.value })} />
+            <select aria-label="Where" className={RULE_SELECT} value={r.place ?? "caption"}
+                    onChange={(e) => update(i, { place: e.target.value as CaptionRule["place"] })}>
+              <option value="caption">in the caption</option>
+              <option value="title">in the YouTube title</option>
+            </select>
+            <select aria-label="Platform" className={RULE_SELECT} value={(r.platforms ?? [])[0] ?? ""}
+                    onChange={(e) => update(i, { platforms: e.target.value ? [e.target.value] : [] })}>
+              <option value="">on every platform</option>
+              {names.map(([k, label]) => <option key={k} value={k}>on {label} only</option>)}
+            </select>
+            <Button type="button" variant="ghost" size="icon" aria-label="Remove rule"
+                    onClick={() => onChange(rules.filter((_, j) => j !== i))}><X className="size-4" /></Button>
+          </div>
+          {r.quote && <span className="pl-1 text-xs text-muted">The brief: “{r.quote}”</span>}
+        </div>
+      ))}
+      <Button type="button" variant="secondary" size="sm" className="w-fit"
+              onClick={() => onChange([...rules, { text: "", must: "include", place: "caption", platforms: [], quote: "" }])}>
+        <Plus className="size-3.5" /> Add a rule
+      </Button>
+    </div>
+  );
+}
 
 /** A value the brief actually gave (not empty, not the blank form's default). */
 const given = (key: keyof CampaignForm, v: unknown) =>
@@ -160,7 +206,7 @@ export function CampaignEditorPage() {
 
   const submit = () => {
     const marketplace = market === "other" ? form.marketplace : market;
-    save.mutate({ form: { ...form, marketplace }, name: editing }, {
+    save.mutate({ form: { ...form, marketplace, caption_rules: (form.caption_rules ?? []).filter((r) => r.text.trim()) }, name: editing }, {
       onSuccess: async (res) => {
         if (pasted) {
           try {
@@ -274,6 +320,15 @@ export function CampaignEditorPage() {
           </Field>
           <SwitchRow label="Use only these hashtags" hint="For briefs that ban extra hashtags."
                      checked={form.only_required_hashtags} onChange={(v) => set("only_required_hashtags", v)} />
+          <Field label="Other caption rules" optional
+                 hint="Anything else the brief says a post must say or must not, on one platform or all: an @mention, a tag in the YouTube title, a banned word. Every clip is checked against each.">
+            {() => <CaptionRules rules={form.caption_rules ?? []} platforms={form.platform_targets}
+                                 onChange={(v) => set("caption_rules", v)} />}
+          </Field>
+          <Field label="Rules for when you post" optional
+                 hint="One per line: what only you can do, like keeping comments on or turning on the paid-partnership label. Shown as a checklist when posting.">
+            {(id) => <LinesInput id={id} rows={3} value={form.posting_rules ?? []} onChange={(v) => set("posting_rules", v)} />}
+          </Field>
         </Section>
 
         <Section title="What to clip" hint="How Clipper picks and edits the moments.">

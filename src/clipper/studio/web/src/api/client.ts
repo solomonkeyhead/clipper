@@ -446,3 +446,38 @@ export const startImport = (url: string, files: string[], campaign = "") =>
   postJson<FootageImport>("/api/imports", { url, files, campaign });
 export const useImports = () =>
   useQuery({ queryKey: ["imports"], queryFn: async () => (await fetch("/api/imports")).json() as Promise<FootageImport[]> });
+
+export type PostCopy = components["schemas"]["PostCopy"];
+export type BriefProblem = components["schemas"]["BriefProblem"];
+export type CaptionRule = components["schemas"]["CaptionRule"];
+
+/** The user's own caption for a clip not yet posted (D81). */
+export function useEditCaption() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, caption }: { id: number; caption: string }) =>
+      unwrap(api.PUT("/api/clips/{clip_id}/caption", { params: { path: { clip_id: id } }, body: { caption } })),
+    onSettled: invalidate,
+  });
+}
+
+/** A rule the AI check found missing, made a rule for every clip of the campaign (D81). */
+export function useAddCaptionRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, rule }: { name: string; rule: CaptionRule }) =>
+      unwrap(api.POST("/api/campaigns/{name}/caption-rules", { params: { path: { name } }, body: rule })),
+    onSuccess: () => {
+      CLIP_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey }));
+      qc.invalidateQueries({ queryKey: ["campaign-form"] });
+    },
+  });
+}
+
+export function useRecheckRules() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (name: string) => unwrap(api.POST("/api/campaigns/{name}/recheck", { params: { path: { name } } })),
+    onSettled: invalidate,
+  });
+}

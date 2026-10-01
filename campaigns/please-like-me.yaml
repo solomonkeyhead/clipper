@@ -50,8 +50,7 @@ hook_texts:
 hook_overlay: true
 keep_original_audio: false
 brief_rules: Pull footage from the approved assets folder. Cut a clip at least 10 seconds
-  long. Add on-screen text that matches the clip. Write your caption. On YouTube, tag @JoshThomasChannel
-  in the title.
+  long. Add on-screen text that matches the clip. Write your caption.
 long_description: true
 description_context: Please Like Me is an award-winning Australian comedy created by and starring
   Josh Thomas, based on his own life. It follows a 20-something guy who figures out he’s gay,
@@ -72,3 +71,15 @@ notes: |-
   - Submit video analytics after 2,000 views showing watch time, all view graphs, and locations.
   - Low effort edits, stolen clips, spam posting, story boosting, collab posts, and AI-generated Reel covers are not allowed.
 burn_credit_in_video: false
+
+# D81: the brief's caption rules, enforced and checked on every platform.
+caption_rules:
+  - text: "@JoshThomasChannel"
+    must: include
+    place: title
+    platforms: [youtube_shorts]
+    quote: "On YouTube, tag @JoshThomasChannel in the title."
+posting_rules:
+  - "If people ask what the show is, pin a comment with the name and where to watch."
+  - "Keep likes and comments ON."
+  - "No collab posts, story boosting or AI-generated Reel covers."

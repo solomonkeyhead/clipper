@@ -1,13 +1,13 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   AlertTriangle, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Link2, Loader2, Send, SkipForward, Trash2, Undo2,
-  Upload, X, XCircle,
+  Pencil, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  downloadUrl, markNotGood, proofUrl, revealClip, useAddPostLink, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
+  downloadUrl, markNotGood, proofUrl, revealClip, useAddPostLink, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -168,6 +168,49 @@ function DuplicateWarning({ clip }: { clip: Clip }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/** A clip the rule checks or the AI check found breaking its brief (D81). */
+const breaksBrief = (clip: Clip) => Boolean(clip.rules && (clip.rules.failed.length || clip.rules.brief.length));
+
+/** The stored caption; editable until the clip is posted, the brief's rules still applied. */
+function CaptionSection({ clip }: { clip: Clip }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const edit = useEditCaption();
+  const editable = clip.status === "ready" || clip.status === "skipped";
+  const save = () => {
+    if (draft === null) return;
+    edit.mutate({ id: clip.id, caption: draft }, {
+      onSuccess: () => { setDraft(null); toast.success("Caption saved", { description: "Anything the brief requires is added back, and the AI checks it again." }); },
+      onError: (e) => toast.error("Couldn't save the caption", { description: String(e.message ?? e) }),
+    });
+  };
+  return (
+    <section>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Caption</h3>
+        <span className="flex gap-1.5">
+          {editable && draft === null && <Button size="sm" variant="ghost" onClick={() => setDraft(clip.caption)}><Pencil className="size-3.5" /> Edit</Button>}
+          {draft === null && <CopyButton text={clip.caption} what="Caption" label="Copy caption" keys="C" />}
+        </span>
+      </div>
+      {draft === null ? (
+        <p className="max-h-56 overflow-auto rounded-md border border-line bg-surface-1 p-3 text-sm whitespace-pre-wrap">
+          {clip.caption}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={7} autoFocus
+                    onKeyDown={(e) => e.stopPropagation()}
+                    className="w-full rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-accent" />
+          <span className="flex gap-2">
+            <Button size="sm" variant="primary" disabled={edit.isPending || !draft.trim()} onClick={save}>Save</Button>
+            <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>Cancel</Button>
+          </span>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -361,6 +404,13 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
             {clip.duplicates.length > 0 && clip.status === "ready" && (
               <Tip label={`Already posted: repeats “${clip.duplicates[0].title}” (${clip.duplicates[0].posted_on.join(", ")})`}>
                 <span aria-label="Already posted" className="text-warning"><AlertTriangle className="size-3.5" /></span>
+              </Tip>
+            )}
+            {clip.status === "ready" && breaksBrief(clip) && (
+              <Tip label={`Breaks the brief: ${[...(clip.rules?.failed ?? []), ...(clip.rules?.brief ?? []).map((p) => p.problem)].join("; ")}`}>
+                <span aria-label="Breaks the brief" className="flex items-center gap-1 text-xs font-medium text-danger">
+                  <ShieldAlert className="size-3.5" /> Brief
+                </span>
               </Tip>
             )}
             <ScoreBadge clip={clip} />
@@ -563,17 +613,7 @@ export function ClipSheet() {
 
                 {clip.status === "ready" && <PostPanel clip={clip} />}
 
-                {clip.caption && (
-                  <section>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Caption</h3>
-                      <CopyButton text={clip.caption} what="Caption" label="Copy caption" keys="C" />
-                    </div>
-                    <p className="max-h-56 overflow-auto rounded-md border border-line bg-surface-1 p-3 text-sm whitespace-pre-wrap">
-                      {clip.caption}
-                    </p>
-                  </section>
-                )}
+                {clip.caption && <CaptionSection clip={clip} />}
 
                 <section>
                   <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Your rating</h3>

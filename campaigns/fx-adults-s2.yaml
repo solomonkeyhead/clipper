@@ -80,3 +80,9 @@ notes: |
   only from the TikTok Commercial Library or FX's cues (the pipeline adds none);
   no footage from outside the provided folder. Each post needs 5,000 views to
   qualify; max $1,000 per post.
+
+# D81: rules only the poster can follow, shown as a checklist when posting.
+posting_rules:
+  - "Keep likes and comments on."
+  - "No paid boosting."
+  - "Music only from the TikTok Commercial Library or FX's cues."

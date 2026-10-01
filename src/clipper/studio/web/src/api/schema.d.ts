@@ -116,6 +116,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/campaigns/{name}/caption-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Caption Rule
+         * @description A rule the AI check found missing, made a rule for every clip (D81).
+         */
+        post: operations["add_caption_rule_api_campaigns__name__caption_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/campaigns/{name}/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recheck Campaign */
+        post: operations["recheck_campaign_api_campaigns__name__recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/campaigns/{name}/brief": {
         parameters: {
             query?: never;
@@ -445,6 +482,26 @@ export interface paths {
         head?: never;
         /** Update Clip */
         patch: operations["update_clip_api_clips__clip_id__patch"];
+        trace?: never;
+    };
+    "/api/clips/{clip_id}/caption": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Edit Caption
+         * @description The user's own caption for a clip not yet posted; the rules still apply (D81).
+         */
+        put: operations["edit_caption_api_clips__clip_id__caption_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/posts": {
@@ -1252,6 +1309,44 @@ export interface components {
             authorization: string;
             /** Notes */
             notes: string;
+            /**
+             * Caption Rules
+             * @default []
+             */
+            caption_rules: components["schemas"]["CaptionRule"][];
+            /**
+             * Posting Rules
+             * @default []
+             */
+            posting_rules: string[];
+        };
+        /**
+         * BriefProblem
+         * @description Something the AI check found the post breaking (campaign/audit.py).
+         */
+        BriefProblem: {
+            /** Rule */
+            rule: string;
+            /**
+             * Platform
+             * @default all
+             */
+            platform: string;
+            /**
+             * Where
+             * @default caption
+             */
+            where: string;
+            /**
+             * Problem
+             * @default
+             */
+            problem: string;
+            /**
+             * Add
+             * @default
+             */
+            add: string;
         };
         /** Campaign */
         Campaign: {
@@ -1292,6 +1387,11 @@ export interface components {
              * @default
              */
             campaign_url: string;
+            /**
+             * Posting Rules
+             * @default []
+             */
+            posting_rules: string[];
         };
         /** CampaignCheck */
         CampaignCheck: {
@@ -1430,6 +1530,10 @@ export interface components {
              * @default
              */
             brief_rules: string;
+            /** Caption Rules */
+            caption_rules?: components["schemas"]["CaptionRule"][];
+            /** Posting Rules */
+            posting_rules?: string[];
             /**
              * Long Description
              * @default true
@@ -1449,6 +1553,38 @@ export interface components {
              * @default
              */
             notes: string;
+        };
+        /**
+         * CaptionRule
+         * @description Text a brief says a post must carry, or must not (D81): "On YouTube, tag
+         *     @JoshThomasChannel in the title" is include "@JoshThomasChannel" in the
+         *     title on youtube_shorts. Enforced and checked per platform (campaign/rules.py).
+         */
+        CaptionRule: {
+            /** Text */
+            text: string;
+            /**
+             * Must
+             * @default include
+             * @enum {string}
+             */
+            must: "include" | "avoid";
+            /**
+             * Place
+             * @default caption
+             * @enum {string}
+             */
+            place: "caption" | "title";
+            /**
+             * Platforms
+             * @default []
+             */
+            platforms: string[];
+            /**
+             * Quote
+             * @default
+             */
+            quote: string;
         };
         /** Clip */
         Clip: {
@@ -1529,6 +1665,12 @@ export interface components {
              * @default []
              */
             duplicates: components["schemas"]["Duplicate"][];
+            /**
+             * Post Copy
+             * @default []
+             */
+            post_copy: components["schemas"]["PostCopy"][];
+            rules?: components["schemas"]["Rules"] | null;
         };
         /** Dimension */
         Dimension: {
@@ -1753,6 +1895,23 @@ export interface components {
             /** Posted Caption */
             posted_caption?: string | null;
         };
+        /**
+         * PostCopy
+         * @description What to paste on one platform, with every rule checked (campaign/rules.py).
+         */
+        PostCopy: {
+            /** Platform */
+            platform: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Caption */
+            caption: string;
+            /** Checks */
+            checks: components["schemas"]["RuleCheck"][];
+        };
         /** Proof */
         Proof: {
             /** Saved At */
@@ -1794,6 +1953,41 @@ export interface components {
             ai: boolean;
             /** Web */
             web: boolean;
+        };
+        /** RuleCheck */
+        RuleCheck: {
+            /** Name */
+            name: string;
+            /** Passed */
+            passed: boolean;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        };
+        /** Rules */
+        Rules: {
+            /**
+             * Failed
+             * @default []
+             */
+            failed: string[];
+            /**
+             * Checked
+             * @default false
+             */
+            checked: boolean;
+            /**
+             * Checking
+             * @default false
+             */
+            checking: boolean;
+            /**
+             * Brief
+             * @default []
+             */
+            brief: components["schemas"]["BriefProblem"][];
         };
         /** Setup */
         Setup: {
@@ -2182,6 +2376,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignForm"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_caption_rule_api_campaigns__name__caption_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaptionRule"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recheck_campaign_api_campaigns__name__recheck_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -2788,6 +3052,45 @@ export interface operations {
         };
     };
     update_clip_api_clips__clip_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_caption_api_clips__clip_id__caption_put: {
         parameters: {
             query?: never;
             header?: never;

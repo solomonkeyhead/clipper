@@ -453,6 +453,38 @@ class EditPermissions(StrictModel):
     overlays: bool | None = None         # b-roll, stickers, reaction cams
 
 
+#: Where a campaign's clips can be posted (CampaignConfig.platform_targets).
+PLATFORMS = ("tiktok", "instagram_reels", "youtube_shorts")
+
+
+class CaptionRule(StrictModel):
+    """Text a brief says a post must carry, or must not (D81): "On YouTube, tag
+    @JoshThomasChannel in the title" is include "@JoshThomasChannel" in the
+    title on youtube_shorts. Enforced and checked per platform (campaign/rules.py)."""
+
+    text: str
+    must: Literal["include", "avoid"] = "include"
+    # "title" is YouTube's title field; on a platform without one it means the caption.
+    place: Literal["caption", "title"] = "caption"
+    platforms: tuple[str, ...] = ()   # empty: every platform the campaign posts on
+    quote: str = ""                   # the brief's own words, shown with the check
+
+    @field_validator("text")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("a caption rule needs its text")
+        return v.strip()
+
+    @field_validator("platforms")
+    @classmethod
+    def _known(cls, v: tuple[str, ...]) -> tuple[str, ...]:
+        unknown = [p for p in v if p not in PLATFORMS]
+        if unknown:
+            raise ValueError(f"unknown platform {unknown[0]!r}; use {', '.join(PLATFORMS)}")
+        return v
+
+
 class CampaignConfig(StrictModel):
     """Per-campaign rules. `source_authorization` is the gate on the whole tool."""
 
@@ -528,6 +560,12 @@ class CampaignConfig(StrictModel):
     # The brief's own wording about edits ("do not alter", "no jump cuts",
     # "keep the original audio", ...), read for anything it forbids.
     brief_rules: str = ""
+    # Every other rule on a post's text -- mentions, per-platform tags, banned
+    # words -- added and checked for each platform (campaign/rules.py, D81).
+    caption_rules: tuple[CaptionRule, ...] = ()
+    # Rules only the poster can follow ("keep likes and comments on"), shown as
+    # a checklist when posting.
+    posting_rules: tuple[str, ...] = ()
     # Preferred clip length, overriding the content type's default target.
     target_seconds: tuple[float, float] | None = None
     # What the campaign pays, for the Control Center's earnings estimates: per

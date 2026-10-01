@@ -119,6 +119,14 @@ function BriefPanel({ brief }: { brief: Brief }) {
           {brief.required_text && <Rule>Caption includes <b>{brief.required_text}</b>{brief.required_text.includes("#ad") && " and TikTok's paid-partnership toggle is on"}</Rule>}
           {brief.credit && <Rule>Credit: {brief.credit}</Rule>}
           {brief.original_audio && <Rule>Original audio kept</Rule>}
+          {(brief.caption_rules ?? []).map((r) => (
+            <Rule key={`${r.must}${r.text}${r.place}${(r.platforms ?? []).join()}`}>
+              {r.must === "avoid" ? "Never says" : r.place === "title" ? "YouTube title includes" : "Caption includes"}{" "}
+              <b>{r.text}</b>
+              {(r.platforms ?? []).length > 0 && r.place !== "title" && <> on {(r.platforms ?? []).map((p) => PLATFORM_NAME[p] ?? p).join(", ")}</>}
+            </Rule>
+          ))}
+          {(brief.posting_rules ?? []).map((r) => <Rule key={r}>{r}</Rule>)}
         </ul>
         {brief.hashtags.length > 0 && (
           <div>

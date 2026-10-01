@@ -21,12 +21,11 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-from ..config import CampaignConfig
+from ..config import PLATFORMS, CampaignConfig, CaptionRule
 from ..utils.logging import get_logger
 
 log = get_logger(__name__)
 
-PLATFORMS = ("tiktok", "instagram_reels", "youtube_shorts")
 HISTORY = ".history"
 
 
@@ -61,6 +60,10 @@ class CampaignForm(BaseModel):
     hook_overlay: bool = True
     keep_original_audio: bool = False
     brief_rules: str = ""
+    # Mentions, per-platform tags, banned words (config.CaptionRule), and the
+    # rules only the poster can follow.
+    caption_rules: list[CaptionRule] = Field(default_factory=list)
+    posting_rules: list[str] = Field(default_factory=list)
     long_description: bool = True
     description_context: str = ""
     description_keywords: list[str] = Field(default_factory=list)
@@ -109,7 +112,8 @@ def to_form(campaign: CampaignConfig) -> CampaignForm:
         fallback_captions=list(campaign.fallback_captions),
         fixed_captions=campaign.fixed_captions, hook_texts=list(campaign.hook_texts),
         hook_overlay=campaign.hook_overlay, keep_original_audio=campaign.keep_original_audio,
-        brief_rules=campaign.brief_rules, long_description=campaign.long_description,
+        brief_rules=campaign.brief_rules, caption_rules=list(campaign.caption_rules),
+        posting_rules=list(campaign.posting_rules), long_description=campaign.long_description,
         description_context=campaign.description_context,
         description_keywords=list(campaign.description_keywords),
         max_clips_per_source=campaign.max_clips_per_source, notes=campaign.notes)
@@ -127,6 +131,16 @@ def _hashtags(items: list[str]) -> list[str]:
                 tag = tag if tag.startswith("#") else f"#{tag}"
                 if tag.lower() not in {t.lower() for t in out}:
                     out.append(tag)
+    return out
+
+
+def _unique_rules(rules: list[CaptionRule]) -> list[CaptionRule]:
+    seen, out = set(), []
+    for rule in rules:
+        k = (rule.text.lower(), rule.must, rule.place, tuple(sorted(rule.platforms)))
+        if k not in seen:
+            seen.add(k)
+            out.append(rule)
     return out
 
 
@@ -167,6 +181,8 @@ def merged(form: CampaignForm, existing: dict | None) -> dict:
         "hook_overlay": form.hook_overlay,
         "keep_original_audio": form.keep_original_audio,
         "brief_rules": form.brief_rules.strip(),
+        "caption_rules": [r.model_dump(mode="json") for r in _unique_rules(form.caption_rules)],
+        "posting_rules": _lines(form.posting_rules),
         "long_description": form.long_description,
         "description_context": form.description_context.strip(),
         "description_keywords": _lines(form.description_keywords),
@@ -275,9 +291,38 @@ def update(folder: Path, name: str, form: CampaignForm) -> CampaignConfig:
     return campaign
 
 
+def add_caption_rule(folder: Path, name: str, rule: dict) -> CampaignConfig:
+    """Add one caption rule (config.CaptionRule) to campaign `name`; a rule it
+    already has is not added twice."""
+    path = path_for(folder, name)
+    if path is None:
+        raise CampaignError(f"no campaign {name!r}")
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    rules = list(data.get("caption_rules") or [])
+    clean = CaptionRule.model_validate(rule).model_dump(mode="json")
+    same = ("text", "must", "place", "platforms")
+    if not any({k: CaptionRule.model_validate(r).model_dump(mode="json")[k] for k in same}
+               == {k: clean[k] for k in same} for r in rules):
+        rules.append(clean)
+    data["caption_rules"] = rules
+    campaign = validate(data)
+    _back_up(path)
+    path.write_text(dump(data), encoding="utf-8")
+    log.info("campaign %s: added caption rule %r", name, clean["text"])
+    return campaign
+
+
 # --------------------------------------------------------------------------
 # Reading a pasted brief
 # --------------------------------------------------------------------------
+
+class BriefCaptionRule(BaseModel):
+    text: str = ""
+    must: str = "include"
+    place: str = "caption"
+    platforms: list[str] = Field(default_factory=list)
+    quote: str = ""
+
 
 class BriefFields(BaseModel):
     """What the LLM may fill in. Empty string / 0 / [] means the brief doesn't say."""
@@ -302,6 +347,8 @@ class BriefFields(BaseModel):
     on_screen_text: list[str] = Field(default_factory=list)
     keep_original_audio: bool = False
     edit_rules: str = ""
+    caption_rules: list[BriefCaptionRule] = Field(default_factory=list)
+    posting_rules: list[str] = Field(default_factory=list)
     description_context: str = ""
     description_keywords: list[str] = Field(default_factory=list)
     other_rules: list[str] = Field(default_factory=list)
@@ -335,11 +382,24 @@ only_required_hashtags: true if the brief forbids other hashtags.
 - on_screen_text: text-on-screen hook lines the brief supplies, word for word.
 - keep_original_audio: true if the brief requires the original audio.
 - edit_rules: the brief's own words about editing (cuts, zooms, music, text, audio), quoted.
+- caption_rules: EVERY other rule about text a post must or must not contain: @mentions or \
+tags of an account, a phrase, link or hashtag required only on some platforms, words or \
+topics that are banned. One entry each: "text" is exactly what must appear (or must not), \
+"must" is "include" or "avoid", "place" is "title" when the brief says the YouTube title, \
+else "caption", "platforms" lists the platforms it is limited to ([] for all), "quote" is \
+the brief's sentence word for word. Example: "On YouTube, tag @JoshThomasChannel in the \
+title" -> {"text": "@JoshThomasChannel", "must": "include", "place": "title", \
+"platforms": ["youtube_shorts"], "quote": "On YouTube, tag @JoshThomasChannel in the title."}. \
+Don't repeat what required_caption_text, required_hashtags or required_credit_text hold.
+- posting_rules: rules only the person posting can follow (likes and comments on, \
+disclosure or paid-partnership toggles, pinned comments, how long posts stay up, no \
+boosting, one account per platform), one short line each.
 - description_context: 1-3 factual sentences on what the show/creator is and who is in it, \
 from the brief only.
 - description_keywords: search terms the brief uses (show name, cast, creator), at most 10.
-- other_rules: every other rule worth remembering (eligibility, audience, posting, \
-payout conditions), one short line each."""
+- other_rules: every other rule worth remembering (eligibility, audience, payout \
+conditions), one short line each.
+- Every rule in the brief must land in exactly one field. Drop none."""
 
 
 def read_brief(text: str, backend) -> CampaignForm:
@@ -387,6 +447,8 @@ def form_from_brief(found: BriefFields) -> CampaignForm:
         hook_texts=_lines(found.on_screen_text),
         keep_original_audio=found.keep_original_audio,
         brief_rules=found.edit_rules.strip(),
+        caption_rules=_caption_rules(found.caption_rules),
+        posting_rules=_lines(found.posting_rules),
         long_description=True,
         description_context=found.description_context.strip(),
         description_keywords=_lines(found.description_keywords)[:10],
@@ -395,6 +457,20 @@ def form_from_brief(found: BriefFields) -> CampaignForm:
     if form.min_seconds > form.max_seconds:
         form.min_seconds, form.max_seconds = form.max_seconds, form.min_seconds
     return form
+
+
+def _caption_rules(found: list[BriefCaptionRule]) -> list[CaptionRule]:
+    """The reader's caption rules that make sense; a malformed one is dropped, not guessed at."""
+    out = []
+    for r in found:
+        try:
+            out.append(CaptionRule(
+                text=r.text, must=r.must if r.must in ("include", "avoid") else "include",
+                place=r.place if r.place in ("caption", "title") else "caption",
+                platforms=tuple(p for p in r.platforms if p in PLATFORMS), quote=r.quote.strip()))
+        except ValidationError:
+            continue
+    return _unique_rules(out)
 
 
 def _public_link(url: str) -> bool:
