@@ -1520,3 +1520,17 @@ rendered one at a time, and videos one at a time. Transcription itself was fast.
   blurred at quarter size and scaled up (graph.BLUR_DOWNSCALE); frames compared
   side by side on a 16:9 Adults episode look the same, and 30s of it renders in
   5.4s instead of 9.9s.
+
+## D76 -- Ask reads active campaigns' briefs (2026-09-30)
+
+The brief as pasted is now kept whole (campaign_briefs table, up to 30,000
+characters) whenever a campaign is saved after "Fill in the form"; the form
+only keeps what Clipper acts on, and eligibility, payout terms or what gets
+rejected live in the text. Ask has a campaign_brief tool: an active campaign's
+pasted brief plus the rules Clipper follows for it (by id, title, or a part of
+the title that fits one campaign); archived campaigns aren't offered. Briefs
+are fetched only when a question needs one, so storing all of it costs nothing
+until then, and unrelated questions cost what they did. The edit page has a
+folded "Paste the brief" so existing campaigns can get theirs. Checked live:
+"what hashtags ... and what gets rejected" for Chad Powers answered from the
+rules (#chadpowers #hulu #tvedits, #ad; football, comedy-only, no Ricky+Russ).

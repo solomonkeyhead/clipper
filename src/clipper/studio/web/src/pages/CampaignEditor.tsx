@@ -3,7 +3,7 @@ import { ArrowLeft, Loader2, Save, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  readBrief, useCampaign, useCampaignForm, useDeleteCampaign, useSaveCampaign, type CampaignForm,
+  readBrief, saveCampaignBrief, useCampaign, useCampaignBrief, useCampaignForm, useDeleteCampaign, useSaveCampaign, type CampaignForm,
 } from "@/api/client";
 import {
   Field, LinesInput, NumberInput, Section, Segmented, SwitchRow, TextArea, TextInput,
@@ -48,16 +48,18 @@ function takePrefill(): { title?: string; brief?: string; form?: CampaignForm } 
   }
 }
 
-function BriefReader({ onRead, initial = "", from }: {
-  onRead: (form: CampaignForm) => void; initial?: string; from?: CampaignForm;
+function BriefReader({ onRead, initial = "", from, saved, editing = false }: {
+  onRead: (form: CampaignForm, text: string) => void; initial?: string; from?: CampaignForm;
+  saved?: string | null; editing?: boolean;
 }) {
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(!editing);
   const read = async () => {
     setBusy(true);
     try {
       const form = await readBrief(text);
-      onRead(form);
+      onRead(form, text);
       toast.success(`Filled in ${filled(form)} fields from the brief`,
         { description: "Check them below, then save." });
     } catch (e) {
@@ -66,11 +68,24 @@ function BriefReader({ onRead, initial = "", from }: {
       setBusy(false);
     }
   };
+  if (!open) {
+    // Editing: the brief is optional, so it stays folded until asked for.
+    return (
+      <Card className="flex flex-wrap items-center gap-3 px-4 py-3">
+        <Sparkles className="size-4 shrink-0 text-accent" />
+        <span className="min-w-0 flex-1 text-sm">
+          {saved ? <>Full brief saved {saved.slice(0, 10)}. <span className="text-muted">Ask can answer questions about it.</span></>
+            : <>No brief saved. <span className="text-muted">Paste it so Ask can answer questions about this campaign.</span></>}
+        </span>
+        <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>{saved ? "Paste an updated brief" : "Paste the brief"}</Button>
+      </Card>
+    );
+  }
   return (
     <Card className="flex flex-col gap-3 border-accent/40 bg-accent-soft/40 p-5">
       <div>
         <h2 className="flex items-center gap-2 text-md font-semibold">
-          <Sparkles className="size-4 text-accent" /> Fastest way: paste the brief
+          <Sparkles className="size-4 text-accent" /> {editing ? "Paste the brief" : "Fastest way: paste the brief"}
         </h2>
         {from ? (
           <p className="mt-0.5 text-sm text-muted">
@@ -83,7 +98,8 @@ function BriefReader({ onRead, initial = "", from }: {
         ) : (
           <p className="mt-0.5 text-sm text-muted">
             Copy the campaign's whole page from Content Rewards, Vyro or wherever it's posted, paste it here, and
-            Clipper fills in the form for you. It skips passwords and footage links.
+            Clipper fills in the form for you. It skips passwords and footage links. The whole brief is kept, so
+            Ask can answer questions about it later.
           </p>
         )}
       </div>
@@ -125,7 +141,11 @@ export function CampaignEditorPage() {
   const set = <K extends keyof CampaignForm>(key: K, value: CampaignForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const fromBrief = (read: CampaignForm) => {
+  // The brief as pasted, saved with the campaign for Ask (D76).
+  const [pasted, setPasted] = useState("");
+  const { data: briefStatus } = useCampaignBrief(editing);
+  const fromBrief = (read: CampaignForm, text: string) => {
+    setPasted(text);
     // The brief fills what it gives; anything it doesn't (an alert's pay or link,
     // or what the user typed) is kept.
     setForm((f) => {
@@ -141,7 +161,14 @@ export function CampaignEditorPage() {
   const submit = () => {
     const marketplace = market === "other" ? form.marketplace : market;
     save.mutate({ form: { ...form, marketplace }, name: editing }, {
-      onSuccess: (res) => {
+      onSuccess: async (res) => {
+        if (pasted) {
+          try {
+            await saveCampaignBrief(res.name as string, pasted);
+          } catch (e) {
+            toast.error(`The brief text wasn't kept: ${(e as Error).message}`);
+          }
+        }
         toast.success(editing ? "Campaign saved" : `${form.title} added`,
           { description: editing ? undefined : "Next: give it footage on the New clips page." });
         void navigate({ to: "/campaigns/$name", params: { name: res.name as string } });
@@ -169,7 +196,8 @@ export function CampaignEditorPage() {
           "Tell Clipper about a campaign you've joined, so it clips and captions to that campaign's rules."} />
 
       <form className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        {!editing && <BriefReader onRead={fromBrief} initial={prefill.brief} from={prefill.form} />}
+        <BriefReader onRead={fromBrief} initial={prefill.brief} from={prefill.form}
+                     editing={!!editing} saved={briefStatus?.saved_at} />
 
         <Section title="The basics">
           <Field label="Campaign name" hint={editing ? "Rename it any time; its clips stay with it." : "What you'll call it in Clipper, e.g. \"Chad Powers S2\"."}>

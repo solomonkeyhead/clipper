@@ -79,7 +79,32 @@ def toolbox() -> agent.Toolbox:
                            if brief else {})})
         return out
 
-    return agent.Toolbox(clips=clips, campaigns=campaigns)
+    def brief(wanted: str) -> dict | None:
+        """An active campaign's rules and pasted brief, by id or title (D76)."""
+        from ..campaign import editor
+
+        snap = server.Snapshot()
+        key = wanted.strip().lower()
+        active = [n for n in snap.campaign_names()
+                  if not snap.campaign(n).archived and snap.campaigns.get(n) is not None]
+        # Exact id or title first; else the one campaign whose id or title contains
+        # it ("Chad Powers" -> "Chad Powers S2"), so the model needn't look it up.
+        exact = [n for n in active if key in (n.lower(), (snap.campaign(n).title or "").lower())]
+        partial = [n for n in active if key and (key in n.lower() or key in (snap.campaign(n).title or "").lower())]
+        for name in exact or (partial if len(partial) == 1 else []):
+            c, cfg = snap.campaign(name), snap.campaigns[name]
+            rules = {k: v for k, v in editor.to_form(cfg).model_dump().items()
+                     if v not in (None, "", [], False) and k not in ("name", "fallback_captions")}
+            with db.connect() as con:
+                pasted = db.brief(con, name)
+            return {"campaign": name, "title": c.title, "rules": rules,
+                    "brief": pasted["text"] if pasted else None,
+                    "brief_saved": pasted["saved_at"] if pasted else None,
+                    **({} if pasted else {"note": "No brief text saved for this campaign; the user "
+                                                  "can paste it on the campaign's edit page."})}
+        return None
+
+    return agent.Toolbox(clips=clips, campaigns=campaigns, brief=brief)
 
 
 def build_router(broker) -> APIRouter:

@@ -850,6 +850,25 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         broker.publish("campaigns.changed")
         return {"name": campaign.name}
 
+    @app.put("/api/campaigns/{name}/brief")
+    def save_campaign_brief(name: str, body: dict) -> dict:
+        """Keep the brief as pasted, whole, for Ask (D76)."""
+        if name not in load_campaigns():
+            raise HTTPException(404, f"no campaign {name!r}")
+        text = str(body.get("text") or "").strip()
+        if len(text) < 40:
+            raise HTTPException(400, "that's too short to be a brief")
+        with db.connect() as con:
+            db.save_brief(con, name, text)
+        return {"ok": True, "saved_at": db.now()}
+
+    @app.get("/api/campaigns/{name}/brief")
+    def get_campaign_brief(name: str) -> dict:
+        with db.connect() as con:
+            found = db.brief(con, name)
+        return {"saved_at": found["saved_at"] if found else None,
+                "chars": len(found["text"]) if found else 0}
+
     @app.delete("/api/campaigns/{name}")
     def delete_campaign(name: str) -> dict:
         """Only a campaign with no clips; one with clips is archived instead."""

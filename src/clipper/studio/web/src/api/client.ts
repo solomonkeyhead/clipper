@@ -331,6 +331,16 @@ export function useRateClip() {
 
 export const RATING_WORDS = ["", "Bad", "Weak", "OK", "Good", "Great"];
 
+/** The brief as pasted, kept whole for Ask (D76). */
+export const useCampaignBrief = (name: string | undefined) =>
+  useQuery({ queryKey: ["brief", name], enabled: !!name,
+             queryFn: async () => (await fetch(`/api/campaigns/${name}/brief`)).json() as Promise<{ saved_at: string | null; chars: number }> });
+export async function saveCampaignBrief(name: string, text: string) {
+  const res = await fetch(`/api/campaigns/${name}/brief`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+  if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+}
+
 /** One click on a ready clip: skip it and learn from it; `undo` restores it (D74). */
 export async function markNotGood(id: number, undo?: { status: string }) {
   const res = await fetch(`/api/clips/${id}/not-good`, {

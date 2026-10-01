@@ -98,6 +98,13 @@ CREATE TABLE IF NOT EXISTS footage (
     how         TEXT NOT NULL,            -- clipped | added
     at          TEXT NOT NULL
 );
+-- The brief as the user pasted it, whole (D76): the form keeps what Clipper
+-- acts on; Ask reads this for everything else (eligibility, payout terms...).
+CREATE TABLE IF NOT EXISTS campaign_briefs (
+    campaign    TEXT PRIMARY KEY,
+    text        TEXT NOT NULL,
+    saved_at    TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS found_campaigns (
     key         TEXT PRIMARY KEY,         -- watch.watcher.campaign_key
     source      TEXT NOT NULL DEFAULT '',
@@ -361,3 +368,18 @@ def history(con: sqlite3.Connection, url: str) -> list[dict]:
     return [dict(r) for r in con.execute(
         "SELECT at, views, avg_watch_s, skip_rate_pct FROM snapshots WHERE url=? ORDER BY at",
         (url,))]
+
+
+#: A pasted brief is kept up to this many characters (a long one is ~8,000).
+BRIEF_CHARS = 30_000
+
+
+def save_brief(con: sqlite3.Connection, campaign: str, text: str) -> None:
+    con.execute("INSERT INTO campaign_briefs (campaign, text, saved_at) VALUES (?,?,?) "
+                "ON CONFLICT(campaign) DO UPDATE SET text=excluded.text, saved_at=excluded.saved_at",
+                (campaign, text.strip()[:BRIEF_CHARS], now()))
+
+
+def brief(con: sqlite3.Connection, campaign: str) -> dict | None:
+    row = con.execute("SELECT text, saved_at FROM campaign_briefs WHERE campaign=?", (campaign,)).fetchone()
+    return dict(row) if row else None

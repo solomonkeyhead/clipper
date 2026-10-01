@@ -33,6 +33,8 @@ class Toolbox:
 
     clips: Callable[[str | None], list[dict]]
     campaigns: Callable[[], list[dict]]
+    #: An active campaign's rules and its brief as pasted; None if not active.
+    brief: Callable[[str], dict | None] = lambda name: None
 
 
 @dataclass
@@ -51,7 +53,9 @@ and whether a campaign is worth joining.
 
 Rules:
 - Use tools instead of guessing. For anything current (trends, news, what's working now), \
-search the web. For the user's own results, use my_clips / my_campaigns.
+search the web. For the user's own results, use my_clips / my_campaigns. For what a campaign \
+allows, requires, pays or rejects, read campaign_brief and answer from it, quoting the brief's \
+words for rules; if the brief doesn't say, say so rather than guessing.
 - Cite web results inline by their number, like [2]. Never invent a source, a number or a quote.
 - If a tool says a source isn't set up, answer from what you have and say in one line what \
 adding it would give.
@@ -81,6 +85,12 @@ def _declarations():
            {"campaign": S(type="STRING", description="Campaign id to filter by")}),
         fn("my_campaigns", "The user's campaigns: id, title, pay per 1K views, platforms, "
            "clip length, focus, hook lines, clips made, views, estimated earnings."),
+        fn("campaign_brief", "One active campaign's full brief as the user pasted it, plus the rules "
+           "Clipper follows for it (hashtags, caption and credit text, banned words, clip length, "
+           "platforms, payout, deadline, notes). Use it for any question about what a campaign "
+           "allows, requires, pays or rejects. Archived campaigns aren't available.",
+           {"campaign": S(type="STRING", description="Campaign id or title, from my_campaigns")},
+           ["campaign"]),
     ])]
 
 
@@ -120,6 +130,13 @@ class _Run:
     def _my_campaigns(self) -> dict:
         self.progress("Reading your campaigns")
         return {"campaigns": self.box.campaigns()}
+
+    def _campaign_brief(self, campaign: str) -> dict:
+        self.progress(f"Reading the {campaign} brief")
+        found = self.box.brief(campaign)
+        if found is None:
+            return {"error": f"no active campaign {campaign!r}; check my_campaigns for ids"}
+        return found
 
 
 def _client():
