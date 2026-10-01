@@ -1526,6 +1526,11 @@ export interface components {
              */
             keep_original_audio: boolean;
             /**
+             * Censor Flagged Words
+             * @default true
+             */
+            censor_flagged_words: boolean;
+            /**
              * Brief Rules
              * @default
              */

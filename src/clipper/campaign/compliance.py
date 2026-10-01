@@ -222,6 +222,13 @@ def apply_campaign_caption(plan: ClipPlan, campaign: CampaignConfig) -> ClipPlan
         if not _contains(caption, text):
             caption = append(caption, text)
 
+    if campaign.censor_flagged_words:  # campaign/safety.py (D82)
+        from .safety import clean
+
+        caption = clean(caption, campaign)
+        tags = [t for t in tags if clean(t, campaign)]
+        return plan.model_copy(update={"suggested_caption": caption, "hashtags": tags,
+                                       "hook_text": clean(plan.hook_text, campaign)})
     return plan.model_copy(update={"suggested_caption": caption, "hashtags": tags})
 
 

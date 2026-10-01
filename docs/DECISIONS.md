@@ -1619,3 +1619,19 @@ a campaign or its brief is saved, stored captions get the every-platform rules
 (library and performance log), and the AI check re-reads only clips whose texts or
 brief changed. The brief reader now fills caption_rules and posting_rules (what
 only the poster can do, shown as a checklist when posting) and is told to drop none.
+
+## D82 -- Masking only the words that get posts flagged (2026-10-01)
+
+The user asked to avoid shadowbans and bans without cutting vulgar jokes: "as
+close to the line as possible". Vyro's content requirements ban pornography and
+sexually explicit material, hate speech, self-harm and drug promotion, but list no
+words, and the platforms read captions, titles and on-screen text. So
+campaign/safety.py masks a short list in a post's caption, description, YouTube
+title and new clips' hook lines: explicit sexual terms, self-harm and hard drugs
+lose one letter ("p*nis", "s*icide"), slurs all but the first; a hashtag of one is
+dropped. Ordinary swearing stays. @mentions, links and words the campaign itself
+uses (a show called "Sex Education") are untouched. On by default, a switch per
+campaign (censor_flagged_words). Burned-in subtitles keep following
+mask_profanity_in_captions; hooks already rendered into a video can't change.
+On the user's clips it masked nine Please Like Me descriptions (sex, penis, slut,
+suicide, porn).

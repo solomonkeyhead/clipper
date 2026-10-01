@@ -19,6 +19,7 @@ import re
 from dataclasses import dataclass, field
 
 from ..config import CampaignConfig, CaptionRule
+from . import safety
 from .compliance import RuleResult, _contains
 
 NAMES = {"tiktok": "TikTok", "instagram_reels": "Instagram", "youtube_shorts": "YouTube"}
@@ -122,6 +123,8 @@ def required_texts(campaign: CampaignConfig, platform: str | None) -> list[str]:
 
 def enforce(caption: str, campaign: CampaignConfig, platform: str | None = None) -> str:
     """The caption with everything the rules require on `platform` (None: on every platform)."""
+    if campaign.censor_flagged_words:
+        caption = safety.clean(caption, campaign)
     line, description, tags = parts(caption)
     if campaign.only_required_hashtags:
         allowed = allowed_tags(campaign)
@@ -151,6 +154,8 @@ def youtube_title(name: str, caption: str, campaign: CampaignConfig) -> str:
     """The Short's title: the clip's name (its hook), then anything a rule wants in
     the title, cut at a word so the whole fits YouTube's 100 characters."""
     base = re.sub(r"\s+", " ", name or parts(caption)[0]).strip()
+    if campaign.censor_flagged_words:
+        base = safety.clean(base, campaign)
     needed = [r.text for r in campaign.caption_rules
               if r.must == "include" and applies(r, "youtube_shorts") and in_title(r, "youtube_shorts")]
     suffix = " ".join(t for t in needed if not _contains(base, t))
@@ -203,6 +208,10 @@ def check(post: PostText, campaign: CampaignConfig, *, hook: str = "") -> list[R
     if campaign.only_required_hashtags:
         extra = sorted(_tags_in(everything) - allowed_tags(campaign))
         results.append(RuleResult("No hashtags beyond the brief's", not extra, ", ".join(extra)))
+    if campaign.censor_flagged_words:
+        risky = sorted({w for w in re.findall(r"[A-Za-z]+", everything)
+                        if safety.flagged(w) and w.lower() not in safety.exempt(campaign)})
+        results.append(RuleResult("No words that get posts flagged", not risky, ", ".join(risky)))
     results.append(_limits(post))
     return results
 

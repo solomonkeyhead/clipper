@@ -512,6 +512,9 @@ class CampaignConfig(StrictModel):
     credit_position: CreditPosition = "top_left"
     forbidden_terms: tuple[str, ...] = ()
     mask_profanity_in_captions: bool = True
+    # Mask the few words that get a post flagged (explicit sexual terms, slurs,
+    # self-harm, hard drugs) in its caption, title and hook; swearing stays (D82).
+    censor_flagged_words: bool = True
     brand_mentions: BrandMentions = BrandMentions()
     language: str = "en"
     # Most clips from one video when Clipper decides how many; None = every

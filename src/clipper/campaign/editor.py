@@ -59,6 +59,7 @@ class CampaignForm(BaseModel):
     hook_texts: list[str] = Field(default_factory=list)
     hook_overlay: bool = True
     keep_original_audio: bool = False
+    censor_flagged_words: bool = True
     brief_rules: str = ""
     # Mentions, per-platform tags, banned words (config.CaptionRule), and the
     # rules only the poster can follow.
@@ -112,6 +113,7 @@ def to_form(campaign: CampaignConfig) -> CampaignForm:
         fallback_captions=list(campaign.fallback_captions),
         fixed_captions=campaign.fixed_captions, hook_texts=list(campaign.hook_texts),
         hook_overlay=campaign.hook_overlay, keep_original_audio=campaign.keep_original_audio,
+        censor_flagged_words=campaign.censor_flagged_words,
         brief_rules=campaign.brief_rules, caption_rules=list(campaign.caption_rules),
         posting_rules=list(campaign.posting_rules), long_description=campaign.long_description,
         description_context=campaign.description_context,
@@ -180,6 +182,7 @@ def merged(form: CampaignForm, existing: dict | None) -> dict:
         "hook_texts": _lines(form.hook_texts),
         "hook_overlay": form.hook_overlay,
         "keep_original_audio": form.keep_original_audio,
+        "censor_flagged_words": form.censor_flagged_words,
         "brief_rules": form.brief_rules.strip(),
         "caption_rules": [r.model_dump(mode="json") for r in _unique_rules(form.caption_rules)],
         "posting_rules": _lines(form.posting_rules),

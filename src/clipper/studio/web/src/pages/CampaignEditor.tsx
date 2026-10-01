@@ -20,7 +20,7 @@ const BLANK: CampaignForm = {
   min_seconds: 15, max_seconds: 60, selection_focus: "", required_caption_text: "",
   required_hashtags: [], only_required_hashtags: false, required_credit_text: "",
   fallback_captions: [], fixed_captions: false, hook_texts: [], hook_overlay: true,
-  keep_original_audio: false, brief_rules: "", caption_rules: [], posting_rules: [],
+  keep_original_audio: false, censor_flagged_words: true, brief_rules: "", caption_rules: [], posting_rules: [],
   long_description: true, description_context: "",
   description_keywords: [], max_clips_per_source: null, notes: "",
 };
@@ -320,6 +320,9 @@ export function CampaignEditorPage() {
           </Field>
           <SwitchRow label="Use only these hashtags" hint="For briefs that ban extra hashtags."
                      checked={form.only_required_hashtags} onChange={(v) => set("only_required_hashtags", v)} />
+          <SwitchRow label="Mask words that get posts flagged"
+                     hint="Sexual terms, slurs, self-harm and hard drugs get a letter masked (d*ck, p*rn) in captions, titles and hook lines. Swearing stays."
+                     checked={form.censor_flagged_words ?? true} onChange={(v) => set("censor_flagged_words", v)} />
           <Field label="Other caption rules" optional
                  hint="Anything else the brief says a post must say or must not, on one platform or all: an @mention, a tag in the YouTube title, a banned word. Every clip is checked against each.">
             {() => <CaptionRules rules={form.caption_rules ?? []} platforms={form.platform_targets}
