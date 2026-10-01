@@ -150,3 +150,13 @@ class TestToken:
         with pytest.raises(api.InstagramError) as info:
             api._get("https://graph.instagram.com/v25.0/me", {"access_token": "SECRET123"})
         assert "SECRET123" not in str(info.value)
+
+
+def test_clips_with_the_same_id_from_different_videos_stay_apart():
+    """Clip ids repeat across sources ("001_0m00s"); one used to hide the other (D78)."""
+    line = "full series is free on youtube (Josh Thomas channel) 🫶 In this clip from Please Like Me, "
+    rows = [{**clip_row(line + "Josh doubts dating someone very attractive.", "001_0m00s"), "source_id": "s1"},
+            {**clip_row(line + "Josh brings Jeffrey three cups of water.", "001_0m00s"), "source_id": "s2"}]
+    result = sync.apply([reel("r1", line + "Josh doubts dating someone very attractive.")], rows, now=NOW)
+    assert len(result.matched) == 1
+    assert rows[-1]["platform"] == "instagram" and rows[-1]["source_id"] == "s1"

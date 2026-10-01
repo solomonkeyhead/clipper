@@ -19,6 +19,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from difflib import SequenceMatcher
 
 from ..learn import log as perf
 from .api import Video
@@ -43,6 +44,35 @@ def normalise(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").lower()).strip()
 
 
+#: How alike two whole captions must be to call a post one clip's, and by how
+#: much the best must beat the next (difflib ratio, 0-1).
+WHOLE_MIN, WHOLE_MARGIN = 0.8, 0.05
+
+
+def best_row(caption: str, candidates: list[tuple[int, str]]) -> tuple[int | None, bool]:
+    """The row a post's caption belongs to: (index, ambiguous).
+
+    Rows are found by the caption's first MATCH_CHARS characters. When several
+    share them -- a campaign whose required line opens every caption ("full
+    series is free on youtube (Josh Thomas channel) ...") -- the whole captions
+    decide, if one is clearly closest; else it's ambiguous (D78).
+    """
+    key = normalise(caption)
+    if not key:
+        return None, False
+    hits = [(i, normalise(c)) for i, c in candidates if normalise(c)[:MATCH_CHARS] == key[:MATCH_CHARS]]
+    if len(hits) == 1:
+        return hits[0][0], False
+    if not hits:
+        return None, False
+    scored = sorted(((SequenceMatcher(None, key[:400], text[:400]).ratio(), i) for i, text in hits),
+                    reverse=True)
+    (best, index), (second, _) = scored[0], scored[1]
+    if best >= WHOLE_MIN and best - second >= WHOLE_MARGIN:
+        return index, False
+    return None, True
+
+
 def match(videos: list[Video], rows: list[dict[str, str]]) -> tuple[dict[int, Video], SyncResult]:
     """Row index -> video, plus the videos that found no row or several."""
     result = SyncResult()
@@ -52,13 +82,11 @@ def match(videos: list[Video], rows: list[dict[str, str]]) -> tuple[dict[int, Vi
         if video.id in by_id:
             found[by_id[video.id]] = video
             continue
-        key = normalise(video.caption)[:MATCH_CHARS]
-        hits = [i for i, r in enumerate(rows)
-                if key and not r.get("video_id")
-                and normalise(r.get("caption", ""))[:MATCH_CHARS] == key]
-        if len(hits) == 1:
-            found[hits[0]] = video
-        elif hits:
+        index, ambiguous = best_row(video.caption, [(i, r.get("caption", "")) for i, r in enumerate(rows)
+                                                    if not r.get("video_id") and i not in found])
+        if index is not None:
+            found[index] = video
+        elif ambiguous:
             result.ambiguous.append(video)
         else:
             result.unmatched.append(video)

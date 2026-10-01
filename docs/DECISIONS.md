@@ -1549,3 +1549,20 @@ Clipper, which it says -- then Mark posted or paste the link. A folded note
 names each platform's paid-partnership switch: paid clipping is advertising,
 and the FTC (US) and the platforms expect it labelled beyond any #ad. Posting
 for the user stays the official-API route, waiting on platform app reviews.
+
+## D78 -- Posts found again when captions share their start; Clips opens on Ready (2026-09-30)
+
+The user's newest Please Like Me post stayed "Ready to post": a post was matched
+to its clip by the caption's first 60 characters, and that campaign's required
+line opens every caption ("full series is free on youtube (Josh Thomas channel)
+In this clip from Please Like Me on..."), so the post matched many clips and
+was left as ambiguous. When several clips share the start, the whole captions
+now decide (tiktok.sync.best_row: difflib ratio >= 0.8 and 0.05 clear of the
+next; the real post scored 0.97 against <= 0.41). Instagram had a second bug:
+candidates were keyed by clip id, which repeats across sources ("001_0m00s"),
+so 20 clips collapsed into one; they're keyed by source and clip id now. On
+the live accounts: TikTok 11 of 11 posts matched, Instagram 6 of 6.
+
+The Clips page opens on "Ready to post" (the user clicked it first every time),
+and its filters follow a clip's path: Ready to post, To submit, Submitted,
+Skipped, then All.

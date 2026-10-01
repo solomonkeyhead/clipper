@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 
 from ..learn import log as perf
-from ..tiktok.sync import MATCH_CHARS, WINDOWS, SyncResult, normalise
+from ..tiktok.sync import WINDOWS, SyncResult, best_row
 from .api import Reel
 
 PLATFORM = "instagram"
@@ -44,17 +44,18 @@ def apply(reels: list[Reel], rows: list[dict[str, str]], *, account: str = "",
             rows[index]["video_id"] = reel.id
             by_id[reel.id] = index
         if index is None:
-            key = normalise(reel.caption)[:MATCH_CHARS]
-            clips = {r.get("clip_id") or i: i for i, r in enumerate(rows)
-                     if key and r.get("platform") != platform
-                     and normalise(r.get("caption", ""))[:MATCH_CHARS] == key}
-            if len(clips) > 1:
+            # One candidate per clip: its rows on other platforms carry the same caption.
+            # Clip ids repeat across sources ("001_0m00s"), so a clip is its source and id.
+            clips = {(r.get("source_id"), r.get("clip_id")) if r.get("clip_id") else i: i
+                     for i, r in enumerate(rows) if r.get("platform") != platform}
+            found, ambiguous = best_row(reel.caption, [(i, rows[i].get("caption", "")) for i in clips.values()])
+            if ambiguous:
                 result.ambiguous.append(reel)
                 continue
-            if not clips:
+            if found is None:
                 result.unmatched.append(reel)
                 continue
-            template = rows[next(iter(clips.values()))]
+            template = rows[found]
             rows.append({**{c: template.get(c, "") for c in CARRIED},
                          "platform": platform, "account": account, "video_id": reel.id})
             index = len(rows) - 1

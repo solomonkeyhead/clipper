@@ -5,7 +5,8 @@ import { ClipGrid } from "@/components/ClipGrid";
 import { Card, EmptyState, Kbd, PageHeader, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-const FILTERS = [["all", "All"], ["ready", "Ready to post"], ["posted", "To submit"], ["submitted", "Submitted"], ["skipped", "Skipped"]] as const;
+// In the order a clip moves through them, opening on what's waiting to be posted; All last (D78).
+const FILTERS = [["ready", "Ready to post"], ["posted", "To submit"], ["submitted", "Submitted"], ["skipped", "Skipped"], ["all", "All"]] as const;
 
 const HINTS: Partial<Record<ClipFilter, React.ReactNode>> = {
   ready: <>Download a clip and copy its caption to post it. Once it's live, the next sync finds it and moves it to <b className="text-fg">To submit</b>.</>,
@@ -26,7 +27,7 @@ export function ClipsPage() {
   const { data: clips, isLoading } = useClips();
   const { data: campaigns = [] } = useCampaigns();
   const active = useActive();
-  const status = search.status ?? "all";
+  const status = search.status ?? "ready";
   const campaign = search.campaign ?? "active";
   const list = (clips ?? []).filter((c) =>
     (campaign === "active" ? active.has(c.campaign) : campaign === "all" || c.campaign === campaign) &&

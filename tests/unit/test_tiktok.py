@@ -175,3 +175,20 @@ class TestAccounts:
         api._save({"open_id": "second"}, api.token_path("second"))
         assert [p.stem for p in api.token_files()] == ["first", "second"]
         assert api.remove("first") and [p.stem for p in api.token_files()] == ["second"]
+
+
+class TestSharedCaptionStart:
+    """A campaign whose required line opens every caption (D78)."""
+
+    LINE = "full series is free on youtube (Josh Thomas channel) 🫶 In this clip from Please Like Me on Netflix, "
+
+    def test_the_whole_caption_decides(self):
+        rows = [row(caption=self.LINE + "Josh doubts dating someone very attractive.", clip_id="001_0m00s"),
+                row(caption=self.LINE + "Josh brings Jeffrey three cups of water.", clip_id="001_0m00s")]
+        found, result = sync.match([video(caption=self.LINE + "Josh doubts dating someone very attractive.")], rows)
+        assert list(found) == [0] and not result.ambiguous
+
+    def test_too_close_to_call_stays_ambiguous(self):
+        rows = [row(caption=self.LINE + "a", clip_id="1"), row(caption=self.LINE + "b", clip_id="2")]
+        found, result = sync.match([video(caption=self.LINE)], rows)
+        assert not found and len(result.ambiguous) == 1
