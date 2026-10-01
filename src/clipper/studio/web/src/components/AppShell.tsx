@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Film, GraduationCap, LayoutDashboard, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
+  AlertTriangle, BarChart3, Film, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
   Settings, UserCircle2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -30,7 +30,6 @@ function useNav(): NavItem[] {
   const working = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const active = new Set(campaigns.filter((c) => !c.archived).map((c) => c.name));
   // Clips waiting on you: ready to post, or posted and not yet submitted.
-  const unrated = clips.filter((c) => c.rating == null && c.file_exists).length;
   const waiting = clips.filter((c) => (c.status === "ready" || c.status === "posted") && active.has(c.campaign)).length;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
@@ -38,7 +37,6 @@ function useNav(): NavItem[] {
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
     { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },
-    { to: "/learning", label: "Learning", icon: <GraduationCap />, keys: "G R", badge: unrated, tone: "neutral" as const },
   ];
 }
 
@@ -73,6 +71,25 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
     </Link>
   );
   return collapsed ? <Tip label={item.label} keys={item.keys} side="right">{link}</Tip> : link;
+}
+
+/** Clipping runs on the server whatever page is open; this shows it on every page. */
+function ClippingPill() {
+  const { data: jobs = [] } = useJobs();
+  const working = jobs.filter((j) => j.status === "running" || j.status === "queued");
+  if (!working.length) return null;
+  const now = working.find((j) => j.status === "running");
+  const label = now
+    ? `Clipping${working.length > 1 ? ` · ${working.length} left` : ""} · ${Math.round(now.pct)}%`
+    : `${working.length} queued`;
+  return (
+    <Tip label={now ? `${now.name}: ${now.stage}` : "Waiting to start"}>
+      <Link to="/new" className="flex h-8 items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 text-xs font-medium text-accent hover:border-accent"
+            aria-label={label}>
+        <Loader2 className="size-3.5 animate-spin" /> {label}
+      </Link>
+    </Tip>
+  );
 }
 
 function SyncPill() {
@@ -206,6 +223,7 @@ export function AppShell() {
                 <Sparkles className="size-3.5 text-accent" /> Ask
               </button>
             </Tip>
+            <ClippingPill />
             <AutoPostPill />
             <SyncPill />
           </div>

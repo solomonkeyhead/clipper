@@ -96,7 +96,7 @@ export function CommandPalette() {
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
           <Item icon={<BarChart3 />} label="Stats" keys="G S" onSelect={go("/stats")} />
-          <Item icon={<GraduationCap />} label="Learning: rate clips, check the score" keys="G R" onSelect={go("/learning")} />
+          <Item icon={<GraduationCap />} label="Learning: does the score match your taste?" onSelect={go("/learning")} />
           <Item icon={<UserCircle2 />} label="Accounts" keys="G A" onSelect={go("/accounts")} />
           <Item icon={<Settings />} label="Settings" keys="G ," onSelect={go("/settings")} />
         </Group>

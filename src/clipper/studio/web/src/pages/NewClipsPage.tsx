@@ -307,6 +307,10 @@ export function NewClipsPage() {
   const filled = ranges.filter((r) => r.start || r.end);
   const rangesOk = filled.length > 0 && filled.every((r) => !rangeProblem(r));
   const overCap = batchCap !== null && picked.length > batchCap;
+  // The queue reads top to bottom in the order it runs; finished jobs, newest first, below (D74).
+  const queue = jobs.filter((j) => j.status === "running" || j.status === "queued")
+    .sort((a, b) => (a.status === "running" ? -1 : b.status === "running" ? 1 : a.id - b.id));
+  const finished = jobs.filter((j) => j.status !== "running" && j.status !== "queued");
   // Footage by campaign (studio/footage.py): the picked campaign's first and open,
   // then each other campaign folded, then anything not sorted yet (D73).
   const titleOf = (name: string) => campaigns.find((c) => c.name === name)?.title ?? name;
@@ -462,9 +466,15 @@ export function NewClipsPage() {
         </div>
 
         <section className="mt-4">
-          <h2 className="mb-3 text-md font-semibold">Jobs</h2>
+          {queue.length > 0 && (
+            <>
+              <h2 className="mb-3 text-md font-semibold">Clipping now{queue.length > 1 ? `, then ${queue.length - 1} more in this order` : ""}</h2>
+              <div className="mb-6 flex flex-col gap-2">{queue.map((j) => <JobCard key={j.id} job={j} />)}</div>
+            </>
+          )}
+          {finished.length > 0 && <h2 className="mb-3 text-md font-semibold">Finished</h2>}
           {jobs.length ? (
-            <div className="flex flex-col gap-2">{jobs.map((j) => <JobCard key={j.id} job={j} />)}</div>
+            <div className="flex flex-col gap-2">{finished.map((j) => <JobCard key={j.id} job={j} />)}</div>
           ) : (
             <EmptyState icon={<Scissors className="size-5" />} title="Nothing clipping yet"
               body="A full episode takes a few minutes: transcribing, finding scenes, scoring moments, then rendering each clip." />

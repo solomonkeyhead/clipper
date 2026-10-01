@@ -35,7 +35,15 @@ export function useLiveUpdates() {
       });
       source.addEventListener("clips.changed", refreshClips);
       source.addEventListener("job.progress", (e) => {
-        const job = JSON.parse((e as MessageEvent).data) as { id: number; status: string };
+        const job = JSON.parse((e as MessageEvent).data) as { id: number; status: string; name: string; clips: number; message: string };
+        const before = qc.getQueryData<{ id: number; status: string }[]>(["jobs"])?.find((j) => j.id === job.id);
+        if (before && before.status !== job.status && (job.status === "done" || job.status === "failed")) {
+          // Whatever page is open: clipping runs in the background (D74).
+          if (job.status === "failed") toast.error(`${job.name}: clipping failed`, { description: job.message });
+          else toast.success(job.clips ? `${job.name}: ${job.clips} clip${job.clips === 1 ? "" : "s"} made` : `${job.name}: no clips good enough`,
+                             { description: job.clips ? "They're in Clips, ready to post." : job.message });
+          if (job.status === "done") refreshClips();
+        }
         qc.setQueryData<{ id: number }[]>(["jobs"], (old = []) => {
           const rest = old.filter((j) => j.id !== job.id);
           return [job, ...rest].sort((a, b) => b.id - a.id);

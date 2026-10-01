@@ -331,6 +331,14 @@ export function useRateClip() {
 
 export const RATING_WORDS = ["", "Bad", "Weak", "OK", "Good", "Great"];
 
+/** One click on a ready clip: skip it and learn from it; `undo` restores it (D74). */
+export async function markNotGood(id: number, undo?: { status: string }) {
+  const res = await fetch(`/api/clips/${id}/not-good`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(undo ? { undo: true, status: undo.status } : {}) });
+  if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+}
+
 /* ---------- Ask (the research chat) ---------- */
 
 export type ResearchStatus = components["schemas"]["ResearchStatus"];

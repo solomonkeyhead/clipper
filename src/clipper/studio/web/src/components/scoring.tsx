@@ -1,5 +1,5 @@
-import { Hand, Star } from "lucide-react";
-import { RATING_WORDS, useRateClip, type Clip } from "@/api/client";
+import { Hand, ThumbsDown, ThumbsUp } from "lucide-react";
+import { useRateClip, type Clip } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { Tip } from "./ui";
 
@@ -40,12 +40,14 @@ export function ScoreBadge({ clip }: { clip: Clip }) {
   );
 }
 
-export function RatingStars({ rating }: { rating?: number | null }) {
-  if (!rating) return null;
+/** Your verdict on a card: thumbs up (4-5, or posted) or down (1-2). */
+export function RatingMark({ rating }: { rating?: number | null }) {
+  if (!rating || rating === 3) return null;
+  const good = rating >= 4;
   return (
-    <Tip label={`You rated it ${rating}/5 (${RATING_WORDS[rating]})`}>
-      <span className="tabular flex items-center gap-0.5 text-[11px] font-semibold text-money">
-        <Star className="size-3 fill-current" />{rating}
+    <Tip label={good ? "You liked it" : "You marked it not good"}>
+      <span className={cn("flex items-center", good ? "text-success" : "text-warning")}>
+        {good ? <ThumbsUp className="size-3.5" /> : <ThumbsDown className="size-3.5" />}
       </span>
     </Tip>
   );
@@ -114,24 +116,28 @@ export function RatingPanel({ clip }: { clip: Clip }) {
       {label}
     </button>
   );
+  // Good / Not good: two clear choices instead of five stars (D74). Older 1-5
+  // ratings still count: 4-5 read as good, 1-2 as not good.
+  const verdict = clip.rating == null || clip.rating === 3 ? null : clip.rating >= 4 ? "good" : "bad";
+  const choose = (v: "good" | "bad") => set(verdict === v ? null : v === "good" ? 5 : 1, []);
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Your rating">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} role="radio" aria-checked={clip.rating === n}
-            onClick={() => set(clip.rating === n ? null : n, clip.rating === n ? [] : reasons)}
-            className={cn("flex h-8 items-center gap-1 rounded-md border px-2 text-sm font-medium transition-colors",
-              clip.rating && n <= clip.rating ? "border-money/50 text-money" : "border-line text-muted hover:text-fg",
-              clip.rating === n && "bg-surface-2")}>
-            <Star className={cn("size-4", clip.rating && n <= clip.rating && "fill-current")} />
-            <span className="hidden sm:inline">{RATING_WORDS[n]}</span>
+      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Your verdict">
+        {(["good", "bad"] as const).map((v) => (
+          <button key={v} role="radio" aria-checked={verdict === v} onClick={() => choose(v)}
+            className={cn("flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition-colors",
+              verdict === v ? v === "good" ? "border-success/50 bg-[color-mix(in_oklch,var(--success)_14%,transparent)] text-success"
+                : "border-warning/50 bg-[color-mix(in_oklch,var(--warning)_14%,transparent)] text-warning"
+                : "border-line text-muted hover:text-fg")}>
+            {v === "good" ? <><ThumbsUp className="size-4" /> Good</> : <><ThumbsDown className="size-4" /> Not good</>}
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-1.5">{GOOD_REASONS.map((r) => chip(r, "good"))}</div>
-      <div className="flex flex-wrap gap-1.5">{BAD_REASONS.map((r) => chip(r, "bad"))}</div>
+      {verdict && (
+        <div className="flex flex-wrap gap-1.5">{(verdict === "good" ? GOOD_REASONS : BAD_REASONS).map((r) => chip(r, verdict))}</div>
+      )}
       <p className="text-xs text-subtle">
-        {clip.rating ? "Tap reasons that fit (optional)." : "Rate it first, then add reasons if you like."} Clipper learns your taste from these.
+        Optional: clips you post already count as good. Clipper learns your taste from both{verdict ? "; tap reasons that fit" : ""}.
       </p>
     </div>
   );

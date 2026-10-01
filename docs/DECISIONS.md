@@ -1461,3 +1461,27 @@ initials of the campaign's title in the file name ("ADULTS 205", "ChadPowers_",
 208.mov). Clipper's own clip downloads ("<title> - <campaign>.mp4") are clips,
 not footage, and are left out. On the user's PC: 60 of 62 sorted; 1.mp4 and
 2.mp4 say nothing and stay unsorted until clipped for a campaign.
+
+## D74 -- Captions that never stack; clipping shown everywhere; "Not good" (2026-09-30)
+
+- **Stacked ("smeared") captions.** The user's Please Like Me clip showed every
+  line twice, offset. Not the face-avoiding placement: the transcriber squashed
+  a stammer ("a... Why don't you have a back me up") so six words started at
+  11.40s, each word's highlight state became an event at the same instant, and
+  libass stacks overlapping events vertically. Squashed words are now spread
+  over the time they span (captions.spread_squashed), and caption events never
+  overlap: each ends when the next begins and a state under two frames is
+  dropped (captions.one_at_a_time). Fixes new renders; old clips keep theirs.
+- **Clipping in the background.** Jobs always ran on the server whatever page
+  was open, but only New clips showed them. A "Clipping · N left · %" pill now
+  sits in the top bar on every page, and each finished video raises a toast.
+- **Queue order.** New clips lists what's clipping top to bottom in the order it
+  runs (running first, then queued oldest first), with finished jobs below.
+- **"Not good".** Rating every clip is a chore nobody keeps up. A ready clip has
+  a Not good button (card and panel): it skips the clip and records a 1, with
+  undo. Posting a clip now counts as a 4 unless rated (learn/feedback.POSTED_AS),
+  so learning needs no ratings at all; the panel's five stars became Good / Not
+  good with optional reasons (older 1-5 ratings still count).
+- **The Learning tab** was mostly a statistics page and a list of clips to rate.
+  It left the sidebar: its switch and a one-line summary ("Learning from 11
+  clips") are in Settings, linking to the trimmed details page (no rating list).

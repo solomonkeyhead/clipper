@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
 from clipper.config import SafeArea
@@ -314,3 +316,27 @@ class TestCreditPlacement:
                         safe_area=self.SAFE, duration=5.0,
                         hook_text="The Christmas morning", hook_seconds=2.0)
         assert self._margin_v(ass, "Hook") == 220
+
+
+class TestNoStackedCaptions:
+    """A stammer the transcriber squashed onto one instant drew every highlight
+    state at once, stacked line by line (the user's "smeared" captions)."""
+
+    def squashed(self):
+        said = [(10.90, 11.14, "don't"), (11.14, 11.20, "you"), (11.20, 11.34, "have"),
+                (11.34, 11.40, "a..."), (11.40, 11.45, "Why"), (11.40, 11.45, "don't"),
+                (11.40, 11.45, "you"), (11.40, 11.45, "have"), (11.40, 11.45, "a"),
+                (11.40, 11.52, "back"), (11.52, 11.72, "me"), (11.72, 11.88, "up")]
+        return [Word(start=a, end=b, text=t) for a, b, t in said]
+
+    def test_squashed_words_are_spread_out(self):
+        spread = captions.spread_squashed(self.squashed())
+        starts = [w.start for w in spread]
+        assert starts == sorted(starts) and len(set(starts)) == len(starts)
+
+    def test_no_two_captions_are_ever_on_screen_together(self):
+        content = build_ass(self.squashed(), style=get_style("bold_pop"), width=1080, height=1920,
+                            safe_area=SafeArea())
+        shown = sorted((a, b) for a, b, text in captions.parse_event_times(content))
+        assert all(b1 <= a2 + 1e-6 for (_, b1), (a2, _) in itertools.pairwise(shown))
+        assert all(b - a >= captions.MIN_EVENT_SECONDS - 0.011 for a, b in shown)  # centisecond rounding

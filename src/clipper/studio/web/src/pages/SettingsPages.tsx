@@ -1,11 +1,12 @@
 import {
   AlertTriangle, CheckCircle2, ExternalLink, KeyRound, Loader2, Monitor, Moon, Plus, Stethoscope, Sun, XCircle,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   connectInstagram, runSystemCheck, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
-  useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
+  useLearning, useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
 import { PlatformIcon } from "@/components/PlatformIcon";
@@ -417,6 +418,7 @@ function SystemCheck() {
 
 export function SettingsPage() {
   const { data: settings } = useSettings();
+  const { data: learning } = useLearning();
   const save = useSetSettings();
   const qc = useQueryClient();
   const theme = useUI((s) => s.theme);
@@ -453,6 +455,16 @@ export function SettingsPage() {
               {["5", "15", "30", "60"].map((m) => <option key={m} value={m}>{m} minutes</option>)}
             </select>
           ) : <Skeleton className="h-9 w-32" />}
+        />
+        <Row
+          title="Learn from my clips"
+          body={<>Clipper counts the clips you post as good and the ones you mark <b>Not good</b> as bad, and picks
+            more like the good ones. {learning ? `Learning from ${learning.rated} clip${learning.rated === 1 ? "" : "s"} so far. ` : ""}
+            <Link to="/learning" className="text-accent hover:underline">How well does it match your taste?</Link></>}
+          control={settings ? (
+            <Switch label="Learn from my clips" checked={settings.learn_from_feedback === "1"}
+                    onChange={(v) => save.mutate({ learn_from_feedback: v ? "1" : "0" })} />
+          ) : <Skeleton className="h-5 w-9" />}
         />
         <Row
           title="Theme"

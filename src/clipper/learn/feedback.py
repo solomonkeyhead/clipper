@@ -1,7 +1,10 @@
 """Learning from the user's ratings: does the score work, and what should change?
 
-The Control Center asks for a 1-5 rating on each clip, with optional reasons
-("weak hook", "needs context", ...). Three things come out of them:
+Rating every clip is a chore nobody keeps up (D74), so most of the signal is
+implicit: a clip the user posted counts as a 4 (they judged it good enough to
+post), and "Not good" -- one click on a ready clip -- is a 1. A rating they do
+give (Good / Not good in the clip panel, or the older 1-5 stars), with optional
+reasons ("weak hook", "needs context", ...), always wins. Three things come out:
 
 * **A report** -- does Clipper's score agree with the user's ratings, and with
   the views the posts got? Rank correlations, and a table of score bands.
@@ -91,6 +94,11 @@ class Rated:
     text: str
     views: float | None = None
     rated_at: str = ""
+    #: Rated by posting it rather than by the user saying so.
+    implicit: bool = False
+
+#: What posting a clip says about it, when the user hasn't rated it.
+POSTED_AS = 4
 
 
 def from_rows(rows: list[dict], views: dict[int, float] | None = None) -> list[Rated]:
@@ -98,9 +106,12 @@ def from_rows(rows: list[dict], views: dict[int, float] | None = None) -> list[R
     out = []
     for row in rows:
         scores = json.loads(row.get("scores") or "{}")
+        rating, implicit = row.get("rating"), False
+        if rating is None and row.get("status") in ("posted", "submitted"):
+            rating, implicit = POSTED_AS, True
         out.append(Rated(
             id=row["id"], campaign=row["campaign"], title=row.get("title") or "",
-            rating=row.get("rating"), reasons=json.loads(row.get("reasons") or "[]"),
+            rating=rating, implicit=implicit, reasons=json.loads(row.get("reasons") or "[]"),
             score=scores.get("score"), rubric=scores.get("rubric") or {},
             text=scores.get("text") or "", views=(views or {}).get(row["id"]),
             rated_at=row.get("rated_at") or ""))
@@ -149,16 +160,18 @@ def taste(clips: list[Rated], campaign: str | None = None) -> str:
     def line(c: Rated) -> str:
         why = ", ".join(REASONS.get(r, r).lower() for r in c.reasons)
         text = " ".join(c.text.split())[:220]
-        return (f'- rated {c.rating}/5: "{c.title}"' + (f" ({why})" if why else "")
+        said = ("posted it" if c.implicit else "marked it not good" if c.rating == 1
+                else f"rated it {c.rating}/5")
+        return (f'- {said}: "{c.title}"' + (f" ({why})" if why else "")
                 + (f"\n  {text}" if text else ""))
 
     liked = pick(lambda c: c.rating >= 4)
     disliked = pick(lambda c: c.rating <= 2)
     parts = []
     if liked:
-        parts.append("Clips they rated highly:\n" + "\n".join(line(c) for c in liked))
+        parts.append("Clips they liked (posted, or rated well):\n" + "\n".join(line(c) for c in liked))
     if disliked:
-        parts.append("Clips they rated low:\n" + "\n".join(line(c) for c in disliked))
+        parts.append("Clips they didn't like:\n" + "\n".join(line(c) for c in disliked))
     counts: dict[str, int] = {}
     for c in rated:
         for r in c.reasons:

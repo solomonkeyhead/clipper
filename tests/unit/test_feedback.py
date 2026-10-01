@@ -41,9 +41,20 @@ def test_taste_lists_liked_and_disliked_clips_and_reasons():
     clips = [clip(1, 5, 8, reasons=["great_hook"]), clip(2, 1, 3, reasons=["needs_context"]),
              clip(3, 2, 4, reasons=["needs_context", "boring"]), clip(4, None, 6)]
     text = feedback.taste(clips, "c")
-    assert "rated 5/5: \"clip 1\" (great hook)" in text
-    assert "Clips they rated low" in text and "needs context (2)" in text
+    assert "rated it 5/5: \"clip 1\" (great hook)" in text
+    assert "marked it not good: \"clip 2\"" in text
+    assert "Clips they didn't like" in text and "needs context (2)" in text
     assert feedback.taste(clips[:2], "c") == ""  # too few to say anything
+
+
+def test_posting_counts_as_liking_unless_rated():
+    rows = [{"id": 1, "campaign": "c", "title": "a", "rating": None, "status": "posted", "reasons": "[]"},
+            {"id": 2, "campaign": "c", "title": "b", "rating": 1, "status": "posted", "reasons": "[]"},
+            {"id": 3, "campaign": "c", "title": "d", "rating": None, "status": "ready", "reasons": "[]"}]
+    a, b, d = feedback.from_rows(rows)
+    assert (a.rating, a.implicit) == (feedback.POSTED_AS, True)
+    assert (b.rating, b.implicit) == (1, False)  # what the user said wins
+    assert d.rating is None
 
 
 def test_report_agreement_and_bands():

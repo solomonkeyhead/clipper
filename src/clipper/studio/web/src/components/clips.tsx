@@ -1,19 +1,20 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  AlertTriangle, CheckCircle2, Download, ExternalLink, FileCheck2, FolderOpen, Info, Link2, Loader2, Send, SkipForward, Trash2, Undo2,
+  AlertTriangle, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Link2, Loader2, Send, SkipForward, Trash2, Undo2,
   Upload, X, XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  downloadUrl, proofUrl, revealClip, useAddPostLink, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
+  downloadUrl, markNotGood, proofUrl, revealClip, useAddPostLink, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
-import { RatingPanel, RatingStars, ScoreBadge, ScoreBreakdown } from "./scoring";
+import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
 
 const STATUS_WORD: Record<ClipStatus, string> = {
@@ -33,6 +34,32 @@ export function useStatusWithUndo() {
       action: { label: "Undo", onClick: () => mutation.mutate({ id: clip.id, status: previous }) },
     });
   };
+}
+
+/** "Not good": skip a ready clip and teach Clipper from it, with a 5-second undo (D74). */
+function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: ["clips"] });
+  const mark = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const before = clip.marked;
+    try {
+      await markNotGood(clip.id);
+      void refresh();
+      toast("Marked not good", {
+        description: "Skipped. Clipper will pick fewer clips like it.", duration: 5000,
+        action: { label: "Undo", onClick: () => void markNotGood(clip.id, { status: before }).then(refresh) },
+      });
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+  const button = (
+    <Button size={size} variant="ghost" onClick={(e) => void mark(e)} aria-label="Not good">
+      <ThumbsDown className={size === "md" ? "size-4" : "size-3.5"} />{size === "md" && " Not good"}
+    </Button>
+  );
+  return size === "md" ? button : <Tip label="Not good: skip it, and Clipper learns from it">{button}</Tip>;
 }
 
 /** Mark a clip (all its post links) submitted to its campaign, with a 5-second undo. */
@@ -336,7 +363,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
               </Tip>
             )}
             <ScoreBadge clip={clip} />
-            <RatingStars rating={clip.rating} />
+            <RatingMark rating={clip.rating} />
           </span>
           {clip.posts.length > 0 && (
             <span className="tabular text-xs text-muted">
@@ -366,6 +393,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
           <>
             {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
             {clip.file_exists && <DownloadButton clip={clip} />}
+            {clip.status === "ready" && <NotGoodButton clip={clip} />}
           </>
         )}
         <span className="ml-auto"><DeleteButton clip={clip} /></span>
@@ -529,6 +557,7 @@ export function ClipSheet() {
                       <SkipForward className="size-4" /> Skip <Kbd>X</Kbd>
                     </Button>
                   )}
+                  {clip.status === "ready" && <NotGoodButton clip={clip} size="md" />}
                 </div>
 
                 {clip.caption && (

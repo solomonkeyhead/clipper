@@ -368,8 +368,9 @@ def build_ass(
             hook_text, hook_until, style=style, top_margin=hook_top, font_size=hook_size,
         ))
 
-    shifted = _shift_words(words, clip_start, duration)
+    shifted = spread_squashed(_shift_words(words, clip_start, duration))
     chunks = chunk_words(shifted, style)
+    captions: list[tuple[float, float, str, int]] = []
     line_height = font_size * 1.18 + outline * 2
     bottom_edge = height - margin_v
     for i, chunk in enumerate(chunks):
@@ -385,10 +386,57 @@ def build_ass(
             where = place(box, seen, bottom_limit=height * 1248 / 1920,
                           top_limit=(hook_bottom + 20 * scale) if chunk.start < hook_until
                           else top_safe, gap=40 * scale)
-        events.extend(_chunk_events(chunk, style, mask_profanity_words, hold_until=hold,
-                                    where=where, frame_height=height))
+        captions.extend(_chunk_events(chunk, style, mask_profanity_words, hold_until=hold,
+                                      where=where, frame_height=height))
+    events.extend(_dialogue(start, end, "Caption", text, margin_v=margin)
+                  for start, end, text, margin in one_at_a_time(captions))
 
     return header + "\n".join(events) + "\n"
+
+
+#: Shortest a caption state may be on screen: two frames. A shorter highlight
+#: step can't be seen, and overlapping ones are what libass stacks (below).
+MIN_EVENT_SECONDS = 2 / 30
+
+
+def spread_squashed(words: list[Word]) -> list[Word]:
+    """Give words the transcriber squashed onto one instant their share of the time.
+
+    A fast restart ("a... Why don't you have a back me up") came back as six
+    words all starting at 11.40s; each became a caption event at that instant,
+    and libass stacks events that overlap, so the page showed every highlight
+    state at once, offset line by line -- the "smeared" captions the user saw.
+    A run of words starting within a frame of each other is spread evenly up to
+    the next word's start (or the run's own end).
+    """
+    out = [w.model_copy() for w in words]
+    i = 0
+    while i < len(out):
+        j = i
+        while j + 1 < len(out) and out[j + 1].start - out[i].start < MIN_EVENT_SECONDS / 2:
+            j += 1
+        if j > i:
+            stop = out[j + 1].start if j + 1 < len(out) else max(w.end for w in out[i:j + 1])
+            step = (stop - out[i].start) / (j - i + 1)
+            for k in range(i, j + 1):
+                out[k].start = out[i].start + step * (k - i)
+                out[k].end = max(out[k].end, out[k].start + step)
+        i = j + 1
+    return out
+
+
+def one_at_a_time(captions: list[tuple[float, float, str, int]]) -> list[tuple[float, float, str, int]]:
+    """Caption events never overlap: each ends when the next begins, and a state
+    too short to see is dropped. libass stacks overlapping events vertically, so
+    any overlap draws the caption twice, one copy above the other."""
+    ordered = sorted(captions, key=lambda c: c[0])
+    out = []
+    for n, (start, end, text, margin) in enumerate(ordered):
+        if n + 1 < len(ordered):
+            end = min(end, ordered[n + 1][0])
+        if end - start >= MIN_EVENT_SECONDS or n + 1 == len(ordered):
+            out.append((start, max(end, start + MIN_EVENT_SECONDS), text, margin))
+    return out
 
 
 def _shift_words(words: list[Word], clip_start: float, duration: float | None) -> list[Word]:
@@ -470,14 +518,15 @@ def caption_hold(chunk: Chunk, limit: float | None) -> float:
 def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool, *,
                   hold_until: float | None = None,
                   where: tuple[str, float] | None = None,
-                  frame_height: int = 1920) -> list[str]:
-    """One event per word, each showing the whole chunk with that word active.
+                  frame_height: int = 1920) -> list[tuple[float, float, str, int]]:
+    """One event per word, each showing the whole chunk with that word active:
+    (start, end, ASS text, vertical margin).
 
     libass has no karaoke-with-colour primitive that survives outline rendering
     well, so the highlight is done by re-emitting the chunk. Chunks are short,
     so the event count stays modest.
     """
-    events: list[str] = []
+    events: list[tuple[float, float, str, int]] = []
     breaks = set(line_breaks([w.text.strip() for w in chunk.words], style.max_chars_per_line))
     for i, active in enumerate(chunk.words):
         parts: list[str] = []
@@ -512,7 +561,7 @@ def _chunk_events(chunk: Chunk, style: CaptionStyle, mask: bool, *,
                 text, margin_v = f"{{\\an{ALIGN_TOP_CENTRE}}}" + text, round(y)
             else:
                 margin_v = round(frame_height - y)
-        events.append(_dialogue(start, end, "Caption", text, margin_v=margin_v))
+        events.append((start, end, text, margin_v))
     return events
 
 

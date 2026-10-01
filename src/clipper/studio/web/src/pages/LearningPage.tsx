@@ -1,8 +1,5 @@
-import { GraduationCap, Star } from "lucide-react";
-import { RATING_WORDS, useClips, useLearning, useRateClip, useSetSettings, useSettings, type Clip } from "@/api/client";
-import { ScoreBadge } from "@/components/scoring";
-import { Card, EmptyState, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
-import { useUI } from "@/lib/store";
+import { useLearning, useSetSettings, useSettings } from "@/api/client";
+import { Card, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { cn, formatCount } from "@/lib/utils";
 
 const VERDICT: Record<string, { text: string; tone: string }> = {
@@ -29,40 +26,10 @@ function Verdict({ label, verdict, rho, n, need, explain }: {
   );
 }
 
-function QuickRate({ clip }: { clip: Clip }) {
-  const open = useUI((s) => s.setOpenClip);
-  const rate = useRateClip();
-  return (
-    <div className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
-      <button onClick={() => open(clip.id)} className="shrink-0" aria-label={`Open ${clip.title}`}>
-        <img src={clip.thumb} alt="" loading="lazy" className="aspect-[9/16] w-10 rounded-[4px] bg-black object-cover" />
-      </button>
-      <div className="min-w-0 flex-1">
-        <button onClick={() => open(clip.id)} className="block max-w-full truncate text-left text-sm font-medium hover:underline">{clip.title}</button>
-        <div className="mt-0.5 flex items-center gap-2"><ScoreBadge clip={clip} /></div>
-      </div>
-      <div className="flex shrink-0" role="radiogroup" aria-label={`Rate ${clip.title}`}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <Tip key={n} label={RATING_WORDS[n]}>
-            <button role="radio" aria-checked={false} aria-label={`${n} of 5`}
-                    onClick={() => rate.mutate({ id: clip.id, rating: n, reasons: [] })}
-                    className="group grid size-8 place-items-center rounded-sm text-subtle hover:text-money">
-              <Star className="size-4 group-hover:fill-current" />
-            </button>
-          </Tip>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function LearningPage() {
   const { data: report, isLoading } = useLearning();
-  const { data: clips = [] } = useClips();
   const { data: settings } = useSettings();
   const save = useSetSettings();
-  const unrated = clips.filter((c) => c.rating == null && c.file_exists)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   if (isLoading || !report) return <div className="flex flex-col gap-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-64" /></div>;
   const learning = settings ? settings.learn_from_feedback === "1" : report.active;
@@ -71,13 +38,13 @@ export function LearningPage() {
   return (
     <div className="fade-in flex max-w-5xl flex-col gap-6">
       <PageHeader title="Learning"
-        subtitle="Rate your clips and Clipper learns what you like. This page shows whether its scores match your taste and your views." />
+        subtitle="Clipper learns from the clips you post and the ones you mark not good. This page shows whether its scores match your taste and your views." />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="flex flex-col gap-1 p-4">
-          <span className="text-xs font-medium text-muted">Clips rated</span>
+          <span className="text-xs font-medium text-muted">Clips it learns from</span>
           <span className="tabular text-2xl font-semibold">{report.rated}</span>
-          <span className="text-xs text-muted">{report.unrated} waiting for a rating</span>
+          <span className="text-xs text-muted">posted, or marked good or not good</span>
         </Card>
         <Verdict label="Score matches your ratings" verdict={report.agreement_verdict} rho={report.agreement}
                  n={report.scored_and_rated} need={report.min_for_agreement}
@@ -97,17 +64,7 @@ export function LearningPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="flex flex-col gap-2 p-4">
-          <h2 className="px-2 text-md font-semibold">Rate these next</h2>
-          {unrated.length ? (
-            <div className="flex max-h-[420px] flex-col overflow-y-auto">{unrated.slice(0, 20).map((c) => <QuickRate key={c.id} clip={c} />)}</div>
-          ) : (
-            <EmptyState icon={<GraduationCap className="size-5" />} title="Every clip is rated" body="New clips show up here to rate." />
-          )}
-          <p className="px-2 text-xs text-subtle">Open a clip to watch it and add reasons. In a clip, keys 1–5 rate it.</p>
-        </Card>
-
+      <div className="grid gap-4">
         <Card className="flex flex-col gap-3 p-4">
           <div className="px-2">
             <h2 className="text-md font-semibold">Does the score work?</h2>
@@ -138,7 +95,7 @@ export function LearningPage() {
             <p className="px-2 text-xs text-muted">
               Your own ratings vs views: ρ = {report.rating_vs_views.toFixed(2)}. {report.rating_vs_views >= 0.3
                 ? "Your taste predicts views well, so learning from it should help."
-                : "Your taste and views don't line up much yet; keep rating, and let views settle."}
+                : "Your taste and views don't line up much yet; let views settle."}
             </p>
           )}
         </Card>
@@ -148,8 +105,8 @@ export function LearningPage() {
         <div>
           <h2 className="text-md font-semibold">What Clipper has learned</h2>
           <p className="mt-0.5 text-sm text-muted">
-            The score adds up six parts. As you rate, parts that match your ratings count for more.
-            {toWeights > 0 ? ` Rate ${toWeights} more clip${toWeights === 1 ? "" : "s"} with a score to start adjusting.` : ` Based on ${report.weights_n} rated clips.`}
+            The score adds up six parts. Parts that match what you post and what you mark not good count for more.
+            {toWeights > 0 ? ` Post or mark ${toWeights} more scored clip${toWeights === 1 ? "" : "s"} to start adjusting.` : ` Based on ${report.weights_n} rated clips.`}
           </p>
         </div>
         <div className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
@@ -187,7 +144,7 @@ export function LearningPage() {
             <pre className="mt-2 max-h-72 overflow-auto rounded-md border border-line bg-surface-1 p-3 text-xs whitespace-pre-wrap">{report.taste}</pre>
           </details>
         ) : (
-          <p className="text-xs text-subtle">After 3 ratings, Clipper also shows the scorer examples of clips you liked and didn't.</p>
+          <p className="text-xs text-subtle">After 3 clips posted or marked, Clipper also shows the scorer examples of clips you liked and didn't.</p>
         )}
       </Card>
     </div>

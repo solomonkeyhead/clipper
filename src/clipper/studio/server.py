@@ -1096,6 +1096,28 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         broker.publish("clips.changed", {"id": clip_id})
         return {"ok": True}
 
+    @app.post("/api/clips/{clip_id}/not-good")
+    def not_good(clip_id: int, body: dict | None = None) -> dict:
+        """One click on a ready clip: skip it, and learn from it (a 1/5). `undo`
+        puts it back as it was (D74)."""
+        body = body or {}
+        with db.connect() as con:
+            clip = db.clip(con, clip_id)
+            if clip is None:
+                raise HTTPException(404, "no such clip")
+            if body.get("undo"):
+                db.set_rating(con, clip_id, None, [])
+                db.update_clip(con, clip_id, status=str(body.get("status") or "ready"))
+            else:
+                try:
+                    db.set_rating(con, clip_id, 1, [str(r) for r in body.get("reasons") or []])
+                except ValueError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                if clip["status"] == "ready":
+                    db.update_clip(con, clip_id, status="skipped")
+        broker.publish("clips.changed", {"id": clip_id})
+        return {"ok": True}
+
     @app.get("/api/learning")
     def learning() -> Learning:
         from ..config import Config
