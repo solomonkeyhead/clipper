@@ -54,6 +54,18 @@ class Reel:
     saves: int = 0
     avg_watch_s: float | None = None
     skip_rate_pct: float | None = None
+    #: Its views and insights were read this time. False: they weren't asked for
+    #: (an older reel between daily refreshes) or Instagram refused, and the log
+    #: keeps the numbers it has rather than taking zeros (instagram/sync.py).
+    measured: bool = True
+
+
+#: Reels this young get their insights on every sync; older ones once a day
+#: (`list_reels(older=...)`). Each reel is one insights call, and Instagram
+#: caps an account's calls per day; campaigns pay on a post's first days anyway.
+FRESH_DAYS = 14
+#: How often older reels' numbers are refreshed.
+OLDER_EVERY_HOURS = 24
 
 
 def accounts_dir() -> Path:
@@ -149,9 +161,11 @@ def access_token(path: Path | None = None) -> str:
     return stored["access_token"]
 
 
-def list_reels(token: str, *, limit: int = 200, insights: bool = True) -> list[Reel]:
-    """The account's Reels, newest first, with their insights."""
+def list_reels(token: str, *, limit: int = 200, insights: bool = True, older: bool = True) -> list[Reel]:
+    """The account's Reels, newest first, with their insights -- for reels older
+    than FRESH_DAYS only when `older` is true."""
     reels: list[Reel] = []
+    fresh_after = time.time() - FRESH_DAYS * DAY
     url, params = f"{GRAPH}/me/media", {"fields": MEDIA_FIELDS, "limit": "50",
                                         "access_token": token}
     while url and len(reels) < limit:
@@ -163,15 +177,18 @@ def list_reels(token: str, *, limit: int = 200, insights: bool = True) -> list[R
                         created=_epoch(m.get("timestamp")), url=m.get("permalink") or "",
                         likes=int(m.get("like_count") or 0),
                         comments=int(m.get("comments_count") or 0))
-            if insights:
-                _add_insights(reel, token)
+            if insights and (older or reel.created >= fresh_after):
+                reel.measured = _add_insights(reel, token)
+            else:
+                reel.measured = False
             reels.append(reel)
         url, params = (page.get("paging") or {}).get("next"), None
     return reels
 
 
-def _add_insights(reel: Reel, token: str) -> None:
-    """Fill a reel's numbers; a metric Instagram refuses is left out, not fatal."""
+def _add_insights(reel: Reel, token: str) -> bool:
+    """Fill a reel's numbers; a metric Instagram refuses is left out, not fatal.
+    False when none could be read."""
     metrics = list(REEL_METRICS)
     while metrics:
         try:
@@ -182,10 +199,10 @@ def _add_insights(reel: Reel, token: str) -> None:
             bad = next((m for m in metrics if m in str(exc)), None)
             if bad is None:
                 log.warning("no insights for reel %s: %s", reel.id, exc)
-                return
+                return False
             metrics.remove(bad)
     else:
-        return
+        return False
     values = {item.get("name"): (item.get("values") or [{}])[0].get("value")
               for item in data.get("data") or []}
     reel.views = int(values.get("views") or 0)
@@ -195,6 +212,19 @@ def _add_insights(reel: Reel, token: str) -> None:
         reel.avg_watch_s = round(float(values["ig_reels_avg_watch_time"]) / 1000.0, 1)  # ms
     if values.get("reels_skip_rate") is not None:
         reel.skip_rate_pct = round(float(values["reels_skip_rate"]), 1)
+    return True
+
+
+def older_due(path: Path, now: float | None = None) -> bool:
+    """Whether this account's older reels are due their daily refresh."""
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    return (now or time.time()) - float(stored.get("older_at") or 0) >= OLDER_EVERY_HOURS * 3600
+
+
+def mark_older_done(path: Path, now: float | None = None) -> None:
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    stored["older_at"] = now or time.time()
+    _save(stored, path)
 
 
 def _epoch(stamp: str | None) -> float:

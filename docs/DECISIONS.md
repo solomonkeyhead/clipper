@@ -1706,3 +1706,13 @@ posted; the score breakdown and note collapsed. The card's Not good toast offers
 "Say why". New clips' Finished list is one line per video (8 shown, then Show all),
 and stop notes no longer say "1 of 500 requested" (500 is the internal no-limit).
 The dashboard's To submit tile and "ready to post" footnote repeated Next up.
+
+## D88 -- Continuous syncing kept light (2026-10-01)
+
+Every sync stored a snapshot of every post, changed or not: 2,817 rows for 24
+posts in 3 days. A snapshot is now kept only when a post's numbers differ from its
+last one (the readers take the last row on or before a time, so gaps mean "the
+same"); old repeats were pruned to 127. Instagram costs one insights call per reel
+per sync against a per-account daily cap, so reels up to 14 days old are read every
+sync and older ones once a day. A reel whose insights weren't read (skipped, or
+refused by Instagram) now keeps its logged numbers: before, a refusal wrote 0 views.

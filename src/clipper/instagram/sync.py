@@ -89,6 +89,14 @@ def _update(row: dict[str, str], reel: Reel, now: float) -> list[str]:
     put("posted_caption", getattr(reel, "full_text", reel.caption), only_if_empty=False)
     if reel.created:
         put("posted_at", datetime.fromtimestamp(reel.created).strftime("%Y-%m-%d %H:%M"))
+    if not getattr(reel, "measured", True):
+        # Its views weren't read this time: keep what the log has, take only the counts.
+        for column, value in (("likes", reel.likes), ("comments", reel.comments)):
+            current = perf.number(row.get(column))
+            if current is None or value > current:
+                put(column, str(value), only_if_empty=False)
+        row["synced_at"] = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")
+        return filled
     age = now - reel.created if reel.created else -1
     for column, low, high in WINDOWS:
         if low <= age < high:

@@ -48,8 +48,11 @@ def sync_all(rows: list[dict[str, str]]) -> list[str]:
             problems.append(f"TikTok{f' @{name}' if name else ''}: {exc}")
     for path in ig_api.token_files():
         try:
-            ig_sync.apply(ig_api.list_reels(ig_api.access_token(path)), rows,
+            older = ig_api.older_due(path)  # older reels once a day (instagram/api.py)
+            ig_sync.apply(ig_api.list_reels(ig_api.access_token(path), older=older), rows,
                           account=ig_api.username(path))
+            if older:
+                ig_api.mark_older_done(path)
         except ig_api.InstagramError as exc:
             problems.append(f"Instagram @{ig_api.username(path)}: {exc}")
     for path in yt_api.token_files():

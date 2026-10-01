@@ -354,13 +354,41 @@ def set_submitted(con: sqlite3.Connection, url: str, done: bool) -> None:
                 (url, now() if done else None))
 
 
-def add_snapshots(con: sqlite3.Connection, at: str, posts: list[dict]) -> None:
+SNAPSHOT_FIELDS = ("views", "likes", "comments", "shares", "saves", "avg_watch_s", "skip_rate_pct")
+
+
+def add_snapshots(con: sqlite3.Connection, at: str, posts: list[dict]) -> int:
+    """Each post's numbers at `at`, kept only when they differ from its last
+    snapshot: a sync every few minutes would otherwise add a row per post every
+    time, unchanged (views_at and the history read the last row on or before a
+    time, so the gaps mean "same as before"). Returns how many were kept."""
+    last = {r["url"]: tuple(r[f] for f in SNAPSHOT_FIELDS) for r in con.execute(
+        f"SELECT url, {', '.join(SNAPSHOT_FIELDS)} FROM snapshots s "
+        "WHERE at = (SELECT MAX(at) FROM snapshots t WHERE t.url = s.url)")}
+    rows = []
+    for p in posts:
+        values = (p.get("views_latest"), p.get("likes"), p.get("comments"), p.get("shares"),
+                  p.get("saves"), p.get("avg_watch_s"), p.get("skip_rate_pct"))
+        if last.get(p["url"]) != values:
+            rows.append((p["url"], at, *values))
     con.executemany(
         "INSERT OR REPLACE INTO snapshots (url, at, views, likes, comments, shares, saves, "
-        "avg_watch_s, skip_rate_pct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [(p["url"], at, p.get("views_latest"), p.get("likes"), p.get("comments"),
-          p.get("shares"), p.get("saves"), p.get("avg_watch_s"), p.get("skip_rate_pct"))
-         for p in posts])
+        "avg_watch_s, skip_rate_pct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    return len(rows)
+
+
+def prune_snapshots(con: sqlite3.Connection) -> int:
+    """Drop snapshots identical to the one before them (kept by older versions).
+    Each post's first and latest stay. Returns how many went."""
+    gone = []
+    for url in [r["url"] for r in con.execute("SELECT DISTINCT url FROM snapshots")]:
+        points = con.execute(f"SELECT at, {', '.join(SNAPSHOT_FIELDS)} FROM snapshots WHERE url=? ORDER BY at",
+                             (url,)).fetchall()
+        for i in range(1, len(points) - 1):
+            if tuple(points[i])[1:] == tuple(points[i - 1])[1:]:
+                gone.append((url, points[i]["at"]))
+    con.executemany("DELETE FROM snapshots WHERE url=? AND at=?", gone)
+    return len(gone)
 
 
 def views_at(con: sqlite3.Connection, when: str) -> dict[str, int]:
