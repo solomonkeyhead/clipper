@@ -1756,3 +1756,20 @@ the clip is checked again after. Failed rule checks now show in the same box.
 The clip window's Post it, caption and note sections shared one React key, so a
 refresh could draw them twice; each has its own now. The card's brief warning is
 an icon, so the status pill no longer wraps.
+
+## D92 -- Descriptions written to be found and talked about, the brief first (2026-10-01)
+
+Descriptions recapped the scene the viewer had just watched. Current guidance
+(TikTok indexes caption text with on-screen text and speech and favours ~150-300
+characters, topic words up front; Instagram ranks keyword-rich captions over
+hashtags and shows ~125 characters before "more"; YouTube indexes a Short's first
+description lines; comments, shares and saves rank posts) became the prompt: a
+natural first sentence with the words people search (show, people, what the moment
+is about), then what the clip can't show (premise, why it lands, where to watch),
+ending with one specific question or "send this to..." tied to the moment, never
+generic bait. The brief comes first: the pasted brief (or the campaign's rules) and
+the rules Clipper enforces are in the prompt and outrank every guideline, a brief
+banning calls to action drops the question, and the text is still enforced and
+checked like any caption. Faithfulness rules stay (nothing the transcript and brief
+don't support; no speaker guessing). Two worked examples steer it off keyword lists.
+16 unposted Please Like Me clips were re-described; 2 were refused by Gemini's filter.

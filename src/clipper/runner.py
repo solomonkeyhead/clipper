@@ -967,7 +967,7 @@ def _loudness(info: SourceInfo):
 def _description(plan: ClipPlan, words: list[Word], campaign: CampaignConfig,
                  backends: list[LLMBackend] | None, config: Config) -> str:
     """The clip's searchable description (campaign/description.py), or "" on any failure."""
-    from .campaign.description import describe
+    from .campaign.description import describe, pasted_brief
 
     text = " ".join(w.text for w in words
                     if plan.start <= (w.start + w.end) / 2 < plan.end).strip()
@@ -977,7 +977,8 @@ def _description(plan: ClipPlan, words: list[Word], campaign: CampaignConfig,
         except Exception as exc:  # no key, backend not installed, ...
             log.warning("no description: %s", exc)
             return ""
-    return describe(text, campaign, plan.suggested_caption, backends)
+    return describe(text, campaign, plan.suggested_caption, backends,
+                    hook=plan.hook_text if plan.hook_shown else "", brief=pasted_brief(campaign.name))
 
 
 def _correction(config: Config, override: str | None, info) -> tuple[list[LLMBackend] | None, AudioRecheck | None]:

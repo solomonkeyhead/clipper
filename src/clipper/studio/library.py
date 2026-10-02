@@ -347,7 +347,7 @@ def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[
     on. Needs each clip's time range (start_s/end_s) and its source's transcript.
     Returns (title, description) for each clip described.
     """
-    from ..campaign.description import describe
+    from ..campaign.description import describe, pasted_brief
     from ..config import CampaignConfig, Config
     from ..learn import log as perf
     from ..models import SourceInfo, Transcript
@@ -365,6 +365,7 @@ def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[
         backends = [build_backend(config)]
     rows = perf.read()
     posts = posts_by_clip(rows)
+    brief = pasted_brief(campaign_name)
     done = []
     with db.connect() as con:
         for clip in db.clips(con, campaign_name):
@@ -386,7 +387,7 @@ def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[
                 words = with_range_transcript(words, start, end, listener.words_between(start, end))
             text = " ".join(w.text for w in words if start <= (w.start + w.end) / 2 < end)
             line, _ = split_caption(clip["caption"])
-            description = describe(text, campaign, line, backends)
+            description = describe(text, campaign, line, backends, hook=clip["hook"] or "", brief=brief)
             if not description:
                 continue
             caption = with_description(clip["caption"], description)

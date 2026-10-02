@@ -1,14 +1,26 @@
-"""Searchable post descriptions, for campaigns with `long_description`.
+"""Post descriptions written to be found and to get people talking (D92).
 
-TikTok's own advice is that a longer description helps a post get found. This
-writes 2-3 plain sentences about what happens in the clip, from its transcript,
-with the show's name and the campaign's keywords where they genuinely fit. It
-sits between the caption line and the hashtags (compliance.full_caption).
+The paragraph between a clip's caption line and its hashtags
+(compliance.full_caption), for campaigns with `long_description`. It used to
+recount the scene, which does nothing a viewer who just watched it needs. What
+the platforms' own search and their creators' guides point to instead
+(researched 2026-10-01):
 
-Faithfulness matters more than keywords: a description that promises what the
-clip doesn't show is the same fault as an invented hook (llm/prompts.py), so the
-model gets the transcript and the brief's context and is told to use nothing
-else. Any failure leaves the clip with its short caption.
+* Search reads the caption: TikTok indexes caption text alongside on-screen
+  text and speech, and favours captions of about 150-300 characters with the
+  topic's words up front; Instagram ranks keyword-rich captions over hashtags
+  and shows ~125 characters before "more"; YouTube indexes a Short's first
+  description lines. So the first sentence carries the words people search --
+  the show, the people in it, what the moment is about -- in plain language.
+* A description adds what the clip can't show: the premise, why the moment
+  lands, where to watch -- not a retelling of what was just seen.
+* Comments, shares and saves rank posts, so it may end with one specific
+  question or "send this to..." tied to this moment, never generic bait.
+
+The campaign's brief comes first: its rules are in the prompt and outrank every
+guideline here, and the result is enforced and checked like any caption
+(campaign/rules.py). Faithfulness still matters more than keywords: nothing the
+transcript and brief don't support. Any failure leaves the clip its caption line.
 """
 
 from __future__ import annotations
@@ -24,28 +36,51 @@ from ..utils.logging import get_logger
 
 log = get_logger(__name__)
 
-DESCRIPTION_VERSION = "d2"
-MIN_CHARS, MAX_CHARS = 80, 450
+DESCRIPTION_VERSION = "d4"
+MIN_CHARS, MAX_CHARS = 80, 400
 
 SYSTEM = """\
-You write the description that goes under a short vertical clip from a TV show or
-film, posted on TikTok and Instagram. People find clips by searching, so the
-description says plainly what happens in this clip.
+You write the description under a short vertical clip from a TV show, film or creator, \
+posted on TikTok, Instagram Reels and YouTube Shorts for a paid campaign. It goes under \
+a caption line that's already written. Its jobs: get the clip found in search, and get \
+viewers to comment, share and go watch the show.
 
-Write 2 or 3 sentences, 150-350 characters in total:
-- Name the show, and the characters involved if the context or transcript names them.
-- Say what happens and what is at stake in this clip, in present tense.
-- Use search terms from the keyword list only where they truly fit this clip.
-- Describe only what the transcript says or makes certain. The context is
-  background for names and the premise; do not add a setting (practice, after
-  the game, at a party), a secret, a feeling or a stake the transcript doesn't
-  state, and do not reveal how the story ends.
-- The transcript has no speaker names. Never say who says a line or who
-  confesses, admits or confronts, unless the line itself makes it certain
-  (e.g. someone is addressed by name). Prefer "Ricky and Russ" as a pair.
-- No hashtags, no @mentions, no emojis, no questions to the viewer, no calls to
-  action ("follow for more", "watch till the end"), and no quote longer than 6 words.
-- Don't repeat the caption line you are given; add to it.
+THE BRIEF COMES FIRST. The campaign's rules are given below. Follow every one of them \
+exactly; if a rule says anything about captions, descriptions, wording, topics, \
+mentions of other platforms or calls to action, it overrides the guidelines here.
+
+How to write it (2-3 short sentences, 150-300 characters in total):
+1. Open with a natural sentence that carries the words people would type to find this: \
+the show's name and, where the context or transcript names them, the people in it, plus \
+what this moment is about in plain search terms ("Josh's first boyfriend", "a mum and son \
+road trip"). A real sentence, never a list of keywords. These first ~100 characters show \
+before "more", so make them count.
+2. Add what the clip can't show on its own: the premise, why this moment lands, or \
+where to watch, as the brief puts it. Don't retell the scene the viewer just watched.
+3. End with ONE short, specific question or share prompt tied to this moment, unless \
+the brief forbids calls to action: something a viewer can answer from their own life \
+("Who else had a friend like Tom?") or a person to send it to ("Send this to the friend \
+who always takes the biggest one"). Never generic bait ("like and follow", "comment \
+below", "watch till the end", "thoughts?").
+
+Use the keyword list where it truly fits; never stuff it. Write like a fan telling a \
+friend about the show, in the voice of the caption line above it: casual, specific, no \
+press-release words ("hilarious exchange", "must-watch", "award-winning" unless the \
+brief says it).
+
+Examples of the shape (not to copy):
+- "Josh Thomas in Please Like Me, freaking out that his new boyfriend is too hot to be \
+real. The whole show is free on YouTube. Who else has done this?"
+- "Rose and Josh's mum-and-son road trip in Please Like Me is the most honest thing TV \
+has done about caring for a parent. Send this to your mum."
+
+Never:
+- state anything the transcript or context doesn't support: no invented setting, \
+secret, feeling, stake, quote or ending, and no spoilers beyond this clip;
+- say who says a line unless the line itself makes it certain (a name is used);
+- repeat the caption line or the on-screen hook;
+- use hashtags, @mentions, emojis or links (the caption adds what the brief requires);
+- quote more than 6 words.
 
 Return JSON: {"description": "..."}\
 """
@@ -55,11 +90,21 @@ class _Description(BaseModel):
     description: str
 
 
-def build_user(transcript: str, campaign: CampaignConfig, caption_line: str) -> str:
+def build_user(transcript: str, campaign: CampaignConfig, caption_line: str, *,
+               hook: str = "", brief: str | None = None) -> str:
+    """The prompt's facts: the brief's rules first, then the clip."""
+    from .audit import brief_text, code_checked
+
     keywords = ", ".join(campaign.description_keywords) or "(none)"
-    return (f"Context: {campaign.description_context.strip() or '(none)'}\n"
-            f"Keywords: {keywords}\n"
-            f"Caption line already posted above: {caption_line.strip()}\n\n"
+    rules = brief_text(campaign, brief)
+    checked = "\n".join(f"- {c}" for c in code_checked(campaign))
+    return (f"THE CAMPAIGN'S BRIEF (follow it over everything):\n{rules or '(none)'}\n\n"
+            f"Rules Clipper adds to the caption itself:\n{checked}\n\n"
+            f"What the clips should be about: {campaign.selection_focus.strip() or '(not said)'}\n"
+            f"Context (the show, the people): {campaign.description_context.strip() or '(none)'}\n"
+            f"Keywords: {keywords}\n\n"
+            f"Caption line above it: {caption_line.strip()}\n"
+            f"On-screen hook: {hook.strip() or '(none)'}\n\n"
             f"Transcript of the clip:\n{transcript.strip()}")
 
 
@@ -73,12 +118,25 @@ def clean(text: str) -> str | None:
     return text
 
 
+def pasted_brief(campaign: str) -> str | None:
+    """The campaign's brief as the user pasted it, if they did (studio/db.py)."""
+    try:
+        from ..studio import db
+
+        with db.connect() as con:
+            return (db.brief(con, campaign) or {}).get("text")
+    except Exception as exc:  # no library: the campaign file's rules still go in
+        log.debug("no pasted brief for %s: %s", campaign, exc)
+        return None
+
+
 def describe(transcript: str, campaign: CampaignConfig, caption_line: str,
-             backends: list[LLMBackend], *, cache=None) -> str:
-    """A description for one clip, or "" if the model gave nothing usable."""
+             backends: list[LLMBackend], *, cache=None, hook: str = "", brief: str | None = None) -> str:
+    """A description for one clip, or "" if the model gave nothing usable.
+    `brief` is the brief as pasted, when there is one (studio/db.py)."""
     if not campaign.long_description or not transcript.strip():
         return ""
-    user = build_user(transcript, campaign, caption_line)
+    user = build_user(transcript, campaign, caption_line, hook=hook, brief=brief)
     for backend in backends:
         key = None
         if cache is not None:
