@@ -104,6 +104,7 @@ def run(
 
     selection = choose(outcome, config, limit=limit)
     result.selection_note = selection.stopped_because
+    _choose_openings(selection.picks + selection.reserves, outcome, config, backend_override)
 
     out_dir = ensure(out_root / outcome.info.source_id)
     clips_dir = ensure(out_dir / "clips")
@@ -151,6 +152,21 @@ def run(
 
 #: "No limit": selection stops only when nothing else clears the quality bar.
 EVERY_GOOD_MOMENT = 500
+
+
+def _choose_openings(picks: list[Pick], outcome: ScoreOutcome, config: Config,
+                     backend_override: str | None) -> None:
+    """Start each chosen clip on the line that hooks (candidates/opening.py, D93)."""
+    from .candidates import opening
+
+    try:
+        backends = [build_backend(config, override=backend_override)]
+    except Exception as exc:  # the code rule alone still runs
+        log.warning("opening lines not chosen by AI: %s", exc)
+        backends = []
+    opening.apply(picks, outcome.sentences.sentences, backends,
+                  min_seconds=config.candidates.min_seconds,
+                  max_seconds=config.candidates.max_seconds, cache=LLMCache())
 
 
 def clip_limit(top: int | None, campaign: CampaignConfig) -> int:

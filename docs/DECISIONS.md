@@ -1773,3 +1773,21 @@ banning calls to action drops the question, and the text is still enforced and
 checked like any caption. Faithfulness rules stay (nothing the transcript and brief
 don't support; no speaker guessing). Two worked examples steer it off keyword lists.
 16 unposted Please Like Me clips were re-described; 2 were refused by Gemini's filter.
+
+## D93 — Clips open on the line that hooks (2026-10-01)
+
+"Weak hook" ratings were about how the video starts, not the on-screen text. Of the
+clips marked that way, some opened on small talk before the moment ("Okay, did you
+have fun?"), and others on the answer to a question cut off before them ("Yeah, I
+vote yes", "Just spot-on average"). Windows start wherever a sentence or scene
+starts, which says nothing about whether that line hooks; a scene edge placed
+mid-exchange also let a window open on a continuing line. Now, after selection
+and before rendering, one text call per source (candidates/opening.py) sees each
+chosen clip's first lines plus up to four said just before it and picks the start:
+the latest line that keeps all the setup the payoff needs. Code bounds it: the
+campaign's length limits, never a line that continues an earlier one, back across a
+camera cut only while the talk runs on (< 1s pause), and with no answer a
+mid-sentence start still moves back to its sentence. On the 13 rated clips it moved
+the four weak ones that needed it (to "Should I just pee on him?", "I have a big
+penis.", past the small talk) and left the great-hook ones alone. The reasons now
+read "Great opening" / "Weak opening". Re-rendering stays for new captions only.

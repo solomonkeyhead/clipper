@@ -13,10 +13,10 @@ const RUBRIC_LABELS: Record<string, string> = {
 /** What worked, what didn't in the moment, and what didn't in the edit (learn/feedback.py, D86). */
 const GROUPS: { label: string; tone: "good" | "bad" | "edit"; reasons: [string, string][] }[] = [
   { label: "What worked", tone: "good", reasons: [
-    ["great_hook", "Great hook"], ["funny", "Funny"], ["emotional", "Emotional"],
+    ["great_hook", "Great opening"], ["funny", "Funny"], ["emotional", "Emotional"],
     ["good_ending", "Good ending"], ["on_brief", "Right for the campaign"]] },
   { label: "What didn't", tone: "bad", reasons: [
-    ["weak_hook", "Weak hook"], ["boring", "Boring / slow"], ["bad_ending", "Cut off / bad ending"],
+    ["weak_hook", "Weak opening"], ["boring", "Boring / slow"], ["bad_ending", "Cut off / bad ending"],
     ["needs_context", "Needs context"], ["off_brief", "Wrong for the campaign"]] },
   { label: "In the edit", tone: "edit", reasons: [
     ["bad_framing", "Bad framing"], ["caption_errors", "Caption mistakes"], ["wrong_text", "On-screen text doesn't fit"]] },

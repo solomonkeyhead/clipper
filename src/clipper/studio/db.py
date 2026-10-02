@@ -299,10 +299,10 @@ def update_clip(con: sqlite3.Connection, clip_id: int, **changes) -> None:
 
 REASONS = {
     # what the user liked
-    "great_hook": "Great hook", "funny": "Funny", "emotional": "Emotional",
+    "great_hook": "Great opening", "funny": "Funny", "emotional": "Emotional",
     "good_ending": "Good ending", "on_brief": "Right for the campaign",
     # what they didn't
-    "weak_hook": "Weak hook", "boring": "Boring / slow", "bad_ending": "Cut off / bad ending",
+    "weak_hook": "Weak opening", "boring": "Boring / slow", "bad_ending": "Cut off / bad ending",
     "needs_context": "Needs context", "off_brief": "Wrong for the campaign",
     "bad_framing": "Bad framing", "caption_errors": "Caption mistakes",
     "wrong_text": "On-screen text doesn't fit",
