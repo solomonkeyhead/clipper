@@ -29,9 +29,23 @@ TEXT_NAMES = {"tiktok": "Description", "instagram_reels": "Caption", "youtube_sh
 #: X counts 280 for an account without Premium.
 CAPTION_MAX = {"tiktok": 4000, "instagram_reels": 2200, "youtube_shorts": 5000, "x": 280}
 TITLE_MAX = 100
-INSTAGRAM_MAX_HASHTAGS = 30
+#: Hashtags per post (D95). Instagram has allowed only 5 since 2025-12-19; YouTube
+#: ignores every hashtag past 15. Elsewhere a few specific tags beat a long list,
+#: so optional ones are dropped from the end; the brief's own are never dropped.
+HASHTAG_MAX = {"tiktok": 5, "instagram_reels": 5, "youtube_shorts": 5, "x": 2}
+HASHTAG_HARD_MAX = {"instagram_reels": 5, "youtube_shorts": 15}
+#: YouTube blocks a Short over a minute with any Content ID claim, worldwide.
+YOUTUBE_MAX_SECONDS = 60.0
 #: YouTube refuses a title or description containing these.
 YOUTUBE_FORBIDDEN = ("<", ">")
+#: Like-for-like promises, which TikTok makes ineligible for the For You feed
+#: (and the others demote): a real question or "send this to..." is fine.
+BAIT = re.compile(
+    r"\b(?:like|follow|comment|share)\s+(?:this\s+)?for\s+(?:a\s+)?(?:like|follow|part|pt|more)\b"
+    r"|\bcomment\s+[\"'“]?\w+[\"'”]?\s+(?:to|if|for)\b"
+    r"|\b(?:like|follow)\s+if\b"
+    r"|\bfollow\s+for\s+more\b",
+    re.IGNORECASE)
 
 
 @dataclass
@@ -143,12 +157,27 @@ def enforce(caption: str, campaign: CampaignConfig, platform: str | None = None)
                 if t.lower() in have or not _contains(join(line, description, ""), t)]
     tags = " ".join(required + [w for w in words if w.lower() not in
                                 {t.lower() for t in campaign.required_hashtags}])
+    if platform in HASHTAG_MAX:
+        tags = _cap_tags(line, description, tags, campaign, HASHTAG_MAX[platform])
     text = join(line, description, tags)
     if platform == "x":
         text = _fit_x(line, tags, campaign)
     if platform == "youtube_shorts":
         text = _no_angles(text)
     return text
+
+
+def _cap_tags(line: str, description: str, tags: str, campaign: CampaignConfig, most: int) -> str:
+    """The hashtag block with optional tags dropped from its end until the whole
+    post has at most `most`; tags any of the brief's texts supply always stay."""
+    keep = allowed_tags(campaign)
+    words = tags.split()
+    while len(_tags_in(join(line, description, " ".join(words)))) > most:
+        optional = [i for i, w in enumerate(words) if _tag(w) not in keep]
+        if not optional:
+            break
+        words.pop(optional[-1])
+    return " ".join(words)
 
 
 def _fit_x(line: str, tags: str, campaign: CampaignConfig) -> str:
@@ -183,20 +212,23 @@ def youtube_title(name: str, caption: str, campaign: CampaignConfig) -> str:
     return _no_angles(f"{base} {suffix}".strip())
 
 
-def post_texts(name: str, caption: str, hook: str, campaign: CampaignConfig) -> list[PostText]:
-    """What to paste on each platform the campaign posts on, checked."""
+def post_texts(name: str, caption: str, hook: str, campaign: CampaignConfig,
+               duration: float | None = None) -> list[PostText]:
+    """What to paste on each platform the campaign posts on, checked. `duration`:
+    the clip's length in seconds, for the platforms' limits on it."""
     out = []
     for platform in campaign.platform_targets:
         post = PostText(platform=platform, caption=enforce(caption, campaign, platform),
                         title=youtube_title(name, caption, campaign) if has_title(platform) else "")
-        post.checks = check(post, campaign, hook=hook)
+        post.checks = check(post, campaign, hook=hook, duration=duration)
         out.append(post)
     return out
 
 
 # -- checking ---------------------------------------------------------------------
 
-def check(post: PostText, campaign: CampaignConfig, *, hook: str = "") -> list[RuleResult]:
+def check(post: PostText, campaign: CampaignConfig, *, hook: str = "",
+          duration: float | None = None) -> list[RuleResult]:
     """Every rule the brief sets on this post's text, one result each."""
     caption, title, platform = post.caption, post.title, post.platform
     everything = f"{title}\n{caption}"
@@ -231,19 +263,27 @@ def check(post: PostText, campaign: CampaignConfig, *, hook: str = "") -> list[R
         risky = sorted({w for w in re.findall(r"[A-Za-z]+", everything)
                         if safety.flagged(w) and w.lower() not in safety.exempt(campaign)})
         results.append(RuleResult("No words that get posts flagged", not risky, ", ".join(risky)))
-    results.append(_limits(post))
+    bait = sorted({m.group(0) for m in BAIT.finditer(f"{everything}\n{hook}")})
+    results.append(RuleResult("No like-for-like bait", not bait, ", ".join(f"“{b}”" for b in bait)))
+    results.append(_limits(post, duration))
     return results
 
 
-def _limits(post: PostText) -> RuleResult:
+def _limits(post: PostText, duration: float | None = None) -> RuleResult:
     name = NAMES.get(post.platform, post.platform)
     problems = []
     limit = CAPTION_MAX.get(post.platform)
     if limit and len(post.caption) > limit:
         problems.append(f"the {TEXT_NAMES.get(post.platform, 'caption').lower()} is "
                         f"{len(post.caption)} characters (most {limit})")
-    if post.platform == "instagram_reels" and len(_tags_in(post.caption)) > INSTAGRAM_MAX_HASHTAGS:
-        problems.append(f"more than {INSTAGRAM_MAX_HASHTAGS} hashtags")
+    most = HASHTAG_HARD_MAX.get(post.platform)
+    count = len(_tags_in(f"{post.title}\n{post.caption}"))
+    if most and count > most:
+        problems.append(f"{count} hashtags (it allows {most})" if post.platform == "instagram_reels"
+                        else f"{count} hashtags (past {most} it ignores them all)")
+    if post.platform == "youtube_shorts" and duration is not None and duration >= YOUTUBE_MAX_SECONDS:
+        problems.append(f"the clip is {duration:.0f}s: a Short over a minute with any copyright "
+                        "claim is blocked everywhere")
     if has_title(post.platform):
         if not post.title.strip():
             problems.append("no title")

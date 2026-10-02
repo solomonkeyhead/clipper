@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
+import { AlertTriangle, BadgeDollarSign, CheckCircle2, ChevronDown, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAccountGroups, useAccounts, useAddPostLink, useCampaigns, useRecheckRules,
@@ -21,14 +21,19 @@ import { Button, CopyButton, Tip } from "./ui";
  * Each platform gets its own text, with every brief rule checked (D81): a
  * brief can ask something of one platform only, and YouTube has a title.
  */
-const UPLOAD: Record<string, { name: string; url: string; how: string; label: string }> = {
+/** Each upload page, and the paid-content switch to turn on there (D95): campaigns
+ *  pay per view, so every post is an ad. On TikTok #ad without the switch gets
+ *  the post kept off the For You feed; the others say the label costs no reach. */
+const UPLOAD: Record<string, { name: string; url: string; how: string; label: string; why?: string }> = {
   tiktok: {
     name: "TikTok", url: "https://www.tiktok.com/tiktokstudio/upload",
-    how: "Drop the video in", label: "More options → Content disclosure → Branded content",
+    how: "Drop the video in", label: "More options → Disclose commercial content → Branded content",
+    why: "#ad alone isn't enough: without this switch TikTok keeps the post off the For You feed.",
   },
   instagram: {
     name: "Instagram", url: "https://www.instagram.com/",
-    how: "Press Create (+), then Post", label: "Advanced settings → Add paid partnership label",
+    how: "Press Create (+), then Post",
+    label: "Advanced settings → Add paid partnership label, if the campaign gave you a brand account to tag",
   },
   youtube: {
     name: "YouTube Shorts", url: "https://www.youtube.com/upload",
@@ -36,7 +41,7 @@ const UPLOAD: Record<string, { name: string; url: string; how: string; label: st
   },
   x: {
     name: "X", url: "https://x.com/compose/post",
-    how: "Attach the video with the picture icon", label: "X has no label switch, so keep the brief's #ad in the post",
+    how: "Attach the video with the picture icon", label: "X has no switch: the brief's #ad in the post covers it",
   },
 };
 
@@ -79,14 +84,6 @@ export function PostPanel({ clip }: { clip: Clip }) {
         {(campaign?.posting_rules?.length ?? 0) > 0 && <Checklist rules={campaign!.posting_rules!} />}
         <PasteLink clip={clip} compact />
       </div>
-      <details className="mt-2 text-xs text-muted">
-        <summary className="cursor-pointer hover:text-fg">Paid clipping is an ad: turn on the paid-partnership label</summary>
-        <p className="mt-1">
-          Campaigns pay you to post, so the platforms (and the FTC in the US) expect it labelled, besides any #ad the
-          brief asks for.{" "}
-          {shown.map((p) => <span key={p}><b>{UPLOAD[p].name}</b>: {UPLOAD[p].label}. </span>)}
-        </p>
-      </details>
     </section>
   );
 }
@@ -148,6 +145,15 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
         </p>
       )}
       {copy.title && <p className="mt-1.5 truncate text-xs text-muted" title={copy.title}>Title: <span className="text-fg">{copy.title}</span></p>}
+      {UPLOAD[key(copy.platform)] && (
+        <p className="mt-1.5 flex items-start gap-1.5 text-xs">
+          <BadgeDollarSign className="mt-px size-3.5 shrink-0 text-warning" />
+          <span>
+            <b>Paid content:</b> {UPLOAD[key(copy.platform)].label}.
+            {UPLOAD[key(copy.platform)].why && <span className="text-muted"> {UPLOAD[key(copy.platform)].why}</span>}
+          </span>
+        </p>
+      )}
       {open && (
         <ul className="mt-2 flex flex-col gap-1 border-t border-line pt-2 text-xs">
           {copy.checks.map((c) => (

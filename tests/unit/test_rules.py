@@ -83,12 +83,34 @@ class TestEachPlatformsText:
                           "None of the brief's banned words": "suicide"}
 
     def test_platform_limits(self):
-        many = " ".join(f"#t{i}" for i in range(31))
+        many = " ".join(f"#t{i}" for i in range(6))
         failed = [c for c in rules.check(rules.PostText("instagram_reels", many), plm(required_hashtags=[]))
                   if not c.passed]
-        assert [c.name for c in failed] == ["Fits Instagram's limits"] and "30 hashtags" in failed[0].detail
+        assert [c.name for c in failed] == ["Fits Instagram's limits"] and "allows 5" in failed[0].detail
         assert "<" not in rules.youtube_title("a <b> c", "", plm())
         assert "<" not in rules.enforce("x < y", plm(), "youtube_shorts")
+
+    def test_optional_hashtags_are_dropped_to_five_but_the_briefs_never(self):
+        campaign = plm(required_hashtags=["#pleaselikeme", "#gay", "#underratedshows"])
+        caption = "the line  #pleaselikeme #gay #underratedshows #tv #comedy #aussie #fyp"
+        text = rules.enforce(caption, campaign, "instagram_reels")
+        assert rules._tags_in(text) == {"#pleaselikeme", "#gay", "#underratedshows", "#tv", "#comedy"}
+        assert rules.enforce(caption, campaign) == caption  # the stored caption keeps them all
+
+    def test_like_for_like_bait_fails_and_a_real_question_passes(self):
+        def bait(text):
+            return [c.detail for c in rules.check(rules.PostText("tiktok", text), plm(required_hashtags=[]))
+                    if c.name == "No like-for-like bait" and not c.passed]
+
+        assert bait("Follow for part 2 #pleaselikeme") and bait('comment "JOSH" to see more')
+        assert not bait("Who was worse here, Josh or Tom? Send this to your mum.")
+
+    def test_a_short_of_a_minute_or_more_fails_on_youtube_only(self):
+        by = by_platform(rules.post_texts(HOOK, CAPTION, HOOK, plm(), duration=61))
+        assert "blocked everywhere" in next(c.detail for c in by["youtube_shorts"].checks if not c.passed)
+        assert all(c.passed for c in by["tiktok"].checks)
+        assert all(c.passed for c in by_platform(rules.post_texts(HOOK, CAPTION, HOOK, plm(), duration=45))
+                   ["youtube_shorts"].checks)
 
     def test_the_summary_names_the_platform_when_only_one_fails(self):
         campaign = plm(caption_rules=[{"text": "Hulu", "must": "avoid", "platforms": ["tiktok"]}])

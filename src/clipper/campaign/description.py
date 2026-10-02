@@ -36,7 +36,7 @@ from ..utils.logging import get_logger
 
 log = get_logger(__name__)
 
-DESCRIPTION_VERSION = "d4"
+DESCRIPTION_VERSION = "d5"
 MIN_CHARS, MAX_CHARS = 80, 400
 
 SYSTEM = """\
@@ -53,15 +53,17 @@ How to write it (2-3 short sentences, 150-300 characters in total):
 1. Open with a natural sentence that carries the words people would type to find this: \
 the show's name and, where the context or transcript names them, the people in it, plus \
 what this moment is about in plain search terms ("Josh's first boyfriend", "a mum and son \
-road trip"). A real sentence, never a list of keywords. These first ~100 characters show \
+road trip"). A real sentence, never a list of keywords, with the show's name in its \
+first 60 characters. About the first 125 characters show \
 before "more", so make them count.
 2. Add what the clip can't show on its own: the premise, why this moment lands, or \
 where to watch, as the brief puts it. Don't retell the scene the viewer just watched.
 3. End with ONE short, specific question or share prompt tied to this moment, unless \
 the brief forbids calls to action: something a viewer can answer from their own life \
 ("Who else had a friend like Tom?") or a person to send it to ("Send this to the friend \
-who always takes the biggest one"). Never generic bait ("like and follow", "comment \
-below", "watch till the end", "thoughts?").
+who always takes the biggest one"). Never generic or like-for-like bait ("like and \
+follow", "follow for part 2", "comment JOSH to...", "comment below", "watch till the end", \
+"thoughts?"): TikTok keeps posts that bargain for engagement off its For You feed.
 
 Use the keyword list where it truly fits; never stuff it. Write like a fan telling a \
 friend about the show, in the voice of the caption line above it: casual, specific, no \

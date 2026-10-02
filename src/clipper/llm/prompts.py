@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-PROMPT_VERSION = "v4"
+PROMPT_VERSION = "v5"
 """Bump on ANY edit below. It is part of the cache key."""
 
 SCHEMA_DESCRIPTION = """\
@@ -41,9 +41,12 @@ Each object must contain exactly these keys:
 HOOK_TEXT_RULES = """\
 hook_text is an ORIGINAL on-screen line of 3-8 words (at most 40 characters),
 shown from the first frame to give a scrolling viewer a reason to stay. It is
-NOT a quote and NOT a copy of the transcript. Describe the situation, the
-stakes, or a relatable identity ("When your boss asks for honesty"), or ask a
-question -- and never promise an outcome the clip does not deliver. It must be
+NOT a quote and NOT a copy of the transcript. Give it a TAKE: an opinion, a
+joke, a relatable identity ("When your boss asks for honesty"), or a question
+a viewer would answer -- something worth sending to a friend. A plain label of
+what happens ("Josh talks to his mum") is not a hook, and platforms don't count
+it as your own edit. Never like-for-like bait ("follow for part 2"), and never
+promise an outcome the clip does not deliver. It must be
 faithful to the clip and must not invent facts, numbers or claims that are not
 in the transcript. Name only people, places and things the transcript itself
 mentions: a party scene is not a "group chat", a dinner is not a "meeting".

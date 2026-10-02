@@ -84,6 +84,7 @@ def run(
     """Ingest through manifest for one source."""
     started = time.perf_counter()
     timings: dict[str, float] = {}
+    campaign = platform_limits(campaign)
     config = campaign_config(config, campaign)
     check_rights(source, campaign)
 
@@ -361,12 +362,26 @@ def parse_range(text: str) -> tuple[float, float]:
 SCRIPTED_MAX_SILENCE = 0.55
 # TikTok's creative guidance: land the proposition in the first 3 seconds.
 SCRIPTED_OPENING_SECONDS = 3.0
-SCRIPTED_TARGET = (20.0, 45.0)
+# Platform research (2026-10, D95): 15-35s on TikTok, 12-30s on Reels, 15-45s on
+# Shorts; this account's Reels averaged 7-14s watched on 15-60s clips.
+SCRIPTED_TARGET = (15.0, 35.0)
+#: YouTube blocks any Short over a minute with a Content ID claim, worldwide.
+YOUTUBE_SHORT_MAX = 59.0
 SCRIPTED_MAX_SECONDS = 90.0
 SCRIPTED_MAX_LEAD_IN = 0.15   # silence before the first word (research R1.1, D59)
 SCRIPTED_REACTION_TAIL = 1.0  # held after the last line, into silence only
 SCRIPTED_MAX_TAIL = 1.5       # never more silence than this at the end
 SCRIPTED_MAX_SHOTS = 32       # separately framed shots per clip
+
+
+def platform_limits(campaign: CampaignConfig) -> CampaignConfig:
+    """The campaign with its platforms' hard limits on clip length applied: a
+    campaign posting to YouTube Shorts gets clips under a minute (D95)."""
+    window = campaign.duration
+    if ("youtube_shorts" in campaign.platform_targets and window.max_seconds > YOUTUBE_SHORT_MAX
+            and window.min_seconds < YOUTUBE_SHORT_MAX):
+        return campaign.model_copy(update={"duration": window.model_copy(update={"max_seconds": YOUTUBE_SHORT_MAX})})
+    return campaign
 
 
 def campaign_config(config: Config, campaign: CampaignConfig) -> Config:

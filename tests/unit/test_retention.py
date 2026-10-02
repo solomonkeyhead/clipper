@@ -150,13 +150,26 @@ class TestScriptedSettings:
             "name": "fx", "source_authorization": "Vyro campaign FX: Adults S2",
             "duration": {"min_seconds": 30, "max_seconds": 120}, "scripted": True})
         cfg = campaign_config(Config(), campaign)
-        assert cfg.candidates.max_seconds == 90 and cfg.candidates.target_seconds == (30, 45)
+        # D95: 15-35s preferred, never below the brief's own minimum.
+        assert cfg.candidates.max_seconds == 90 and cfg.candidates.target_seconds == (30, 35)
         assert cfg.candidates.prefer_target_length
         # D59: speech within 0.15 s of the first frame (was 0.5 s in D52).
         assert cfg.refine.max_lead_in == 0.15 and cfg.refine.max_tail == 1.5
         assert cfg.refine.post_roll == 1.0 and cfg.refine.tail_guard > 0
         assert cfg.render.opening_full_screen_seconds == 3.0
         assert cfg.render.hook_text_seconds >= 3.0
+
+    def test_a_campaign_on_youtube_shorts_gets_clips_under_a_minute(self):
+        from clipper.runner import platform_limits
+
+        def window(targets, low=10, high=90):
+            return platform_limits(CampaignConfig.model_validate({
+                "name": "c", "source_authorization": "Vyro campaign FX: Adults S2", "platform_targets": targets,
+                "duration": {"min_seconds": low, "max_seconds": high}})).duration.max_seconds
+
+        assert window(["tiktok", "youtube_shorts"]) == 59.0
+        assert window(["tiktok"]) == 90
+        assert window(["youtube_shorts"], low=60, high=120) == 120  # a brief that wants longer still gets it
 
     def test_other_campaigns_are_unchanged(self):
         campaign = CampaignConfig.model_validate({

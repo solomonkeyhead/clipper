@@ -72,21 +72,22 @@ def reapply(campaign: CampaignConfig) -> int:
 
 #: (campaign fingerprint, title, caption, hook) -> its texts: every page load builds
 #: them for every unposted clip, and they only change when one of those does.
-_texts: dict[tuple[str, str, str, str], list[rules.PostText]] = {}
+_texts: dict[tuple, list[rules.PostText]] = {}
 
 
 def texts(clip: dict, campaign: CampaignConfig, *, fingerprint: str | None = None) -> list[rules.PostText]:
     """Each platform's texts for `clip`. With `fingerprint` (the campaign as it is
     now, see `fingerprint`), remembered until the clip's or the campaign's text changes."""
     args = (clip["title"] or "", clip["caption"] or "", clip["hook"] or "")
+    duration = clip.get("duration_s")
     if fingerprint is None:
-        return rules.post_texts(*args, campaign)
-    key = (fingerprint, *args)
+        return rules.post_texts(*args, campaign, duration)
+    key = (fingerprint, *args, duration)
     found = _texts.get(key)
     if found is None:
         if len(_texts) > 5000:
             _texts.clear()
-        found = _texts[key] = rules.post_texts(*args, campaign)
+        found = _texts[key] = rules.post_texts(*args, campaign, duration)
     return found
 
 

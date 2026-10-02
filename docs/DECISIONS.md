@@ -1806,3 +1806,21 @@ one switch and a plain-words summary, Stats shows views by platform, each post
 shows views over time from the snapshots, and New clips marks videos already
 clipped and no longer lists downloaded clips as footage. Log noise from a resting
 model and closed browser tabs is gone, and no page scrolls sideways on a phone.
+
+## D95 — Platform research turned into rules (2026-10-02)
+
+From a sourced research report on TikTok, Reels and Shorts reach (official
+sources where they exist). Firm rules enforced in campaign/rules.py: at most 5
+hashtags a post (Instagram's hard cap since 2025-12-19; YouTube ignores all past
+15; 5 elsewhere as best practice), optional tags dropped from the end and the
+brief's own never; a "No like-for-like bait" check (TikTok makes engagement
+bargaining FYF-ineligible); a YouTube check that a clip is under a minute (a
+Short over a minute with any Content ID claim is blocked worldwide), and runs
+for a campaign posting to Shorts cap clips at 59s unless the brief wants longer.
+The posting panel shows each platform's paid-content switch on its own row:
+#ad without TikTok's commercial disclosure toggle keeps a post off For You, and
+Instagram and YouTube say their labels cost no reach. Best guesses applied: a
+15-35s length target for scripted clips (was 20-45; this account's Reels were
+watched 7-14s), hooks written as a take rather than a label (Instagram doesn't
+count descriptive text as an edit; prompt v5), and descriptions with the show's
+name in the first 60 characters (d5). The brief still comes first everywhere.
