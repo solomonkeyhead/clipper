@@ -55,6 +55,15 @@ FAST_SYNC_SECONDS = 120
 # Response models (the front end's types are generated from these)
 # --------------------------------------------------------------------------
 
+class PostPoint(BaseModel):
+    """A post's numbers at one sync that changed them."""
+
+    at: str
+    views: float | None = None
+    avg_watch_s: float | None = None
+    skip_rate_pct: float | None = None
+
+
 class Post(BaseModel):
     platform: str
     account: str
@@ -1446,9 +1455,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                         min_for_agreement=feedback.MIN_FOR_AGREEMENT, **result.__dict__)
 
     @app.get("/api/posts/history")
-    def post_history(url: str) -> list[dict]:
+    def post_history(url: str) -> list[PostPoint]:
         with db.connect() as con:
-            return db.history(con, url.split("?", 1)[0])
+            return [PostPoint(**p) for p in db.history(con, url.split("?", 1)[0])]
 
     @app.post("/api/sync")
     async def sync() -> dict:

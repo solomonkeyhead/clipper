@@ -386,20 +386,6 @@ def add_snapshots(con: sqlite3.Connection, at: str, posts: list[dict]) -> int:
     return len(rows)
 
 
-def prune_snapshots(con: sqlite3.Connection) -> int:
-    """Drop snapshots identical to the one before them (kept by older versions).
-    Each post's first and latest stay. Returns how many went."""
-    gone = []
-    for url in [r["url"] for r in con.execute("SELECT DISTINCT url FROM snapshots")]:
-        points = con.execute(f"SELECT at, {', '.join(SNAPSHOT_FIELDS)} FROM snapshots WHERE url=? ORDER BY at",
-                             (url,)).fetchall()
-        for i in range(1, len(points) - 1):
-            if tuple(points[i])[1:] == tuple(points[i - 1])[1:]:
-                gone.append((url, points[i]["at"]))
-    con.executemany("DELETE FROM snapshots WHERE url=? AND at=?", gone)
-    return len(gone)
-
-
 def views_at(con: sqlite3.Connection, when: str) -> dict[str, int]:
     """Each post's views at the last snapshot on or before `when`."""
     rows = con.execute(

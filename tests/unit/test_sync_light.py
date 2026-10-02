@@ -22,14 +22,6 @@ def test_a_snapshot_is_kept_only_when_the_numbers_change(data_root):
         assert [p["views"] for p in db.history(con, "https://x/1")] == [100, 150]
 
 
-def test_old_repeats_are_pruned_keeping_first_changes_and_latest(data_root):
-    with db.connect() as con:
-        rows = [("https://x/1", f"2026-10-01 10:{m:02d}", v) for m, v in ((0, 1), (1, 1), (2, 1), (3, 2), (4, 2))]
-        con.executemany("INSERT INTO snapshots (url, at, views) VALUES (?, ?, ?)", rows)
-        assert db.prune_snapshots(con) == 2
-        assert [(p["at"][-2:], p["views"]) for p in db.history(con, "https://x/1")] == [("00", 1), ("03", 2), ("04", 2)]
-
-
 def test_an_unread_reel_keeps_its_numbers():
     row = {"url": "https://ig/r", "views_latest": "900", "views_24h": "", "likes": "5", "shares": "3"}
     reel = ig_api.Reel(id="1", caption="c", created=time.time() - 3600, url="https://ig/r", likes=7, measured=False)

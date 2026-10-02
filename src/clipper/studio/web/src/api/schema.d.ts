@@ -2063,6 +2063,20 @@ export interface components {
             /** Checks */
             checks: components["schemas"]["RuleCheck"][];
         };
+        /**
+         * PostPoint
+         * @description A post's numbers at one sync that changed them.
+         */
+        PostPoint: {
+            /** At */
+            at: string;
+            /** Views */
+            views?: number | null;
+            /** Avg Watch S */
+            avg_watch_s?: number | null;
+            /** Skip Rate Pct */
+            skip_rate_pct?: number | null;
+        };
         /** Proof */
         Proof: {
             /** Saved At */
@@ -3551,9 +3565,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["PostPoint"][];
                 };
             };
             /** @description Validation Error */

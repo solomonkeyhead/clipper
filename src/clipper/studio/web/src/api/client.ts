@@ -72,8 +72,13 @@ export const useAccounts = () =>
 export const useSettings = () =>
   useQuery({ queryKey: keys.settings, queryFn: () => unwrap(api.GET("/api/settings")) });
 
+/** One post's views at each sync that changed them (studio/db.py snapshots). */
+export const usePostHistory = (url: string) =>
+  useQuery({ queryKey: ["post-history", url],
+             queryFn: () => unwrap(api.GET("/api/posts/history", { params: { query: { url } } })) });
+
 /** Everything that shows clips or posts. */
-const CLIP_KEYS = [keys.home, keys.campaigns, keys.clips, keys.posts, ["campaign"]];
+const CLIP_KEYS = [keys.home, keys.campaigns, keys.clips, keys.posts, ["campaign"], ["post-history"]];
 
 function useInvalidate() {
   const qc = useQueryClient();

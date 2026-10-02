@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  downloadUrl, markNotGood, proofUrl, revealClip, useCampaignTitle, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
+  downloadUrl, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -500,7 +500,8 @@ function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
         </p>
       ) : (
       <dl className="tabular grid grid-cols-3 gap-x-3 gap-y-2 text-sm sm:grid-cols-4">
-        <Stat label="Views" value={formatCount(post.views)} extra={post.x_median ? `${post.x_median}× median` : undefined} />
+        <Stat label="Views" value={formatCount(post.views)} extra={post.x_median ? `${post.x_median}× median` : undefined}
+              good={(post.x_median ?? 0) >= 1.5} />
         <Stat label="Avg watch" value={post.avg_watch_s !== null && post.avg_watch_s !== undefined ? `${post.avg_watch_s}s` : na(tiktokNa)} />
         <Stat label="Skipped in 3s" value={post.skip_rate_pct !== null && post.skip_rate_pct !== undefined ? `${post.skip_rate_pct}%` : na(post.platform === "tiktok" ? tiktokNa : "Not reported yet")} />
         <Stat label="Est. earnings" value={post.est_earnings !== null && post.est_earnings !== undefined ? <span className="text-money">{formatMoney(post.est_earnings)}</span> : na("Set the campaign's pay rate to estimate")} />
@@ -510,6 +511,7 @@ function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
         <Stat label="Saves" value={post.saves !== null && post.saves !== undefined ? formatCount(post.saves) : na(tiktokNa)} />
       </dl>
       )}
+      {!noStats && <ViewsLine post={post} />}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>Posted {ago(post.posted_at)}</span>
         {post.settling && <Chip tone="warning">Stats still settling (Instagram reports up to 48 h late)</Chip>}
@@ -519,10 +521,43 @@ function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
   );
 }
 
-const Stat = ({ label, value, extra }: { label: string; value: React.ReactNode; extra?: string }) => (
+const DAY_MS = 86_400_000;
+const when = (at: string) => new Date(at.replace(" ", "T")).getTime();
+
+/** Views over time, from each sync that changed them: is it still growing, or has it stalled? */
+function ViewsLine({ post }: { post: Post }) {
+  const { data: points = [] } = usePostHistory(post.url);
+  const start = post.posted_at ? when(post.posted_at) : NaN;
+  const now = Date.now();
+  // Steps from 0 at posting to now: the snapshots only mark changes.
+  const series = [
+    ...(Number.isFinite(start) ? [{ t: start, v: 0 }] : []),
+    ...points.filter((p) => p.views != null).map((p) => ({ t: when(p.at), v: p.views ?? 0 })),
+    { t: now, v: post.views ?? 0 },
+  ].filter((p) => Number.isFinite(p.t)).sort((a, b) => a.t - b.t);
+  if (series.length < 3 || (post.views ?? 0) === 0) return null;
+  const t0 = series[0].t, t1 = now, top = Math.max(1, ...series.map((p) => p.v));
+  const W = 160, H = 32;
+  const x = (t: number) => ((t - t0) / Math.max(1, t1 - t0)) * W;
+  const y = (v: number) => H - 2 - (v / top) * (H - 4);
+  const path = series.map((p, i) => (i === 0 ? `M${x(p.t)},${y(p.v)}`
+    : `H${x(p.t)}V${y(p.v)}`)).join("");
+  const dayAgo = [...series].reverse().find((p) => p.t <= now - DAY_MS)?.v ?? 0;
+  const gain = (post.views ?? 0) - dayAgo;
+  return (
+    <div className="mt-2 flex items-center gap-3 text-xs text-muted">
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="shrink-0 overflow-visible" aria-hidden>
+        <path d={path} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+      </svg>
+      <span>{gain > 0 ? <><b className="text-money">+{formatCount(gain)}</b> in the last day</> : "No new views in the last day"}</span>
+    </div>
+  );
+}
+
+const Stat = ({ label, value, extra, good }: { label: string; value: React.ReactNode; extra?: string; good?: boolean }) => (
   <div className="flex flex-col">
     <dt className="text-xs text-muted">{label}</dt>
-    <dd className="font-medium">{value}{extra && <span className="ml-1 text-xs text-money">{extra}</span>}</dd>
+    <dd className="font-medium">{value}{extra && <span className={cn("ml-1 text-xs", good ? "text-money" : "text-muted")}>{extra}</span>}</dd>
   </div>
 );
 
