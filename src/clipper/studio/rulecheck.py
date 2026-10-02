@@ -17,6 +17,7 @@ campaign runs at a time, in the background; the clips page updates when done.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 from datetime import datetime
@@ -69,8 +70,28 @@ def reapply(campaign: CampaignConfig) -> int:
     return changed
 
 
-def texts(clip: dict, campaign: CampaignConfig) -> list[rules.PostText]:
-    return rules.post_texts(clip["title"] or "", clip["caption"] or "", clip["hook"] or "", campaign)
+#: (campaign fingerprint, title, caption, hook) -> its texts: every page load builds
+#: them for every unposted clip, and they only change when one of those does.
+_texts: dict[tuple[str, str, str, str], list[rules.PostText]] = {}
+
+
+def texts(clip: dict, campaign: CampaignConfig, *, fingerprint: str | None = None) -> list[rules.PostText]:
+    """Each platform's texts for `clip`. With `fingerprint` (the campaign as it is
+    now, see `fingerprint`), remembered until the clip's or the campaign's text changes."""
+    args = (clip["title"] or "", clip["caption"] or "", clip["hook"] or "")
+    if fingerprint is None:
+        return rules.post_texts(*args, campaign)
+    key = (fingerprint, *args)
+    found = _texts.get(key)
+    if found is None:
+        if len(_texts) > 5000:
+            _texts.clear()
+        found = _texts[key] = rules.post_texts(*args, campaign)
+    return found
+
+
+def fingerprint(campaign: CampaignConfig) -> str:
+    return hashlib.sha256(campaign.model_dump_json().encode()).hexdigest()[:16]
 
 
 def audit_key(clip: dict, campaign: CampaignConfig, brief: str | None,

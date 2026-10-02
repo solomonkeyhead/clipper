@@ -142,6 +142,20 @@ def test_source_names_lose_the_delivery_suffix(raw, shown):
     assert display_source(raw) == shown
 
 
+@pytest.mark.parametrize("name, own", [
+    ("the most underrated gay show - please-like-me.mp4", True),
+    ("the most underrated gay show - please-like-me (1).mp4", True),
+    ("PLM_s01_ep1-CarRide.mp4", False),
+    ("Interview - someone-else.mp4", False),  # not a campaign of ours
+])
+def test_downloaded_clips_are_not_footage(name, own):
+    from pathlib import Path
+
+    from clipper.studio.server import own_clip
+
+    assert own_clip(Path(name), {"please-like-me"}) is own
+
+
 class TestApi:
     @pytest.fixture
     def client(self, data_root, campaigns):

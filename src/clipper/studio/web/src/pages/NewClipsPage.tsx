@@ -207,9 +207,9 @@ const SORTED_BY: Record<string, string> = {
   clipped: "clipped for this campaign", added: "added for this campaign", name: "by its name", like: "named like its neighbours",
 };
 
-function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, onToggle, onAll }: {
+function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, clipped, onToggle, onAll }: {
   title: string; videos: Source[]; open: boolean; hint?: string; picked: string[]; manual: boolean;
-  onToggle: (path: string) => void; onAll?: () => void;
+  clipped: Map<string, number>; onToggle: (path: string) => void; onAll?: () => void;
 }) {
   const [open, setOpen] = useState(startOpen);
   useEffect(() => setOpen(startOpen), [startOpen]);
@@ -237,6 +237,11 @@ function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, on
                 : picked.includes(s.path) ? <CheckSquare className="size-4 shrink-0 text-accent" />
                 : <Square className="size-4 shrink-0 text-muted" />}
               <span className="min-w-0 flex-1 truncate text-sm" title={s.sorted_by ? `Sorted ${SORTED_BY[s.sorted_by] ?? ""}` : undefined}>{s.name}</span>
+              {clipped.has(s.path.toLowerCase()) && (
+                <Chip tone="success" className="shrink-0" title="Already clipped: clipping it again makes near-duplicates">
+                  <CheckCircle2 className="size-3" /> {clipped.get(s.path.toLowerCase())} clip{clipped.get(s.path.toLowerCase()) === 1 ? "" : "s"}
+                </Chip>
+              )}
               <span className="tabular shrink-0 text-xs text-muted">
                 {s.size_mb >= 1024 ? `${(s.size_mb / 1024).toFixed(1)} GB` : `${Math.round(s.size_mb)} MB`} · {s.folder} · {ago(s.modified)}
               </span>
@@ -365,6 +370,11 @@ export function NewClipsPage() {
   const queue = jobs.filter((j) => j.status === "running" || j.status === "queued")
     .sort((a, b) => (a.status === "running" ? -1 : b.status === "running" ? 1 : a.id - b.id));
   const finished = jobs.filter((j) => j.status !== "running" && j.status !== "queued");
+  // Videos already clipped, and how many clips each gave, so none is clipped twice by mistake.
+  const clipped = new Map<string, number>();
+  for (const j of jobs) {
+    if (j.status === "done") clipped.set(j.source.toLowerCase(), (clipped.get(j.source.toLowerCase()) ?? 0) + j.clips);
+  }
   // Footage by campaign (studio/footage.py): the picked campaign's first and open,
   // then each other campaign folded, then anything not sorted yet (D73).
   const titleOf = (name: string) => campaigns.find((c) => c.name === name)?.title ?? name;
@@ -462,7 +472,7 @@ export function NewClipsPage() {
               <div className="flex flex-col gap-2">
                 {groups.map((g) => (
                   <FootageGroup key={g.key} title={g.title} videos={g.videos} open={g.open} hint={g.hint}
-                    picked={picked} manual={mode === "manual"} onToggle={toggle}
+                    picked={picked} manual={mode === "manual"} clipped={clipped} onToggle={toggle}
                     onAll={mode === "manual" ? undefined : () => setPicked((p) => [...new Set([...p, ...g.videos.map((v) => v.path)])].slice(0, batchCap ?? undefined))} />
                 ))}
               </div>

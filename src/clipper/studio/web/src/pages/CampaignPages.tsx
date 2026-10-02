@@ -7,6 +7,7 @@ import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, Chip, CopyButton, EmptyState, PageHeader, Skeleton, Tip } from "@/components/ui";
 import { FindCampaigns } from "./FindCampaigns";
 import { PostTable } from "./StatsPage";
+import { ClipFilters, NoClips, firstFilter, inFilter, type ClipFilter } from "./WorkPages";
 import { PLATFORM_NAME, ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
 function CampaignCard({ c }: { c: Campaign }) {
@@ -16,12 +17,12 @@ function CampaignCard({ c }: { c: Campaign }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-md font-semibold">{c.title}</h3>
-          <div className="mt-1 flex items-center gap-1.5 text-muted">
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted">
             {c.platforms.map((p) => (
               <Tip key={p} label={PLATFORM_NAME[p] ?? p}><span><PlatformIcon platform={p} /></span></Tip>
             ))}
-            {c.marketplace && <span className="ml-1 text-xs">{c.marketplace}</span>}
-            {c.last_post && <span className="ml-1 text-xs">· last post {ago(c.last_post)}</span>}
+            {c.marketplace && <span className="ml-1 text-xs whitespace-nowrap">{c.marketplace}</span>}
+            {c.last_post && <span className="text-xs whitespace-nowrap">· last post {ago(c.last_post)}</span>}
           </div>
         </div>
         {c.reward_per_1k_usd !== null && c.reward_per_1k_usd !== undefined && (
@@ -32,11 +33,11 @@ function CampaignCard({ c }: { c: Campaign }) {
         )}
       </div>
       <div className="tabular grid grid-cols-4 gap-2 text-center">
-        {([["Ready", c.counts.ready], ["Posted", c.counts.posted], ["Submitted", c.counts.submitted],
+        {([["Ready", c.counts.ready], ["To submit", c.counts.posted], ["Submitted", c.counts.submitted],
            ["Views", formatCount(c.views)]] as const).map(([label, value]) => (
           <div key={label} className="rounded-md bg-surface-2 py-2">
             <div className="text-md font-semibold">{value}</div>
-            <div className="text-[11px] text-muted">{label}</div>
+            <div className="truncate px-1 text-[11px] text-muted">{label}</div>
           </div>
         ))}
       </div>
@@ -45,7 +46,7 @@ function CampaignCard({ c }: { c: Campaign }) {
           {c.est_earnings !== null && c.est_earnings !== undefined
             ? <>Est. <span className="text-money">{formatMoney(c.est_earnings)}</span> so far</> : " "}
         </span>
-        {c.to_submit > 0 && <Chip tone="warning">{c.to_submit} to submit</Chip>}
+        {c.to_submit > 0 && <Chip tone="warning">{c.to_submit} link{c.to_submit === 1 ? "" : "s"} to submit</Chip>}
       </div>
     </Link>
   );
@@ -88,9 +89,9 @@ export function CampaignsPage() {
         </>} />
       {finding && <FindCampaigns />}
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}</div>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}</div>
       ) : list.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{list.map((c) => <CampaignCard key={c.name} c={c} />)}</div>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">{list.map((c) => <CampaignCard key={c.name} c={c} />)}</div>
       ) : (
         <EmptyState icon={<Megaphone className="size-5" />} title={showArchived ? "Nothing archived" : "No campaigns yet"}
           body={showArchived ? undefined : "Joined a campaign on Content Rewards or Vyro? Add it here: paste its brief and Clipper fills in the rules."}
@@ -170,6 +171,7 @@ export function CampaignPage() {
   const { data, isLoading, error } = useCampaign(name);
   const setCampaign = useSetCampaign();
   const [tab, setTab] = useState<"clips" | "posts">("clips");
+  const [filter, setFilter] = useState<ClipFilter | null>(null);
 
   if (isLoading) return <div className="flex flex-col gap-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-96" /></div>;
   if (error || !data) return <EmptyState icon={<Megaphone className="size-5" />} title="Campaign not found" />;
@@ -177,6 +179,8 @@ export function CampaignPage() {
   const brief = data.brief;
   const clips = data.clips;
   const posts = data.clips.flatMap((x) => x.posts);
+  const showing = filter ?? firstFilter(clips);
+  const shown = clips.filter((x) => inFilter(x, showing));
 
   return (
     <div className="fade-in">
@@ -224,7 +228,10 @@ export function CampaignPage() {
             ))}
           </div>
           {tab === "clips" ? (
-            clips.length ? <ClipGrid clips={clips} /> : <EmptyState icon={<Megaphone className="size-5" />} title="No clips yet"
+            clips.length ? <>
+              <ClipFilters clips={clips} value={showing} onChange={setFilter} />
+              {shown.length ? <ClipGrid clips={shown} /> : <NoClips filter={showing} />}
+            </> : <EmptyState icon={<Megaphone className="size-5" />} title="No clips yet"
               body="Give Clipper this campaign's footage and the clips land here."
               action={<Link to="/new" search={{ campaign: c.name }} className="text-sm font-medium text-accent hover:underline">Make clips →</Link>} />
           ) : (

@@ -10,14 +10,16 @@ function greeting() {
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
-function PipelineColumn({ title, clips, tone }: { title: string; clips: Clip[]; tone: string }) {
+function PipelineColumn({ title, status, clips, tone }: {
+  title: string; status: "ready" | "posted" | "submitted"; clips: Clip[]; tone: string;
+}) {
   const open = useUI((s) => s.setOpenClip);
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface-1 p-3">
       <div className="flex items-center justify-between px-1">
-        <span className="flex items-center gap-2 text-sm font-medium">
+        <Link to="/clips" search={{ status }} className="flex items-center gap-2 text-sm font-medium hover:text-accent">
           <span className={cn("size-2 rounded-full", tone)} /> {title}
-        </span>
+        </Link>
         <span className="tabular text-xs text-muted">{clips.length}</span>
       </div>
       <div className="flex flex-col gap-1.5">
@@ -28,7 +30,9 @@ function PipelineColumn({ title, clips, tone }: { title: string; clips: Clip[]; 
             <span className="line-clamp-2 text-xs leading-snug">{c.title}</span>
           </button>
         ))}
-        {clips.length > 5 && <span className="px-1.5 text-xs text-subtle">+{clips.length - 5} more</span>}
+        {clips.length > 5 && (
+          <Link to="/clips" search={{ status }} className="px-1.5 text-xs text-subtle hover:text-accent">+{clips.length - 5} more</Link>
+        )}
         {clips.length === 0 && <span className="px-1.5 py-2 text-xs text-subtle">Nothing here</span>}
       </div>
     </div>
@@ -127,7 +131,7 @@ export function DashboardPage() {
           {since ? (
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <div className="tabular text-2xl font-semibold text-money">+{formatCount(since.views_gained)}</div>
+                <div className={cn("tabular text-2xl font-semibold", since.views_gained > 0 ? "text-money" : "text-muted")}>+{formatCount(since.views_gained)}</div>
                 <div className="text-xs text-muted">views since {ago(since.since)}</div>
               </div>
               <div>
@@ -178,9 +182,9 @@ export function DashboardPage() {
       <section>
         <h2 className="mb-3 text-md font-semibold">Pipeline</h2>
         <div className="grid gap-3 md:grid-cols-3">
-          <PipelineColumn title="Ready to post" clips={by("ready")} tone="bg-info" />
-          <PipelineColumn title="Posted" clips={by("posted")} tone="bg-warning" />
-          <PipelineColumn title="Submitted" clips={by("submitted")} tone="bg-success" />
+          <PipelineColumn title="Ready to post" status="ready" clips={by("ready")} tone="bg-info" />
+          <PipelineColumn title="To submit" status="posted" clips={by("posted")} tone="bg-warning" />
+          <PipelineColumn title="Submitted" status="submitted" clips={by("submitted")} tone="bg-success" />
         </div>
       </section>
       </>}

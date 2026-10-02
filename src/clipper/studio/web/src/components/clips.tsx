@@ -375,6 +375,16 @@ function bestViews(clip: Clip) {
   return { views, best };
 }
 
+/** A skipped clip's way back, with the same 5-second undo as skipping. */
+function BackToReady({ clip }: { clip: Clip }) {
+  const setStatus = useStatusWithUndo();
+  return (
+    <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setStatus(clip, "ready"); }}>
+      <Undo2 className="size-3.5" /> Back to ready
+    </Button>
+  );
+}
+
 /* ---------- Card ---------- */
 
 export function ClipCard({ clip, showCampaign = false, focused = false }: {
@@ -416,7 +426,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
           </span>
           {clip.posts.length > 0 && (
             <span className="tabular text-xs text-muted">
-              {formatCount(views)} views
+              {formatCount(views)} view{views === 1 ? "" : "s"}
               {best !== null && best >= 1.5 && <span className="ml-1 text-money">{best}×</span>}
             </span>
           )}
@@ -438,6 +448,8 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
           </>
         ) : clip.status === "submitted" ? (
           <LinkButtons posts={clip.posts} />
+        ) : clip.status === "skipped" ? (
+          <BackToReady clip={clip} />
         ) : (
           <>
             {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
@@ -605,9 +617,13 @@ export function ClipSheet() {
 
                 <div className="flex flex-wrap gap-2">
                   {(clip.status === "posted" || clip.status === "submitted") && <SubmitButton clip={clip} size="md" />}
-                  {clip.status === "ready" || clip.status === "skipped" ? (
+                  {clip.status === "ready" ? (
                     <Button variant="primary" onClick={() => setStatus(clip, "posted")}>
                       <Upload className="size-4" /> Mark posted <Kbd className="border-white/30 bg-white/10 text-white">P</Kbd>
+                    </Button>
+                  ) : clip.status === "skipped" ? (
+                    <Button variant="secondary" onClick={() => setStatus(clip, "ready")}>
+                      <Undo2 className="size-4" /> Back to ready <Kbd>R</Kbd>
                     </Button>
                   ) : clip.posts.length === 0 && (
                     <Button variant="ghost" onClick={() => setStatus(clip, "ready")}>Back to ready <Kbd>R</Kbd></Button>

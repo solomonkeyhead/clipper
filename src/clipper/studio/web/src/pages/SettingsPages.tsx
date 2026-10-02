@@ -1,12 +1,11 @@
 import {
   AlertTriangle, CheckCircle2, ExternalLink, Eye, KeyRound, Loader2, Monitor, Moon, Plus, Stethoscope, Sun, XCircle,
 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   connectInstagram, connectX, runSystemCheck, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
-  useLearning, useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
+  useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
 import { GroupsCard } from "@/components/groups";
@@ -553,7 +552,6 @@ function SystemCheck() {
 
 export function SettingsPage() {
   const { data: settings } = useSettings();
-  const { data: learning } = useLearning();
   const save = useSetSettings();
   const qc = useQueryClient();
   const theme = useUI((s) => s.theme);
@@ -582,7 +580,7 @@ export function SettingsPage() {
         />
         <Row
           title="Sync every"
-          body="How often Clipper fetches views and stats from TikTok and Instagram while it's open."
+          body="How often Clipper fetches views and stats from your connected accounts while it's open. X is read at most hourly, since it charges per read."
           control={settings ? (
             <select value={settings.sync_minutes} aria-label="Sync interval"
                     onChange={(e) => save.mutate({ sync_minutes: e.target.value })}
@@ -590,16 +588,6 @@ export function SettingsPage() {
               {["5", "15", "30", "60"].map((m) => <option key={m} value={m}>{m} minutes</option>)}
             </select>
           ) : <Skeleton className="h-9 w-32" />}
-        />
-        <Row
-          title="Learn from my clips"
-          body={<>Clipper counts the clips you post as good and the ones you mark <b>Not good</b> as bad, and picks
-            more like the good ones. {learning ? `Learning from ${learning.rated} clip${learning.rated === 1 ? "" : "s"} so far. ` : ""}
-            <Link to="/learning" className="text-accent hover:underline">How well does it match your taste?</Link></>}
-          control={settings ? (
-            <Switch label="Learn from my clips" checked={settings.learn_from_feedback === "1"}
-                    onChange={(v) => save.mutate({ learn_from_feedback: v ? "1" : "0" })} />
-          ) : <Skeleton className="h-5 w-9" />}
         />
         <Row
           title="Theme"
@@ -618,9 +606,10 @@ export function SettingsPage() {
         />
         <Row
           title="Plan (preview)"
-          body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats.{" "}
-            <b className="text-fg">Research</b>: adds the Ask chat. <b className="text-fg">Pro</b>: everything, and auto-posting once
-            it's available. Nothing is billed; switch to see each tier.</>}
+          body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats, up to 10 clips
+            a video and 3 videos at a time. <b className="text-fg">Research</b>: adds the Ask chat, choosing a clip's on-screen line,
+            writing your own captions, and 10 videos at a time. <b className="text-fg">Pro</b>: everything, including every clip a video
+            has, several accounts per platform with groups, and auto-posting once it's available. Nothing is billed; switch to see each tier.</>}
           control={settings ? (
             <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">
               {([["free", "Free"], ["research", "Research"], ["pro", "Pro"]] as const).map(([value, label]) => (

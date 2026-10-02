@@ -1,4 +1,5 @@
-import { useLearning, useSetSettings, useSettings } from "@/api/client";
+import { Lightbulb } from "lucide-react";
+import { useLearning, useSetSettings, useSettings, type Learning } from "@/api/client";
 import { Card, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { cn, formatCount } from "@/lib/utils";
 
@@ -24,6 +25,45 @@ function Verdict({ label, verdict, rho, n, need, explain }: {
       </span>
     </Card>
   );
+}
+
+type Report = Learning;
+
+/** What Clipper already does about the reasons people give most. */
+const ANSWER: Record<string, string> = {
+  weak_hook: "Each clip's opening line is now chosen before it's rendered, so it starts where a stranger would stay.",
+  bad_ending: "Clips are extended to finish their last thought when it fits the length limit.",
+  needs_context: "Moments that need earlier scenes score lower for standalone clarity.",
+};
+
+/** The report in plain words: what's working, what isn't, what would help. */
+function insights(r: Report): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const top = r.reasons[0];
+  if (top && top.count >= 2) {
+    out.push(<>Your most common complaint is <b>{top.label.toLowerCase()}</b> ({top.count}×). {ANSWER[top.key] ?? ""}</>);
+  }
+  const rated = r.bands.filter((b) => b.rated >= 2 && b.avg_rating != null);
+  if (rated.length >= 2) {
+    const hi = rated[rated.length - 1];
+    const rest = rated.slice(0, -1);
+    const restAvg = rest.reduce((s, b) => s + (b.avg_rating ?? 0) * b.rated, 0) / rest.reduce((s, b) => s + b.rated, 0);
+    out.push((hi.avg_rating ?? 0) > restAvg
+      ? <>The score points the right way: clips it scores {hi.label.toLowerCase()} average <b>{hi.avg_rating}★</b> from you, against {restAvg.toFixed(1)}★ below that.</>
+      : <>Clips it scores {hi.label.toLowerCase()} don't rate better with you than lower ones yet ({hi.avg_rating}★ vs {restAvg.toFixed(1)}★).</>);
+  }
+  const judged = r.dimensions.filter((d) => d.agreement != null);
+  if (r.scored_and_rated >= r.min_for_agreement && judged.length) {
+    const sorted = [...judged].sort((a, b) => (b.agreement ?? 0) - (a.agreement ?? 0));
+    const best = sorted.filter((d) => (d.agreement ?? 0) >= 0.3).slice(0, 2).map((d) => d.label.toLowerCase());
+    const none = sorted.filter((d) => Math.abs(d.agreement ?? 0) < 0.1).map((d) => d.label.toLowerCase());
+    if (best.length) out.push(<>Of what it scores, <b>{best.join(" and ")}</b> {best.length === 1 ? "matches" : "match"} your ratings best.</>);
+    if (none.length) out.push(<>Its read on <b>{none.join(" and ")}</b> has no link to what you like yet.</>);
+  }
+  if (r.unrated > 0) {
+    out.push(<>{r.unrated} clip{r.unrated === 1 ? " has" : "s have"} no rating. Rating them, especially ones you like, is the fastest way to teach it.</>);
+  }
+  return out;
 }
 
 export function LearningPage() {
@@ -63,6 +103,17 @@ export function LearningPage() {
           </span>
         </Card>
       </div>
+
+      {insights(report).length > 0 && (
+        <Card className="flex flex-col gap-2 p-5">
+          <h2 className="flex items-center gap-2 text-md font-semibold"><Lightbulb className="size-4 text-accent" /> What it's seeing</h2>
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {insights(report).map((line, i) => (
+              <li key={i} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />{line}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid gap-4">
         <Card className="flex flex-col gap-3 p-4">

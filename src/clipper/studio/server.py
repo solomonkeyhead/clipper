@@ -24,6 +24,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -491,6 +492,7 @@ class Snapshot:
             self.submitted = db.submitted(con)
             self.briefs = db.briefs(con)
         now = datetime.now()
+        self._prints: dict[str, str] = {}
         self.clips: list[Clip] = []
         all_posts: list[dict] = []
         pending: list[tuple[dict, list[dict]]] = []
@@ -572,7 +574,9 @@ class Snapshot:
     def _rules(self, clip: dict, campaign: CampaignConfig) -> tuple[list[PostCopy], Rules]:
         from ..campaign import rules as caption_rules
 
-        texts = rulecheck.texts(clip, campaign)
+        if campaign.name not in self._prints:
+            self._prints[campaign.name] = rulecheck.fingerprint(campaign)
+        texts = rulecheck.texts(clip, campaign, fingerprint=self._prints[campaign.name])
         copy = [PostCopy(platform=t.platform, title=t.title, caption=t.caption,
                          checks=[RuleCheck(name=r.name, passed=r.passed, detail=r.detail) for r in t.checks])
                 for t in texts]
@@ -722,13 +726,24 @@ def source_folders() -> list[Path]:
     return [downloads_dir(), Path.home() / "Downloads"]
 
 
+#: A clip downloaded to post: "<title> - <campaign>.mp4", "(1)" if downloaded twice.
+_OWN_DOWNLOAD = re.compile(r" - ([a-z0-9][a-z0-9-]*)(?: \(\d+\))?$")
+
+
+def own_clip(path: Path, campaigns: set[str]) -> bool:
+    """A finished clip downloaded from the Control Center, not footage to clip."""
+    found = _OWN_DOWNLOAD.search(path.stem)
+    return bool(found and found.group(1) in campaigns)
+
+
 def list_sources() -> list[dict]:
     seen, out = set(), []
+    campaigns = set(load_campaigns())
     for folder in source_folders():
         if not folder.is_dir():
             continue
         for path in folder.iterdir():
-            if path.suffix.lower() in VIDEO_EXTENSIONS and path.is_file():
+            if path.suffix.lower() in VIDEO_EXTENSIONS and path.is_file() and not own_clip(path, campaigns):
                 key = path.resolve()
                 if key in seen:
                     continue
@@ -864,6 +879,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     app = FastAPI(title="Clipper Control Center", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
+    # The clip list is ~200 KB of JSON; compressed it's a fraction. Video, images
+    # and the live event stream are left as they are (Starlette's own exclusions).
+    app.add_middleware(GZipMiddleware, minimum_size=2048)
 
     @app.middleware("http")
     async def same_origin_writes(request: Request, call_next):

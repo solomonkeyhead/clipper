@@ -104,6 +104,38 @@ export function PostTable({ posts }: { posts: Post[] }) {
   );
 }
 
+/** Each platform's posts, views and median side by side: where views come from, and where they don't. */
+function ByPlatform({ posts }: { posts: Post[] }) {
+  const groups = new Map<string, Post[]>();
+  for (const p of posts) groups.set(p.platform, [...(groups.get(p.platform) ?? []), p]);
+  if (groups.size < 2) return null;
+  const rows = [...groups.entries()].map(([platform, list]) => {
+    const views = list.map((p) => p.views ?? 0).sort((a, b) => a - b);
+    return { platform, posts: list.length, total: views.reduce((s, v) => s + v, 0),
+             median: views[Math.floor(views.length / 2)], zero: views.filter((v) => v === 0).length };
+  }).sort((a, b) => b.total - a.total);
+  const top = Math.max(1, ...rows.map((r) => r.total));
+  return (
+    <div className="rounded-lg border border-line bg-surface-1 p-4">
+      <h2 className="mb-3 text-sm font-semibold">By platform</h2>
+      <div className="flex flex-col gap-2.5">
+        {rows.map((r) => (
+          <div key={r.platform} className="grid grid-cols-[120px_1fr_auto] items-center gap-3 text-sm">
+            <span className="flex items-center gap-2"><PlatformIcon platform={r.platform} />{PLATFORM_NAME[r.platform] ?? r.platform}</span>
+            <span className="h-2 overflow-hidden rounded-full bg-surface-3">
+              <span className="block h-full rounded-full bg-accent" style={{ width: `${(r.total / top) * 100}%` }} />
+            </span>
+            <span className="tabular text-right text-xs text-muted">
+              <b className="text-fg">{formatCount(r.total)}</b> views · {r.posts} post{r.posts === 1 ? "" : "s"} · median {formatCount(r.median)}
+              {r.zero > 0 && r.zero === r.posts && <span className="ml-1.5 text-warning">all at 0</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function StatsPage() {
   const { data: posts, isLoading } = usePosts();
   const { data: campaigns = [] } = useCampaigns();
@@ -137,6 +169,7 @@ export function StatsPage() {
             <Metric label="Skipped in 3s" value={withSkip.length ? `${Math.round(withSkip.reduce((s, p) => s + (p.skip_rate_pct ?? 0), 0) / withSkip.length)}%` : "–"}
                     sub="lower is better" />
           </div>
+          <ByPlatform posts={list} />
           <PostTable posts={list} />
         </div>
       )}

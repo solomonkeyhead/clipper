@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Film, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
+  AlertTriangle, BarChart3, Film, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
   Settings, UserCircle2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -38,6 +38,7 @@ function useNav(): NavItem[] {
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
     { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },
+    { to: "/learning", label: "Learning", icon: <GraduationCap />, keys: "G R" },
   ];
 }
 
@@ -134,11 +135,30 @@ function AutoPostPill() {
   );
 }
 
+/** Whether the window is narrower than `px`, kept up to date. */
+function useNarrow(px: number) {
+  const query = `(max-width: ${px - 1}px)`;
+  const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const on = () => setNarrow(list.matches);
+    list.addEventListener("change", on);
+    return () => list.removeEventListener("change", on);
+  }, [query]);
+  return narrow;
+}
+
 export function AppShell() {
   useLiveUpdates();
   const navigate = useNavigate();
-  const collapsed = useUI((s) => s.collapsed);
-  const toggle = useUI((s) => s.toggleCollapsed);
+  // In a narrow window the sidebar starts as icons, so pages get the room;
+  // it still opens on demand, without changing the wide-window preference.
+  const narrow = useNarrow(1024);
+  const [narrowOpen, setNarrowOpen] = useState(false);
+  const wideCollapsed = useUI((s) => s.collapsed);
+  const toggleWide = useUI((s) => s.toggleCollapsed);
+  const collapsed = narrow ? !narrowOpen : wideCollapsed;
+  const toggle = narrow ? () => setNarrowOpen((v) => !v) : toggleWide;
   const online = useUI((s) => s.online);
   const setPalette = useUI((s) => s.setPalette);
   const setShortcuts = useUI((s) => s.setShortcuts);
