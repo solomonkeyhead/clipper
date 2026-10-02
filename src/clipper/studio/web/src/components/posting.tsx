@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { AlertTriangle, BadgeDollarSign, CheckCircle2, ChevronDown, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
+import { AlertTriangle, BadgeDollarSign, CheckCircle2, ChevronDown, Clock, Pin, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useAccountGroups, useAccounts, useAddPostLink, useCampaigns, useRecheckRules,
+  useAccountGroups, useAccounts, useAddPostLink, useCampaigns, usePosts, useRecheckRules,
   type Account, type Clip, type PostCopy,
 } from "@/api/client";
 import { useUI } from "@/lib/store";
@@ -52,6 +52,7 @@ const ORDER = Object.keys(UPLOAD);
 export function PostPanel({ clip }: { clip: Clip }) {
   const { data: campaigns = [] } = useCampaigns();
   const postOn = usePostOn(clip.campaign);
+  const lastPost = useLastPost();
   const campaign = campaigns.find((c) => c.name === clip.campaign);
   const copies = [...(clip.post_copy ?? [])].sort((a, b) => ORDER.indexOf(key(a.platform)) - ORDER.indexOf(key(b.platform)));
   const allowed = campaign?.platforms ?? [];
@@ -72,7 +73,7 @@ export function PostPanel({ clip }: { clip: Clip }) {
       <div className="flex flex-col gap-2.5 text-sm">
         <div className="flex min-w-0 flex-col gap-1.5">
           {copies.length ? copies.map((c) => (
-            <PlatformRow key={c.platform} copy={c} accounts={postOn(key(c.platform))}
+            <PlatformRow key={c.platform} copy={c} accounts={postOn(key(c.platform))} last={lastPost.get(key(c.platform))}
                          url={UPLOAD[key(c.platform)]?.url} onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
           )) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
           {shown.length > 1 && (
@@ -81,6 +82,16 @@ export function PostPanel({ clip }: { clip: Clip }) {
             </Button>
           )}
         </div>
+        {clip.pinned_comment && (
+          <div className="flex items-start gap-2 rounded-sm border border-line bg-surface-1 px-2.5 py-2">
+            <Pin className="mt-0.5 size-3.5 shrink-0 text-accent" />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-muted">Pin as the first comment, on each platform</div>
+              <p className="text-sm">{clip.pinned_comment}</p>
+            </div>
+            <CopyButton text={clip.pinned_comment} what="Pinned comment" label="Copy" />
+          </div>
+        )}
         {(campaign?.posting_rules?.length ?? 0) > 0 && <Checklist rules={campaign!.posting_rules!} />}
         <PasteLink clip={clip} compact />
       </div>
@@ -107,12 +118,28 @@ function usePostOn(campaign: string) {
   };
 }
 
-function PlatformRow({ copy, accounts, url, onOpen }: {
-  copy: PostCopy; accounts: Account[]; url?: string; onOpen: () => void;
+/** Leave this long between posts on a platform, so each gets its own test
+ *  audience and none reads as spam (best guess from the research, D96). */
+const SPACING_HOURS = 3;
+
+/** Each platform's most recent post time, in the accounts being viewed. */
+function useLastPost() {
+  const { data: posts = [] } = usePosts();
+  const last = new Map<string, number>();
+  for (const p of posts) {
+    const at = p.posted_at ? new Date(p.posted_at.replace(" ", "T")).getTime() : NaN;
+    if (Number.isFinite(at) && at > (last.get(p.platform) ?? 0)) last.set(p.platform, at);
+  }
+  return last;
+}
+
+function PlatformRow({ copy, accounts, url, onOpen, last }: {
+  copy: PostCopy; accounts: Account[]; url?: string; onOpen: () => void; last?: number;
 }) {
   const [open, setOpen] = useState(false);
   const failed = copy.checks.filter((c) => !c.passed);
   const name = UPLOAD[key(copy.platform)]?.name ?? copy.platform;
+  const since = last ? (Date.now() - last) / 3_600_000 : null;
   return (
     <div className="rounded-sm border border-line bg-surface-1 px-2.5 py-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -145,6 +172,16 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
         </p>
       )}
       {copy.title && <p className="mt-1.5 truncate text-xs text-muted" title={copy.title}>Title: <span className="text-fg">{copy.title}</span></p>}
+      {since !== null && since < SPACING_HOURS && (
+        <p className="mt-1.5 flex items-start gap-1.5 text-xs text-warning">
+          <Clock className="mt-px size-3.5 shrink-0" />
+          <span>
+            Your last {name} post went up {since < 1 ? `${Math.max(1, Math.round(since * 60))} min` : `${since.toFixed(1)} h`} ago.
+            Posting around {new Date(last! + SPACING_HOURS * 3_600_000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} gives
+            each post its own test audience.
+          </span>
+        </p>
+      )}
       {UPLOAD[key(copy.platform)] && (
         <p className="mt-1.5 flex items-start gap-1.5 text-xs">
           <BadgeDollarSign className="mt-px size-3.5 shrink-0 text-warning" />

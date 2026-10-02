@@ -210,6 +210,7 @@ class Snapshot:
             copy, rule_state = self._rules(c, brief) if brief and status in ("ready", "skipped") else ([], None)
             self.clips.append(Clip(
                 post_copy=copy, rules=rule_state,
+                pinned_comment=rulecheck.extras(c).get("pinned_comment", "") if status == "ready" else "",
                 score=scores.get("score"), rubric=scores.get("rubric") or {},
                 pool=scores.get("pool"), pool_rank=scores.get("pool_rank"),
                 picked_by=scores.get("picked_by") or "unknown", rating=c.get("rating"),

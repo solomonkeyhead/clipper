@@ -78,7 +78,8 @@ _texts: dict[tuple, list[rules.PostText]] = {}
 def texts(clip: dict, campaign: CampaignConfig, *, fingerprint: str | None = None) -> list[rules.PostText]:
     """Each platform's texts for `clip`. With `fingerprint` (the campaign as it is
     now, see `fingerprint`), remembered until the clip's or the campaign's text changes."""
-    args = (clip["title"] or "", clip["caption"] or "", clip["hook"] or "")
+    # On YouTube the searchable title, when one is written (D96); else the clip's name.
+    args = (extras(clip).get("youtube_title") or clip["title"] or "", clip["caption"] or "", clip["hook"] or "")
     duration = clip.get("duration_s")
     if fingerprint is None:
         return rules.post_texts(*args, campaign, duration)
@@ -153,6 +154,74 @@ def check_clips(campaign: CampaignConfig, *, backends=None, cache=None, publish=
     return done
 
 
+#: A clip whose title and comment couldn't be written is tried again after this long.
+EXTRAS_RETRY_HOURS = 24
+
+
+def extras(clip: dict) -> dict:
+    """The clip's stored YouTube title and pinned comment (campaign/extras.py), if any."""
+    try:
+        found = json.loads(clip.get("extras") or "null") or {}
+    except ValueError:
+        return {}
+    return found if found.get("youtube_title") else {}
+
+
+def _extras_due(clip: dict, now: datetime) -> bool:
+    from ..campaign.extras import EXTRAS_VERSION
+
+    try:
+        found = json.loads(clip.get("extras") or "null") or {}
+    except ValueError:
+        found = {}
+    if found.get("v") != EXTRAS_VERSION:
+        return True
+    if found.get("youtube_title"):
+        return False
+    failed = found.get("failed_at")
+    return not failed or (now - datetime.strptime(failed, "%Y-%m-%d %H:%M")).total_seconds() > EXTRAS_RETRY_HOURS * 3600
+
+
+def fill_extras(campaign: CampaignConfig, *, backends=None, cache=None, publish=None) -> int:
+    """Write the YouTube title and pinned comment for each unposted clip without
+    current ones (D96). Returns how many were written."""
+    from ..campaign import extras as extras_mod
+    from ..campaign.description import pasted_brief
+    from ..learn import log as perf
+    from . import library, stats
+
+    now = datetime.now()
+    live = stats.posts_by_clip(perf.read())
+    with db.connect() as con:
+        # Ready clips only: a skipped one gets its own if it's put back.
+        clips = [c for c in _unposted(con, campaign.name, live) if c["status"] == "ready" and _extras_due(c, now)]
+    if not clips:
+        return 0
+    spoken = library.clip_texts(clips)
+    if backends is None:
+        backends = _backends()
+    if cache is None:
+        from ..llm.cache import LLMCache
+
+        cache = LLMCache()
+    brief = pasted_brief(campaign.name)
+    done = 0
+    for clip in clips:
+        if clip["id"] not in spoken:
+            continue
+        found = extras_mod.write(spoken[clip["id"]], campaign, backends, hook=clip["hook"] or "",
+                                 source=clip.get("source_title") or "", brief=brief, cache=cache)
+        value = ({"v": extras_mod.EXTRAS_VERSION, **found.model_dump()} if found
+                 else {"v": extras_mod.EXTRAS_VERSION, "failed_at": now.strftime("%Y-%m-%d %H:%M")})
+        with db.connect() as con:
+            db.update_clip(con, clip["id"], extras=json.dumps(value))
+        done += bool(found)
+        if publish and done and done % 5 == 0:
+            publish("clips.changed")
+    log.info("%s: YouTube titles and pinned comments written for %d clip(s)", campaign.name, done)
+    return done
+
+
 def _backends():
     from ..config import Config
     from ..runner import _correction_backends
@@ -168,6 +237,9 @@ def recheck(name: str, *, publish=None, backends=None, cache=None) -> None:
     if campaign is None:
         return
     if reapply(campaign) and publish:
+        publish("clips.changed")
+    # Titles first: the AI check then reads the texts as they'll be posted.
+    if fill_extras(campaign, backends=backends, cache=cache, publish=publish) and publish:
         publish("clips.changed")
     check_clips(campaign, backends=backends, cache=cache, publish=publish)
     if publish:

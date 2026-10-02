@@ -149,6 +149,7 @@ class Clip(BaseModel):
     duplicates: list[Duplicate] = []  # already-posted clips this one repeats
     # Not posted yet: each platform's text, and the brief's rules checked (D81).
     post_copy: list[PostCopy] = []
+    pinned_comment: str = ""       # to pin under the post on every platform (campaign/extras.py)
     rules: Rules | None = None
     rerendering: str | None = None     # queued | rendering: a new hook on its way (D90)
     rerender_error: str | None = None  # why the last re-render failed

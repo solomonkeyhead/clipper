@@ -402,6 +402,28 @@ def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[
     return done
 
 
+def clip_texts(clips: list[dict]) -> dict[int, str]:
+    """Clip id -> what is said in it, from its source's transcript (each source
+    read once). Clips with no time range or transcript are left out."""
+    from ..models import Transcript
+    from ..paths import work_dir
+
+    words_of: dict[str, list] = {}
+    out = {}
+    for clip in clips:
+        if clip.get("start_s") is None or clip.get("end_s") is None:
+            continue
+        source = clip["source_id"]
+        if source not in words_of:
+            path = work_dir(source) / "transcript.json"
+            words_of[source] = Transcript.load(path).words if path.exists() else []
+        start, end = clip["start_s"], clip["end_s"]
+        text = " ".join(w.text for w in words_of[source] if start <= (w.start + w.end) / 2 < end).strip()
+        if text:
+            out[clip["id"]] = text
+    return out
+
+
 def first_sentence(caption: str, limit: int = 60) -> str:
     """A caption's opening sentence, for a clip with no hook to be named by."""
     text = re.split(r"(?<=[.!?])\s|\s#|\s@", (caption or "").strip(), maxsplit=1)[0].strip()

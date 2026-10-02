@@ -1831,6 +1831,11 @@ export interface components {
              * @default []
              */
             post_copy: components["schemas"]["PostCopy"][];
+            /**
+             * Pinned Comment
+             * @default
+             */
+            pinned_comment: string;
             rules?: components["schemas"]["Rules"] | null;
             /** Rerendering */
             rerendering?: string | null;

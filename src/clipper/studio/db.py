@@ -191,6 +191,9 @@ MIGRATIONS = [
     # The AI check of a clip's post texts against its brief (studio/rulecheck.py):
     # JSON {key, problems, at}; `key` says which texts and brief it read.
     ("clips", "audit", "ALTER TABLE clips ADD COLUMN audit TEXT"),
+    # Its searchable YouTube title and pinned comment (campaign/extras.py):
+    # JSON {v, youtube_title, pinned_comment} or {v, failed_at}.
+    ("clips", "extras", "ALTER TABLE clips ADD COLUMN extras TEXT"),
     # Where a found campaign came from: "email", "discord" or "whop".
     ("found_campaigns", "via", "ALTER TABLE found_campaigns ADD COLUMN via TEXT NOT NULL DEFAULT 'email'"),
 ]
@@ -289,7 +292,8 @@ def clip(con: sqlite3.Connection, clip_id: int) -> dict | None:
 
 def update_clip(con: sqlite3.Connection, clip_id: int, **changes) -> None:
     allowed = {k: v for k, v in changes.items()
-               if k in ("status", "notes", "title", "hook", "caption", "start_s", "end_s", "watch_until")}
+               if k in ("status", "notes", "title", "hook", "caption", "start_s", "end_s", "watch_until",
+                        "extras")}
     if "status" in allowed and allowed["status"] not in STATUSES:
         raise ValueError(f"status must be one of {', '.join(STATUSES)}")
     if allowed:

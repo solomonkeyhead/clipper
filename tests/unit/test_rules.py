@@ -306,6 +306,55 @@ class TestTheAPI:
         assert client.put(f"/api/clips/{clip_id}/caption", json={"caption": "x"}).status_code == 400
 
 
+class TestTitlesAndPinnedComments:
+    """A searchable YouTube title and a pinned comment per ready clip (D96)."""
+
+    TITLE = "Please Like Me: Josh freaks out about his new boyfriend"
+    PINNED = "This is Please Like Me, season 1 episode 2. All four seasons are free on YouTube."
+
+    def transcript(self):
+        from clipper.models import Transcript, Word
+        from clipper.paths import ensure, work_dir
+
+        words = [Word(start=i, end=i + 0.8, text=w) for i, w in enumerate(["he", "is", "way", "too", "hot", "for", "me"])]
+        Transcript(source_id="s1", language="en", words=words).save(ensure(work_dir("s1")) / "transcript.json")
+
+    def reply(self, title=TITLE, pinned=PINNED):
+        return json.dumps({"youtube_title": title, "pinned_comment": pinned})
+
+    def test_they_are_written_once_and_the_title_goes_to_youtube_with_the_briefs_tag(self, data_root, campaigns):
+        self.transcript()
+        clip_id = add_clip(data_root, start_s=0.0, end_s=6.0)
+        backend = MockBackend(responses=[self.reply()])
+        assert rulecheck.fill_extras(plm(), backends=[backend]) == 1
+        assert rulecheck.fill_extras(plm(), backends=[backend]) == 0  # current: not asked again
+        with db.connect() as con:
+            clip = db.clip(con, clip_id)
+        assert rulecheck.extras(clip)["pinned_comment"] == self.PINNED
+        youtube = next(p for p in rulecheck.texts(clip, plm()) if p.platform == "youtube_shorts")
+        assert youtube.title == f"{self.TITLE} @JoshThomasChannel"
+        assert "way too hot" in backend.calls[0].user  # from the clip's own words
+
+    def test_an_unusable_answer_is_tried_again_only_after_a_day(self, data_root, campaigns):
+        self.transcript()
+        clip_id = add_clip(data_root, start_s=0.0, end_s=6.0)
+        assert rulecheck.fill_extras(plm(), backends=[MockBackend(responses=[self.reply(title="too short")])]) == 0
+        with db.connect() as con:
+            clip = db.clip(con, clip_id)
+        assert rulecheck.extras(clip) == {} and not rulecheck._extras_due(clip, __import__("datetime").datetime.now())
+
+    def test_hashtags_are_stripped_and_lengths_kept(self):
+        from clipper.campaign.extras import Extras, clean
+
+        found = clean(Extras(youtube_title=f"{self.TITLE} #fyp", pinned_comment=self.PINNED))
+        assert found and found.youtube_title == self.TITLE
+        assert clean(Extras(youtube_title=self.TITLE, pinned_comment="x" * 300)) is None
+        assert clean(Extras(youtube_title="Please Like Me: Josh and Tom talk about men and sex",
+                            pinned_comment=self.PINNED)) is None  # a held-back word: keep the hook instead
+        assert clean(Extras(youtube_title=f"{self.TITLE} @JoshThomasChannel",
+                            pinned_comment=self.PINNED)).youtube_title == self.TITLE
+
+
 def test_the_mock_answers_in_order():
     """The helpers above rely on MockBackend's scripted replies."""
     backend = MockBackend(responses=["a", "b"])
