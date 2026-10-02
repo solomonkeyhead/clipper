@@ -31,7 +31,7 @@ import re
 from pydantic import BaseModel
 
 from ..config import CampaignConfig
-from ..llm.base import LLMBackend, LLMRequest
+from ..llm.base import LLMBackend, LLMRequest, miss_level
 from ..utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -151,7 +151,7 @@ def describe(transcript: str, campaign: CampaignConfig, caption_line: str,
             response = backend.complete(LLMRequest(system=SYSTEM, user=user, temperature=0.2,
                                                    response_schema=_Description))
         except Exception as exc:  # a description must never fail a render
-            log.warning("description: %s did not answer (%s)", backend.describe(), str(exc)[:160])
+            log.log(miss_level(exc), "description: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             continue
         found = _parse(response.text)
         if found:

@@ -31,6 +31,17 @@ class LLMError(RuntimeError):
     """A backend could not produce a usable response."""
 
 
+class Resting(LLMError):
+    """A try-first model sitting out after a failure: expected, and the fallback answers."""
+
+
+def miss_level(exc: Exception) -> int:
+    """How loudly to log a backend that didn't answer: a resting model is routine."""
+    import logging
+
+    return logging.DEBUG if isinstance(exc, Resting) else logging.WARNING
+
+
 class LLMConfigError(LLMError):
     """The backend is missing a key, model, or server. Not retryable."""
 
@@ -213,7 +224,7 @@ class LLMBackend(ABC):
         """
         key = (self.name, self.model)
         if self.max_retries == 0 and time.monotonic() < self._resting.get(key, 0.0):
-            raise LLMError(f"{self.describe()} is resting after a recent failure")
+            raise Resting(f"{self.describe()} is resting after a recent failure")
         try:
             return self._complete_with_retries(request)
         except LLMError:

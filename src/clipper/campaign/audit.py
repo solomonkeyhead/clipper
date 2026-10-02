@@ -27,7 +27,7 @@ import re
 from pydantic import BaseModel, Field
 
 from ..config import CampaignConfig
-from ..llm.base import ContentBlocked, LLMBackend, LLMRequest
+from ..llm.base import ContentBlocked, LLMBackend, LLMRequest, miss_level
 from ..utils.logging import get_logger
 from .compliance import _contains
 from .rules import NAMES, PostText
@@ -179,7 +179,7 @@ def _ask(system: str, user: str, backends: list[LLMBackend], cache, parse):
             log.info("rule check: %s refused to read it (%s)", backend.describe(), str(exc)[:160])
             continue
         except Exception as exc:  # a check that couldn't run says so; it never blocks
-            log.warning("rule check: %s did not answer (%s)", backend.describe(), str(exc)[:160])
+            log.log(miss_level(exc), "rule check: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             continue
         found = parse(response.text)
         if found is not None:

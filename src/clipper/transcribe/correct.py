@@ -41,7 +41,7 @@ from difflib import SequenceMatcher
 
 from pydantic import BaseModel, ValidationError
 
-from ..llm.base import LLMBackend, LLMRequest
+from ..llm.base import LLMBackend, LLMRequest, miss_level
 from ..llm.cache import LLMCache
 from ..models import Word
 from ..utils.logging import get_logger
@@ -208,9 +208,9 @@ def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
         try:
             response = backend.complete(LLMRequest(
                 system=system, user=user, temperature=0.0, response_schema=schema))
-        except Exception as exc:  # a caption fix must never fail a render
-            log.warning("caption correction: %s did not answer (%s)",
-                        backend.describe(), str(exc)[:160])
+        except Exception as exc:  # a caption fix (or scene split, or opening) must never fail a render
+            log.log(miss_level(exc), "%s: %s did not answer (%s)", prompt_key,
+                    backend.describe(), str(exc)[:160])
             continue
         if cache is not None and key is not None:
             cache.put(key, text=response.text, model=response.model)

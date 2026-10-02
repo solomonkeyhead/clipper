@@ -728,6 +728,14 @@ def accounts() -> list[Account]:
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".m4v", ".webm", ".avi"}
 
 
+def _quiet_resets(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+    """Windows reports a browser closing its live-update connection as an error
+    ("connection forcibly closed"); it's a page closed or reloaded, nothing more."""
+    if isinstance(context.get("exception"), ConnectionResetError):
+        return
+    loop.default_exception_handler(context)
+
+
 def source_folders() -> list[Path]:
     """Where footage for new clips is looked for: Clipper's downloads, then yours."""
     from ..paths import downloads_dir
@@ -859,7 +867,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
-        broker.bind(asyncio.get_running_loop())
+        loop = asyncio.get_running_loop()
+        broker.bind(loop)
+        loop.set_exception_handler(_quiet_resets)
         with contextlib.suppress(Exception):  # scores for clips filed before they were kept
             await asyncio.to_thread(library.backfill_scores)
         with contextlib.suppress(Exception):  # and a (late) evidence snapshot
