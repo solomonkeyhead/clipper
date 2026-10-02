@@ -56,9 +56,11 @@ from .api_models import (
     Home,
     Learning,
     Metrics,
+    Payout,
     Post,
     PostCopy,
     PostPoint,
+    PostTask,
     Proof,
     ReasonGroup,
     ReasonOption,
@@ -137,6 +139,45 @@ def display_source(title: str) -> str:
     return " ".join(kept) or title
 
 
+#: A campaign ending within this many days is said so before clipping for it.
+ENDING_SOON_DAYS = 3
+#: Budget left that counts as running low: this much, or what this many views earn.
+LOW_BUDGET_USD, LOW_BUDGET_VIEWS = 50.0, 20_000
+
+
+def campaign_warning(deadline: str, budget_left: float | None, checked_at: str | None,
+                     rate_per_1k: float | None, today: datetime | None = None) -> str:
+    """Why clipping for a campaign may not pay much longer, or "" (D100): open
+    marketplaces stop paying the moment a brand's budget runs out."""
+    today = today or datetime.now()
+    out = []
+    try:
+        days = (datetime.strptime(deadline, "%Y-%m-%d").date() - today.date()).days if deadline else None
+    except ValueError:
+        days = None
+    if days is not None:
+        if days < 0:
+            out.append(f"Ended {deadline}")
+        elif days == 0:
+            out.append("Ends today")
+        elif days <= ENDING_SOON_DAYS:
+            out.append(f"Ends in {days} day{'s' if days > 1 else ''}")
+    if budget_left is not None:
+        low = max(LOW_BUDGET_USD, (rate_per_1k or 0) * LOW_BUDGET_VIEWS / 1000)
+        if budget_left <= 0:
+            out.append("Budget used up")
+        elif budget_left < low:
+            out.append(f"About ${budget_left:,.0f} of budget left")
+        if out and out[-1].startswith(("Budget", "About")) and checked_at:
+            try:
+                age = (today - datetime.strptime(checked_at, "%Y-%m-%d %H:%M")).days
+            except ValueError:
+                age = 0
+            if age >= 1:
+                out[-1] += f" ({age} day{'s' if age > 1 else ''} ago)"
+    return " · ".join(out)
+
+
 def effective_status(clip: dict, posts: list) -> str:
     """A clip with a live post is posted, whatever it was marked; later states stay."""
     if clip["status"] == "ready" and posts:
@@ -157,6 +198,9 @@ class Snapshot:
             self.settings = db.settings(con)
             self.submitted = db.submitted(con)
             self.briefs = db.briefs(con)
+            self.tasks_done = db.tasks_done(con)
+            self.payouts = db.payouts(con)
+        self._milestones: dict[str, list] = {}
         now = datetime.now()
         self._prints: dict[str, str] = {}
         self.clips: list[Clip] = []
@@ -196,7 +240,9 @@ class Snapshot:
                         views, brief.reward_per_1k_usd if brief else None,
                         brief.min_payout_usd if brief else None,
                         brief.max_payout_usd if brief else None),
-                    submitted_at=self.submitted.get(p["url"])))
+                    submitted_at=self.submitted.get(p["url"]),
+                    tasks=[PostTask(views=m.views, task=m.task, done=(p["url"], m.views) in self.tasks_done)
+                           for m in self.milestones(brief) if (views or 0) >= m.views]))
             status = effective_status(c, models)
             if models and status in ("posted", "submitted"):
                 # A post found after the clip was marked submitted still needs submitting.
@@ -256,6 +302,16 @@ class Snapshot:
                            checking=rulecheck.checking(campaign.name),
                            brief=[BriefProblem(**p) for p in found.get("problems") or []] if current else [])
 
+    def milestones(self, campaign: CampaignConfig | None) -> list:
+        """The brief's view-milestone tasks (campaign/milestones.py), read once per campaign."""
+        from ..campaign import milestones
+
+        if campaign is None:
+            return []
+        if campaign.name not in self._milestones:
+            self._milestones[campaign.name] = milestones.of(campaign, self.briefs.get(campaign.name))
+        return self._milestones[campaign.name]
+
     @property
     def posts(self) -> list[Post]:
         return [p for c in self.clips for p in c.posts]
@@ -281,7 +337,21 @@ class Snapshot:
             views=sum(p.views or 0 for p in posts),
             est_earnings=round(sum(earnings), 2) if earnings else None,
             to_submit=sum(1 for p in posts if not p.submitted_at),
-            last_post=max((p.posted_at for p in posts if p.posted_at), default=None))
+            last_post=max((p.posted_at for p in posts if p.posted_at), default=None),
+            **self.money(name, brief, posts))
+
+    def money(self, name: str, brief: CampaignConfig | None, posts: list[Post]) -> dict:
+        """What a campaign has paid, and whether it's about to stop paying (D99, D100)."""
+        paid = [p["amount"] for p in self.payouts if p["campaign"] == name]
+        views = sum(p.views or 0 for p in posts)
+        st = self.state.get(name, {})
+        deadline = brief.deadline if brief else ""
+        return {"paid_usd": round(sum(paid), 2) if paid else None,
+                "paid_per_1k": round(sum(paid) / views * 1000, 2) if paid and views else None,
+                "deadline": deadline, "budget_left": st.get("budget_left"),
+                "budget_checked_at": st.get("budget_checked_at"),
+                "warning": campaign_warning(deadline, st.get("budget_left"), st.get("budget_checked_at"),
+                                            brief.reward_per_1k_usd if brief else None)}
 
     def campaign_names(self) -> list[str]:
         return sorted(set(self.campaigns) | {c.campaign for c in self.clips})
@@ -614,7 +684,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 views=sum(views), posts=len(posts),
                 median_views=statistics.median(views) if views else None,
                 to_submit=sum(1 for p in posts if not p.submitted_at),
-                ready=pipeline.ready),
+                ready=pipeline.ready,
+                paid_usd=round(sum(p["amount"] for p in snap.payouts if p["campaign"] in active), 2)
+                if any(p["campaign"] in active for p in snap.payouts) else None,
+                tasks_due=sum(1 for p in posts for t in p.tasks if not t.done)),
             since=since, pipeline=pipeline,
             # The getting-started checklist, in the order a new user does it.
             first_run={"ai": setup.ai_status()["ready"], "campaign": bool(snap.campaigns),
@@ -658,8 +731,50 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.patch("/api/campaigns/{name}")
     def update_campaign(name: str, changes: dict) -> dict:
         with db.connect() as con:
-            db.set_campaign_state(con, name, **changes)
+            try:
+                db.set_campaign_state(con, name, **changes)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
         broker.publish("campaigns.changed")
+        return {"ok": True}
+
+    @app.get("/api/payouts")
+    def list_payouts(campaign: str | None = None) -> list[Payout]:
+        with db.connect() as con:
+            return [Payout(**p) for p in db.payouts(con, campaign)]
+
+    @app.post("/api/payouts")
+    def add_payout(body: dict) -> Payout:
+        """A payout a campaign actually made, recorded by hand (D99)."""
+        try:
+            amount = float(body.get("amount"))
+            with db.connect() as con:
+                new = db.add_payout(con, str(body.get("campaign") or ""), amount,
+                                    str(body.get("paid_on") or datetime.now().strftime("%Y-%m-%d")),
+                                    str(body.get("note") or ""))
+                found = next(p for p in db.payouts(con) if p["id"] == new)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, f"couldn't record that payout: {exc}") from exc
+        broker.publish("campaigns.changed")
+        return Payout(**found)
+
+    @app.delete("/api/payouts/{payout_id}")
+    def delete_payout(payout_id: int) -> dict:
+        with db.connect() as con:
+            db.delete_payout(con, payout_id)
+        broker.publish("campaigns.changed")
+        return {"ok": True}
+
+    @app.post("/api/posts/task")
+    def post_task(body: dict) -> dict:
+        """A brief's view-milestone task marked done for a post, or undone (D98)."""
+        try:
+            url, views = str(body["url"]).split("?", 1)[0], int(body["views"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(400, "needs the post's url and the milestone's views") from exc
+        with db.connect() as con:
+            db.set_task_done(con, url, views, bool(body.get("done", True)))
+        broker.publish("clips.changed", {})
         return {"ok": True}
 
     @app.get("/api/campaigns/{name}/form")

@@ -99,6 +99,64 @@ export interface paths {
         patch: operations["update_campaign_api_campaigns__name__patch"];
         trace?: never;
     };
+    "/api/payouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Payouts */
+        get: operations["list_payouts_api_payouts_get"];
+        put?: never;
+        /**
+         * Add Payout
+         * @description A payout a campaign actually made, recorded by hand (D99).
+         */
+        post: operations["add_payout_api_payouts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/payouts/{payout_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Payout */
+        delete: operations["delete_payout_api_payouts__payout_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/posts/task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Task
+         * @description A brief's view-milestone task marked done for a post, or undone (D98).
+         */
+        post: operations["post_task_api_posts_task_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/campaigns/{name}/form": {
         parameters: {
             query?: never;
@@ -1548,6 +1606,24 @@ export interface components {
              * @default []
              */
             posting_rules: string[];
+            /** Paid Usd */
+            paid_usd?: number | null;
+            /** Paid Per 1K */
+            paid_per_1k?: number | null;
+            /**
+             * Deadline
+             * @default
+             */
+            deadline: string;
+            /** Budget Left */
+            budget_left?: number | null;
+            /** Budget Checked At */
+            budget_checked_at?: string | null;
+            /**
+             * Warning
+             * @default
+             */
+            warning: string;
         };
         /** CampaignCheck */
         CampaignCheck: {
@@ -2022,6 +2098,29 @@ export interface components {
             to_submit: number;
             /** Ready */
             ready: number;
+            /** Paid Usd */
+            paid_usd?: number | null;
+            /**
+             * Tasks Due
+             * @default 0
+             */
+            tasks_due: number;
+        };
+        /** Payout */
+        Payout: {
+            /** Id */
+            id: number;
+            /** Campaign */
+            campaign: string;
+            /** Amount */
+            amount: number;
+            /** Paid On */
+            paid_on: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
         };
         /** Post */
         Post: {
@@ -2070,6 +2169,11 @@ export interface components {
             submitted_at?: string | null;
             /** Posted Caption */
             posted_caption?: string | null;
+            /**
+             * Tasks
+             * @default []
+             */
+            tasks: components["schemas"]["PostTask"][];
         };
         /**
          * PostCopy
@@ -2106,6 +2210,21 @@ export interface components {
             avg_watch_s?: number | null;
             /** Skip Rate Pct */
             skip_rate_pct?: number | null;
+        };
+        /**
+         * PostTask
+         * @description Something the brief asks once a post passes a number of views (campaign/milestones.py).
+         */
+        PostTask: {
+            /** Views */
+            views: number;
+            /** Task */
+            task: string;
+            /**
+             * Done
+             * @default false
+             */
+            done: boolean;
         };
         /** Proof */
         Proof: {
@@ -2556,6 +2675,142 @@ export interface operations {
             path: {
                 name: string;
             };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payouts_api_payouts_get: {
+        parameters: {
+            query?: {
+                campaign?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Payout"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_payout_api_payouts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Payout"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_payout_api_payouts__payout_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payout_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_task_api_posts_task_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody: {

@@ -34,6 +34,14 @@ class PostPoint(BaseModel):
     skip_rate_pct: float | None = None
 
 
+class PostTask(BaseModel):
+    """Something the brief asks once a post passes a number of views (campaign/milestones.py)."""
+
+    views: int
+    task: str
+    done: bool = False
+
+
 class Post(BaseModel):
     platform: str
     account: str
@@ -56,6 +64,15 @@ class Post(BaseModel):
     est_earnings: float | None = None
     submitted_at: str | None = None
     posted_caption: str | None = None   # as it is on the platform, for the proof pack
+    tasks: list[PostTask] = []          # the brief's view milestones this post has reached
+
+
+class Payout(BaseModel):
+    id: int
+    campaign: str
+    amount: float
+    paid_on: str
+    note: str = ""
 
 
 class Duplicate(BaseModel):
@@ -180,6 +197,12 @@ class Campaign(BaseModel):
     last_post: str | None = None
     campaign_url: str = ""         # where the user submits post links
     posting_rules: list[str] = []  # the brief's rules only the poster can follow
+    paid_usd: float | None = None      # what it has actually paid, as recorded (D99)
+    paid_per_1k: float | None = None   # ...per 1,000 of its posts' views
+    deadline: str = ""                 # YYYY-MM-DD, from the brief
+    budget_left: float | None = None   # as last checked on its page (D100)
+    budget_checked_at: str | None = None
+    warning: str = ""                  # ending soon, ended, or budget running low
 
 
 class Brief(BaseModel):
@@ -215,6 +238,8 @@ class Metrics(BaseModel):
     median_views: float | None
     to_submit: int
     ready: int
+    paid_usd: float | None = None   # recorded payouts, active campaigns
+    tasks_due: int = 0              # brief tasks reached and not done
 
 
 class SinceLastVisit(BaseModel):

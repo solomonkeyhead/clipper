@@ -120,8 +120,45 @@ export function useSetNote() {
 export function useSetCampaign() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: ({ name, ...changes }: { name: string; archived?: boolean; auto_post?: boolean | null }) =>
-      unwrap(api.PATCH("/api/campaigns/{name}", { params: { path: { name } }, body: changes })),
+    mutationFn: ({ name, ...changes }: {
+      name: string; archived?: boolean; auto_post?: boolean | null; budget_left?: number | null;
+    }) => unwrap(api.PATCH("/api/campaigns/{name}", { params: { path: { name } }, body: changes })),
+    onSettled: invalidate,
+  });
+}
+
+export type Payout = components["schemas"]["Payout"];
+
+/** What campaigns actually paid, as recorded (D99). */
+export const usePayouts = (campaign?: string) =>
+  useQuery({ queryKey: ["payouts", campaign ?? "all"],
+             queryFn: () => unwrap(api.GET("/api/payouts", { params: { query: { campaign } } })) });
+
+export function useAddPayout() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: { campaign: string; amount: number; paid_on: string; note?: string }) =>
+      unwrap(api.POST("/api/payouts", { body })),
+    onSettled: () => { invalidate(); void qc.invalidateQueries({ queryKey: ["payouts"] }); },
+  });
+}
+
+export function useDeletePayout() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(api.DELETE("/api/payouts/{payout_id}", { params: { path: { payout_id: id } } })),
+    onSettled: () => { invalidate(); void qc.invalidateQueries({ queryKey: ["payouts"] }); },
+  });
+}
+
+/** A brief's view-milestone task done (or undone) for a post (D98). */
+export function useSetTask() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (body: { url: string; views: number; done: boolean }) =>
+      unwrap(api.POST("/api/posts/task", { body })),
     onSettled: invalidate,
   });
 }

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  downloadUrl, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
+  downloadUrl, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useSetTask, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -512,12 +512,33 @@ function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
       </dl>
       )}
       {!noStats && <ViewsLine post={post} />}
+      {post.tasks?.length ? <PostTasks post={post} /> : null}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
         <span>Posted {ago(post.posted_at)}</span>
         {post.settling && <Chip tone="warning">Stats still settling (Instagram reports up to 48 h late)</Chip>}
         {post.submitted_at && <Chip tone="success">Submitted</Chip>}
       </div>
     </div>
+  );
+}
+
+/** What the brief asks now this post has passed a view count (campaign/milestones.py, D98). */
+function PostTasks({ post }: { post: Post }) {
+  const setTask = useSetTask();
+  return (
+    <ul className="mt-2 flex flex-col gap-1.5">
+      {(post.tasks ?? []).map((t) => (
+        <li key={t.views} className={cn("flex items-start gap-2 rounded-sm border p-2 text-xs",
+          t.done ? "border-line text-muted" : "border-warning/50 bg-[color-mix(in_oklch,var(--warning)_8%,transparent)]")}>
+          <input type="checkbox" className="mt-0.5 accent-[var(--color-accent)]" checked={t.done}
+                 aria-label={`Done: ${t.task}`}
+                 onChange={(e) => setTask.mutate({ url: post.url, views: t.views, done: e.target.checked })} />
+          <span className={cn(t.done && "line-through")}>
+            <b>Passed {formatCount(t.views)} views.</b> The brief says: “{t.task}”
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

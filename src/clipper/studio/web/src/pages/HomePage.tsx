@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, Inbox, Send, Sparkles, TrendingUp } from "lucide-react";
-import { useCampaigns, useClips, useHome, type Clip } from "@/api/client";
-import { Card, Metric, PageHeader, Skeleton } from "@/components/ui";
+import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp } from "lucide-react";
+import { useCampaigns, useClips, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
+import { Button, Card, Metric, PageHeader, Skeleton } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
@@ -90,6 +90,9 @@ function GetStarted({ done }: { done: Record<string, boolean> }) {
 export function DashboardPage() {
   const { data: home } = useHome();
   const { data: clips = [] } = useClips();
+  const { data: posts = [] } = usePosts();
+  const setTask = useSetTask();
+  const open = useUI((s) => s.setOpenClip);
   const { data: campaigns = [] } = useCampaigns();
   const archived = new Set(campaigns.filter((c) => c.archived).map((c) => c.name));
 
@@ -104,6 +107,9 @@ export function DashboardPage() {
   }
   const m = home.metrics;
   const since = home.since;
+  // The brief's view-milestone tasks reached and not done (D98), oldest post first.
+  const due = posts.flatMap((post) => (post.tasks ?? []).filter((t) => !t.done).map((task) => ({ post, task })))
+    .sort((a, b) => (a.post.posted_at ?? "").localeCompare(b.post.posted_at ?? ""));
   const firstRun = Object.values(home.first_run).some((done) => !done);
   const active = clips.filter((c) => c.status !== "skipped" && !archived.has(c.campaign));
   const by = (s: string) => active.filter((c) => c.status === s);
@@ -117,7 +123,8 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Metric label="Est. earnings" tone="money" value={formatMoney(m.est_earnings)}
                 hint="Estimate: views ÷ 1,000 × each campaign's rate. Campaigns verify views themselves."
-                sub={m.est_earnings === null ? "Add a campaign's pay rate" : "active campaigns"} />
+                sub={m.est_earnings === null ? "Add a campaign's pay rate"
+                  : m.paid_usd != null ? `${formatMoney(m.paid_usd)} paid so far` : "active campaigns"} />
         <Metric label="Views" value={formatCount(m.views)} sub="active campaigns" />
         <Metric label="Posts" value={m.posts} sub="active campaigns" />
         <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more" />
@@ -171,7 +178,21 @@ export function DashboardPage() {
               <ArrowRight className="size-4 text-subtle" />
             </Link>
           )}
-          {m.ready === 0 && m.to_submit === 0 && (
+          {due.slice(0, 3).map(({ post, task }) => (
+            <div key={`${post.url}-${task.views}`} className="flex items-start gap-3 rounded-md p-2 hover:bg-surface-2">
+              <ListChecks className="mt-0.5 size-4 shrink-0 text-warning" />
+              <button type="button" className="min-w-0 flex-1 text-left text-sm" onClick={() => open(post.clip)}
+                      title={task.task}>
+                <span className="line-clamp-1">{post.clip_title}</span>
+                <span className="line-clamp-1 text-xs text-muted">Passed {formatCount(task.views)} views: {task.task}</span>
+              </button>
+              <Button size="sm" variant="ghost" onClick={() => setTask.mutate({ url: post.url, views: task.views, done: true })}>
+                Done
+              </Button>
+            </div>
+          ))}
+          {due.length > 3 && <span className="px-2 text-xs text-subtle">+{due.length - 3} more brief tasks</span>}
+          {m.ready === 0 && m.to_submit === 0 && !due.length && (
             <p className="flex items-center gap-2 p-2 text-sm text-muted">
               <CheckCircle2 className="size-4 text-success" /> All caught up.
             </p>

@@ -1852,3 +1852,28 @@ more encode). Skipped where a brief forbids re-edits (campaign/edits.teaser_allo
 and on podcast clips with internal cuts; kept on a hook re-render (scores.teaser).
 On by default; Settings -> "Open on the payoff". The opening call now prefers the
 stronger model, falling back as everywhere else. Existing clips are unchanged.
+
+## D98 — Brief tasks at a view count (2026-10-02)
+
+Briefs set tasks that start mattering later -- Please Like Me: "Wait until your
+video passes 2,000 views, then screen-record your video analytics... and submit".
+Missed, a clip is rejected after its views are in. campaign/milestones.py reads
+every sentence that ties an action to a view count from the pasted brief, notes
+and posting rules (rates, minimums and "to qualify" lines aren't tasks), keeping
+the fullest wording. Each post past one carries the task (Post.tasks) with a Done
+box in the clip panel; due ones head the dashboard's Next up (post_tasks table).
+
+## D99 — Payouts recorded (2026-10-02)
+
+Estimates are views x rate; campaigns pay less (bot scores, caps, rejections).
+Payouts are entered by hand on the campaign page (payouts table, /api/payouts),
+giving paid so far and the real rate per 1,000 of its posts' views next to the
+estimate; the dashboard shows paid under estimated earnings.
+
+## D100 — Budget and deadline warnings (2026-10-02)
+
+Open marketplaces stop paying when a brand's budget runs out. A campaign's budget
+left is entered on its page (stamped with when; campaign_state.budget_left), and
+with the brief's deadline gives a warning -- ended, ending within 3 days, used up,
+or under $50 / 20,000 views' worth (with how old the figure is) -- on its card, its
+page and when picking it on New clips. No scraping: Whop's own figures are typed in.

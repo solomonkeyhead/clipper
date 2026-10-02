@@ -454,6 +454,11 @@ export function NewClipsPage() {
           {chosen && chosen.reward_per_1k_usd != null && (
             <p className="mt-2 text-xs text-muted">Pays ${chosen.reward_per_1k_usd.toFixed(2)} per 1K views. Clipper follows its brief's rules.</p>
           )}
+          {chosen?.warning && (
+            <p className="mt-2 flex items-center gap-1.5 text-sm text-warning">
+              <AlertTriangle className="size-4 shrink-0" /> {chosen.warning}: clips posted after it stops paying earn nothing.
+            </p>
+          )}
         </Step>
 
         <Step n={2} title="Footage">

@@ -46,6 +46,22 @@ CREATE TABLE IF NOT EXISTS campaign_state (
     archived    INTEGER NOT NULL DEFAULT 0,
     auto_post   INTEGER               -- NULL: follow the global setting
 );
+-- A brief's view-milestone task done for a post (campaign/milestones.py, D98).
+CREATE TABLE IF NOT EXISTS post_tasks (
+    url         TEXT NOT NULL,
+    views       INTEGER NOT NULL,     -- the milestone
+    done_at     TEXT NOT NULL,
+    PRIMARY KEY (url, views)
+);
+-- What a campaign actually paid, as the user records it (D99).
+CREATE TABLE IF NOT EXISTS payouts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign    TEXT NOT NULL,
+    amount      REAL NOT NULL,
+    paid_on     TEXT NOT NULL,        -- YYYY-MM-DD
+    note        TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL
@@ -196,6 +212,9 @@ MIGRATIONS = [
     # Its searchable YouTube title and pinned comment (campaign/extras.py):
     # JSON {v, youtube_title, pinned_comment} or {v, failed_at}.
     ("clips", "extras", "ALTER TABLE clips ADD COLUMN extras TEXT"),
+    # A campaign's remaining budget, as the user last saw it on its page (D100).
+    ("campaign_state", "budget_left", "ALTER TABLE campaign_state ADD COLUMN budget_left REAL"),
+    ("campaign_state", "budget_checked_at", "ALTER TABLE campaign_state ADD COLUMN budget_checked_at TEXT"),
     # Where a found campaign came from: "email", "discord" or "whop".
     ("found_campaigns", "via", "ALTER TABLE found_campaigns ADD COLUMN via TEXT NOT NULL DEFAULT 'email'"),
 ]
@@ -341,6 +360,43 @@ def set_campaign_state(con: sqlite3.Connection, name: str, **changes) -> None:
             value = changes[key]
             con.execute(f"UPDATE campaign_state SET {key}=? WHERE name=?",
                         (None if value is None else int(bool(value)), name))
+    if "budget_left" in changes:
+        value = changes["budget_left"]
+        if value is not None and (not isinstance(value, int | float) or value < 0):
+            raise ValueError("budget left must be a number of dollars, 0 or more")
+        con.execute("UPDATE campaign_state SET budget_left=?, budget_checked_at=? WHERE name=?",
+                    (value, now() if value is not None else None, name))
+
+
+def tasks_done(con: sqlite3.Connection) -> set[tuple[str, int]]:
+    """(post url, milestone views) for every brief task marked done."""
+    return {(r["url"], r["views"]) for r in con.execute("SELECT url, views FROM post_tasks")}
+
+
+def set_task_done(con: sqlite3.Connection, url: str, views: int, done: bool) -> None:
+    if done:
+        con.execute("INSERT OR REPLACE INTO post_tasks (url, views, done_at) VALUES (?, ?, ?)",
+                    (url, views, now()))
+    else:
+        con.execute("DELETE FROM post_tasks WHERE url=? AND views=?", (url, views))
+
+
+def payouts(con: sqlite3.Connection, campaign: str | None = None) -> list[dict]:
+    query = "SELECT * FROM payouts" + (" WHERE campaign=?" if campaign else "") + " ORDER BY paid_on DESC, id DESC"
+    return [dict(r) for r in con.execute(query, (campaign,) if campaign else ())]
+
+
+def add_payout(con: sqlite3.Connection, campaign: str, amount: float, paid_on: str, note: str = "") -> int:
+    if amount <= 0:
+        raise ValueError("a payout is more than $0")
+    datetime.strptime(paid_on, "%Y-%m-%d")  # ValueError if it isn't a date
+    cur = con.execute("INSERT INTO payouts (campaign, amount, paid_on, note, created_at) VALUES (?,?,?,?,?)",
+                      (campaign, round(amount, 2), paid_on, note.strip()[:200], now()))
+    return int(cur.lastrowid)
+
+
+def delete_payout(con: sqlite3.Connection, payout_id: int) -> None:
+    con.execute("DELETE FROM payouts WHERE id=?", (payout_id,))
 
 
 def settings(con: sqlite3.Connection) -> dict[str, str]:

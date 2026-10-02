@@ -1,7 +1,10 @@
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Archive, ArchiveRestore, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, Search, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useState } from "react";
-import { useCampaign, useCampaigns, useFound, useSetCampaign, type Brief, type Campaign } from "@/api/client";
+import {
+  useAddPayout, useCampaign, useCampaigns, useDeletePayout, useFound, usePayouts, useSetCampaign, type Brief, type Campaign,
+} from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, Chip, CopyButton, EmptyState, PageHeader, Skeleton, Tip } from "@/components/ui";
@@ -46,7 +49,10 @@ function CampaignCard({ c }: { c: Campaign }) {
           {c.est_earnings !== null && c.est_earnings !== undefined
             ? <>Est. <span className="text-money">{formatMoney(c.est_earnings)}</span> so far</> : " "}
         </span>
-        {c.to_submit > 0 && <Chip tone="warning">{c.to_submit} link{c.to_submit === 1 ? "" : "s"} to submit</Chip>}
+        <span className="flex flex-wrap justify-end gap-1.5">
+          {c.warning && <Chip tone="danger" title={c.warning}>{c.warning.split(" · ")[0]}</Chip>}
+          {c.to_submit > 0 && <Chip tone="warning">{c.to_submit} link{c.to_submit === 1 ? "" : "s"} to submit</Chip>}
+        </span>
       </div>
     </Link>
   );
@@ -166,6 +172,88 @@ function BriefPanel({ brief }: { brief: Brief }) {
   );
 }
 
+/** Estimated vs actually paid, the real rate, and whether it's about to stop paying (D99, D100). */
+function MoneyCard({ c }: { c: Campaign }) {
+  const { data: payouts = [] } = usePayouts(c.name);
+  const add = useAddPayout();
+  const remove = useDeletePayout();
+  const setCampaign = useSetCampaign();
+  const [amount, setAmount] = useState("");
+  const [paidOn, setPaidOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [budget, setBudget] = useState<string | null>(null);
+  const saveBudget = () => {
+    if (budget === null) return;
+    const value = budget.trim() === "" ? null : Number(budget.replace(/[$,]/g, ""));
+    if (value !== null && (!Number.isFinite(value) || value < 0)) return void toast.error("Budget left is a dollar amount");
+    setCampaign.mutate({ name: c.name, budget_left: value }, { onSuccess: () => setBudget(null) });
+  };
+  return (
+    <Card className="mb-5 flex flex-col gap-4 p-4">
+      {c.warning && (
+        <p className="flex items-center gap-2 rounded-md bg-[color-mix(in_oklch,var(--warning)_12%,transparent)] px-3 py-2 text-sm text-warning">
+          <AlertTriangle className="size-4 shrink-0" /> {c.warning}. Clips posted after a campaign stops paying earn nothing.
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div><div className="text-xs text-muted">Estimated</div>
+          <div className="tabular text-lg font-semibold">{c.est_earnings != null ? formatMoney(c.est_earnings) : "–"}</div></div>
+        <div><div className="text-xs text-muted">Paid</div>
+          <div className="tabular text-lg font-semibold text-money">{c.paid_usd != null ? formatMoney(c.paid_usd) : "–"}</div></div>
+        <Tip label="What it actually paid per 1,000 of your posts' views, against its stated rate">
+          <div><div className="text-xs text-muted">Real rate</div>
+            <div className="tabular text-lg font-semibold">{c.paid_per_1k != null ? `${formatMoney(c.paid_per_1k)}/1K` : "–"}</div></div>
+        </Tip>
+        <div>
+          <div className="text-xs text-muted">Budget left{c.deadline && <> · ends {c.deadline}</>}</div>
+          {budget === null ? (
+            <button type="button" className="tabular text-lg font-semibold hover:text-accent" onClick={() => setBudget(c.budget_left != null ? String(c.budget_left) : "")}
+                    title={c.budget_checked_at ? `Checked ${ago(c.budget_checked_at)}` : "Not set: copy it from the campaign's page"}>
+              {c.budget_left != null ? formatMoney(c.budget_left) : <span className="text-sm font-normal text-accent">Set</span>}
+            </button>
+          ) : (
+            <input autoFocus value={budget} onChange={(e) => setBudget(e.target.value)} onBlur={saveBudget}
+                   onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") saveBudget(); if (e.key === "Escape") setBudget(null); }}
+                   placeholder="$ left" aria-label="Budget left"
+                   className="h-8 w-28 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+          )}
+        </div>
+      </div>
+      <details>
+        <summary className="cursor-pointer text-xs text-muted hover:text-fg">
+          Payouts {payouts.length > 0 && `(${payouts.length})`}: record what the campaign actually paid
+        </summary>
+        <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
+          e.preventDefault();
+          const value = Number(amount.replace(/[$,]/g, ""));
+          if (!Number.isFinite(value) || value <= 0) return void toast.error("Enter what it paid, in dollars");
+          add.mutate({ campaign: c.name, amount: value, paid_on: paidOn },
+                     { onSuccess: () => setAmount(""), onError: (err) => toast.error((err as Error).message) });
+        }}>
+          <input value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.stopPropagation()}
+                 placeholder="$ amount" aria-label="Amount paid"
+                 className="h-8 w-28 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+          <input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} aria-label="Paid on"
+                 className="h-8 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+          <Button size="sm" type="submit" variant="secondary" disabled={!amount.trim() || add.isPending}>Add payout</Button>
+        </form>
+        {payouts.length > 0 && (
+          <ul className="mt-2 flex flex-col divide-y divide-line text-sm">
+            {payouts.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 py-1.5">
+                <span className="tabular w-24 text-money">{formatMoney(p.amount)}</span>
+                <span className="flex-1 text-muted">{p.paid_on}{p.note && ` · ${p.note}`}</span>
+                <Button size="icon" variant="ghost" className="size-7" aria-label="Remove payout" onClick={() => remove.mutate(p.id)}>
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+    </Card>
+  );
+}
+
 export function CampaignPage() {
   const { name } = useParams({ from: "/campaigns/$name" });
   const { data, isLoading, error } = useCampaign(name);
@@ -218,6 +306,7 @@ export function CampaignPage() {
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         {brief ? <BriefPanel brief={brief} /> : <div />}
         <div className="min-w-0">
+          <MoneyCard c={c} />
           <div className="mb-4 flex gap-1 border-b border-line" role="tablist">
             {([["clips", `Clips ${data.clips.length}`], ["posts", `Posts ${posts.length}`]] as const).map(([key, label]) => (
               <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
