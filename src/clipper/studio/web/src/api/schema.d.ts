@@ -1484,8 +1484,8 @@ export interface components {
             label: string;
             /** Clips */
             clips: number;
-            /** Avg Rating */
-            avg_rating?: number | null;
+            /** Liked Pct */
+            liked_pct?: number | null;
             /** Rated */
             rated: number;
             /** Median Views */

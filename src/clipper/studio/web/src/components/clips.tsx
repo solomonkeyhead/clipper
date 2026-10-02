@@ -38,12 +38,12 @@ export function useStatusWithUndo() {
   };
 }
 
-/** "Not good": skip a ready clip and teach Clipper from it, with a 5-second undo (D74). */
-function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
+/** "Not good": skip a ready clip and teach Clipper from it, with a 5-second undo (D74).
+ *  The card's button and the open clip's B key both do this. */
+export function useNotGood() {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["clips"] });
-  const mark = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  return async (clip: Clip) => {
     const before = clip.marked;
     try {
       await markNotGood(clip.id);
@@ -57,8 +57,12 @@ function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }
       toast.error((err as Error).message);
     }
   };
+}
+
+function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
+  const notGood = useNotGood();
   const button = (
-    <Button size={size} variant="ghost" onClick={(e) => void mark(e)} aria-label="Not good">
+    <Button size={size} variant="ghost" onClick={(e) => { e.stopPropagation(); void notGood(clip); }} aria-label="Not good">
       <ThumbsDown className={size === "md" ? "size-4" : "size-3.5"} />{size === "md" && " Not good"}
     </Button>
   );
@@ -591,6 +595,7 @@ export function ClipSheet() {
   const setStatus = useStatusWithUndo();
   const submit = useSubmittedWithUndo();
   const rate = useRateClip();
+  const notGood = useNotGood();
   const title = useCampaignTitle();
   const campaignUrlOf = useCampaignUrl();
   const campaignUrl = clip ? campaignUrlOf(clip.campaign) : "";
@@ -614,8 +619,13 @@ export function ClipSheet() {
     x: () => clip && setStatus(clip, "skipped"),
     r: () => clip && setStatus(clip, "ready"),
     s: () => clip && clip.status !== "submitted" && submit(clip),
-    ...Object.fromEntries([1, 2, 3, 4, 5].map((n) => [String(n), () =>
-      clip && rate.mutate({ id: clip.id, rating: clip.rating === n ? null : n, reasons: clip.rating === n ? [] : clip.reasons })])),
+    // Good / Not good (D74), as the buttons: Y toggles Good; B on a ready clip skips it too.
+    y: () => clip && rate.mutate({ id: clip.id, rating: (clip.rating ?? 0) >= 4 ? null : 5, reasons: clip.reasons }),
+    b: () => {
+      if (!clip) return;
+      if (clip.status === "ready") void notGood(clip);
+      else rate.mutate({ id: clip.id, rating: clip.rating != null && clip.rating <= 2 ? null : 1, reasons: clip.reasons });
+    },
     f: () => clip && void showFile(clip.id),
     d: () => clip?.file_exists && window.location.assign(downloadUrl(clip.id)),
     Delete: () => clip && remove(clip),
@@ -737,6 +747,7 @@ export function ClipSheet() {
 
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
                   <span><Kbd>J</Kbd> <Kbd>K</Kbd> next / previous</span>
+                  <span><Kbd>Y</Kbd> good · <Kbd>B</Kbd> not good</span>
                   <span><Kbd>P</Kbd> posted</span>
                   <span><Kbd>X</Kbd> skip</span>
                   <span><Kbd>D</Kbd> download</span>

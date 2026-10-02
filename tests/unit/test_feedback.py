@@ -63,6 +63,7 @@ def test_report_agreement_and_bands():
     assert report.agreement_verdict == "strong" and report.views_verdict == "strong"
     assert report.rated == 6 and report.unrated == 0
     assert [b["clips"] for b in report.bands] == [1, 1, 1, 3]
+    assert [b["liked_pct"] for b in report.bands] == [0, 0, 0, 100]  # good / not good, not stars
 
 
 class TestWhatARatingTeaches:

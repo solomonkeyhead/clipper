@@ -43,14 +43,14 @@ function insights(r: Report): React.ReactNode[] {
   if (top && top.count >= 2) {
     out.push(<>Your most common complaint is <b>{top.label.toLowerCase()}</b> ({top.count}×). {ANSWER[top.key] ?? ""}</>);
   }
-  const rated = r.bands.filter((b) => b.rated >= 2 && b.avg_rating != null);
+  const rated = r.bands.filter((b) => b.rated >= 2 && b.liked_pct != null);
   if (rated.length >= 2) {
     const hi = rated[rated.length - 1];
     const rest = rated.slice(0, -1);
-    const restAvg = rest.reduce((s, b) => s + (b.avg_rating ?? 0) * b.rated, 0) / rest.reduce((s, b) => s + b.rated, 0);
-    out.push((hi.avg_rating ?? 0) > restAvg
-      ? <>The score points the right way: clips it scores {hi.label.toLowerCase()} average <b>{hi.avg_rating}★</b> from you, against {restAvg.toFixed(1)}★ below that.</>
-      : <>Clips it scores {hi.label.toLowerCase()} don't rate better with you than lower ones yet ({hi.avg_rating}★ vs {restAvg.toFixed(1)}★).</>);
+    const restPct = Math.round(rest.reduce((s, b) => s + (b.liked_pct ?? 0) * b.rated, 0) / rest.reduce((s, b) => s + b.rated, 0));
+    out.push((hi.liked_pct ?? 0) > restPct
+      ? <>The score points the right way: you liked <b>{hi.liked_pct}%</b> of the clips it scores {hi.label.toLowerCase()}, against {restPct}% below that.</>
+      : <>Clips it scores {hi.label.toLowerCase()} don't land better with you than lower ones yet ({hi.liked_pct}% liked vs {restPct}%).</>);
   }
   const judged = r.dimensions.filter((d) => d.agreement != null);
   if (r.scored_and_rated >= r.min_for_agreement && judged.length) {
@@ -88,7 +88,7 @@ export function LearningPage() {
         </Card>
         <Verdict label="Score matches your ratings" verdict={report.agreement_verdict} rho={report.agreement}
                  n={report.scored_and_rated} need={report.min_for_agreement}
-                 explain="Rank correlation between Clipper's score and your rating: 1 is perfect, 0 is no relation." />
+                 explain="Rank correlation between Clipper's score and your Good / Not good: 1 is perfect, 0 is no relation." />
         <Verdict label="Score matches views" verdict={report.views_verdict} rho={report.views_agreement}
                  n={report.with_views} need={report.min_for_agreement}
                  explain="Rank correlation between Clipper's score and each clip's total views. Views on a new account are noisy." />
@@ -119,14 +119,14 @@ export function LearningPage() {
         <Card className="flex flex-col gap-3 p-4">
           <div className="px-2">
             <h2 className="text-md font-semibold">Does the score work?</h2>
-            <p className="text-xs text-muted">If it does, higher-scoring clips should get higher ratings and more views.</p>
+            <p className="text-xs text-muted">If it does, you should like more of the higher-scoring clips, and they should get more views.</p>
           </div>
           <table className="tabular w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-muted">
                 <th className="px-2 py-1.5 font-medium">Clipper's score</th>
                 <th className="px-2 py-1.5 font-medium">Clips</th>
-                <th className="px-2 py-1.5 font-medium">Your avg rating</th>
+                <th className="px-2 py-1.5 font-medium">You liked</th>
                 <th className="px-2 py-1.5 font-medium">Median views</th>
               </tr>
             </thead>
@@ -135,8 +135,16 @@ export function LearningPage() {
                 <tr key={b.label} className="border-t border-line">
                   <td className="px-2 py-2 font-medium">{b.label}</td>
                   <td className="px-2 py-2">{b.clips}</td>
-                  <td className="px-2 py-2">{b.avg_rating != null ? <span className="text-money">★ {b.avg_rating}</span> : <span className="text-subtle">–</span>}
-                    {b.rated > 0 && <span className="ml-1 text-xs text-subtle">({b.rated})</span>}</td>
+                  <td className="px-2 py-2">
+                    {b.liked_pct != null ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-3">
+                          <span className="block h-full rounded-full bg-success" style={{ width: `${b.liked_pct}%` }} />
+                        </span>
+                        {b.liked_pct}%
+                      </span>
+                    ) : <span className="text-subtle">–</span>}
+                    {b.rated > 0 && <span className="ml-1 text-xs text-subtle">of {b.rated}</span>}</td>
                   <td className="px-2 py-2">{b.median_views != null ? formatCount(b.median_views) : <span className="text-subtle">–</span>}</td>
                 </tr>
               ))}

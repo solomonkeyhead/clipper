@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { AlertTriangle, BadgeDollarSign, CheckCircle2, ChevronDown, Clock, Pin, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
+import { AlertTriangle, BadgeDollarSign, CheckCircle2, Clock, Pin, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAccountGroups, useAccounts, useAddPostLink, useCampaigns, usePosts, useRecheckRules,
@@ -71,17 +71,26 @@ export function PostPanel({ clip }: { clip: Clip }) {
       <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Post it</h3>
       <BriefCheck clip={clip} />
       <div className="flex flex-col gap-2.5 text-sm">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          {copies.length ? copies.map((c) => (
-            <PlatformRow key={c.platform} copy={c} accounts={postOn(key(c.platform))} last={lastPost.get(key(c.platform))}
-                         url={UPLOAD[key(c.platform)]?.url} onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
-          )) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
-          {shown.length > 1 && (
-            <Button size="sm" variant="ghost" className="w-fit" onClick={() => open(shown)}>
-              <Upload className="size-3.5" /> Open all {shown.length}
-            </Button>
-          )}
-        </div>
+        {copies.length ? (
+          // One line per platform, the same shape every time: the Open buttons sit in
+          // one column, so posting everywhere is a run down it (then "Open all" below).
+          <div className="flex min-w-0 flex-col">
+            <div className="divide-y divide-line rounded-sm border border-line bg-surface-1">
+              {copies.map((c) => (
+                <PlatformRow key={c.platform} copy={c} accounts={postOn(key(c.platform))}
+                             url={UPLOAD[key(c.platform)]?.url} onOpen={() => key(c.platform) in UPLOAD && open([key(c.platform)])} />
+              ))}
+            </div>
+            {shown.length > 1 && (
+              <div className="mt-1.5 flex justify-end pr-2.5">
+                <Button size="sm" variant="ghost" className="w-[8.5rem]" onClick={() => open(shown)}>
+                  <Upload className="size-3.5" /> Open all {shown.length}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
+        <BeforePosting platforms={copies.length ? copies.map((c) => key(c.platform)) : shown} lastPost={lastPost} />
         {clip.pinned_comment && (
           <div className="flex items-start gap-2 rounded-sm border border-line bg-surface-1 px-2.5 py-2">
             <Pin className="mt-0.5 size-3.5 shrink-0 text-accent" />
@@ -133,62 +142,54 @@ function useLastPost() {
   return last;
 }
 
-function PlatformRow({ copy, accounts, url, onOpen, last }: {
-  copy: PostCopy; accounts: Account[]; url?: string; onOpen: () => void; last?: number;
+/** Hours since `last`, or null: under SPACING_HOURS is worth a word before posting. */
+const recentHours = (last?: number) => (last ? (Date.now() - last) / 3_600_000 : null);
+const ago = (hours: number) => (hours < 1 ? `${Math.max(1, Math.round(hours * 60))} min` : `${hours.toFixed(1)} h`);
+
+/** The platform's short name, so every row fits on one line ("YouTube", not "YouTube Shorts"). */
+const SHORT: Record<string, string> = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", x: "X" };
+
+function PlatformRow({ copy, accounts, url, onOpen }: {
+  copy: PostCopy; accounts: Account[]; url?: string; onOpen: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const failed = copy.checks.filter((c) => !c.passed);
-  const name = UPLOAD[key(copy.platform)]?.name ?? copy.platform;
-  const since = last ? (Date.now() - last) / 3_600_000 : null;
+  const k = key(copy.platform);
+  const name = SHORT[k] ?? UPLOAD[k]?.name ?? copy.platform;
   return (
-    <div className="rounded-sm border border-line bg-surface-1 px-2.5 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="flex w-28 items-center gap-1.5 text-sm font-medium">
+    <div className="px-2.5 py-1.5">
+      <div className="flex items-center gap-2">
+        <span className="flex w-[6.5rem] shrink-0 items-center gap-1.5 text-sm font-medium">
           <PlatformIcon platform={copy.platform} className="size-3.5" /> {name}
+          <Tip label={failed.length ? `${failed.length} rule${failed.length > 1 ? "s" : ""} broken: click to see`
+            : `All ${copy.checks.length} rules met: click to see them`}>
+            <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
+                    aria-label={failed.length ? "Rules broken" : "All rules met"}
+                    className={cn("inline-flex", failed.length ? "text-danger" : "text-success")}>
+              {failed.length ? <XCircle className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
+            </button>
+          </Tip>
+
         </span>
-        {copy.title && <CopyButton text={copy.title} what={`${name} title`} label="Copy title" />}
-        {/* What the platform's upload page calls it: TikTok's "description" (campaign/rules.py TEXT_NAMES). */}
-        <CopyButton text={copy.caption} what={`${name} ${copy.text_name.toLowerCase()}`}
-                    label={`Copy ${copy.text_name.toLowerCase()}`} />
-        <Tip label={`${UPLOAD[key(copy.platform)]?.how ?? "Upload it"}. Opens in whichever account you're signed in to here.`}>
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          {copy.title && <CopyButton text={copy.title} what={`${name} title`} label="Title"
+                                     tip={<>Copy the title: <b>{copy.title}</b></>} />}
+          {/* What the platform's upload page calls it: TikTok's "description" (campaign/rules.py TEXT_NAMES). */}
+          <CopyButton text={copy.caption} what={`${name} ${copy.text_name.toLowerCase()}`} label={copy.text_name} />
+        </span>
+        <Tip label={`${UPLOAD[k]?.how ?? "Upload it"}. Opens in whichever account you're signed in to here.`}>
           {/* A real link, so middle-click and Ctrl-click work as usual too. */}
           <a href={url} target="_blank" rel="noopener noreferrer"
              onClick={(e) => { if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) { e.preventDefault(); onOpen(); } }}
-             className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
+             className="inline-flex h-7 w-[8.5rem] shrink-0 items-center justify-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
             Open {name} <ExternalLink className="size-3" />
           </a>
         </Tip>
-        <button type="button" onClick={() => setOpen(!open)}
-                className={cn("ml-auto inline-flex items-center gap-1 text-xs", failed.length ? "text-danger" : "text-success")}>
-          {failed.length ? <XCircle className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
-          {failed.length ? `${failed.length} rule${failed.length > 1 ? "s" : ""} broken` : `All ${copy.checks.length} rules met`}
-          <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} />
-        </button>
       </div>
       {accounts.length > 0 && (
-        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted">
+        <p className="mt-1 flex flex-wrap items-center gap-1 pl-[7rem] text-xs text-muted">
           Post from {accounts.map((a) => <span key={a.key} className="rounded-full border border-line px-2 py-0.5 text-fg">@{a.handle}</span>)}
           {accounts.length > 1 && <span>(one post each)</span>}
-        </p>
-      )}
-      {copy.title && <p className="mt-1.5 truncate text-xs text-muted" title={copy.title}>Title: <span className="text-fg">{copy.title}</span></p>}
-      {since !== null && since < SPACING_HOURS && (
-        <p className="mt-1.5 flex items-start gap-1.5 text-xs text-warning">
-          <Clock className="mt-px size-3.5 shrink-0" />
-          <span>
-            Your last {name} post went up {since < 1 ? `${Math.max(1, Math.round(since * 60))} min` : `${since.toFixed(1)} h`} ago.
-            Posting around {new Date(last! + SPACING_HOURS * 3_600_000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} gives
-            each post its own test audience.
-          </span>
-        </p>
-      )}
-      {UPLOAD[key(copy.platform)] && (
-        <p className="mt-1.5 flex items-start gap-1.5 text-xs">
-          <BadgeDollarSign className="mt-px size-3.5 shrink-0 text-warning" />
-          <span>
-            <b>Paid content:</b> {UPLOAD[key(copy.platform)].label}.
-            {UPLOAD[key(copy.platform)].why && <span className="text-muted"> {UPLOAD[key(copy.platform)].why}</span>}
-          </span>
         </p>
       )}
       {open && (
@@ -200,6 +201,38 @@ function PlatformRow({ copy, accounts, url, onOpen, last }: {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/** What to do on each upload page, out of the rows so they stay one line each:
+ *  the paid-content switch (D95), and any platform posted to under 3 hours ago (D96). */
+function BeforePosting({ platforms, lastPost }: { platforms: string[]; lastPost: Map<string, number> }) {
+  const shown = [...new Set(platforms)].filter((p) => UPLOAD[p]);
+  if (!shown.length) return null;
+  const soon = shown.map((p) => [p, recentHours(lastPost.get(p))] as const)
+    .filter(([, h]) => h !== null && h < SPACING_HOURS);
+  return (
+    <div className="flex flex-col gap-1.5 rounded-sm border border-line bg-surface-1 px-2.5 py-2 text-xs">
+      <span className="flex items-center gap-1.5 font-medium">
+        <BadgeDollarSign className="size-3.5 text-warning" /> Turn on the paid-content label
+      </span>
+      <ul className="flex flex-col gap-0.5 pl-5 text-muted">
+        {shown.map((p) => (
+          <li key={p}><b className="text-fg">{SHORT[p] ?? UPLOAD[p].name}:</b> {UPLOAD[p].label}.{UPLOAD[p].why && ` ${UPLOAD[p].why}`}</li>
+        ))}
+      </ul>
+      {soon.length > 0 && (
+        <span className="flex items-start gap-1.5 text-warning">
+          <Clock className="mt-px size-3.5 shrink-0" />
+          <span>
+            You posted {soon.map(([p, h]) => `${SHORT[p] ?? UPLOAD[p].name} ${ago(h!)}`).join(", ")} ago. Waiting until about{" "}
+            {new Date(Math.max(...soon.map(([p]) => lastPost.get(p)!)) + SPACING_HOURS * 3_600_000)
+              .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}{" "}
+            gives each post its own test audience.
+          </span>
+        </span>
       )}
     </div>
   );

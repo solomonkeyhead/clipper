@@ -279,7 +279,9 @@ def report(clips: list[Rated], defaults: dict[str, float], *, active: bool = Tru
         ratings = [c.moment for c in members if c.moment is not None]
         views = [c.views for c in members if c.views is not None]
         out.bands.append({"label": label, "clips": len(members),
-                          "avg_rating": round(statistics.fmean(ratings), 1) if ratings else None,
+                          # Good / Not good, not stars (D74): the share of rated clips that read as
+                          # liked, its moment counting for more than half ("moment" above).
+                          "liked_pct": round(100 * sum(r > 3 for r in ratings) / len(ratings)) if ratings else None,
                           "rated": len(ratings),
                           "median_views": statistics.median(views) if views else None})
     weights, out.weights_n = learned_weights(clips, defaults)

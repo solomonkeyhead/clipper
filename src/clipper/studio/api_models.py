@@ -281,7 +281,7 @@ class AccountGroup(BaseModel):
 class Band(BaseModel):
     label: str
     clips: int
-    avg_rating: float | None = None
+    liked_pct: int | None = None   # share of its rated clips you liked
     rated: int
     median_views: float | None = None
 

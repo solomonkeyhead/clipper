@@ -65,8 +65,10 @@ export const Kbd = ({ children, className }: { children: ReactNode; className?: 
 
 /* ---------- Copy button with a "Copied" state ---------- */
 
-export function CopyButton({ text, what, label, size = "sm", variant = "secondary", keys, className }: {
+export function CopyButton({ text, what, label, size = "sm", variant = "secondary", keys, className, tip }: {
   text: string; what: string; label?: string; size?: Size; variant?: Variant; keys?: string; className?: string;
+  /** The tooltip, when "Copy <what>" isn't enough (e.g. the text itself). */
+  tip?: ReactNode;
 }) {
   const [done, setDone] = useState(false);
   useEffect(() => {
@@ -89,7 +91,7 @@ export function CopyButton({ text, what, label, size = "sm", variant = "secondar
       {label && <span>{done ? "Copied" : label}</span>}
     </Button>
   );
-  return <Tip label={`Copy ${what.toLowerCase()}`} keys={keys}>{button}</Tip>;
+  return <Tip label={tip ?? `Copy ${what.toLowerCase()}`} keys={keys}>{button}</Tip>;
 }
 
 /* ---------- Chips and status ---------- */

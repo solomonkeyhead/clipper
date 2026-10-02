@@ -137,7 +137,7 @@ const SHORTCUTS: [string, [string, string][]][] = [
     ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
     ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"]]],
-  ["Open clip", [["J / K", "Next / previous clip"], ["C", "Copy caption"], ["L", "Copy link"],
+  ["Open clip", [["J / K", "Next / previous clip"], ["Y", "Good"], ["B", "Not good"], ["C", "Copy caption"], ["L", "Copy link"],
     ["D", "Download"], ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip"], ["F", "Show in folder"],
     ["Delete", "Delete (undo)"], ["Esc", "Close"]]],
 ];
