@@ -68,7 +68,9 @@ export function PostTable({ posts }: { posts: Post[] }) {
   };
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-surface-1">
+    // `relative`: the header's screen-reader label is positioned, and without it
+    // escaped the scroll box and widened the whole page on a phone.
+    <div className="relative overflow-x-auto rounded-lg border border-line bg-surface-1">
       <table className="tabular w-full text-sm">
         <thead className="border-b border-line text-left text-xs text-muted">
           <tr className="h-9">

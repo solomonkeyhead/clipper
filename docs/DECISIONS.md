@@ -1791,3 +1791,18 @@ mid-sentence start still moves back to its sentence. On the 13 rated clips it mo
 the four weak ones that needed it (to "Should I just pee on him?", "I have a big
 penis.", past the small talk) and left the great-hook ones alone. The reasons now
 read "Great opening" / "Weak opening". Re-rendering stays for new captions only.
+
+## D94 — Review pass: one source for shared lists, lighter pages (2026-10-01)
+
+A full pass for speed, cohesion and clutter. Speed: the clip list's per-platform
+texts are cached until a clip's or campaign's text changes (page data 57 -> 29 ms),
+API responses are gzipped (the 205 KB clip list is a fraction), and the libraries
+ship in their own long-lived file. One source each: platform names (were in five
+modules), video extensions, what each platform calls its text, and the rating
+reasons (served at /api/reasons, so a rename is one edit); response models moved
+to studio/api_models.py. Cohesion: the campaign page uses the Clips page's status
+tabs, "To submit" means the same thing everywhere, Learning is in the sidebar with
+one switch and a plain-words summary, Stats shows views by platform, each post
+shows views over time from the snapshots, and New clips marks videos already
+clipped and no longer lists downloaded clips as footage. Log noise from a resting
+model and closed browser tabs is gone, and no page scrolls sideways on a phone.
