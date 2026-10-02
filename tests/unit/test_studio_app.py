@@ -183,6 +183,14 @@ class TestApi:
         assert campaign["name"] == "chad-powers-s2" and campaign["counts"]["ready"] == 1
         assert client.get("/api/settings").json()["auto_post"] == "0"
 
+    def test_the_rating_reasons_come_grouped_from_one_list(self, client):
+        from clipper.studio import db
+
+        groups = client.get("/api/reasons").json()
+        assert [g["tone"] for g in groups] == ["good", "bad", "edit"]
+        offered = {r["key"]: r["label"] for g in groups for r in g["reasons"]}
+        assert offered == db.REASONS and offered["weak_hook"] == "Weak opening"
+
     def test_a_synced_post_makes_a_clip_posted_with_its_earnings(self, client, data_root, campaigns):
         brief = yaml.safe_load((campaigns / "chad-powers-s2.yaml").read_text(encoding="utf-8"))
         brief["reward_per_1k_usd"] = 2.5

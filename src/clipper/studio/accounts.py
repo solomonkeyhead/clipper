@@ -50,10 +50,10 @@ def token_files(platform: str):
 
 
 def over_limit_message(platform: str) -> str:
+    from ..config import PLATFORM_NAMES
     from . import plans
 
-    names = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "x": "X"}
-    return (f"Your plan connects one {names.get(platform, platform)} account. More than one per platform "
+    return (f"Your plan connects one {PLATFORM_NAMES.get(platform, platform)} account. More than one per platform "
             f"is part of the {plans.PLAN_NAMES[plans.FEATURES['multi_account']]} plan.")
 
 

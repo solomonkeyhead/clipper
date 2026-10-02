@@ -626,6 +626,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reasons
+         * @description The rating reasons the clip panel offers: one list, here (studio/db.py REASONS).
+         */
+        get: operations["reasons_api_reasons_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/learning": {
         parameters: {
             query?: never;
@@ -2054,6 +2074,11 @@ export interface components {
             /** Platform */
             platform: string;
             /**
+             * Text Name
+             * @default Caption
+             */
+            text_name: string;
+            /**
              * Title
              * @default
              */
@@ -2107,6 +2132,25 @@ export interface components {
             label: string;
             /** Count */
             count: number;
+        };
+        /**
+         * ReasonGroup
+         * @description The reasons a rating can give, grouped as learning reads them (learn/feedback.py).
+         */
+        ReasonGroup: {
+            /** Label */
+            label: string;
+            /** Tone */
+            tone: string;
+            /** Reasons */
+            reasons: components["schemas"]["ReasonOption"][];
+        };
+        /** ReasonOption */
+        ReasonOption: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
         };
         /** ResearchStatus */
         ResearchStatus: {
@@ -3524,6 +3568,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reasons_api_reasons_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReasonGroup"][];
                 };
             };
         };

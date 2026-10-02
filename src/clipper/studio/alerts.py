@@ -20,6 +20,7 @@ import os
 import threading
 from datetime import UTC, datetime, timedelta
 
+from ..config import PLATFORM_NAMES
 from ..utils.logging import get_logger
 from ..watch import discord, whop
 from . import db
@@ -128,9 +129,6 @@ def _config():
     profile = f"{p['profile']}\nPosts on: {', '.join(PLATFORM_NAMES.get(x, x) for x in platforms)}."
     return base.model_copy(update={"profile": profile, "min_rate_per_1k": p["min_rate"],
                                    "platforms": platforms})
-
-
-PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube"}
 
 
 def _connected() -> list[str]:

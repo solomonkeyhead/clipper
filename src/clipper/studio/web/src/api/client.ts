@@ -72,6 +72,10 @@ export const useAccounts = () =>
 export const useSettings = () =>
   useQuery({ queryKey: keys.settings, queryFn: () => unwrap(api.GET("/api/settings")) });
 
+/** The reasons a rating can give, grouped (one list, on the server). */
+export const useReasons = () =>
+  useQuery({ queryKey: ["reasons"], queryFn: () => unwrap(api.GET("/api/reasons")), staleTime: Infinity });
+
 /** One post's views at each sync that changed them (studio/db.py snapshots). */
 export const usePostHistory = (url: string) =>
   useQuery({ queryKey: ["post-history", url],

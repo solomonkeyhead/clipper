@@ -30,7 +30,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..campaign import editor
 from ..campaign.editor import CampaignError, CampaignForm
-from ..config import CampaignConfig
+from ..config import PLATFORM_NAMES, CampaignConfig
 from ..learn import log as perf
 from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
@@ -60,6 +60,8 @@ from .api_models import (
     PostCopy,
     PostPoint,
     Proof,
+    ReasonGroup,
+    ReasonOption,
     RuleCheck,
     Rules,
     Setup,
@@ -68,6 +70,7 @@ from .api_models import (
     WhopFeed,
 )
 from .events import Broker
+from .imports import VIDEO_EXTENSIONS
 
 log = get_logger(__name__)
 
@@ -80,9 +83,6 @@ SESSION_GAP_MINUTES = 30
 WATCH_FOR = timedelta(minutes=30)
 FAST_SYNC_SECONDS = 120
 
-
-PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "x": "X",
-                  "facebook": "Facebook", "snapchat": "Snapchat", "threads": "Threads"}
 
 # --------------------------------------------------------------------------
 # Reading the library
@@ -244,6 +244,7 @@ class Snapshot:
             self._prints[campaign.name] = rulecheck.fingerprint(campaign)
         texts = rulecheck.texts(clip, campaign, fingerprint=self._prints[campaign.name])
         copy = [PostCopy(platform=t.platform, title=t.title, caption=t.caption,
+                         text_name=caption_rules.TEXT_NAMES.get(t.platform, "Caption"),
                          checks=[RuleCheck(name=r.name, passed=r.passed, detail=r.detail) for r in t.checks])
                 for t in texts]
         _, key = rulecheck.audit_key(clip, campaign, self.briefs.get(campaign.name), texts)
@@ -382,7 +383,6 @@ def accounts() -> list[Account]:
 # The app
 # --------------------------------------------------------------------------
 
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".m4v", ".webm", ".avi"}
 
 
 def _quiet_resets(loop: asyncio.AbstractEventLoop, context: dict) -> None:
@@ -1106,6 +1106,17 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                     db.update_clip(con, clip_id, status="skipped")
         broker.publish("clips.changed", {"id": clip_id})
         return {"ok": True}
+
+    @app.get("/api/reasons")
+    def reasons() -> list[ReasonGroup]:
+        """The rating reasons the clip panel offers: one list, here (studio/db.py REASONS)."""
+        from ..learn import feedback
+
+        groups = (("What worked", "good", feedback.GOOD), ("What didn't", "bad", feedback.MOMENT_BAD),
+                  ("In the edit", "edit", feedback.EDIT))
+        return [ReasonGroup(label=label, tone=tone,
+                            reasons=[ReasonOption(key=k, label=db.REASONS[k]) for k in keys])
+                for label, tone, keys in groups]
 
     @app.get("/api/learning")
     def learning() -> Learning:

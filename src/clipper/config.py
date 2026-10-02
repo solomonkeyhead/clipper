@@ -455,6 +455,11 @@ class EditPermissions(StrictModel):
 
 #: Where a campaign's clips can be posted (CampaignConfig.platform_targets).
 PLATFORMS = ("tiktok", "instagram_reels", "youtube_shorts", "x")
+#: Every platform's name as shown, under both its account key ("instagram") and
+#: its campaign target ("instagram_reels"), plus the ones a post link can be from.
+PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "instagram_reels": "Instagram",
+                  "youtube": "YouTube", "youtube_shorts": "YouTube", "x": "X",
+                  "facebook": "Facebook", "snapchat": "Snapchat", "threads": "Threads"}
 
 
 class CaptionRule(StrictModel):

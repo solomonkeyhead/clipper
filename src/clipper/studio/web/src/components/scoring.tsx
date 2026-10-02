@@ -1,7 +1,7 @@
 import { Hand, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { markNotGood, useRateClip, type Clip } from "@/api/client";
+import { markNotGood, useRateClip, useReasons, type Clip } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { Tip } from "./ui";
 
@@ -9,18 +9,6 @@ const RUBRIC_LABELS: Record<string, string> = {
   hook_strength: "Hook", standalone_clarity: "Makes sense alone", payoff: "Payoff",
   emotional_intensity: "Emotion", quotability: "Quotable", ending_completeness: "Ending",
 };
-
-/** What worked, what didn't in the moment, and what didn't in the edit (learn/feedback.py, D86). */
-const GROUPS: { label: string; tone: "good" | "bad" | "edit"; reasons: [string, string][] }[] = [
-  { label: "What worked", tone: "good", reasons: [
-    ["great_hook", "Great opening"], ["funny", "Funny"], ["emotional", "Emotional"],
-    ["good_ending", "Good ending"], ["on_brief", "Right for the campaign"]] },
-  { label: "What didn't", tone: "bad", reasons: [
-    ["weak_hook", "Weak opening"], ["boring", "Boring / slow"], ["bad_ending", "Cut off / bad ending"],
-    ["needs_context", "Needs context"], ["off_brief", "Wrong for the campaign"]] },
-  { label: "In the edit", tone: "edit", reasons: [
-    ["bad_framing", "Bad framing"], ["caption_errors", "Caption mistakes"], ["wrong_text", "On-screen text doesn't fit"]] },
-];
 
 const scoreTone = (score: number) =>
   score >= 8 ? "text-success" : score >= 6.5 ? "text-accent" : score >= 5.5 ? "text-fg" : "text-warning";
@@ -105,6 +93,9 @@ export function ScoreBreakdown({ clip }: { clip: Clip }) {
 export function RatingPanel({ clip }: { clip: Clip }) {
   const rate = useRateClip();
   const qc = useQueryClient();
+  // What worked, what didn't in the moment, and what didn't in the edit (learn/feedback.py, D86).
+  const { data: groups = [] } = useReasons();
+  const good = new Set(groups.filter((g) => g.tone === "good").flatMap((g) => g.reasons.map((r) => r.key)));
   const reasons = clip.reasons ?? [];
   // Good / Not good: two clear choices instead of five stars (D74). Older 1-5
   // ratings still count: 4-5 read as good, 1-2 as not good.
@@ -124,7 +115,7 @@ export function RatingPanel({ clip }: { clip: Clip }) {
   const toggle = (key: string) => {
     const next = reasons.includes(key) ? reasons.filter((r) => r !== key) : [...reasons, key];
     // A reason on an unrated clip rates it: a skipped clip as not good, otherwise by the reason.
-    const rating = clip.rating ?? (clip.status === "skipped" || !GROUPS[0].reasons.some(([k]) => k === key) ? 1 : 5);
+    const rating = clip.rating ?? (clip.status === "skipped" || !good.has(key) ? 1 : 5);
     set(rating, next);
   };
   return (
@@ -146,10 +137,10 @@ export function RatingPanel({ clip }: { clip: Clip }) {
         </span>
       </div>
       {(verdict || reasons.length > 0) && <div className="flex flex-col gap-1.5">
-        {GROUPS.map((g) => (
+        {groups.map((g) => (
           <div key={g.label} className="flex flex-wrap items-center gap-1.5">
             <span className="w-24 shrink-0 text-xs text-muted">{g.label}</span>
-            {g.reasons.map(([key, label]) => (
+            {g.reasons.map(({ key, label }) => (
               <button key={key} onClick={() => toggle(key)} aria-pressed={reasons.includes(key)}
                 className={cn("h-7 rounded-full border px-2.5 text-xs font-medium transition-colors",
                   reasons.includes(key)

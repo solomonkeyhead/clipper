@@ -12,6 +12,19 @@ from ..campaign.editor import CampaignForm
 from ..config import CaptionRule
 
 
+class ReasonOption(BaseModel):
+    key: str
+    label: str
+
+
+class ReasonGroup(BaseModel):
+    """The reasons a rating can give, grouped as learning reads them (learn/feedback.py)."""
+
+    label: str
+    tone: str                      # good | bad | edit
+    reasons: list[ReasonOption]
+
+
 class PostPoint(BaseModel):
     """A post's numbers at one sync that changed them."""
 
@@ -61,7 +74,8 @@ class RuleCheck(BaseModel):
 class PostCopy(BaseModel):
     """What to paste on one platform, with every rule checked (campaign/rules.py)."""
 
-    platform: str          # tiktok | instagram_reels | youtube_shorts
+    platform: str          # tiktok | instagram_reels | youtube_shorts | x
+    text_name: str = "Caption"  # what that platform's upload page calls `caption`
     title: str = ""        # YouTube's title
     caption: str
     checks: list[RuleCheck]

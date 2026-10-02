@@ -18,11 +18,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from ..config import CampaignConfig, CaptionRule
+from ..config import PLATFORM_NAMES, PLATFORMS, CampaignConfig, CaptionRule
 from . import safety
 from .compliance import RuleResult, _contains
 
-NAMES = {"tiktok": "TikTok", "instagram_reels": "Instagram", "youtube_shorts": "YouTube", "x": "X"}
+NAMES = {p: PLATFORM_NAMES[p] for p in PLATFORMS}
 #: What each platform calls the text under a post, as its upload page labels it.
 TEXT_NAMES = {"tiktok": "Description", "instagram_reels": "Caption", "youtube_shorts": "Description", "x": "Post"}
 #: Platforms' own limits on a post's text.
