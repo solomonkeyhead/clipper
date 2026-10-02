@@ -1824,3 +1824,31 @@ Instagram and YouTube say their labels cost no reach. Best guesses applied: a
 watched 7-14s), hooks written as a take rather than a label (Instagram doesn't
 count descriptive text as an edit; prompt v5), and descriptions with the show's
 name in the first 60 characters (d5). The brief still comes first everywhere.
+
+## D96 — Searchable YouTube titles, pinned comments, posting spacing (2026-10-02)
+
+Research (D95): Shorts traffic comes from the feed and search, hashtags bring
+0.03%, and a hook line is written to stop a scroll, not to be searched. Each ready
+clip now gets, from one AI call on its own words, the source's name and the brief
+(campaign/extras.py): a YouTube title "Show: who + what happens" (40-70 chars;
+the brief's title rules are still added by code) and a pinned comment saying what
+the show is, which episode, and where to watch as the brief puts it. Written in
+the background rule check (studio/rulecheck.py fill_extras), ready clips only,
+stored as clips.extras; a title or comment with a word that gets posts held back
+is rejected, since the model wrote "talk about men and sex" despite being told
+not to. The posting panel shows the comment with a copy button, and warns when
+the last post on a platform went up under 3 hours ago (best guess from research).
+
+## D97 — Open on the payoff (2026-10-02)
+
+Research (D95): clips that hold viewers open on the line people quote, then play
+the setup; it also counts as the poster's own edit for originality checks. The
+opening pass (D93) now also names each clip's payoff and rates it 1-10 read cold;
+only an 8+ whole line of 0.8-3.5s, at least 4s in, with clip and teaser inside the
+length limit, is used (flash-lite picked "It's definitely true" until rated). After
+the clip passes its checks, render/teaser.py cuts that line from the finished file
+and plays it first with the hook over it (same framing, captions, loudness; one
+more encode). Skipped where a brief forbids re-edits (campaign/edits.teaser_allowed)
+and on podcast clips with internal cuts; kept on a hook re-render (scores.teaser).
+On by default; Settings -> "Open on the payoff". The opening call now prefers the
+stronger model, falling back as everywhere else. Existing clips are unchanged.

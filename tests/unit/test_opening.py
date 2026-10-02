@@ -60,13 +60,13 @@ def test_lines_that_continue_an_earlier_one_are_never_offered():
 def test_the_ai_can_move_a_clip_back_to_its_setup():
     backend = _Backend([{"clip": 1, "start_line": 0}])
     starts = opening.choose([_candidate(2)], SENTS, [backend], min_seconds=10, max_seconds=60)
-    assert starts == {"c1": 0}
+    assert starts == {"c1": opening.Opening(0)}
     assert "CURRENT START" in backend.asked[0] and "before the clip" in backend.asked[0]
 
 
 def test_without_an_answer_a_mid_sentence_start_goes_back_to_its_sentence():
     starts = opening.choose([_candidate(2)], SENTS, [], min_seconds=10, max_seconds=60)
-    assert starts == {"c1": 1}
+    assert starts == {"c1": opening.Opening(1)}
 
 
 def test_a_choice_outside_the_allowed_lines_is_ignored():
@@ -86,6 +86,33 @@ def test_reaching_back_across_a_camera_cut_needs_the_talk_to_run_on():
     assert 1 in found.allowed
     moved = opening.moved(_candidate(3, scene_start=4.1), 1, SENTS)
     assert moved.start == 2.3 and moved.scene_start < 2.3 and moved.sentence_indices == (1, 6)
+
+
+def test_a_payoff_far_enough_in_is_marked_to_open_on():
+    # Line 5 ("I'm not sure that I thought it through!") is 20.8s long here: too long to tease.
+    sents = [*SENTS[:5], Sentence(index=5, start=9.2, end=11.0, text="I'm not sure that I thought it through!",
+                                  word_indices=(5, 6), gap_before=0.2)]
+    clip = Candidate(candidate_id="c1", start=0.0, end=11.0, sentence_indices=(0, 6), text="")
+    pick = SimpleNamespace(candidate=clip)
+    opening.apply([pick], sents, [_Backend([{"clip": 1, "start_line": 0, "payoff_line": 5, "payoff_strength": 9}])],
+                  min_seconds=5, max_seconds=60)
+    assert pick.candidate.payoff == (9.2, 11.0)
+
+
+def test_a_payoff_too_early_too_long_or_turned_off_is_dropped():
+    def tease(answer, payoff=True, max_seconds=60):
+        answer = {"payoff_strength": 9, **answer}
+        found = opening.choose([_candidate(0)], SENTS, [_Backend([answer])], min_seconds=10,
+                               max_seconds=max_seconds, payoff=payoff)
+        return found.get("c1", opening.Opening(0)).payoff
+
+    assert tease({"clip": 1, "start_line": 0, "payoff_line": 3}) == 3      # 1.8s long, 4.2s in: fits
+    assert tease({"clip": 1, "start_line": 0, "payoff_line": 5}) is None   # 20.8s long: not a teaser
+    assert tease({"clip": 1, "start_line": 0, "payoff_line": 1}) is None   # 2.3s in: the clip opens on it
+    assert tease({"clip": 1, "start_line": 0, "payoff_line": 4}, payoff=False) is None
+    assert tease({"clip": 1, "start_line": 0, "payoff_line": 4}) == 4
+    assert tease({"clip": 1, "start_line": 0, "payoff_line": 4}, max_seconds=31) is None  # 30s + 2.8s
+    assert tease({"clip": 1, "start_line": 0, "payoff_line": 4, "payoff_strength": 6}) is None  # not strong enough
 
 
 def test_apply_moves_the_pick_in_place():

@@ -87,6 +87,18 @@ def forbidden_by(text: str) -> dict[str, str]:
     return out
 
 
+def teaser_allowed(campaign: CampaignConfig) -> bool:
+    """Whether a clip may open with a preview of its payoff line (D97).
+
+    The scene still plays whole and in order, so the scripted default against
+    re-editing doesn't stop it; a brief that forbids re-edits or changes in its
+    own words ("no re-edits", "unaltered", "out of context"), or a campaign set
+    to `re_edit: false`, does."""
+    if campaign.edits.re_edit is False:
+        return False
+    return "re_edit" not in forbidden_by(campaign.brief_rules)
+
+
 def permissions(campaign: CampaignConfig) -> Permissions:
     kind = content_type(campaign)
     defaults = dict(DEFAULTS[kind])

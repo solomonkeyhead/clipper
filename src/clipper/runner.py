@@ -14,6 +14,7 @@ A reserve is only ever a candidate that already cleared the quality gate
 from __future__ import annotations
 
 import dataclasses
+import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -105,7 +106,7 @@ def run(
 
     selection = choose(outcome, config, limit=limit)
     result.selection_note = selection.stopped_because
-    _choose_openings(selection.picks + selection.reserves, outcome, config, backend_override)
+    _choose_openings(selection.picks + selection.reserves, outcome, config, backend_override, campaign)
 
     out_dir = ensure(out_root / outcome.info.source_id)
     clips_dir = ensure(out_dir / "clips")
@@ -156,18 +157,35 @@ EVERY_GOOD_MOMENT = 500
 
 
 def _choose_openings(picks: list[Pick], outcome: ScoreOutcome, config: Config,
-                     backend_override: str | None) -> None:
-    """Start each chosen clip on the line that hooks (candidates/opening.py, D93)."""
+                     backend_override: str | None, campaign: CampaignConfig) -> None:
+    """Start each chosen clip on the line that hooks, and mark the payoff it opens
+    with when "Open on the payoff" is on (candidates/opening.py, D93, D97)."""
+    from .campaign.edits import teaser_allowed
     from .candidates import opening
 
+    # One call per video, judging what's funny cold: the stronger model when it
+    # answers (on flash-lite, "It's definitely true" was picked as a payoff).
     try:
-        backends = [build_backend(config, override=backend_override)]
+        backends = _correction_backends(config, backend_override)
     except Exception as exc:  # the code rule alone still runs
         log.warning("opening lines not chosen by AI: %s", exc)
         backends = []
     opening.apply(picks, outcome.sentences.sentences, backends,
                   min_seconds=config.candidates.min_seconds,
-                  max_seconds=config.candidates.max_seconds, cache=LLMCache())
+                  max_seconds=config.candidates.max_seconds, cache=LLMCache(),
+                  payoff=payoff_first() and teaser_allowed(campaign))
+
+
+def payoff_first() -> bool:
+    """The Control Center's "Open on the payoff" setting (on unless turned off)."""
+    from .studio import db
+
+    try:
+        with db.connect() as con:
+            return db.settings(con).get("payoff_first", "1") == "1"
+    except Exception as exc:  # no library: the default
+        log.debug("payoff setting unread: %s", exc)
+        return True
 
 
 def clip_limit(top: int | None, campaign: CampaignConfig) -> int:
@@ -289,8 +307,11 @@ def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
         from .campaign.safety import clean
 
         hook = clean(hook, campaign)
+    # The payoff it opened on, if it had one (D97).
+    teaser = (json.loads(clip.get("scores") or "{}") or {}).get("teaser")
     plan = plan.model_copy(update={"clip_id": clip["clip_id"], "hook_text": hook.strip(),
-                                   "hook_shown": bool(hook.strip()) and config.render.show_hook_text})
+                                   "hook_shown": bool(hook.strip()) and config.render.show_hook_text,
+                                   "teaser": _teaser(tuple(teaser), start, end, campaign) if teaser else None})
     out_dir = ensure(out_root / clip["source_id"] / "rerender")
     # No new description: the clip keeps its caption, and it's an AI call saved.
     record = _render_plan(plan, info, words, config=config,
@@ -786,6 +807,19 @@ def _render_plan(
     )
     qa = check_clip(output, context, config.qa, config.render)
     rules = compliance.check_clip(plan, campaign, duration=rendered.duration)
+    # The checked clip, with its payoff shown first (render/teaser.py, D97); not on a
+    # tightened timeline, where the payoff's times no longer line up.
+    from .campaign.edits import teaser_allowed
+
+    if (plan.teaser and qa.status != "fail" and rules.status != "fail"
+            and render_source is source_path and teaser_allowed(campaign)):
+        from .render.teaser import prepend
+
+        a, b = plan.teaser
+        prepend(output, a - render_plan.start, b - render_plan.start,
+                hook=render_plan.hook_text if render_plan.hook_shown else "", config=config,
+                work_dir=work, draft=draft, has_audio=info.media.has_audio)
+        rendered = probe(output)
 
     return ClipRecord(
         plan=plan,
@@ -885,8 +919,23 @@ def _build_plan(
                       if bounds.start - 0.05 <= w.start < bounds.end), None),
         hook_shown=bool(config.render.show_hook_text
                         and (campaign.hook_texts or _hook(values, scores))),
+        teaser=_teaser(candidate.payoff, bounds.start, bounds.end, campaign),
     )
     return compliance.apply_campaign_caption(plan, campaign, pick=rotation.pick)
+
+
+def _teaser(payoff: tuple[float, float] | None, start: float, end: float,
+            campaign: CampaignConfig) -> tuple[float, float] | None:
+    """The payoff to open on, if it's still inside the refined clip, far enough in,
+    and the two together fit the campaign's length (D97)."""
+    from .candidates.opening import PAYOFF_INTO_CLIP
+
+    if payoff is None:
+        return None
+    a, b = payoff
+    if a - start < PAYOFF_INTO_CLIP or b > end or (end - start) + (b - a) > campaign.duration.max_seconds:
+        return None
+    return payoff
 
 
 def _hook(values, scores) -> str:

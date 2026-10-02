@@ -180,6 +180,8 @@ class Candidate(Artifact):
     # A window around a stretch with no dialogue (candidates/windows.py): its
     # words say little, so it is judged only by watching it, and cut as found.
     quiet: bool = False
+    # Its payoff line, source-absolute, to show first as a teaser (D97).
+    payoff: tuple[float, float] | None = None
 
     @property
     def duration(self) -> float:
@@ -435,6 +437,8 @@ class ClipPlan(Artifact):
     # that did and did not have each retention change (see learn/log.py).
     lead_in: float | None = None  # seconds before the first word
     hook_shown: bool = False
+    # The payoff line shown first, source-absolute (render/teaser.py, D97).
+    teaser: tuple[float, float] | None = None
 
     @property
     def duration(self) -> float:

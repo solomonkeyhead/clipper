@@ -82,6 +82,8 @@ def scores_of(record: ClipRecord) -> dict:
         return {"picked_by": "hand", "text": text, "text_v": 2}
     llm = record.raw.get("llm")
     return {"picked_by": "auto", "text": text, "text_v": 2,
+            # The payoff it opens on, so a re-render keeps it (render/teaser.py).
+            "teaser": list(record.plan.teaser) if record.plan.teaser else None,
             "score": round(llm, 2) if llm is not None else None,
             "rubric": record.rubric, "composite": round(record.plan.composite, 4),
             "pool": record.pool, "pool_rank": record.pool_rank,

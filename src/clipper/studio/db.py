@@ -163,6 +163,8 @@ DEFAULT_SETTINGS = {
     "sync_minutes": "15",
     # Use the user's clip ratings when scoring (learn/feedback.py).
     "learn_from_feedback": "1",
+    # Open each new clip on a preview of its payoff line (render/teaser.py, D97).
+    "payoff_first": "1",
     # Which plan's features are on (studio/plans.py). A local install is the
     # owner's, so everything; a hosted version would set this per account.
     "plan": "pro",

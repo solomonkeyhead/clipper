@@ -590,6 +590,15 @@ export function SettingsPage() {
           ) : <Skeleton className="h-9 w-32" />}
         />
         <Row
+          title="Open on the payoff"
+          body={<>New clips start with a second or two of their best line, then play from the setup, so the first frame
+            gives a scroller a reason to stay. Skipped when a brief forbids re-edits, or when no line works on its own.</>}
+          control={settings ? (
+            <Switch label="Open on the payoff" checked={settings.payoff_first !== "0"}
+                    onChange={(v) => save.mutate({ payoff_first: v ? "1" : "0" })} />
+          ) : <Skeleton className="h-5 w-9" />}
+        />
+        <Row
           title="Theme"
           body="Dark suits watching video; light can be easier for long reading."
           control={
