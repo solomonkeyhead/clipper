@@ -1877,3 +1877,17 @@ left is entered on its page (stamped with when; campaign_state.budget_left), and
 with the brief's deadline gives a warning -- ended, ending within 3 days, used up,
 or under $50 / 20,000 views' worth (with how old the figure is) -- on its card, its
 page and when picking it on New clips. No scraping: Whop's own figures are typed in.
+
+## D101 — Design research applied (2026-10-02)
+
+Most of the design report was already in place (keyboard-first, undo toasts, Ctrl K,
+background job status, estimated vs paid, brief checklist, score reasons, Discord
+alerts). Taken from it: dim ("subtle") text raised to pass WCAG AA on cards (it
+measured ~4.0:1 on surface-2); picking several clips in a grid (corner box,
+Ctrl/Shift-click, Esc) with Skip / Back to ready / Mark submitted / Delete for all,
+one undo each; X in the open clip skips and moves to the next (Not good stays so
+you can say why; posting stays since posts are spaced hours apart). Not taken:
+heavier body text in dark mode (light-on-dark already reads heavier), dots instead
+of status words (worse for colour-blind users), appending to the clipboard (breaks
+pasting into separate fields), sample data (fake data in a real library), and a
+watermark check (clips are rendered from source files, never platform downloads).

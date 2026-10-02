@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  AlertTriangle, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
+  AlertTriangle, Check, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
   Lock, Pencil, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -280,6 +280,74 @@ export function useDeleteWithUndo() {
   };
 }
 
+/** What can be done to several picked clips at once, each with one undo for all.
+ *  One at a time, so the server never handles a pile of writes together. */
+export function useBulk() {
+  const status = useSetClipStatus();
+  const submitted = useSetClipSubmitted();
+  const del = useDeleteClip();
+  const each = async (clips: Clip[], fn: (c: Clip) => Promise<unknown>) => {
+    for (const c of clips) await fn(c).catch(() => undefined);
+  };
+  const done = (n: number, what: string, undo: () => void, description?: string) => toast(
+    `${n} clip${n === 1 ? "" : "s"} ${what}`, { description, duration: 6000, action: { label: "Undo", onClick: undo } });
+  return {
+    setStatus: (clips: Clip[], to: ClipStatus) => {
+      void each(clips, (c) => status.mutateAsync({ id: c.id, status: to }));
+      done(clips.length, STATUS_WORD[to] === "ready to post" ? "back to ready" : STATUS_WORD[to],
+        () => void each(clips, (c) => status.mutateAsync({ id: c.id, status: c.marked as ClipStatus })));
+    },
+    submit: (clips: Clip[]) => {
+      void each(clips, (c) => submitted.mutateAsync({ id: c.id, submitted: true }));
+      done(clips.length, "marked submitted", () => void each(clips, (c) => submitted.mutateAsync({ id: c.id, submitted: false })));
+    },
+    remove: (clips: Clip[]) => {
+      void each(clips, (c) => del.mutateAsync({ id: c.id }));
+      done(clips.length, "deleted", () => void each(clips, (c) => del.mutateAsync({ id: c.id, restore: true })), "Kept in the trash for 30 days");
+    },
+  };
+}
+
+/** The bar that floats over a grid while clips are picked. */
+export function SelectionBar({ clips, onClear }: { clips: Clip[]; onClear: () => void }) {
+  const bulk = useBulk();
+  if (!clips.length) return null;
+  const ready = clips.filter((c) => c.status === "ready");
+  const skipped = clips.filter((c) => c.status === "skipped");
+  const posted = clips.filter((c) => c.status === "posted" && c.posts.length > 0);
+  const act = (fn: () => void) => () => { fn(); onClear(); };
+  const count = (n: number) => n < clips.length ? ` ${n}` : "";
+  return (
+    <div role="toolbar" aria-label="Picked clips"
+      className="fade-in fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-xl border border-line-strong bg-surface-1 p-1.5 pl-4 shadow-3">
+      <span className="tabular mr-2 text-sm font-medium whitespace-nowrap">{clips.length} selected</span>
+      {ready.length > 0 && (
+        <Button size="sm" variant="secondary" onClick={act(() => bulk.setStatus(ready, "skipped"))}>
+          <SkipForward className="size-3.5" /> Skip{count(ready.length)} <Kbd>X</Kbd>
+        </Button>
+      )}
+      {skipped.length > 0 && (
+        <Button size="sm" variant="secondary" onClick={act(() => bulk.setStatus(skipped, "ready"))}>
+          <Undo2 className="size-3.5" /> Back to ready{count(skipped.length)}
+        </Button>
+      )}
+      {posted.length > 0 && (
+        <Tip label="You've pasted their links into the campaign's submission form">
+          <Button size="sm" variant="secondary" onClick={act(() => bulk.submit(posted))}>
+            <CheckCircle2 className="size-3.5" /> Mark submitted{count(posted.length)}
+          </Button>
+        </Tip>
+      )}
+      <Button size="sm" variant="danger" onClick={act(() => bulk.remove(clips))}>
+        <Trash2 className="size-3.5" /> Delete <Kbd>Del</Kbd>
+      </Button>
+      <Tip label="Clear the selection" keys="Esc">
+        <Button size="icon" variant="ghost" aria-label="Clear the selection" onClick={onClear}><X className="size-4" /></Button>
+      </Tip>
+    </div>
+  );
+}
+
 function DownloadButton({ clip, label = true, size = "sm" }: {
   clip: Clip; label?: boolean; size?: "sm" | "md";
 }) {
@@ -391,8 +459,10 @@ function BackToReady({ clip }: { clip: Clip }) {
 
 /* ---------- Card ---------- */
 
-export function ClipCard({ clip, showCampaign = false, focused = false }: {
+export function ClipCard({ clip, showCampaign = false, focused = false, selected = false, selecting = false, onSelect }: {
   clip: Clip; showCampaign?: boolean; focused?: boolean;
+  /** Picking several clips: once any is picked, a click picks instead of opening. */
+  selected?: boolean; selecting?: boolean; onSelect?: (e: React.MouseEvent) => void;
 }) {
   const open = useUI((s) => s.setOpenClip);
   const title = useCampaignTitle();
@@ -402,14 +472,26 @@ export function ClipCard({ clip, showCampaign = false, focused = false }: {
     <article
       data-clip={clip.id}
       tabIndex={0}
-      onClick={() => open(clip.id)}
+      onClick={(e) => onSelect && (selecting || e.shiftKey || e.ctrlKey || e.metaKey) ? onSelect(e) : open(clip.id)}
       onKeyDown={(e) => e.key === "Enter" && open(clip.id)}
       className={cn(
-        "group flex cursor-pointer flex-col gap-3 rounded-lg border border-line bg-surface-1 p-3 shadow-1 outline-none",
+        "group relative flex cursor-pointer flex-col gap-3 rounded-lg border border-line bg-surface-1 p-3 shadow-1 outline-none",
         "transition-[border-color,background-color] duration-[var(--dur-base)] hover:border-line-strong hover:bg-surface-2",
         focused && "border-accent ring-1 ring-accent",
+        selected && "border-accent bg-accent-soft hover:bg-accent-soft",
       )}
     >
+      {onSelect && (
+        <Tip label={selected ? "Unselect" : "Select (Shift-click for a range)"}>
+          <button type="button" role="checkbox" aria-checked={selected} aria-label="Select"
+            onClick={(e) => { e.stopPropagation(); onSelect(e); }}
+            className={cn("absolute top-5 left-5 z-10 grid size-5 place-items-center rounded-[5px] border transition-opacity duration-[var(--dur-fast)]",
+              selected ? "border-accent bg-accent text-accent-fg" : "border-white/70 bg-black/40 text-transparent hover:bg-black/60",
+              selected || selecting ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100")}>
+            <Check className="size-3.5" strokeWidth={3} />
+          </button>
+        </Tip>
+      )}
       <Preview clip={clip} />
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
@@ -604,9 +686,19 @@ export function ClipSheet() {
   const [note, setNoteText] = useState("");
   useEffect(() => setNoteText(clip?.notes ?? ""), [clip?.id, clip?.notes]);
 
-  const go = (step: number) => {
+  const neighbour = (step: number) => {
     const order = listIds.length ? listIds : clips.map((c) => c.id);
-    const next = order[order.indexOf(openId ?? -1) + step];
+    return order[order.indexOf(openId ?? -1) + step];
+  };
+  const go = (step: number) => {
+    const next = neighbour(step);
+    if (next !== undefined) setOpen(next);
+  };
+  // Skipping is a triage decision: move straight on to the next clip. (Not good
+  // stays, so you can say why; posting stays, as posts are spaced hours apart.)
+  const skip = (c: Clip) => {
+    const next = neighbour(1);
+    setStatus(c, "skipped");
     if (next !== undefined) setOpen(next);
   };
 
@@ -616,7 +708,7 @@ export function ClipSheet() {
     c: () => clip?.caption && void copyText(clip.caption, "Caption"),
     l: () => clip?.posts[0] && void copyText(clip.posts[0].url, "Link"),
     p: () => clip && setStatus(clip, "posted"),
-    x: () => clip && setStatus(clip, "skipped"),
+    x: () => clip && skip(clip),
     r: () => clip && setStatus(clip, "ready"),
     s: () => clip && clip.status !== "submitted" && submit(clip),
     // Good / Not good (D74), as the buttons: Y toggles Good; B on a ready clip skips it too.
@@ -695,7 +787,7 @@ export function ClipSheet() {
                     <Button variant="ghost" onClick={() => setStatus(clip, "ready")}>Back to ready <Kbd>R</Kbd></Button>
                   )}
                   {clip.status !== "skipped" && (
-                    <Button variant="ghost" onClick={() => setStatus(clip, "skipped")}>
+                    <Button variant="ghost" onClick={() => skip(clip)}>
                       <SkipForward className="size-4" /> Skip <Kbd>X</Kbd>
                     </Button>
                   )}

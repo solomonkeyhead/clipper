@@ -13,7 +13,7 @@
   --border-strong: oklch(1 0 0 / 0.14);
   --text: oklch(0.96 0.003 270);
   --text-muted: oklch(0.72 0.01 270);
-  --text-subtle: oklch(0.58 0.01 270);
+  --text-subtle: oklch(0.64 0.01 270);
   --accent: oklch(0.66 0.19 285);
   --accent-hover: oklch(0.71 0.19 285);
   --accent-fg: oklch(0.99 0 0);
@@ -46,7 +46,7 @@
   --border-strong: oklch(0 0 0 / 0.14);
   --text: oklch(0.20 0.01 270);
   --text-muted: oklch(0.45 0.01 270);
-  --text-subtle: oklch(0.55 0.01 270);
+  --text-subtle: oklch(0.52 0.01 270);
   --accent: oklch(0.55 0.21 285);
   --accent-hover: oklch(0.50 0.21 285);
   --accent-soft: oklch(0.55 0.21 285 / 0.10);
@@ -145,5 +145,5 @@ h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
 .prose-answer strong { font-weight: 600; }
 .prose-answer code { font-family: var(--font-mono, monospace); font-size: 0.85em; background: var(--surface-3); padding: 0 0.3em; border-radius: 4px; }
 .prose-answer table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
-.prose-answer th, .prose-answer td { border-bottom: 1px solid var(--line); padding: 0.35em 0.5em; text-align: left; }
-.prose-answer blockquote { border-left: 2px solid var(--line-strong); padding-left: 0.75em; color: var(--muted); }
+.prose-answer th, .prose-answer td { border-bottom: 1px solid var(--border); padding: 0.35em 0.5em; text-align: left; }
+.prose-answer blockquote { border-left: 2px solid var(--border-strong); padding-left: 0.75em; color: var(--text-muted); }

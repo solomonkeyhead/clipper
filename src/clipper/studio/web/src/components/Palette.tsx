@@ -136,9 +136,10 @@ const SHORTCUTS: [string, [string, string][]][] = [
     ["G then N", "New clips"], ["G then L", "Clips"], ["G then R", "Learning"],
     ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
-    ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"]]],
+    ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"],
+    ["Shift / Ctrl click", "Select several"], ["Esc", "Clear selection"]]],
   ["Open clip", [["J / K", "Next / previous clip"], ["Y", "Good"], ["B", "Not good"], ["C", "Copy caption"], ["L", "Copy link"],
-    ["D", "Download"], ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip"], ["F", "Show in folder"],
+    ["D", "Download"], ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip, then next"], ["F", "Show in folder"],
     ["Delete", "Delete (undo)"], ["Esc", "Close"]]],
 ];
 
