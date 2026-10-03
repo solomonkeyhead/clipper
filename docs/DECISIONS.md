@@ -2096,3 +2096,20 @@ no per-call bill, it counts toward the plan's usage limits.
    Opus this way, took 63 s with one review, which moved a label off the jaw line on its
    own. A head in profile, the air path round it, the bone path through it: the drawing
    the template version could not make. Fit margins trimmed so it fills more of the band.
+
+## D114 — Create: Claude Code safe on Windows, and the page says who drew it (2026-10-03)
+
+Video 76 rebuilt: abstract circles labelled "Skull filters", "Bone: Low bass" across a
+circle, an off-topic f = v / lambda, the "stranger" card again. Re-planned here through
+Claude Code (Opus), the same script got a head with the air path round it and the bone
+path through the jaw, a falling "sound passed by your skull" curve, bars of bass in your
+head vs on a recording -- and the physics check caught sentence 6's false reason ("denser,
+so lower frequencies"). So the user's run was Gemini: their Clipper most likely predated
+D113, or Claude Code wasn't reachable from it.
+1. Nothing multi-line or quote-heavy on the `claude` command line: the instructions go in
+   a file (--system-prompt-file); when `claude` is npm's claude.cmd (cmd.exe cuts an
+   argument at a line break and mangles quotes), the schema is asked for in the prompt and
+   the JSON is taken from the answer, instead of --json-schema.
+2. The notes under a script now also say why a model didn't answer ("claude_code didn't
+   answer: ...", or that Claude Code isn't installed or on PATH).
+3. A label with a line break in it no longer breaks drawing (it stopped the sketch review).

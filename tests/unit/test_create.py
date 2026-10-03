@@ -387,7 +387,7 @@ def test_claude_through_claude_code_on_the_users_plan(monkeypatch):
     reply = first.complete(LLMRequest(system="judge", user="Sentence: x", response_schema=stock._Pick,
                                       media=[(b"jpg", "image/jpeg"), (b"jpg", "image/jpeg")]))
     assert json.loads(reply.text) == {"pick": 2, "score": 8}
-    assert seen["files"] == ["1.jpg", "2.jpg"] and "1.jpg, 2.jpg" in seen["prompt"]
+    assert seen["files"] == ["1.jpg", "2.jpg", "instructions.txt"] and "1.jpg, 2.jpg" in seen["prompt"]
     args = seen["args"]
     assert args[args.index("--tools") + 1] == "Read" and "--json-schema" in args and "--no-session-persistence" in args
 
@@ -397,3 +397,34 @@ def test_claude_through_claude_code_on_the_users_plan(monkeypatch):
     from clipper.llm.base import LLMError
     with pytest.raises(LLMError):
         first.complete(LLMRequest(system="s", user="u"))
+
+
+def test_a_label_with_a_line_break_still_draws():
+    from clipper.create.diagrams import frame
+    from clipper.create.sketch import Sketch
+
+    marks = [{"kind": "circle", "xy": [500, 300, 100]}, {"kind": "dot", "xy": [500, 300]},
+             {"kind": "text", "xy": [500, 480], "text": "air\nconducted"}]
+    frame(Visual(kind="diagram", template="sketch", sketch=Sketch.model_validate({"marks": marks})), 3.9, 4.0)
+
+
+def test_on_windows_claude_cmd_gets_no_json_or_line_breaks_on_its_command_line(monkeypatch):
+    import json
+    import subprocess
+
+    from clipper.llm import claude_code
+    from clipper.llm.base import LLMRequest
+
+    monkeypatch.setattr(claude_code, "cli", lambda: r"C:\\Users\\m\\AppData\\Roaming\\npm\\claude.cmd")
+    seen = {}
+
+    def run(args, input, cwd, **k):
+        seen.update(args=args, prompt=input)
+        return subprocess.CompletedProcess(args, 0, json.dumps(
+            {"is_error": False, "result": 'Here you go:\n```json\n{"pick": 3, "score": 9}\n```'}), "")
+    monkeypatch.setattr(claude_code.subprocess, "run", run)
+    reply = claude_code.ClaudeCodeBackend().complete(
+        LLMRequest(system="line one\nline two", user="u", response_schema=stock._Pick))
+    assert json.loads(reply.text) == {"pick": 3, "score": 9}
+    assert "--json-schema" not in seen["args"] and "--system-prompt-file" in seen["args"]
+    assert not any("\n" in a for a in seen["args"]) and "JSON Schema" in seen["prompt"]

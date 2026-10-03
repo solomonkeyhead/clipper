@@ -42,6 +42,19 @@ def cli() -> str | None:
     return shutil.which("claude")
 
 
+def _shim(command: str) -> bool:
+    """Whether `claude` is a Windows batch shim (npm's claude.cmd) rather than a program."""
+    return command.lower().endswith((".cmd", ".bat"))
+
+
+def _json_in(text: str) -> str:
+    """The JSON object in an answer that may wrap it in words or a ``` fence."""
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end < start:
+        raise LLMError(f"Claude Code's answer had no JSON in it: {text[:200]}")
+    return text[start:end + 1]
+
+
 @register
 class ClaudeCodeBackend(LLMBackend):
     name: ClassVar[str] = "claude_code"
@@ -69,12 +82,20 @@ class ClaudeCodeBackend(LLMBackend):
             if names:
                 prompt += (f"\n\nThe images, in order, are the files {', '.join(names)} in the current folder: "
                            "read every one of them before you answer.")
+            # The instructions go in a file, never on the command line: on Windows `claude` is
+            # often a .cmd shim, and cmd.exe cuts an argument at its first line break (D114).
+            (Path(tmp) / "instructions.txt").write_text(request.system, encoding="utf-8")
             args = [self.command, "-p", "--output-format", "json", "--model", self.model,
                     "--no-session-persistence", "--setting-sources", "",
                     "--tools", "Read" if names else "", *(["--allowedTools", "Read"] if names else []),
-                    "--system-prompt", request.system]
-            if isinstance(schema, type) and issubclass(schema, BaseModel):
-                args += ["--json-schema", json.dumps(schema.model_json_schema(), separators=(",", ":"))]
+                    "--system-prompt-file", "instructions.txt"]
+            wanted = schema if isinstance(schema, type) and issubclass(schema, BaseModel) else None
+            if wanted and _shim(self.command):
+                # No JSON on a .cmd command line either (cmd.exe and quotes): asked for in words.
+                prompt += ("\n\nAnswer with only a JSON object matching this JSON Schema, nothing else:\n"
+                           + json.dumps(wanted.model_json_schema()))
+            elif wanted:
+                args += ["--json-schema", json.dumps(wanted.model_json_schema(), separators=(",", ":"))]
             try:
                 done = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8",
                                       cwd=tmp, timeout=self.timeout)
@@ -95,6 +116,8 @@ class ClaudeCodeBackend(LLMBackend):
             raise LLMError(f"Claude Code failed: {text[:300] or done.stderr[-300:]}")
         if reply.get("structured_output") is not None:
             text = json.dumps(reply["structured_output"])
+        elif wanted:
+            text = _json_in(text)
         if not text.strip():
             raise LLMError("Claude Code returned nothing")
         usage = reply.get("usage") or {}

@@ -225,6 +225,9 @@ def check(script: Script) -> Review:
 def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Script, str]:
     """A script that passed the physics check (one rewrite if it didn't), and what the
     check said, for the page."""
+    from . import ai
+
+    ai.misses.clear()
     script = write(question, angle, take=take)
     review = check(script)
     if not review.ok and review.problems:
@@ -247,12 +250,17 @@ def _sketched(script: Script, note: str) -> tuple[Script, str]:
 
     drawn, notes = draw_all(script)
     who = ai.last_used.split(":", 1)[-1] if ai.last_used else "unknown"
-    return tidy(drawn), "\n".join([note, *notes, f"Written and drawn by: {who}."])
+    missed = [f"{name.split(':', 1)[0]} didn't answer: {why}" for name, why in ai.misses.items()
+              if name != ai.last_used]
+    return tidy(drawn), "\n".join([note, *notes, f"Written and drawn by: {who}.", *missed])
 
 
 def replan(script: Script) -> tuple[Script, str]:
     """New pictures for an approved script, every word kept (its voice is already made):
     the visuals planned again, then checked, once more if the check finds a problem."""
+    from . import ai
+
+    ai.misses.clear()
     channel = channels.load()
     beats = "\n".join(f"{i}. {b.text}" for i, b in enumerate(script.beats, start=1))
     feedback = ""

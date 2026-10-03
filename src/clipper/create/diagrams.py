@@ -122,6 +122,7 @@ def text(draw: ImageDraw.ImageDraw, xy: tuple[float, float], s: str, size: int, 
          anchor: str = "mm", max_width: int = 900, reveal: float = 1.0, halo: bool = False) -> None:
     """Chalk text, shrunk to fit, written on letter by letter as `reveal` goes 0 to 1; with
     `halo`, a rim of board round the letters so a line behind them never crosses them."""
+    s = " ".join(s.split())  # one line: a label with a line break in it broke the drawing
     if reveal <= 0 or not s:
         return
     while size > 30 and draw.textlength(s, font=font_for(s, size)) > max_width:
