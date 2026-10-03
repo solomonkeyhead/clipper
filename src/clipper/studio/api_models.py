@@ -419,3 +419,39 @@ class Status(BaseModel):
     problems: list[str]
     auto_post: bool
     accounts: list[Account]
+
+
+class EditorWord(BaseModel):
+    start: float
+    end: float
+    text: str
+
+
+class EditRule(BaseModel):
+    """One kind of edit and whether this campaign takes it (campaign/edits.py)."""
+    key: str
+    label: str
+    allowed: bool                  # Clipper does it by itself
+    blocked: bool                  # the brief or campaign forbids it, even by hand
+    why: str
+
+
+class EditorView(BaseModel):
+    """What the editor needs to open a video (D103)."""
+    source_id: str
+    prepared: bool                 # read and transcribed; otherwise prepare it first
+    source: str = ""
+    name: str = ""
+    campaign: str = ""
+    duration: float = 0.0
+    fps: float = 30.0
+    has_audio: bool = True
+    proxy_ready: bool = False
+    words: list[EditorWord] = []
+    rules: list[EditRule] = []
+    min_seconds: float | None = None
+    max_seconds: float | None = None
+    hooks: list[str] = []          # the brief's on-screen lines to pick from
+    clip_id: int | None = None
+    clip_status: str | None = None
+    edit: dict | None = None       # editing.ClipEdit: pieces, hook, fixes

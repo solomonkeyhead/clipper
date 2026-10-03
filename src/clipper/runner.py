@@ -25,6 +25,7 @@ from .campaign import compliance, rotation
 from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
 from .candidates.boundaries import RefinedBounds, refine
 from .config import CampaignConfig, Config
+from .editing import ClipEdit, Piece, apply_fixes, kept_words
 from .ingest.download import IngestError, is_url, probe_rights
 from .ingest.probe import probe
 from .llm.base import LLMBackend
@@ -205,8 +206,12 @@ def cut(
     draft: bool = False,
     backend_override: str | None = None,
     first_rank: int = 1,
+    edits: list[ClipEdit] | None = None,
 ) -> RunResult:
     """Render exact, hand-picked ranges with the campaign's framing and captions.
+
+    `edits` (from the editor, D103) replace `ranges`: each is the pieces kept,
+    with their zooms, the hook and caption fixes.
 
     `first_rank` continues the campaign's hook and caption rotation from an
     earlier cut, so clips from two episodes don't open with the same line.
@@ -237,16 +242,27 @@ def cut(
     listener = recheck or (AudioRecheck(audio, config.transcription)
                            if audio and audio.exists() else None)
 
-    for attempt, (start, end) in enumerate(ranges, start=1):
-        start, end = max(0.0, start), min(end, info.media.duration)
+    wanted = ([ClipEdit(pieces=[Piece(start=a, end=b)]) for a, b in ranges]
+              if edits is None else edits)
+    for attempt, edit in enumerate(wanted, start=1):
+        edit = edit.tidy(info.media.duration)
+        if not edit.pieces:
+            continue
+        start, end = edit.start, edit.end
         words = transcript.words
         if listener is not None:
             words = with_range_transcript(words, start, end, listener.words_between(start, end))
-        plan = manual_plan(start, end, words, config=config, campaign=campaign,
-                           rank=first_rank + len(result.accepted), attempt=attempt)
+        rank = first_rank + len(result.accepted)
+        if edits is None:
+            plan = manual_plan(start, end, words, config=config, campaign=campaign,
+                               rank=rank, attempt=attempt)
+        else:
+            plan = edited_plan(edit, words, config=config, campaign=campaign,
+                               rank=rank, attempt=attempt)
         record = _render_plan(plan, info, words, config=config, campaign=campaign,
                               clips_dir=clips_dir, work=work, draft=draft,
-                              corrector=corrector, recheck=recheck)
+                              corrector=corrector, recheck=recheck,
+                              edit=edit if edits is not None else None)
         if record.qa.status == "fail" or record.compliance.status == "fail":
             _reject(record, out_dir / "rejected", result)
             continue
@@ -272,12 +288,15 @@ class RerenderError(RuntimeError):
 
 
 def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
-             out_root: Path, backend_override: str | None = None) -> Path:
-    """Make a library clip again with a different on-screen hook (D90).
+             out_root: Path, backend_override: str | None = None,
+             edit: ClipEdit | None = None, draft: bool = False) -> Path:
+    """Make a library clip again with a different on-screen hook (D90), or as
+    edited in the editor (`edit`, D103; the hook is then the edit's).
 
-    Same range, framing and edits; only the hook line changes. Works from the
-    video's kept working files (transcript, info), so the source must still be on
-    this PC. Returns the new file, rendered in the work area; the caller files it.
+    Otherwise the same range, framing and edits; only the hook line changes. Works
+    from the video's kept working files (transcript, info), so the source must
+    still be on this PC. Returns the new file, rendered in the work area; the
+    caller files it. `draft` makes the editor's quick preview.
     """
     from .paths import work_dir
 
@@ -291,7 +310,13 @@ def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
         raise RerenderError("this clip has no time range on record")
     transcript = Transcript.load(work_src / "transcript.json")
     config = campaign_config(config, campaign)
-    start, end = float(clip["start_s"]), float(clip["end_s"])
+    if edit is not None:
+        edit = edit.tidy(info.media.duration)
+        if not edit.pieces:
+            raise RerenderError("nothing is kept: set where the clip starts and ends")
+        start, end = edit.start, edit.end
+    else:
+        start, end = float(clip["start_s"]), float(clip["end_s"])
     corrector, recheck = _correction(config, backend_override, info)
     audio = Path(info.audio_path) if info.audio_path else None
     listener = recheck or (AudioRecheck(audio, config.transcription) if audio and audio.exists() else None)
@@ -300,24 +325,28 @@ def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
         words = with_range_transcript(words, start, end, listener.words_between(start, end))
     # The brief's lines aren't handed out again (campaign/rotation.py): the hook is
     # the one asked for, and the clip keeps the caption it has.
-    plan = manual_plan(start, end, words, config=config,
-                       campaign=campaign.model_copy(update={"hook_texts": (), "fallback_captions": ()}),
-                       rank=1, attempt=1)
+    quiet = campaign.model_copy(update={"hook_texts": (), "fallback_captions": ()})
+    if edit is not None:
+        plan = edited_plan(edit, words, config=config, campaign=quiet, rank=1, attempt=1)
+        hook = plan.hook_text
+    else:
+        plan = manual_plan(start, end, words, config=config, campaign=quiet, rank=1, attempt=1)
     if campaign.censor_flagged_words:
         from .campaign.safety import clean
 
         hook = clean(hook, campaign)
     # The payoff it opened on, if it had one (D97).
-    teaser = (json.loads(clip.get("scores") or "{}") or {}).get("teaser")
+    # An edited clip doesn't open on its payoff: its timeline is the edit's.
+    teaser = None if edit is not None else (json.loads(clip.get("scores") or "{}") or {}).get("teaser")
     plan = plan.model_copy(update={"clip_id": clip["clip_id"], "hook_text": hook.strip(),
                                    "hook_shown": bool(hook.strip()) and config.render.show_hook_text,
                                    "teaser": _teaser(tuple(teaser), start, end, campaign) if teaser else None})
-    out_dir = ensure(out_root / clip["source_id"] / "rerender")
+    out_dir = ensure(out_root / clip["source_id"] / ("preview" if draft else "rerender"))
     # No new description: the clip keeps its caption, and it's an AI call saved.
     record = _render_plan(plan, info, words, config=config,
                           campaign=campaign.model_copy(update={"long_description": False}),
-                          clips_dir=ensure(out_dir / "clips"), work=ensure(out_dir / "work"), draft=False,
-                          corrector=corrector, recheck=recheck)
+                          clips_dir=ensure(out_dir / "clips"), work=ensure(out_dir / "work"), draft=draft,
+                          corrector=corrector, recheck=recheck, edit=edit)
     if record.qa.status == "fail":
         raise RerenderError(f"the new render failed its checks: {summarize(record.qa)}")
     return record.file
@@ -360,6 +389,25 @@ def manual_plan(start: float, end: float, words: list[Word], *, config: Config,
         hook_shown=bool(config.render.show_hook_text and campaign.hook_texts),
     )
     return compliance.apply_campaign_caption(plan, campaign, pick=rotation.pick)
+
+
+def edited_plan(edit: ClipEdit, words: list[Word], *, config: Config, campaign: CampaignConfig,
+                rank: int, attempt: int) -> ClipPlan:
+    """A plan for a clip made in the editor (D103): its kept words, its hook."""
+    kept = apply_fixes(kept_words(words, edit), edit.fixes)
+    plan = manual_plan(edit.start, edit.end, kept, config=config, campaign=campaign,
+                       rank=rank, attempt=attempt)
+    hook = edit.hook
+    if hook and campaign.censor_flagged_words:
+        from .campaign.safety import clean
+
+        hook = clean(hook, campaign)
+    notes = ["edited by hand"]
+    if edit.cuts:
+        notes.append(f"{edit.cuts} cut(s), {edit.end - edit.start - edit.length:.1f}s taken out")
+    return plan.model_copy(update={
+        "hook_text": hook, "hook_shown": bool(hook) and config.render.show_hook_text,
+        "refine_notes": notes, "edit": edit.model_dump()})
 
 
 def parse_range(text: str) -> tuple[float, float]:
@@ -688,8 +736,12 @@ def _render_plan(
     draft: bool,
     corrector: list[LLMBackend] | None = None,
     recheck: AudioRecheck | None = None,
+    edit: ClipEdit | None = None,
 ) -> ClipRecord:
-    """Reframe, edit, render and check one planned clip (edits per docs/DECISIONS.md D59)."""
+    """Reframe, edit, render and check one planned clip (edits per docs/DECISIONS.md D59).
+
+    `edit` is a clip cut by hand in the editor (D103): its pieces are joined as
+    given, with their zooms, and its caption fixes applied."""
     from .campaign.edits import permissions
     from .render.placement import faces_on_screen
     from .render.prepare import darkness, first_bright, join_segments, lift_for
@@ -700,7 +752,8 @@ def _render_plan(
     allowed = permissions(campaign)
 
     # Never open on a black frame (research R1.1) -- but never skip speech either.
-    skip = first_bright(source_path, plan.start)
+    # An edit starts on the frame its maker chose.
+    skip = 0.0 if edit is not None else first_bright(source_path, plan.start)
     if skip > 0:
         first_word = next((w.start for w in transcript_words
                            if plan.start <= w.start < plan.end), plan.end)
@@ -712,6 +765,8 @@ def _render_plan(
 
     words, fixes = _corrected_words(transcript_words, plan, corrector, recheck,
                                     config.llm.rejected_fix_pairs)
+    if edit is not None:  # a person's fixes come last, over the AI's
+        words = apply_fixes(words, edit.fixes)
     if campaign.long_description:
         plan = plan.model_copy(update={"description": _description(
             plan, words, campaign, corrector, config)})
@@ -719,7 +774,16 @@ def _render_plan(
     # Dead air and fillers (podcasts; `internal_cuts`). The kept pieces are joined
     # into one file and everything below runs on it, on the tightened timeline.
     render_source, render_media, render_plan, render_words = source_path, info.media, plan, words
-    if allowed.internal_cuts and plan.candidate_id != "manual":
+    if edit is not None and (edit.cuts or edit.zoomed):
+        segments = [(p.start, p.end) for p in edit.pieces]
+        render_source = join_segments(
+            source_path, segments, work / f"{plan.clip_id}_edit.mkv",
+            width=info.media.width, height=info.media.height,
+            has_audio=info.media.has_audio, zooms=[p.zoom for p in edit.pieces])
+        render_media = probe(render_source)
+        render_words = remap_words(words, segments)
+        render_plan = plan.model_copy(update={"start": 0.0, "end": edit.length})
+    elif allowed.internal_cuts and plan.candidate_id != "manual":
         cuts = plan_cuts(words, plan.start, plan.end, _loudness(info),
                          min_length=campaign.duration.min_seconds)
         if cuts:

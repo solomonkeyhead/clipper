@@ -439,6 +439,8 @@ class ClipPlan(Artifact):
     hook_shown: bool = False
     # The payoff line shown first, source-absolute (render/teaser.py, D97).
     teaser: tuple[float, float] | None = None
+    # Made in the editor: the pieces kept, hook and caption fixes (editing.py, D103).
+    edit: dict | None = None
 
     @property
     def duration(self) -> float:

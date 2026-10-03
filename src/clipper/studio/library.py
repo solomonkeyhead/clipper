@@ -79,7 +79,8 @@ def scores_of(record: ClipRecord) -> dict:
     """What the scorer thought of a clip, as stored with it (see db.MIGRATIONS)."""
     text = record.plan.text[:TEXT_CHARS]
     if record.plan.candidate_id == "manual":
-        return {"picked_by": "hand", "text": text, "text_v": 2}
+        # Made in the editor: its edit, so it opens there as it was left (D103).
+        return {"picked_by": "hand", "text": text, "text_v": 2, "edit": record.plan.edit}
     llm = record.raw.get("llm")
     return {"picked_by": "auto", "text": text, "text_v": 2,
             # The payoff it opens on, so a re-render keeps it (render/teaser.py).

@@ -38,6 +38,10 @@ WORDING: list[tuple[str, tuple[str, ...]]] = [
      ("audio_additions",)),
     (r"\bno\s+(reaction\s+)?overlays?\b|\bno\s+logos?\b|\bno\s+stickers?\b|\bno\s+b-?roll\b",
      ("overlays",)),
+    # Footage only from the campaign: nothing from outside on top of it (D103).
+    (r"\bonly\s+(use\s+)?(the\s+)?(provided|official|supplied|approved)\s+(footage|clips|content|assets|videos?)\b|"
+     r"\bno\s+(outside|external|third[- ]party)\s+(footage|clips|content|videos?)\b",
+     ("overlays", "audio_additions")),
     (r"\bno\s+(zooms?|(visual\s+)?effects|filters?)\b|\bno\s+colou?r\s+(correction|grading|changes?)\b",
      ("visual_effects",)),
 ]

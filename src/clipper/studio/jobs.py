@@ -33,8 +33,10 @@ class Job:
     campaign: str
     source: str
     top: int | None                 # None: Clipper decides (auto)
-    mode: str = "auto"              # auto | top | manual
+    mode: str = "auto"              # auto | top | manual | prepare (for the editor)
     ranges: list[tuple[float, float]] = field(default_factory=list)
+    # Clips made in the editor (editing.ClipEdit as dicts, D103); a manual job.
+    edits: list[dict] = field(default_factory=list)
     status: str = "queued"          # queued | running | done | failed
     stage: str = "Waiting to start"
     pct: float = 0.0
@@ -184,15 +186,19 @@ class JobRunner:
         self._lock = threading.Lock()
 
     def submit(self, campaign, source: str, top: int | None,
-               ranges: list[tuple[float, float]] | None = None) -> Job:
+               ranges: list[tuple[float, float]] | None = None, *,
+               edits: list[dict] | None = None, prepare: bool = False) -> Job:
         """Queue a run for a loaded `CampaignConfig` and a source path.
 
-        `ranges` (seconds) cuts exactly those moments; otherwise `top` clips at
-        most, or with `top` None as many as are good enough.
+        `ranges` (seconds) cuts exactly those moments, and `edits` renders clips
+        made in the editor; otherwise `top` clips at most, or with `top` None as
+        many as are good enough. `prepare` only reads and transcribes the video,
+        for the editor.
         """
-        mode = "manual" if ranges else "top" if top else "auto"
+        mode = ("prepare" if prepare else "manual" if ranges or edits
+                else "top" if top else "auto")
         job = Job(id=next(self._ids), campaign=campaign.name, source=source, top=top,
-                  mode=mode, ranges=list(ranges or []))
+                  mode=mode, ranges=list(ranges or []), edits=list(edits or []))
         self.jobs[job.id] = job
         self._configs[job.id] = campaign
         self._queue.put(job)
@@ -204,6 +210,19 @@ class JobRunner:
                 self._threads.append(worker)
         self.publish("job.progress", job.view())
         return job
+
+    @staticmethod
+    def _prepare(job: Job, campaign) -> None:
+        """Read and transcribe the video, so the editor can open it (D103)."""
+        from ..config import Config
+        from ..ingest.download import ingest
+        from ..runner import campaign_config
+        from ..transcribe.whisper import transcribe
+
+        info = ingest(job.source)
+        transcribe(info, campaign_config(Config.load(), campaign).transcription)
+        job.report = {"source_id": info.source_id}
+        job.status, job.pct, job.stage = "done", 100.0, "Ready to edit"
 
     def list(self) -> list[dict]:
         live = {j.id: j.view() for j in self.jobs.values()}
@@ -235,10 +254,16 @@ class JobRunner:
         self.publish("job.progress", job.view())
         campaign = self._configs.pop(job.id)
         try:
+            if job.mode == "prepare":
+                self._prepare(job, campaign)
+                return
             if job.mode == "manual":
-                handler.total = len(job.ranges)
+                from ..editing import ClipEdit
+
+                handler.total = len(job.edits or job.ranges)
                 result = runner.cut(job.source, job.ranges, config=Config.load(),
-                                    campaign=campaign, out_root=runs_dir())
+                                    campaign=campaign, out_root=runs_dir(),
+                                    edits=[ClipEdit.model_validate(e) for e in job.edits] or None)
             else:
                 # Auto: the quality bar decides how many, up to the campaign's
                 # maximum if it has one (runner.clip_limit).

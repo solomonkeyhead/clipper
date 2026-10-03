@@ -35,17 +35,23 @@ LIFT_GAMMA = 1.12
 
 
 def join_segments(source: Path, segments: list[tuple[float, float]], output: Path, *,
-                  width: int, height: int, has_audio: bool, punch_in: bool) -> Path:
-    """Concatenate `segments` (source seconds) of `source` into `output`."""
+                  width: int, height: int, has_audio: bool, punch_in: bool = False,
+                  zooms: list[float] | None = None) -> Path:
+    """Concatenate `segments` (source seconds) of `source` into `output`.
+
+    Each segment is zoomed by `zooms` (the editor's choice, D103); without them,
+    `punch_in` alternates every other one in by PUNCH_IN, hiding the jump."""
     base = segments[0][0]
     span = segments[-1][1] - base
+    if zooms is None:
+        zooms = [PUNCH_IN if punch_in and i % 2 == 1 else 1.0 for i in range(len(segments))]
     parts, labels = [], []
-    zw, zh = (int(width * PUNCH_IN) // 2) * 2, (int(height * PUNCH_IN) // 2) * 2
     for i, (a, b) in enumerate(segments):
         s, e = a - base, b - base
         video = f"[0:v]trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS"
-        if punch_in and i % 2 == 1:
+        if zooms[i] > 1.0:
             # Zoom towards the upper-middle, where heads are, not the dead centre.
+            zw, zh = (int(width * zooms[i]) // 2) * 2, (int(height * zooms[i]) // 2) * 2
             video += (f",scale={zw}:{zh}:flags=lanczos,"
                       f"crop={width}:{height}:{(zw - width) // 2}:{int((zh - height) * 0.35)}")
         parts.append(f"{video},setsar=1[v{i}]")
