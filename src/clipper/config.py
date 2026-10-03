@@ -191,6 +191,9 @@ class LLMConfig(StrictModel):
     # Without an API key, Create asks that model through Claude Code instead, on the user's
     # own Claude plan (D113): no bill, it counts toward the plan's usage limits.
     create_via_claude_plan: bool = True
+    # The footage judge (about 9 calls a video, a simple look at thumbnails) asks this one;
+    # None = create_model. Sonnet uses about half the plan usage Opus does (D116).
+    create_quick_model: str | None = None
     # Hard-drop candidates both prompts say need earlier context. Off for
     # scripted TV, where nearly every scene "needs context" by that standard
     # yet works as a clip: on a sitcom episode 26 of 48 were dropped for it.

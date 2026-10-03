@@ -41,8 +41,20 @@ EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/we
 
 
 def cli() -> str | None:
-    """The `claude` command, if Claude Code is installed."""
-    return shutil.which("claude")
+    """The `claude` command, if Claude Code is installed: on PATH, or where its Windows
+    installers put it (a desktop icon's Clipper may not have the terminal's PATH, D116)."""
+    import os
+
+    found = shutil.which("claude")
+    if found:
+        return found
+    home, appdata = Path.home(), os.environ.get("APPDATA", "")
+    for candidate in (home / ".local" / "bin" / "claude.exe", home / ".local" / "bin" / "claude",
+                      Path(appdata) / "npm" / "claude.cmd" if appdata else None,
+                      home / ".claude" / "local" / "claude"):
+        if candidate and candidate.is_file():
+            return str(candidate)
+    return None
 
 
 def _shim(command: str) -> bool:

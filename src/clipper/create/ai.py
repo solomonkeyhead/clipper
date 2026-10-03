@@ -28,13 +28,13 @@ class CreateError(RuntimeError):
     """Something Create couldn't do; the message says why, for the page."""
 
 
-def backends(config) -> list:
+def backends(config, model: str | None = None) -> list:
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
     from ..runner import _correction_backends
 
     chosen = []
-    model = config.llm.create_model
+    model = model or config.llm.create_model
     if model and os.environ.get("ANTHROPIC_API_KEY", "").strip():
         try:
             chosen.append(create_backend("anthropic", model=model, max_retries=1,
@@ -57,12 +57,16 @@ def backends(config) -> list:
     return chosen
 
 
-def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple[bytes, str]] | None = None) -> str:
+def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple[bytes, str]] | None = None,
+        quick: bool = False) -> str:
+    """The first model's answer; `quick` for small, many-times jobs (the footage judge),
+    which go to `llm.create_quick_model` to spare the plan's usage (D116)."""
     from ..config import Config
     from ..llm.base import LLMRequest, miss_level
 
     global last_used
-    for backend in backends(Config.load()):
+    config = Config.load()
+    for backend in backends(config, config.llm.create_quick_model if quick else None):
         try:
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text

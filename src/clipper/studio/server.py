@@ -14,10 +14,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import re
 import statistics
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -634,6 +636,20 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     app = FastAPI(title="Clipper Control Center", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
+    started_on = code_version()
+
+    @app.get("/api/code-version")
+    def running_code() -> dict:
+        """The code this server started with, so a newer `clipper studio` can tell (D116)."""
+        return {"version": started_on}
+
+    @app.post("/api/quit")
+    def quit_server(request: Request) -> dict:
+        """Stop, for a `clipper studio` started on newer code (only from this computer)."""
+        if request.client and request.client.host not in ("127.0.0.1", "::1", "localhost"):
+            raise HTTPException(403, "only from this computer")
+        threading.Timer(0.5, lambda: os._exit(0)).start()
+        return {"stopping": True}
     # The clip list is ~200 KB of JSON; compressed it's a fraction. Video, images
     # and the live event stream are left as they are (Starlette's own exclusions).
     app.add_middleware(GZipMiddleware, minimum_size=2048)
@@ -1931,7 +1947,7 @@ def serve(*, open_browser: bool = True, port: int = PORT) -> None:
     import uvicorn
 
     url = f"http://{HOST}:{port}/"
-    if _running(port):
+    if _running(port) and not _replace_older(port):
         # Opened twice (e.g. the desktop shortcut clicked again): show the one running.
         if open_browser:
             webbrowser.open(url)
@@ -1939,6 +1955,47 @@ def serve(*, open_browser: bool = True, port: int = PORT) -> None:
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run(create_app(auto_sync=True), host=HOST, port=port, log_level="warning")
+
+
+def code_version() -> str:
+    """The commit this copy of Clipper is on ("" when it isn't a git checkout)."""
+    import subprocess
+
+    from ..paths import REPO_ROOT
+
+    try:
+        return subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True,
+                              text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _replace_older(port: int) -> bool:
+    """When the Clipper already running started on older code than what's on disk now, stop
+    it, so this one starts on the new code (D116). The desktop icon only ever opened the
+    running server, so a Clipper left running in the background kept old code for days:
+    updates pulled, never used. True when the port is free again."""
+    import time
+
+    import httpx
+
+    here = code_version()
+    base = f"http://{HOST}:{port}"
+    try:
+        there = httpx.get(f"{base}/api/code-version", timeout=3).json().get("version", "")
+    except (httpx.HTTPError, ValueError):
+        there = ""  # a Clipper from before it could say: older by definition
+    if not here or there == here:
+        return False
+    try:
+        httpx.post(f"{base}/api/quit", timeout=3)
+    except httpx.HTTPError:
+        return False  # it couldn't be asked (too old to know /api/quit): leave it
+    for _ in range(40):
+        time.sleep(0.25)
+        if not _running(port):
+            return True
+    return False
 
 
 def _running(port: int) -> bool:

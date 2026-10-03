@@ -206,7 +206,7 @@ def _judge(sentence: str, query: str, hits: list[dict]) -> dict | None:
                            for i, (h, _) in enumerate(shown, start=1))
         prompt = (f"Sentence: {sentence}\nSearched for: {query}\n"
                   f"Thumbnails 1 to {len(shown)}, in order:\n{listed}")
-        answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown])
+        answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True)
         verdict = _Pick.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
         raise _NoAnswer from exc

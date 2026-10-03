@@ -2121,3 +2121,20 @@ Claude, and from the cloud session there is no seeing why on the user's PC. One 
 answers it: the Clipper version (is the update there?), git and `claude` on PATH, the
 create settings, the order Create will ask the models in (with why any is skipped), and
 one real call to the first of them, with its error if it fails.
+
+## D116 — The desktop icon starts the new code; Claude found off PATH; Sonnet judges (2026-10-03)
+
+The user starts Clipper from the desktop icon, and every update since D113 seemed not to
+take: no notes, Gemini's drawings. The icon ran `clipper studio`, and when a Control Center
+was already listening it only opened the browser on it -- so a Clipper left running in the
+background (no window to close) kept serving the code it started with, while updates were
+pulled to disk and never used.
+1. The server reports the commit it started on (/api/code-version) and can be asked to stop
+   from this computer (/api/quit). `clipper studio` finding an older one running stops it
+   and starts in its place; the same code running is just opened, as before. (A server
+   from before this change can't be asked: it has to be stopped once by hand.)
+2. `claude` is also looked for where the Windows installers put it (~/.local/bin,
+   %APPDATA%/npm), in case the icon's Clipper doesn't have the terminal's PATH.
+3. The footage judge (about 9 calls a video) asks `llm.create_quick_model`, Sonnet 5.5, to
+   spare the plan's usage; scripts and sketches stay on create_model. The user chose the
+   plan over an API key: measured, a video is ~$1.00 at API prices on Opus, ~$0.50 on Sonnet.
