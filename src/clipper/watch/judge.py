@@ -21,7 +21,11 @@ from .mailbox import Mail
 
 log = get_logger(__name__)
 
-PROMPT_VERSION = "campaign-judge-v2"
+PROMPT_VERSION = "campaign-judge-v3"
+
+#: The niches a campaign is filed under on the Campaigns page (D106), one each.
+NICHES = ("TV & film", "Comedy", "Anime & edits", "Streamers & creators", "Podcasts", "Music",
+          "Gaming", "Sports", "Products & apps", "Crypto & finance", "Other")
 
 #: Links in a push must lead to one of these (or a subdomain).
 TRUSTED_HOSTS = ("vyro.com", "whop.com", "contentrewards.com")
@@ -52,6 +56,10 @@ Fields:
 - link: the URL to open this campaign, copied exactly from the message; "".
 - content: in a few words, what gets clipped (e.g. "TV comedy series",
   "gaming streams", "supplement ads").
+- niche: the one that best describes what gets clipped, exactly one of: TV & film,
+  Comedy, Anime & edits, Streamers & creators, Podcasts, Music, Gaming, Sports,
+  Products & apps, Crypto & finance, Other. Judge the campaign's own content, not
+  the clipper's profile.
 - rights: "owner" if the campaign is run by whoever owns the content (the
   creator, brand or studio, or the platform says it is verified), "licensed" if
   it says the content is provided under licence, "unclear" otherwise.
@@ -72,6 +80,7 @@ class Verdict(BaseModel):
     locked: Literal["yes", "no", "unknown"] = "unknown"
     link: str = ""
     content: str = ""
+    niche: str = "Other"
     rights: Literal["owner", "licensed", "unclear"] = "unclear"
     fit: Literal["yes", "maybe", "no"] = "no"
     why: str = ""
@@ -105,7 +114,8 @@ def judge_text(header: str, text: str, profile: str, backend: LLMBackend | list[
             cache.forget(cache.key(backend=used.name, model=used.cache_model(),
                                    prompt_key=PROMPT_VERSION, payload=user))
         return None
-    return verdict.model_copy(update={"link": safe_link(verdict.link)})
+    return verdict.model_copy(update={"link": safe_link(verdict.link),
+                                      "niche": verdict.niche if verdict.niche in NICHES else "Other"})
 
 
 def safe_link(url: str) -> str:

@@ -108,7 +108,10 @@ function FoundRow({ found }: { found: FoundCampaign }) {
     <div className="flex flex-col gap-2 border-t border-line py-3 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">{found.name || "Unnamed campaign"}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold">{found.name || "Unnamed campaign"}</span>
+            {found.niche && <Chip className="h-5 text-[11px]">{found.niche}</Chip>}
+          </div>
           <div className="text-xs text-muted">
             {[found.source !== "other" && found.source[0].toUpperCase() + found.source.slice(1), found.rate,
               found.platforms.join(", "), `found ${ago(found.found_at)}${found.via === "discord" ? " on Discord" : " by email"}`]
@@ -136,8 +139,36 @@ function FoundRow({ found }: { found: FoundCampaign }) {
   );
 }
 
+const NICHE_KEY = "clipper.found.niche";
+
+/** Niche chips, with how many campaigns each holds; "All" first (D106). */
+function NicheFilter({ found, niche, setNiche }: { found: FoundCampaign[]; niche: string; setNiche: (n: string) => void }) {
+  const counts = new Map<string, number>();
+  for (const f of found) counts.set(f.niche || "", (counts.get(f.niche || "") ?? 0) + 1);
+  const options: [string, string, number][] = [["", "All", found.length],
+    ...[...counts.entries()].filter(([n]) => n).sort((a, b) => b[1] - a[1]).map(([n, c]) => [n, n, c] as [string, string, number])];
+  const unsorted = counts.get("") ?? 0;
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Niche">
+      {options.map(([value, label, count]) => (
+        <button key={label} role="radio" aria-checked={niche === value} onClick={() => setNiche(value)}
+          className={cn("flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
+            niche === value ? "border-accent bg-accent text-accent-fg" : "border-line text-muted hover:text-fg")}>
+          {label} <span className="tabular opacity-70">{count}</span>
+        </button>
+      ))}
+      {unsorted > 0 && <span className="flex items-center gap-1 text-xs text-subtle"><Loader2 className="size-3 animate-spin" /> sorting {unsorted}…</span>}
+    </div>
+  );
+}
+
 export function FindCampaigns() {
   const { data: found = [] } = useFound();
+  const [niche, setNicheState] = useState<string>(() => { try { return localStorage.getItem(NICHE_KEY) ?? ""; } catch { return ""; } });
+  const setNiche = (n: string) => { setNicheState(n); try { localStorage.setItem(NICHE_KEY, n); } catch { /* fine */ } };
+  // A remembered niche with nothing in it now shows everything rather than an empty list.
+  const active = niche && found.some((f) => f.niche === niche) ? niche : "";
+  const shown = active ? found.filter((f) => f.niche === active) : found;
   return (
     <>
     <CampaignAlerts />
@@ -146,7 +177,8 @@ export function FindCampaigns() {
       {found.length > 0 && (
         <Card className="p-5">
           <h2 className="mb-3 text-md font-semibold">New campaigns from your alerts</h2>
-          {found.map((f) => <FoundRow key={f.key} found={f} />)}
+          <NicheFilter found={found} niche={active} setNiche={setNiche} />
+          {shown.map((f) => <FoundRow key={f.key} found={f} />)}
         </Card>
       )}
     </div>

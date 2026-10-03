@@ -918,9 +918,15 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.get("/api/found")
     def found_campaigns() -> list[FoundCampaign]:
+        import threading
+
         from . import finder
 
-        return [FoundCampaign(**f) for f in finder.found()]
+        found = [FoundCampaign(**f) for f in finder.found()]
+        # Campaigns found before niches existed (or when no AI answered) are sorted in the background.
+        if any(not f.niche for f in found):
+            threading.Thread(target=finder.sort_niches, args=(broker.publish,), name="niches", daemon=True).start()
+        return found
 
     @app.post("/api/found/{key}/check")
     async def check_found(key: str) -> CampaignCheck:

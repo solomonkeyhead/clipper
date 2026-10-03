@@ -220,6 +220,8 @@ MIGRATIONS = [
     ("campaign_state", "budget_checked_at", "ALTER TABLE campaign_state ADD COLUMN budget_checked_at TEXT"),
     # Where a found campaign came from: "email", "discord" or "whop".
     ("found_campaigns", "via", "ALTER TABLE found_campaigns ADD COLUMN via TEXT NOT NULL DEFAULT 'email'"),
+    # What gets clipped, filed under one of watch.judge.NICHES (D106); "" until sorted.
+    ("found_campaigns", "niche", "ALTER TABLE found_campaigns ADD COLUMN niche TEXT NOT NULL DEFAULT ''"),
 ]
 TRASH_DAYS = 30
 

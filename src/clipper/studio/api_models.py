@@ -340,6 +340,7 @@ class FoundCampaign(BaseModel):
     found_at: str
     dismissed: int
     via: str = "email"
+    niche: str = ""                  # what gets clipped (watch.judge.NICHES, D106); "" until sorted
 
 
 class AlertChannel(BaseModel):

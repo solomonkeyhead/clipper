@@ -1950,3 +1950,15 @@ verdict only with 3 posts a side; Instagram's skip rate beside it. Also "cut in 
 editor", and each on-screen hook's median views per campaign and platform. The TikTok
 switch isn't recorded per post: TikTok posts from a date (setting
 tiktok_disclosed_since, 2026-10-02, editable on the card) count as switch on.
+
+## D106 — Found campaigns by niche, and money over time (2026-10-02)
+
+Found campaigns are filed under one niche (watch.judge.NICHES: TV & film, Comedy,
+Anime & edits, Streamers & creators, Podcasts, Music, Gaming, Sports, Products & apps,
+Crypto & finance, Other): the judge now names it with each verdict (found_campaigns.niche),
+and older ones are sorted in one background AI call when the page loads
+(finder.sort_niches) -- by the campaign's own content, not the "fits your profile" note.
+Chips with counts filter the list; the choice is remembered. The dashboard's earnings
+card and views tile gained 14-day trend lines from the sync snapshots, each post priced by
+its own campaign's rate, minimum and cap (so the line ends on the card's number); recorded
+payouts show beside it as "Actually paid".

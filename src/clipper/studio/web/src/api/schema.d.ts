@@ -2313,6 +2313,11 @@ export interface components {
              * @default email
              */
             via: string;
+            /**
+             * Niche
+             * @default
+             */
+            niche: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
