@@ -36,34 +36,81 @@ log = get_logger(__name__)
 W, H, FPS = 1080, 1920, 30
 MAX_SHOT = 4.5
 PUSH_IN = 0.06
-#: Where a wide clip's middle sits: in the diagrams' band, above the captions.
-WIDE_CENTER = 760
 WATERMARK_WIDTH = 150
 
 
-def _stock_shot(src: Path, seconds: float, out: Path) -> Path:
-    """`seconds` of a stock clip on the 9:16 frame, pushing in slowly. A tall clip fills
-    it; a wide one is shown whole, across the middle, over a blurred, darkened copy of
-    itself -- cropping a wide shot to a phone's width kept a sliver of the middle and cut
-    the subject out (D110)."""
+def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> float:
+    """Where across the clip (0 left, 1 right) its subject is: the faces, when people are
+    in it (YuNet, sampled across the shot, the biggest face weighted most), else where the
+    footage judge saw the subject in the thumbnail, else the middle."""
+    try:
+        import cv2
+
+        from ..render.faces import DETECT_WIDTH, FaceDetectionUnavailable, _detect, _load_detector
+
+        cap = cv2.VideoCapture(str(src))
+        try:
+            fw, fh = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            detector = _load_detector(fw, fh)
+            scale = min(1.0, DETECT_WIDTH / fw) if fw else 1.0
+            dw, dh = max(64, round(fw * scale)), max(64, round(fh * scale))
+            detector.setInputSize((dw, dh))
+            xs, weights = [], []
+            for k in range(5):
+                cap.set(cv2.CAP_PROP_POS_MSEC, (start + seconds * (k + 0.5) / 5) * 1000)
+                ok, frame = cap.read()
+                if not ok:
+                    continue
+                small = cv2.resize(frame, (dw, dh), interpolation=cv2.INTER_AREA) if scale < 1 else frame
+                faces = _detect(detector, small, min_confidence=0.75, frame_height=dh, t=0.0, upscale=1 / scale)
+                if faces:
+                    face = max(faces, key=lambda f: f.width * f.height)
+                    xs.append(face.x / fw)
+                    weights.append(face.width * face.height)
+        finally:
+            cap.release()
+        if len(xs) >= 2:
+            return sum(x * w for x, w in zip(xs, weights, strict=True)) / sum(weights)
+    except (FaceDetectionUnavailable, ImportError, ZeroDivisionError) as exc:
+        log.debug("create: no face framing (%s)", exc)
+    return hint if hint is not None else 0.5
+
+
+def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None) -> Path:
+    """`seconds` of a stock clip filling the 9:16 frame, pushing in slowly, the crop placed on
+    its subject (D111): a wide shot cut to its middle lost the speaker cone to one side and
+    the skull to the other; shown whole over a blur it looked small. The window keeps the
+    subject's spot across the push-in and never leaves the picture."""
     info = probe(src)
     length = info.duration or seconds
     offset = min(length * 0.15, max(0.0, length - seconds - 0.1))
+    x = min(1.0, max(0.0, _subject_x(src, offset, seconds, center)))
     push = f"(1+{PUSH_IN}*t/{seconds:.3f})"
-    if info.width > info.height * 1.05:
-        h = round(W * 9 / 16 / 2) * 2
-        vf = (f"split[a][b];[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-              f"boxblur=40:2,eq=brightness=-0.18[bg];"
-              f"[b]scale=w='trunc({W}*1.08*{push}/2)*2':h=-2:eval=frame,crop='min(iw,{W})':'min(ih,{h})'[fg];"
-              f"[bg][fg]overlay=(W-w)/2:{WIDE_CENTER}-h/2,fps={FPS},setsar=1")
-    else:
-        vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-              f"scale=w='trunc({W}*{push}/2)*2':h=-2:eval=frame,crop={W}:{H},fps={FPS},setsar=1")
+    # Cover the frame, then push in; the crop's left edge sits so the subject lands as near
+    # the middle as the picture allows: (iw*x - W/2) clamped to [0, iw - W].
+    vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+          f"scale=w='trunc(iw*{push}/2)*2':h=-2:eval=frame,"
+          f"crop={W}:{H}:x='max(0,min(iw-{W},iw*{x:.4f}-{W // 2}))':y='(ih-{H})/2',fps={FPS},setsar=1")
     run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y",
          *(["-stream_loop", "-1"] if length < seconds + offset else ["-ss", f"{offset:.3f}"]),
-         "-i", str(src), "-t", f"{seconds:.3f}", "-an", "-filter_complex" if "[" in vf else "-vf", vf,
+         "-i", str(src), "-t", f"{seconds:.3f}", "-an", "-vf", vf,
          "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", str(out)])
     return out
+
+
+def _fallback(beat, script: Script) -> Visual:
+    """For a sentence no footage fits: a sketch of it, else its phrase chalked on the board
+    (a single word like "stranger" on an empty board opened a video once, D111)."""
+    from .sketch import draw
+
+    try:
+        drawn = draw(beat.text, f"A simple, striking sketch of what this sentence shows; the key idea: "
+                                f"{beat.visual.card or beat.emphasis}.", script.text)
+        if drawn.marks:
+            return Visual(kind="diagram", template="sketch", sketch=drawn)
+    except CreateError as exc:
+        log.info("create: no fallback sketch (%s)", exc)
+    return Visual(kind="diagram", template="card", title=beat.visual.card or beat.emphasis or beat.text)
 
 
 def shots(script: Script, timings: Timings, work: Path, progress=None) -> list[Path]:
@@ -72,20 +119,25 @@ def shots(script: Script, timings: Timings, work: Path, progress=None) -> list[P
         if progress:
             progress(f"Shot {i + 1} of {len(script.beats)}", 10 + 60 * i / len(script.beats))
         seconds = b - a
-        if beat.visual.kind == "diagram":
-            said = [(w.start - a, w.text) for w in timings.words if a - 0.05 <= w.start < b]
-            made.append(diagrams.render(beat.visual, seconds, work / f"{i:02d}_diagram.mp4", words=said))
+        said = [(w.start - a, w.text) for w in timings.words if a - 0.05 <= w.start < b]
+        visual = beat.visual
+        if visual.kind == "diagram" and visual.template == "sketch" and not (visual.sketch and visual.sketch.marks):
+            visual = _fallback(beat, script)  # planned before sketches existed, or its drawing failed
+        if visual.kind == "diagram":
+            made.append(diagrams.render(visual, seconds, work / f"{i:02d}_diagram.mp4", words=said))
             continue
         parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
-        queries = beat.visual.queries or [beat.visual.query]
-        for k, part in enumerate(parts):
-            hit = stock.choose(queries, part, used, sentence=beat.text)
-            if hit is None:  # nothing fits: the phrase on the board, never unrelated footage
-                card = Visual(kind="diagram", template="card", title=beat.visual.card or beat.emphasis or beat.text)
-                made.append(diagrams.render(card, part, work / f"{i:02d}_{k}_card.mp4"))
-                continue
-            used.add(hit["id"])
-            made.append(_stock_shot(stock.fetch(hit), part, work / f"{i:02d}_{k}_stock.mp4"))
+        queries = visual.queries or [visual.query]
+        hits = [stock.choose(queries, part, used, sentence=beat.text) for part in parts]
+        for hit in hits:
+            if hit:
+                used.add(hit["id"])
+        if not hits[0]:  # nothing fits: drawn instead, the whole sentence, never unrelated footage
+            made.append(diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}_sketch.mp4", words=said))
+            continue
+        hits = [h or hits[0] for h in hits]  # half a sentence without its own clip keeps the first
+        for k, (part, hit) in enumerate(zip(parts, hits, strict=True)):
+            made.append(_stock_shot(stock.fetch(hit), part, work / f"{i:02d}_{k}_stock.mp4", hit.get("center")))
     return made
 
 

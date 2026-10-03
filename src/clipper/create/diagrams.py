@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import itertools
 import math
 import random
 import re
@@ -106,7 +107,8 @@ def cues(v: Visual, words: list[tuple[float, str]]) -> list[float | None]:
     spoken = [(at, _stem(w)) for at, w in words if len(_stem(w)) >= 3]
     out: list[float | None] = []
     last = 0.0
-    for label in v.labels:
+    labels = [m.cue for m in v.sketch.marks] if v.template == "sketch" and v.sketch else v.labels
+    for label in labels:
         keys = {_stem(w) for w in label.split() if len(_stem(w)) >= 3}
         hit = next((at for at, w in spoken if at >= last and any(w.startswith(k) or k.startswith(w) for k in keys)), None)
         out.append(hit)
@@ -457,7 +459,118 @@ def number(draw, v: Visual, t: float, d: float) -> None:
     text(draw, (W / 2, mid + 160), caption, 70, CHALK, max_width=880, reveal=stage(t, d, 1, 2))
 
 
-DRAW = {"forces": forces, "circle": circle, "equation": equation, "compare": compare, "chain": chain, "graph": graph,
+COLORS = {"chalk": CHALK, "yellow": YELLOW, "blue": BLUE, "red": (255, 120, 100), "dim": DIM}
+SK_X, SK_Y = 40, TOP + 20     # where the sketch grid's (0, 0) lands on the frame
+
+
+def _pts(xy: list[float]) -> list[tuple[float, float]]:
+    return [(SK_X + xy[k], SK_Y + xy[k + 1]) for k in range(0, len(xy) - 1, 2)]
+
+
+def _smooth(pts: list[tuple[float, float]], closed: bool) -> list[tuple[float, float]]:
+    """A Catmull-Rom curve through the points: chalk curves, not polygons."""
+    if len(pts) < 3:
+        return pts + pts[:1] if closed and pts else pts
+    ring = pts if closed else [pts[0], *pts, pts[-1]]
+    n = len(ring)
+    out = []
+    for k in range(n if closed else n - 3):
+        p0, p1, p2, p3 = (ring[(k + j) % n] for j in range(4)) if closed else ring[k:k + 4]
+        for j in range(12):
+            u = j / 12
+            out.append(tuple(0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * u + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * u * u
+                                    + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * u ** 3) for c in (0, 1)))
+    out.append(out[0] if closed else pts[-1])
+    return out
+
+
+def _upto(pts: list[tuple[float, float]], frac: float) -> list[tuple[float, float]]:
+    """The first `frac` of a polyline, by length: a line being drawn on."""
+    if frac >= 1 or len(pts) < 2:
+        return pts
+    seg = [math.dist(a, b) for a, b in itertools.pairwise(pts)]
+    want, out = sum(seg) * max(0.0, frac), [pts[0]]
+    for (a, b), length in zip(itertools.pairwise(pts), seg, strict=True):
+        if want <= length:
+            f = want / length if length else 0
+            out.append((a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f))
+            return out
+        out.append(b)
+        want -= length
+    return out
+
+
+def _at(pts: list[tuple[float, float]], frac: float) -> tuple[float, float]:
+    return _upto(pts, frac)[-1]
+
+
+def _dense(pts: list[tuple[float, float]], step: float = 4.0) -> list[tuple[float, float]]:
+    """The polyline as points every `step` px along it."""
+    out = pts[:1]
+    for a, b in itertools.pairwise(pts):
+        n = max(1, int(math.dist(a, b) / step))
+        out += [(a[0] + (b[0] - a[0]) * j / n, a[1] + (b[1] - a[1]) * j / n) for j in range(1, n + 1)]
+    return out
+
+
+def _polyline(draw, pts, color, width: int = 9, dashed: bool = False) -> None:
+    if len(pts) < 2:
+        return
+    if not dashed:
+        draw.line(pts, fill=color, width=width, joint="curve")
+        return
+    dense = _dense(pts)
+    for j in range(0, len(dense) - 1, 12):  # 28 px dashes, 20 px gaps
+        draw.line(dense[j:j + 8], fill=color, width=width - 2, joint="curve")
+
+
+def sketch(draw, v: Visual, t: float, d: float) -> None:
+    """A chalk sketch made for this sentence (create/sketch.py): its marks arrive in order,
+    or as the voice says their cue word; lines are drawn on, words written, waves and
+    travelling dots keep moving."""
+    marks = v.sketch.marks if v.sketch else []
+    title(draw, v, stage(t, d, 0, len(marks) + 1))
+    for i, m in enumerate(marks):
+        p = stage(t, d, i + 1, len(marks) + 1, label=i)
+        if p <= 0:
+            continue
+        color, pts = COLORS.get(m.color, CHALK), _pts(m.xy)
+        if m.kind in ("line", "arrow", "curve", "loop"):
+            line = _smooth(pts, closed=m.kind == "loop") if m.kind in ("curve", "loop") else pts
+            part = _upto(line, p)
+            _polyline(draw, part, color, dashed=m.dashed)
+            if m.kind == "arrow" and p > 0.9 and len(part) >= 2:
+                arrow(draw, part[-2], part[-1], color, width=9, head=40)
+        elif m.kind == "circle" and len(m.xy) >= 3:
+            (cx, cy), r = pts[0], m.xy[2]
+            draw.arc((cx - r, cy - r, cx + r, cy + r), -90, -90 + 360 * p, fill=color, width=9)
+        elif m.kind == "dot" and pts:
+            (cx, cy), r = pts[0], 16 * p
+            draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=color)
+        elif m.kind == "box" and len(pts) >= 2:
+            (x0, y0), (x1, y1) = pts[0], pts[1]
+            corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+            _polyline(draw, _upto(corners, p), color, dashed=m.dashed)
+        elif m.kind == "text" and pts:
+            text(draw, pts[0], m.text, {1: 56, 2: 70, 3: 100}.get(m.size, 70), color, max_width=640, reveal=p)
+        elif m.kind == "wave" and len(pts) >= 2:
+            (x0, y0), (x1, y1) = pts[0], pts[1]
+            length = math.dist((x0, y0), (x1, y1)) or 1
+            ux, uy = (x1 - x0) / length, (y1 - y0) / length
+            amp, phase = {1: 14, 2: 26, 3: 42}.get(m.size, 26), 2 * math.pi * 0.9 * t
+            wave_pts = [(x0 + ux * s - uy * amp * math.sin(2 * math.pi * m.cycles * s / length - phase),
+                         y0 + uy * s + ux * amp * math.sin(2 * math.pi * m.cycles * s / length - phase))
+                        for s in range(0, int(length * p) + 1, 4)]
+            _polyline(draw, wave_pts, color, width=8)
+        elif m.kind == "mover" and len(pts) >= 2:
+            path = _smooth(pts, closed=False)
+            k = (t / 1.8) % 1.0
+            for lag, r in ((0.08, 8), (0.04, 11), (0.0, 17)):  # a short fading trail
+                x, y = _at(path, max(0.0, k - lag))
+                draw.ellipse((x - r * p, y - r * p, x + r * p, y + r * p), fill=color)
+
+
+DRAW = {"sketch": sketch, "forces": forces, "circle": circle, "equation": equation, "compare": compare, "chain": chain, "graph": graph,
         "wave": wave, "particles": particles, "ray": ray, "number": number, "card": card}
 
 

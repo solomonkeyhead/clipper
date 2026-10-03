@@ -157,7 +157,9 @@ Then score how well that best one fits, honestly:
   0-3  unrelated, confusing, or cheap-looking (cartoonish, a green background, text or a
        logo burned in, a stock-footage cliche).
 Below 7 a chalkboard card is shown instead, which is better than a loose match, so don't
-round up. Answer pick = its number (0 if none) and score."""
+round up. Answer pick = its number (0 if none), score, and center: where across that
+thumbnail the subject is, 0 = left edge, 0.5 = middle, 1 = right edge (the video is cropped
+to a tall strip around it, so put it on the thing the sentence is about)."""
 
 #: The judge's score a clip needs to be used; below it the beat gets a chalk card (D110).
 #: Picks were judged "very poor" when any non-zero pick was taken.
@@ -167,6 +169,7 @@ GOOD_ENOUGH = 7
 class _Pick(BaseModel):
     pick: int
     score: int = 0
+    center: float = 0.5
 
 
 def _thumb(hit: dict) -> bytes | None:
@@ -210,7 +213,7 @@ def _judge(sentence: str, query: str, hits: list[dict]) -> dict | None:
     if not 1 <= n <= len(shown) or verdict.score < GOOD_ENOUGH:
         log.info("create: no footage good enough for %r (best %s scored %s)", sentence[:60], n, verdict.score)
         return None
-    return shown[n - 1][0]
+    return {**shown[n - 1][0], "center": min(1.0, max(0.0, verdict.center))}
 
 
 def choose(queries: list[str], seconds: float, used: set, sentence: str = "") -> dict | None:

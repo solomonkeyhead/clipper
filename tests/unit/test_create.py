@@ -223,6 +223,7 @@ def test_a_loose_match_is_not_good_enough(monkeypatch):
         monkeypatch.setattr(stock, "ask", lambda *a, score=score, **k: f'{{"pick": 2, "score": {score}}}')
         hit = stock._judge("Your voice sounds deeper inside your head.", "voice", HITS[:3])
         assert (hit and hit["id"]) == expect
+    assert hit["center"] == 0.5  # where the subject is, for the crop
 
 
 def test_diagram_pieces_arrive_as_they_are_said():
@@ -236,18 +237,90 @@ def test_diagram_pieces_arrive_as_they_are_said():
     assert cues(Visual(labels=["skull", "bones"]), said) == [2.0, None]
 
 
-def test_wide_footage_is_shown_whole_not_cropped(tmp_path):
+def test_wide_footage_is_cropped_tall_around_its_subject(tmp_path):
     import shutil
     import subprocess
+
+    from PIL import Image
 
     from clipper.create.build import H, W, _stock_shot
     from clipper.ingest.probe import probe
 
     if not shutil.which("ffmpeg"):
         pytest.skip("no ffmpeg")
+    # A wide black clip with a white block near its right edge: the subject.
     src = tmp_path / "wide.mp4"
-    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30",
-                    "-t", "2", str(src)], check=True)
-    out = _stock_shot(src, 1.5, tmp_path / "out.mp4")
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=black:size=1920x1080:rate=30",
+                    "-vf", "drawbox=x=1500:y=400:w=200:h=280:color=white:t=fill", "-t", "2", str(src)], check=True)
+    out = _stock_shot(src, 1.5, tmp_path / "out.mp4", center=1600 / 1920)
     info = probe(out)
     assert (info.width, info.height) == (W, H) and info.duration == pytest.approx(1.5, abs=0.1)
+    still = tmp_path / "still.png"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", "0.7", "-i", str(out), "-frames:v", "1", str(still)],
+                   check=True)
+    img = Image.open(still).convert("L")
+    xs = [x for x in range(0, W, 8) if img.getpixel((x, H // 2)) > 200]
+    assert xs and abs((xs[0] + xs[-1]) / 2 - W / 2) < 120  # the block sits in the middle of the tall frame
+
+
+class TestSketch:
+    MARKS = [
+        {"kind": "loop", "xy": [380, 110, 560, 110, 640, 250, 600, 500, 430, 500, 330, 340]},
+        {"kind": "circle", "xy": [420, 300, 26], "color": "dim"},
+        {"kind": "curve", "xy": [640, 400, 800, 330, 560, 250, 450, 300], "color": "blue", "dashed": True, "cue": "air"},
+        {"kind": "mover", "xy": [560, 440, 445, 320], "color": "yellow", "cue": "skull"},
+        {"kind": "arrow", "xy": [100, 100, 200, 100]}, {"kind": "line", "xy": [100, 150, 200, 150], "dashed": True},
+        {"kind": "dot", "xy": [50, 50]}, {"kind": "box", "xy": [700, 50, 900, 150]},
+        {"kind": "wave", "xy": [100, 300, 300, 300], "cycles": 4, "size": 3},
+        {"kind": "text", "xy": [220, 450], "text": "through bone", "color": "yellow", "cue": "skull"},
+    ]
+
+    def test_every_mark_draws_and_stays_out_of_the_captions(self):
+        from clipper.create.diagrams import BOTTOM, W, frame
+        from clipper.create.sketch import Sketch
+
+        v = Visual(kind="diagram", template="sketch", title="Two ways", sketch=Sketch.model_validate({"marks": self.MARKS}))
+        for t in (0.0, 1.0, 2.5, 3.9):
+            img = frame(v, t, 4.0)
+        band = img.crop((0, BOTTOM + 60, W, BOTTOM + 160)).convert("L")
+        assert max(band.getdata()) < 120
+
+    def test_marks_arrive_when_their_word_is_said(self):
+        from clipper.create.diagrams import cues
+        from clipper.create.sketch import Sketch
+
+        v = Visual(kind="diagram", template="sketch", sketch=Sketch.model_validate({"marks": self.MARKS}))
+        got = cues(v, [(0.4, "Through"), (0.9, "air"), (1.6, "and"), (2.1, "your"), (2.4, "skull.")])
+        assert got[2] == 0.9 and got[3] == 2.4 and got[0] is None
+
+    def test_the_sketcher_looks_at_its_drawing_and_fixes_it(self, monkeypatch):
+        import json
+
+        from clipper.create import sketch
+
+        first = {"marks": self.MARKS[:2]}
+        fixed = {"marks": self.MARKS}
+        seen = []
+
+        def ask(system, user, schema, *, temperature, media=None):
+            seen.append(bool(media))
+            if schema is sketch.Sketch:
+                return json.dumps(first)
+            return json.dumps({"ok": len(seen) > 2, "problems": ["the head is unrecognisable"], "sketch": fixed})
+
+        monkeypatch.setattr(sketch, "ask", ask)
+        drawn = sketch.draw("Sound travels through your skull.", "a head, two sound paths")
+        assert len(drawn.marks) == len(self.MARKS) and seen == [False, True, True]  # drew, looked, looked again
+
+    def test_a_sketch_beat_needs_an_idea_and_a_failed_sketch_becomes_footage(self, monkeypatch):
+        from clipper.create import sketch
+
+        empty = Visual(kind="diagram", template="sketch")
+        assert tidy(script(("Why?", Visual()), ("How.", empty))).beats[1].visual.kind == "stock"
+
+        def broken(*a, **k):
+            raise CreateError("busy")
+        monkeypatch.setattr(sketch, "draw", broken)
+        planned = script(("Why?", Visual()), ("How.", Visual(kind="diagram", template="sketch", idea="a head")))
+        drawn, notes = sketch.draw_all(planned)
+        assert drawn.beats[1].visual.kind == "stock" and notes

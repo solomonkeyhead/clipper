@@ -20,9 +20,10 @@ from pydantic import BaseModel, Field
 
 from . import channel as channels
 from .ai import CreateError, ask
+from .sketch import Sketch
 
-PROMPT_VERSION = "create-script-v3"
-TEMPLATES = ("forces", "circle", "equation", "compare", "chain", "graph", "wave", "particles", "ray", "number")
+PROMPT_VERSION = "create-script-v4"
+TEMPLATES = ("sketch", "forces", "circle", "equation", "compare", "chain", "graph", "wave", "particles", "ray", "number")
 
 
 class Visual(BaseModel):
@@ -39,6 +40,8 @@ class Visual(BaseModel):
     shape: str = ""                 # graph: rising | falling | peak | wave; ray: refract | reflect
     subject: str = ""               # forces: what the arrows push on, written in its box
     amounts: list[float] = Field(default_factory=list)    # wave: amplitudes; particles: how many
+    idea: str = ""                  # sketch: what to draw, for the sketcher (create/sketch.py)
+    sketch: Sketch | None = None    # sketch: the drawing, made after the script (leave empty)
 
 
 class Beat(BaseModel):
@@ -75,6 +78,12 @@ short), 5 to 14 words. For every beat plan ONE picture:
 - kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
   About half the beats; never the first beat; never three diagrams in a row. Prefer a
   diagram to footage that would only loosely match. Templates:
+  * sketch (the default for HOW something works): a chalk drawing of the real thing, made
+    by an illustrator after you. idea = one or two sentences saying exactly what to draw:
+    the objects, where things go, the 2-4 labels ("A head in profile. Sound leaves the mouth
+    and curves round through the air to the ear, dashed blue, labelled 'air'. A second
+    yellow path goes from the throat straight through the skull to the inner ear,
+    labelled 'bone'."). Concrete and physical, never a flow chart. Leave sketch empty.
   * forces: an object with labelled arrows. subject = the object, 1-2 words ("you",
     "car"), labels = the forces ("gravity", "floor pushes up"), directions =
     "up"/"down"/"left"/"right" for each, values = their relative sizes, true to the physics
@@ -145,6 +154,8 @@ def tidy(script: Script) -> Script:
             diagram = False
         if diagram and v.template == "equation" and not any(c in v.equation for c in "=<>"):
             diagram = False
+        if diagram and v.template == "sketch" and not v.idea.strip() and not (v.sketch and v.sketch.marks):
+            diagram = False
         if diagram and v.template == "number" and not any(c.isdigit() for c in v.title):
             diagram = False
         if diagram and (i == 0 or (len(beats) >= 2 and all(b.visual.kind == "diagram" for b in beats[-2:]))):
@@ -194,6 +205,8 @@ def _diagrams(script: Script) -> str:
                  f"labels {v.labels}" if v.labels else "",
                  f"shape {v.shape}" if v.shape else "", f"values {v.values}" if v.values else "",
                  f"amounts {v.amounts}" if v.amounts else "",
+                 f"a sketch of: {v.idea}" if v.idea else "",
+                 "drawn with labels " + str([m.text for m in v.sketch.marks if m.text]) if v.sketch else "",
                  f"directions {v.directions}" if v.directions else "", f"equation {v.equation!r}" if v.equation else ""]
         lines.append(f"- Over sentence {i} (\"{b.text}\"): " + ", ".join(p for p in parts if p))
     return "\n".join(lines)
@@ -218,10 +231,21 @@ def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Scr
         script = write(question, angle, take=take, feedback="\n".join(f"- {p}" for p in review.problems))
         second = check(script)
         if not second.ok and second.problems:
-            return script, "Physics check, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems)
-        return script, "Physics check: fixed after a first draft got this wrong:\n" + \
-            "\n".join(f"- {p}" for p in review.problems)
-    return script, "Physics check: no problems found."
+            note = "Physics check, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems)
+        else:
+            note = "Physics check: fixed after a first draft got this wrong:\n" + \
+                "\n".join(f"- {p}" for p in review.problems)
+    else:
+        note = "Physics check: no problems found."
+    return _sketched(script, note)
+
+
+def _sketched(script: Script, note: str) -> tuple[Script, str]:
+    """The script with its sketches drawn (they're drawn last, for the final words)."""
+    from .sketch import draw_all
+
+    drawn, notes = draw_all(script)
+    return tidy(drawn), "\n".join([note, *notes])
 
 
 def replan(script: Script) -> tuple[Script, str]:
@@ -247,6 +271,6 @@ def replan(script: Script) -> tuple[Script, str]:
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
         review = check(fresh)
         if review.ok or not review.problems:
-            return fresh, "Pictures planned again. Physics check: no problems found."
+            return _sketched(fresh, "Pictures planned again. Physics check: no problems found.")
         feedback = "\n".join(f"- {p}" for p in review.problems)
-    return fresh, "Pictures planned again. Physics check, still unsure:\n" + feedback
+    return _sketched(fresh, "Pictures planned again. Physics check, still unsure:\n" + feedback)
