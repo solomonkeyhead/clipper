@@ -289,6 +289,8 @@ function Workbench({ view }: { view: EditorView }) {
 
   const len = length(edit);
   const at = clipTime(edit, t);
+  // A posted clip's video is what's live: look and preview, but no saving over it.
+  const live = Boolean(view.clip_status && view.clip_status !== "ready" && view.clip_status !== "skipped");
   const stale = preview && JSON.stringify(preview.of) !== JSON.stringify(edit);
   const zoomNow = (() => { const i = pieceAt(edit, t); return i >= 0 ? edit.pieces[i].zoom : 1; })();
 
@@ -310,14 +312,14 @@ function Workbench({ view }: { view: EditorView }) {
               {busy === "preview" ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />} {busy === "preview" ? "Rendering…" : "Preview"}
             </Button>
           </Tip>
-          <Button variant="primary" disabled={Boolean(problems.length) || busy !== null} onClick={() => void save()}>
+          <Button variant="primary" disabled={Boolean(problems.length) || busy !== null || live} onClick={() => void save()}>
             {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : <Scissors className="size-4" />}
             {view.clip_id != null ? "Save changes" : "Make clip"}
           </Button>
         </div>
       </div>
 
-      {view.clip_status && view.clip_status !== "ready" && view.clip_status !== "skipped" && (
+      {live && (
         <p className="flex items-center gap-2 rounded-md border border-warning/40 px-3 py-2 text-sm text-warning">
           <Lock className="size-4" /> This clip is posted, so its video is what's live. You can look, but not save changes.
         </p>
