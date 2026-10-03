@@ -81,6 +81,13 @@ class TestColdOpenRebuilt:
         assert open_loop(10.02, 13.4, words)[1] > 11.6  # by words alone, "with" is shown...
         assert open_loop(10.02, 13.4, words, page_starts(ass))[1] == 11.4  # ...but its page holds the punchline
 
+    def test_no_hook_over_captions_moved_to_the_top(self):
+        from clipper.render.teaser import captions_on_top
+
+        ass = "\n".join([r"Dialogue: 0,0:00:01.00,0:00:02.00,Caption,,0,0,0,,so then",
+                         r"Dialogue: 0,0:00:10.00,0:00:11.00,Caption,,0,0,300,,{\an8}boy you came"])
+        assert captions_on_top(ass, 9.9, 11.4) and not captions_on_top(ass, 0.0, 3.0)
+
     def test_a_late_payoff_ends_the_clip_and_setups_stay_short(self):
         from clipper.runner import _end_on_payoff, _teaser
 

@@ -916,13 +916,15 @@ def _render_plan(
         spoken = [(w.start - render_plan.start, w.end - render_plan.start, w.text) for w in render_words
                   if a - 0.05 <= w.start and w.end <= b + 0.05]
         from .render.cover import hook_showing
-        from .render.teaser import page_starts
+        from .render.teaser import captions_on_top, page_starts
 
-        # The hook isn't drawn twice where the clip already shows it; the teaser stops
-        # before the caption page holding the punchline appears.
-        at = a - render_plan.start
-        prepend(output, at, b - render_plan.start,
-                hook="" if hook_showing(context.ass_text, at) else hook_on_top, config=config,
+        # The hook isn't drawn where the clip already shows it, or where the teaser's
+        # captions sit at the top (off a face); the teaser stops before the caption page
+        # holding the punchline appears.
+        at, to = a - render_plan.start, b - render_plan.start
+        clash = hook_showing(context.ass_text, at) or captions_on_top(context.ass_text, at, to)
+        prepend(output, at, to,
+                hook="" if clash else hook_on_top, config=config,
                 work_dir=work, draft=draft, has_audio=info.media.has_audio, words=spoken,
                 pages=page_starts(context.ass_text))
         rendered = probe(output)

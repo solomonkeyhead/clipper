@@ -95,6 +95,25 @@ def page_starts(ass_text: str) -> list[float]:
     return starts
 
 
+def captions_on_top(ass_text: str, start: float, end: float) -> bool:
+    """Whether any caption between `start` and `end` was moved to the top band (off a
+    face, R5.2) -- where a hook drawn over the teaser would sit on it."""
+    from ..utils.timecode import from_ass
+
+    for line in ass_text.splitlines():
+        if not line.startswith("Dialogue:"):
+            continue
+        fields = line.split(":", 1)[1].split(",", 9)
+        if len(fields) < 10 or fields[3].strip() != "Caption" or r"\an8" not in fields[9]:
+            continue
+        try:
+            if from_ass(fields[1].strip()) < end and from_ass(fields[2].strip()) > start:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def open_loop(start: float, end: float, words: list[tuple[float, float, str]] | None,
               pages: list[float] | None = None) -> tuple[float, float] | None:
     """The part of the payoff line to show: from just before its first word to the
