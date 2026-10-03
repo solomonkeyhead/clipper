@@ -2036,3 +2036,23 @@ diagrams Gemini planned were judged poor in both look and accuracy. So:
    boxes up to 150. The board below the band stays empty on purpose: captions end by
    y 1240 and the platforms' own text sits under that (D59). Silhouette/matte clips are
    dropped with green screens: white figures on black closed that video.
+
+## D111 — Create: sketches drawn for the sentence, crops on the subject (2026-10-03)
+
+Video 75 rebuilt with D110 was mostly chalkboard and the user still didn't like the
+diagrams: the first (sound through the skull) came out as three boxes, "vocal cords ->
+skull bone -> inner ear". The cause was not the prompt but the design: the model could
+only fill in one of ten fixed templates, none of which can show a head. And wide clips
+shown whole over a blur looked small; the user wants full-frame vertical, cropped smartly.
+1. sketch (create/sketch.py), now the planner's default for "how it works": the planner
+   writes what to draw (idea); after the physics check an illustrator pass draws it with
+   chalk marks on a 1000 x 600 grid (lines, arrows, smooth curves and closed outlines,
+   circles, dots, boxes, words, waves, a dot travelling a path), then looks at its own
+   drawing rendered and fixes what it sees, up to twice. Sketches are drawn in parallel
+   and stored in the script; marks appear when the voice says their cue word. The old
+   templates stay for graphs, bars, equations, numbers, rays.
+2. A sentence no footage fits gets a sketch of it, drawn at build, instead of a single
+   word chalked on an empty board ("stranger" opened the video).
+3. Stock fills the frame again, the crop placed on the subject: faces when YuNet finds
+   them across the shot (the biggest weighted most), else where the footage judge says the
+   subject is in the thumbnail (center, 0-1), else the middle; clamped to the picture.
