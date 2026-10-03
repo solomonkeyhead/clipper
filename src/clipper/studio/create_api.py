@@ -30,6 +30,40 @@ class Cancelled(Exception):
     """The user pressed Cancel: the build stops at its next step."""
 
 
+#: Videos deleted while their build was running: deleted when it stops (D123).
+doomed: set[int] = set()
+
+
+def _delete(row: dict) -> None:
+    """The video gone from Create: its row, and its folder (voice, clips, work) to the Recycle Bin.
+    Its idea goes back on the list; a finished clip stays in Clips."""
+    from ..create import store
+    from ..create.voice import folder
+    from ..utils.recycle import recycle
+    from . import db
+
+    with db.connect() as con:
+        con.execute("DELETE FROM create_videos WHERE id=?", (row["id"],))
+    if row["topic_id"]:
+        store.set_topic(row["topic_id"], "new")
+    d = folder(row["id"])
+    if d.exists():
+        recycle(d)
+
+
+def unstick() -> int:
+    """Builds left "voiced" or "building" when Clipper closed mid-build: put back, so they can be
+    built again or deleted, never stuck (D123). Run when the server starts; returns how many."""
+    from ..create import store
+
+    stuck = [v for v in store.videos() if v["status"] in ("voiced", "building") and v["id"] not in _running]
+    for v in stuck:
+        _stopped(v["id"])
+        if not v["clip_id"]:
+            store.update_video(v["id"], error="Clipper was closed during the build. Press Try again to build it.")
+    return len(stuck)
+
+
 def _check(video_id: int) -> None:
     if video_id in cancelled:
         raise Cancelled
@@ -56,6 +90,7 @@ def _view() -> dict:
     from ..create import userclips
     from ..create.script import Script
 
+    videos = [v for v in videos if v["id"] not in doomed]
     for v in videos:
         stage = progress.get(v["id"])
         v["stage"], v["pct"] = (stage if stage else (None, None))
@@ -104,6 +139,13 @@ def _work(video_id: int, publish) -> None:
     finally:
         _running.discard(video_id)
         cancelled.discard(video_id)
+        if video_id in doomed:  # deleted while it was building
+            doomed.discard(video_id)
+            from ..create import store
+
+            row = store.video(video_id)
+            if row:
+                _delete(row)
         publish("create.changed", {"id": video_id})
         publish("clips.changed", {})
 
@@ -115,6 +157,12 @@ def _editable(row: dict) -> None:
 
 
 def routes(app: FastAPI, publish) -> None:
+    try:
+        if unstick():
+            log.info("create: put back builds left unfinished when Clipper last closed")
+    except Exception as exc:  # never stop the page from starting
+        log.warning("create: couldn't check for unfinished builds (%s)", exc)
+
     from ..create import store
     from ..create.ai import CreateError
 
@@ -523,19 +571,14 @@ def routes(app: FastAPI, publish) -> None:
 
     @app.delete("/api/create/videos/{video_id}")
     def create_delete(video_id: int) -> dict:
-        """Remove a video from Create (its files to the Recycle Bin; a finished clip stays in Clips)."""
-        from ..create.voice import folder
-        from ..utils.recycle import recycle
-        from . import db
-
+        """Remove a video from Create (its files to the Recycle Bin; a finished clip stays in Clips),
+        whatever state it is in: nothing can leave a video stuck on the page (D123)."""
         row = video_or_404(video_id)
-        if row["status"] in ("voiced", "building") and video_id in _running:
-            raise HTTPException(409, "it's being built: cancel the build first")
-        with db.connect() as con:
-            con.execute("DELETE FROM create_videos WHERE id=?", (video_id,))
-        if row["topic_id"]:
-            store.set_topic(row["topic_id"], "new")
-        d = folder(video_id)
-        if d.exists():
-            recycle(d)
+        if video_id in _running:
+            # Mid-build: stop it, and delete once it has let go of its files (D123).
+            cancelled.add(video_id)
+            doomed.add(video_id)
+            publish("create.changed", {"id": video_id})
+            return {"ok": True, "after_stop": True}
+        _delete(row)
         return {"ok": True}

@@ -237,18 +237,49 @@ function Steps({ status }: { status: CreateVideo["status"] }) {
 }
 
 function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: boolean; wps: number }) {
+  const qc = useQueryClient();
   const [open, setOpen] = useState(startOpen);
+  const [confirm, setConfirm] = useState(false);
   useEffect(() => setOpen(startOpen), [startOpen]);
   const s = video.script;
+  const building = video.status === "voiced" || video.status === "building";
+  /** Delete, from any state, so no video can get stuck on the page (D123). */
+  const remove = async () => {
+    try {
+      const res = await createApi.remove(video.id) as { after_stop?: boolean };
+      toast.success(res.after_stop ? "Stopping the build, then deleting it" : "Deleted",
+                    { description: "Its files are in the Recycle Bin; a finished video stays in Clips." });
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setConfirm(false);
+    }
+  };
   return (
     <Card className={cn("flex flex-col", open && "ring-1 ring-line-strong")}>
-      <button className="flex flex-wrap items-center justify-between gap-3 p-4 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="min-w-0">
-          <span className="block truncate font-semibold">{s.title || "Untitled"}</span>
-          <span className="text-xs text-muted">{s.beats?.length ?? 0} beats · ~{Math.round(words(s) / wps)}s</span>
-        </span>
-        <Steps status={video.status} />
-      </button>
+      <div className="flex items-center gap-2 p-4">
+        <button className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span className="min-w-0">
+            <span className="block truncate font-semibold">{s.title || "Untitled"}</span>
+            <span className="text-xs text-muted">{s.beats?.length ?? 0} beats · ~{Math.round(words(s) / wps)}s</span>
+          </span>
+          <Steps status={video.status} />
+        </button>
+        {confirm ? (
+          <span className="flex shrink-0 items-center gap-1 text-xs">
+            <span className="text-muted">{building ? "Stop and delete?" : "Delete?"}</span>
+            <Button size="sm" variant="danger" onClick={() => void remove()}>Delete</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>Keep</Button>
+          </span>
+        ) : (
+          <Tip label={building ? "Stop the build and delete this video" : "Delete this video"}>
+            <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Delete this video" onClick={() => setConfirm(true)}>
+              <Trash2 className="size-4" />
+            </Button>
+          </Tip>
+        )}
+      </div>
       {open && <div className="border-t border-line p-4"><Body video={video} wps={wps} /></div>}
     </Card>
   );

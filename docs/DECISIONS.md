@@ -2234,3 +2234,19 @@ and pictures; footage picked again).
 
 **Ready-made script.** Sentence 4 is now microphone footage, so no more than two drawings come in a
 row (5 footage, 4 drawn). Every drawing moves: dots travel the air and bone routes and ride the waves.
+
+## D123 — No stuck videos; the ready-made diagrams designed again (2026-10-03)
+
+A video sat half-built and could not be moved on or removed: closing Clipper mid-build left it
+"building" for good, and that state had no Delete. Now: every video card has a delete button
+(with a confirm) in any state. Deleting a running build stops it and deletes it once it lets go
+of its files; the video disappears from the page at once. When the server starts, builds left
+unfinished by a closed Clipper are put back (`create_api.unstick`): to the finished version if
+there is one, else "Try again".
+
+The ready-made script's four drawings were redone from scratch, not just re-animated: a face
+from the front with air going out of the mouth round the cheeks to the ears and bone going up from
+the voice box through the jaw (3); vocal cords, a bone and a snail-shell inner ear in a row with
+the vibration travelling through (5); a low wave getting through a slab of bone while a high one
+fades (6, was a bar chart); and two faces, with the bone route marked "only you" and thin air
+waves to the friend's ear (8).

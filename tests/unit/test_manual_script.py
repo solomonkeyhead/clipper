@@ -164,11 +164,37 @@ def test_a_build_can_be_cancelled(client):
     try:
         assert client.post(f"/api/create/videos/{vid}/cancel").json() == {"stopping": True}
         assert next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)["cancelling"] is True
-        assert client.delete(f"/api/create/videos/{vid}").status_code == 409
     finally:
         create_api._running.discard(vid)
     create_api._work(vid, lambda *a: None)          # it sees the request before doing anything
     assert store.video(vid)["status"] == "built" and vid not in create_api.cancelled
+
+
+def test_a_video_can_always_be_deleted_and_never_stays_stuck(client, monkeypatch):
+    from clipper.create import store
+    from clipper.studio import create_api
+    from clipper.studio.server import create_app
+
+    vid = store.add_video(None, Script(title="t", beats=[Beat(text="One two three four.")]).model_dump())
+    for status in ("draft", "approved", "failed", "built"):
+        other = store.add_video(None, Script(title="t", beats=[Beat(text="One two three four.")]).model_dump())
+        store.update_video(other, status=status)
+        assert client.delete(f"/api/create/videos/{other}").status_code == 200 and store.video(other) is None
+    # deleted while its build runs: hidden at once, gone when the build lets go
+    store.update_video(vid, status="building")
+    create_api._running.add(vid)
+    try:
+        assert client.delete(f"/api/create/videos/{vid}").json() == {"ok": True, "after_stop": True}
+        assert all(v["id"] != vid for v in client.get("/api/create").json()["videos"])
+    finally:
+        create_api._running.discard(vid)
+    create_api._work(vid, lambda *a: None)
+    assert store.video(vid) is None and vid not in create_api.doomed
+    # left "building" when Clipper closed: put back when it starts again
+    stuck = store.add_video(None, Script(title="t", beats=[Beat(text="One two three four.")]).model_dump())
+    store.update_video(stuck, status="building")
+    create_app()
+    assert store.video(stuck)["status"] == "failed" and "closed during the build" in store.video(stuck)["error"]
 
 
 def test_footage_by_search_words_when_no_model_can_look(monkeypatch):
