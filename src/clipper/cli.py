@@ -950,6 +950,52 @@ def studio(
     server.serve(open_browser=not no_browser, port=port)
 
 
+@app.command(name="ai-check")
+def ai_check() -> None:
+    """Which AI Create will use, tried for real: the first thing to run when the diagrams
+    look like Gemini's (D115)."""
+    import os
+    import shutil
+    import subprocess
+
+    from pydantic import BaseModel
+
+    from .config import Config
+    from .create import ai
+    from .llm.base import LLMRequest
+    from .llm.claude_code import cli
+    from .paths import REPO_ROOT
+
+    version = subprocess.run(["git", "-C", str(REPO_ROOT), "log", "-1", "--format=%h %s %cr"],
+                             capture_output=True, text=True).stdout.strip()
+    console.print(f"Clipper version: {version or 'unknown'}")
+    console.print(f"git on PATH: {shutil.which('git') or 'NO'}")
+    console.print(f"claude on PATH: {cli() or 'NO (Claude Code not installed, or not on this window PATH)'}")
+    config = Config.load()
+    console.print(f"create_model: {config.llm.create_model}   create_via_claude_plan: "
+                  f"{config.llm.create_via_claude_plan}   API key set: {bool(os.environ.get('ANTHROPIC_API_KEY'))}")
+    try:
+        order = ai.backends(config)
+    except Exception as exc:
+        console.print(f"[red]no AI set up: {exc}[/red]")
+        raise typer.Exit(1) from exc
+    console.print("Create asks, in order: " + ", ".join(b.describe() for b in order))
+    for name, why in ai.misses.items():
+        console.print(f"  {name}: {why}")
+
+    class Ok(BaseModel):
+        ok: bool
+
+    first = order[0]
+    console.print(f"Trying {first.describe()} (up to a few minutes)...")
+    try:
+        reply = first.complete(LLMRequest(system="Answer the question.", user="Is 2 + 2 = 4?", response_schema=Ok))
+        console.print(f"[green]It answered: {reply.text}[/green]")
+    except Exception as exc:
+        console.print(f"[red]It failed: {exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
 library_app = typer.Typer(help="The clip library (data/library) behind the Control Center.",
                           no_args_is_help=True)
 app.add_typer(library_app, name="library")

@@ -2113,3 +2113,11 @@ D113, or Claude Code wasn't reachable from it.
 2. The notes under a script now also say why a model didn't answer ("claude_code didn't
    answer: ...", or that Claude Code isn't installed or on PATH).
 3. A label with a line break in it no longer breaks drawing (it stopped the sketch review).
+
+## D115 — `clipper ai-check` (2026-10-03)
+
+Video 76 again after "New pictures": a blob of a head, molecules in a box -- still not
+Claude, and from the cloud session there is no seeing why on the user's PC. One command
+answers it: the Clipper version (is the update there?), git and `claude` on PATH, the
+create settings, the order Create will ask the models in (with why any is skipped), and
+one real call to the first of them, with its error if it fails.
