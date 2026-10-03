@@ -10,29 +10,43 @@ function greeting() {
   return h < 12 ? "Morning." : h < 18 ? "Afternoon." : "Evening.";
 }
 
-/** The money, big and lime: what you've earned, and what's actually been paid (D99, D102). */
-function Earnings({ est, paid, views, posts, trend }: {
+/** The money, tidy: the estimate (with its trend) beside what has actually been paid, and what
+ *  is earned on paper but under a campaign's minimum payout (D99, D102, D118). */
+function Earnings({ est, paid, views, posts, trend, locked, lockedPosts }: {
   est: number | null; paid: number | null | undefined; views: number; posts: number; trend: number[];
+  locked: number; lockedPosts: number;
 }) {
   const week = trend.length >= 2 ? trend[trend.length - 1] - trend[Math.max(0, trend.length - 8)] : null;
+  const waiting = est !== null ? Math.max(0, est - (paid ?? 0)) : 0;
   return (
-    <Tip label="Estimate: views ÷ 1,000 × each campaign's rate. Campaigns verify views themselves.">
-      <Card className="flex flex-col gap-3 p-5 sm:col-span-2">
-        <span className="text-xs font-medium text-muted">Estimated earnings, active campaigns</span>
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span className="num text-[clamp(2.8rem,5vw,4rem)] leading-none text-money">{est === null ? "–" : formatMoney(est)}</span>
-          <span className="text-sm text-muted">
-            {est === null ? "Add a campaign's pay rate to see this" : <>from <b className="text-fg">{formatCount(views)}</b> views on <b className="text-fg">{posts}</b> posts</>}
-          </span>
-        </div>
-        {trend.length >= 2 && <Sparkline values={trend} className="h-10" />}
-        <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-dashed border-line-strong pt-3 text-sm text-muted">
-          {week !== null && <span><b className="text-money">+{formatMoney(Math.max(0, week))}</b> in the last {Math.min(7, trend.length - 1)} days</span>}
-          {paid != null ? <span>Actually paid <b className="text-fg">{formatMoney(paid)}</b></span>
-            : <span>Actually paid: record payouts on each campaign's page</span>}
-        </div>
-      </Card>
-    </Tip>
+    <Card className="flex flex-col gap-3 p-5 sm:col-span-2">
+      <div className="grid grid-cols-2 gap-4">
+        <Tip label="Views ÷ 1,000 × each campaign's rate, for posts that have reached their campaign's minimum payout. Campaigns verify views themselves.">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted">Estimated earnings</span>
+            <span className="num text-[clamp(2.2rem,4vw,3.4rem)] leading-none text-fg">{est === null ? "–" : formatMoney(est)}</span>
+          </div>
+        </Tip>
+        <Tip label="The payouts you've recorded on each campaign's page. Only this is money received.">
+          <div className="flex flex-col gap-1 border-l border-dashed border-line-strong pl-4">
+            <span className="text-xs font-medium text-muted">Actually paid</span>
+            <span className="num text-[clamp(2.2rem,4vw,3.4rem)] leading-none text-money">{formatMoney(paid ?? 0)}</span>
+          </div>
+        </Tip>
+      </div>
+      {trend.length >= 2 && <Sparkline values={trend} className="h-10" />}
+      <div className="flex flex-col gap-1 border-t border-dashed border-line-strong pt-3 text-sm text-muted">
+        <span>
+          {est === null ? "Add a campaign's pay rate to see an estimate"
+            : <>From <b className="text-fg">{formatCount(views)}</b> views on <b className="text-fg">{posts}</b> posts
+                {week !== null && <> · <b className="text-money">+{formatMoney(Math.max(0, week))}</b> in the last {Math.min(7, trend.length - 1)} days</>}</>}
+        </span>
+        {waiting > 0 && <span><b className="text-fg">{formatMoney(waiting)}</b> earned, not paid yet{paid == null && ": record payouts on each campaign's page"}</span>}
+        {locked > 0 && (
+          <span><b className="text-warning">{formatMoney(locked)}</b> more on {lockedPosts} post{lockedPosts === 1 ? "" : "s"} still under the campaign's minimum payout (pays nothing until it's reached)</span>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -181,6 +195,7 @@ export function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Earnings est={m.est_earnings} paid={m.paid_usd} views={m.views} posts={m.posts}
+                  locked={m.locked_usd ?? 0} lockedPosts={m.locked_posts ?? 0}
                   trend={(m.earned_by_day ?? []).slice(Math.max(0, days.findIndex((v) => v > 0)))} />
         <Metric label="Views" value={formatCount(m.views)} trend={trend.length >= 2 ? trend : undefined}
                 hint="Total views on your posts at the end of each day, from the syncs"

@@ -51,6 +51,7 @@ function CampaignCard({ c }: { c: Campaign }) {
         </span>
         <span className="flex flex-wrap justify-end gap-1.5">
           {c.warning && <Chip tone="danger" title={c.warning}>{c.warning.split(" · ")[0]}</Chip>}
+          {c.locked_usd > 0 && <Chip tone="warning" title="Earned on paper, but under this campaign's minimum payout, so it pays nothing yet">{formatMoney(c.locked_usd)} under minimum</Chip>}
           {c.to_submit > 0 && <Chip tone="warning">{c.to_submit} link{c.to_submit === 1 ? "" : "s"} to submit</Chip>}
         </span>
       </div>
@@ -218,6 +219,12 @@ function MoneyCard({ c }: { c: Campaign }) {
           )}
         </div>
       </div>
+      {c.locked_usd > 0 && (
+        <p className="text-xs text-muted">
+          <b className="text-warning">{formatMoney(c.locked_usd)}</b> is earned on paper by {c.locked_posts} post{c.locked_posts === 1 ? "" : "s"} still under
+          the {c.min_payout_usd != null ? formatMoney(c.min_payout_usd) : "campaign's"} minimum payout. It pays nothing until each reaches it, so it isn't in Estimated.
+        </p>
+      )}
       <details>
         <summary className="cursor-pointer text-xs text-muted hover:text-fg">
           Payouts {payouts.length > 0 && `(${payouts.length})`}: record what the campaign actually paid

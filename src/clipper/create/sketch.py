@@ -184,7 +184,7 @@ def draw_all(script) -> tuple[object, list[str]]:
     whose sketch fails becomes stock footage with its card. Returns the script and notes."""
     beats = list(script.beats)
     todo = [i for i, b in enumerate(beats) if b.visual.kind == "diagram" and b.visual.template == "sketch"
-            and not (b.visual.sketch and b.visual.sketch.marks)]
+            and not (b.visual.sketch and b.visual.sketch.marks) and not b.visual.clip]  # a clip of the user's: drawn only if needed
     notes = []
 
     def one(i: int):

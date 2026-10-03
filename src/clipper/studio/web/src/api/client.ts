@@ -608,14 +608,20 @@ export const tightenEdit = (body: EditBody) =>
 
 /* ---------- Create: the user's own channel (D108) ---------- */
 
-export interface CreateVisual { kind: "stock" | "diagram"; query: string; queries?: string[]; card?: string; template: string; title: string; labels: string[] }
+export type ClipFill = "auto" | "planned" | "loop" | "slow" | "hold";
+export interface CreateVisual {
+  kind: "stock" | "diagram"; query: string; queries?: string[]; card?: string; template: string; title: string; labels: string[];
+  clip?: string; clip_start?: number | null; fill?: ClipFill;   // the user's own clip for this sentence (D119)
+}
+export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
+export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
 export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }
 export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number }
 export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string }
 export interface CreateVideo {
   id: number; topic_id: number | null; status: "draft" | "approved" | "voiced" | "building" | "built" | "failed";
   script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;
-  created_at: string; stage: string | null; pct: number | null;
+  created_at: string; stage: string | null; pct: number | null; mine: Mine;
 }
 export interface CreateView {
   channel: { name: string; handle: string; voice: string; campaign: string; words_per_second: number };
@@ -657,6 +663,17 @@ export const createApi = {
   build: (video: number) => send("POST", `/api/create/videos/${video}/build`),
   pictures: (video: number) => send("POST", `/api/create/videos/${video}/pictures`),
   remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),
+  clipAdd: async (video: number, file: File) => {
+    const res = await fetch(`/api/create/videos/${video}/clips/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    return data as MineClip;
+  },
+  clipRemove: (video: number, clip: string) => send("DELETE", `/api/create/videos/${video}/clips/${clip}`),
+  clipSettings: (video: number, body: { auto?: boolean; fill?: ClipFill }) => send("PUT", `/api/create/videos/${video}/clips-settings`, body),
+  place: (video: number, how: "ai" | "order" | "clear", strict = false) => send<{ note: string }>("POST", `/api/create/videos/${video}/place`, { how, strict }),
+  placement: (video: number, body: { beat: number; clip: string; start: number | null; fill: ClipFill }) =>
+    send("PUT", `/api/create/videos/${video}/placement`, body),
   voice: async (video: number, file: File) => {
     const res = await fetch(`/api/create/videos/${video}/voice/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
     const data = await res.json().catch(() => ({}));

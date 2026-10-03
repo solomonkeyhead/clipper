@@ -26,7 +26,7 @@ from ..render.teaser import reencode_args
 from ..utils.cache import slugify
 from ..utils.logging import get_logger
 from . import channel as channels
-from . import diagrams, stock, store
+from . import diagrams, stock, store, userclips
 from .ai import CreateError
 from .script import Script, Visual
 from .voice import Timings, folder
@@ -98,6 +98,34 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
     return out
 
 
+def _own_shot(src: Path, start: float, play: float, total: float, out: Path, slow: float = 1.0,
+              loop: bool = False) -> Path:
+    """`total` seconds of the user's own clip filling the 9:16 frame (D119): `play` seconds of
+    it from `start`, stretched by `slow` (1 = natural speed), then its last frame held until
+    `total`; or, with `loop`, repeated to `total`. Framed like stock footage, on the faces in
+    that stretch of the clip; the sound is dropped (the voice is the only sound)."""
+    if loop:  # the stretch cut once, then repeated
+        piece = _own_shot(src, start, play, play, out.with_name(out.stem + "_piece.mp4"))
+        run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-stream_loop", "-1", "-i", str(piece),
+             "-t", f"{total:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16",
+             "-pix_fmt", "yuv420p", str(out)])
+        return out
+    x = min(1.0, max(0.0, _subject_x(src, start, play, None)))
+    span = max(play * slow, 0.1)
+    push = f"(1+{PUSH_IN}*min(t,{span:.3f})/{span:.3f})"
+    vf = (f"{f'setpts={slow:.4f}*PTS,' if slow != 1.0 else ''}"
+          f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+          f"scale=w='trunc(iw*{push}/2)*2':h=-2:eval=frame,"
+          f"crop={W}:{H}:x='max(0,min(iw-{W},iw*{x:.4f}-{W // 2}))':y='(ih-{H})/2',fps={FPS},setsar=1")
+    rest = total - span
+    if rest > 0.03:
+        vf += f",tpad=stop_mode=clone:stop_duration={rest:.3f}"
+    run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-ss", f"{start:.3f}", "-i", str(src),
+         "-an", "-vf", vf, "-t", f"{total:.3f}",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", str(out)])
+    return out
+
+
 def _too_dark(shot: Path) -> bool:
     """Whether a finished shot is all but black: a "velvet curtain" clip cropped on its dark
     middle gave four seconds of black screen (D112). Judged on a frame a third of the way in."""
@@ -134,43 +162,103 @@ def _fallback(beat, script: Script) -> Visual:
     return Visual(kind="diagram", template="card", title=beat.visual.card or beat.emphasis or beat.text)
 
 
-def shots(script: Script, timings: Timings, work: Path, progress=None) -> list[Path]:
-    made, used = [], set()
+def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: Script, work: Path, used: set,
+             tag: str = "") -> list[Path]:
+    """The shot(s) of the picture planned for a sentence: a diagram, or stock footage (split
+    in two past MAX_SHOT), or a drawing when no footage fits. `tag` keeps a filler's files
+    apart from the sentence's own clip."""
+    if visual.kind == "diagram" and visual.template == "sketch" and not (visual.sketch and visual.sketch.marks):
+        visual = _fallback(beat, script)  # planned before sketches existed, or its drawing failed
+    if visual.kind == "diagram":
+        return [diagrams.render(visual, seconds, work / f"{i:02d}{tag}_diagram.mp4", words=said)]
+    parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
+    queries = visual.queries or [visual.query]
+    hits = [stock.choose(queries, part, used, sentence=beat.text) for part in parts]
+    for hit in hits:
+        if hit:
+            used.add(hit["id"])
+    if not hits[0]:  # nothing fits: drawn instead, the whole sentence, never unrelated footage
+        return [diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
+    hits = [h or hits[0] for h in hits]  # half a sentence without its own clip keeps the first
+    clips = []
+    for k, (part, hit) in enumerate(zip(parts, hits, strict=True)):
+        out = work / f"{i:02d}{tag}_{k}_stock.mp4"
+        clip = _stock_shot(stock.fetch(hit), part, out, hit.get("center"))
+        if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
+            clip = _stock_shot(stock.fetch(hit), part, out, 0.5)
+        if _too_dark(clip):
+            return [diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
+        clips.append(clip)
+    return clips
+
+
+def _own(i: int, visual: Visual, seconds: float, own: dict, cursor: dict, default_fill: str, work: Path,
+         notes: list[str]) -> tuple[list[Path], float] | None:
+    """A sentence's own clip cut to the sentence (D119): (its shot, seconds of the sentence
+    still to fill with the planned picture), or None when the clip can't be used (gone,
+    unreadable), in which case the planned picture is used for the whole sentence."""
+    got = own.get(visual.clip)
+    if not got:
+        notes.append(f"Sentence {i + 1}: its clip is gone; the planned picture is used.")
+        return None
+    src, length, name = got
+    explicit = visual.clip_start is not None
+    start = visual.clip_start if explicit else cursor.get(visual.clip, 0.0)
+    last = max(0.0, length - userclips.MIN_SECONDS)
+    if start > last:
+        if not explicit:  # the clip ran out over the sentences before this one
+            notes.append(f"Sentence {i + 1}: {name} had run out; the planned picture is used.")
+            return None
+        notes.append(f"Sentence {i + 1}: {name} is {length:.1f}s long, so it starts at {last:.1f}s instead of {start:.1f}s.")
+        start = last
+    avail = length - start
+    fill = visual.fill if visual.fill != "auto" else default_fill
+    mode, slow, rest = userclips.fill_plan(avail, seconds, fill)
+    play = seconds if mode == "cut" else avail
+    out = work / f"{i:02d}_own.mp4"
+    try:
+        shot = _own_shot(src, start, play, seconds if mode != "planned" else play, out,
+                         slow=slow, loop=mode == "loop")
+    except Exception as exc:  # an odd codec or a damaged file: the planned picture instead
+        log.warning("create: clip %s couldn't be cut (%s)", name, exc)
+        notes.append(f"Sentence {i + 1}: {name} couldn't be read ({str(exc)[:80]}); the planned picture is used.")
+        return None
+    cursor[visual.clip] = start + play
+    if mode in ("hold", "slow"):
+        notes.append(f"Sentence {i + 1}: {name} had {avail:.1f}s for {seconds:.1f}s; "
+                     + ("held on its last picture." if mode == "hold" else
+                        f"slowed to {slow:.1f}x" + (" and held." if rest > 0.05 else ".")))
+    elif mode == "loop":
+        notes.append(f"Sentence {i + 1}: {name} had {avail:.1f}s for {seconds:.1f}s; repeated.")
+    elif mode == "planned":
+        notes.append(f"Sentence {i + 1}: {name} had {avail:.1f}s for {seconds:.1f}s; the rest is the planned picture.")
+    return [shot], (rest if mode == "planned" else 0.0)
+
+
+def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict | None = None,
+          notes: list[str] | None = None, default_fill: str = "auto") -> list[Path]:
+    """One shot (or two) per sentence. `own` maps clip ids to (file, seconds, name) for the
+    user's clips; a sentence with one gets it, cut or filled to the sentence, followed by its
+    planned picture for any time the clip couldn't cover (D119)."""
+    made, used, cursor = [], set(), {}
+    own = own or {}
+    notes = notes if notes is not None else []
     for i, (beat, (a, b)) in enumerate(zip(script.beats, timings.beats, strict=True)):
         if progress:
             progress(f"Shot {i + 1} of {len(script.beats)}", 10 + 60 * i / len(script.beats))
         seconds = b - a
         said = [(w.start - a, w.text) for w in timings.words if a - 0.05 <= w.start < b]
-        visual = beat.visual
-        if visual.kind == "diagram" and visual.template == "sketch" and not (visual.sketch and visual.sketch.marks):
-            visual = _fallback(beat, script)  # planned before sketches existed, or its drawing failed
-        if visual.kind == "diagram":
-            made.append(diagrams.render(visual, seconds, work / f"{i:02d}_diagram.mp4", words=said))
-            continue
-        parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
-        queries = visual.queries or [visual.query]
-        hits = [stock.choose(queries, part, used, sentence=beat.text) for part in parts]
-        for hit in hits:
-            if hit:
-                used.add(hit["id"])
-        if not hits[0]:  # nothing fits: drawn instead, the whole sentence, never unrelated footage
-            made.append(diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}_sketch.mp4", words=said))
-            continue
-        hits = [h or hits[0] for h in hits]  # half a sentence without its own clip keeps the first
-        clips = []
-        for k, (part, hit) in enumerate(zip(parts, hits, strict=True)):
-            out = work / f"{i:02d}_{k}_stock.mp4"
-            clip = _stock_shot(stock.fetch(hit), part, out, hit.get("center"))
-            if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
-                clip = _stock_shot(stock.fetch(hit), part, out, 0.5)
-            if _too_dark(clip):
-                clips = []
-                break
-            clips.append(clip)
-        if not clips:
-            made.append(diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}_sketch.mp4", words=said))
-            continue
-        made += clips
+        if beat.visual.clip:
+            got = _own(i, beat.visual, seconds, own, cursor, default_fill, work, notes)
+            if got:
+                made += got[0]
+                rest = got[1]
+                if rest > 0.05:  # the clip ran out: the planned picture takes over for the rest
+                    at = seconds - rest
+                    made += _planned(i, beat, beat.visual, rest, [(t - at, w) for t, w in said if t >= at - 0.05],
+                                     script, work, used, tag="b")
+                continue
+        made += _planned(i, beat, beat.visual, seconds, said, script, work, used)
     return made
 
 
@@ -231,11 +319,20 @@ def build(video_id: int, progress=None) -> int:
         raise CreateError("drop the voiceover in first")
     script, timings = Script.model_validate(row["script"]), Timings.model_validate(row["timings"])
     channel, config = channels.load(), Config.load()
+    notes: list[str] = []
+    own = userclips.files(video_id)
+    if own or userclips.load(video_id)["clips"]:
+        # The sentences' real lengths now known: clips placed for the user if they asked (D119).
+        script, said = userclips.prepare(video_id, script, [b - a for a, b in timings.beats])
+        if said:
+            notes.append(said)
+        store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     work = folder(video_id) / "work"
     if work.exists():
         recycle(work)  # a previous build's working files, to the Recycle Bin like all Clipper's
     work.mkdir(parents=True, exist_ok=True)
-    parts = shots(script, timings, work, progress)
+    parts = shots(script, timings, work, progress, own=own, notes=notes,
+                  default_fill=userclips.load(video_id)["fill"])
     if progress:
         progress("Putting it together", 75)
     out = assemble(parts, Path(row["voice"]), script, timings, work / "final.mp4", channel, config)
@@ -261,7 +358,12 @@ def build(video_id: int, progress=None) -> int:
             "scores": json.dumps({"picked_by": "create", "create": video_id, "cover": cover_at,
                                   "text": script.text}),
         })
-    store.update_video(video_id, status="built", clip_id=clip_id, error="")
+    placed = {b.visual.clip for b in script.beats if b.visual.clip}
+    idle = [name for cid, (_, _, name) in own.items() if cid not in placed]
+    if idle:
+        notes.append("Not used: " + ", ".join(idle) + ".")
+    store.update_video(video_id, status="built", clip_id=clip_id, error="",
+                       check_notes=userclips.with_notes(store.video(video_id)["check_notes"], notes))
     recycle(work)
     log.info("create: video %s built as clip %s (%s)", video_id, clip_id, rel)
     return clip_id

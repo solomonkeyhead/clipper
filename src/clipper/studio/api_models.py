@@ -203,6 +203,9 @@ class Campaign(BaseModel):
     budget_left: float | None = None   # as last checked on its page (D100)
     budget_checked_at: str | None = None
     warning: str = ""                  # ending soon, ended, or budget running low
+    min_payout_usd: float | None = None  # its minimum payout, from the brief (D118)
+    locked_usd: float = 0              # earned on paper by posts still under that minimum
+    locked_posts: int = 0
 
 
 class Brief(BaseModel):
@@ -242,6 +245,8 @@ class Metrics(BaseModel):
     tasks_due: int = 0              # brief tasks reached and not done
     views_by_day: list[float] = []  # total views at the end of each of the last 14 days, oldest first
     earned_by_day: list[float] = [] # estimated earnings at the end of each of those days (same rules as est_earnings)
+    locked_usd: float = 0           # earned on paper by posts still under their campaign's minimum payout (D118)
+    locked_posts: int = 0
 
 
 class SinceLastVisit(BaseModel):

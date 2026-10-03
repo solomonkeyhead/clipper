@@ -9,6 +9,7 @@ import { createApi, useClips, useCreate, useCreateAI, type CreateScript, type Cr
 import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { cn, copyText } from "@/lib/utils";
+import { MyClips } from "./MyClips";
 
 /** Create (D108): original Shorts for your own channel -- idea, script, your voice, built. */
 export function CreatePage() {
@@ -193,7 +194,8 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
     );
   }
   if (video.status === "built") {
-    return <Built video={video} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")} onRemove={remove} />;
+    return <Built video={video} wps={wps} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")}
+                  onRebuild={run("rebuild", () => createApi.build(video.id), "Building again with your clips")} onRemove={remove} />;
   }
 
   return (
@@ -206,6 +208,8 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       )}
       <CheckNote text={video.check_notes} />
       <ScriptEditor video={video} wps={wps} />
+      <MyClips video={video} wps={wps} onRebuild={video.status === "failed" && video.voice ? run("rebuild", () => createApi.build(video.id)) : undefined}
+               busyRebuild={busy === "rebuild"} />
       {video.status === "draft" ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" disabled={busy !== null} onClick={run("approve", () => createApi.approve(video.id))}>
@@ -273,6 +277,15 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
 }
 
 function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }) {
+  if (visual.clip) {
+    return (
+      <Tip label="Your own clip. The planned picture fills any time it doesn't cover.">
+        <span className="flex items-center gap-1.5 self-start rounded-md border border-accent bg-accent-soft px-2 py-1.5 text-xs text-accent">
+          <Film className="size-3.5 shrink-0" /><span className="truncate">Your clip</span>
+        </span>
+      </Tip>
+    );
+  }
   const diagram = visual.kind === "diagram";
   const tip = diagram ? `${visual.template} diagram${visual.labels.length ? `: ${visual.labels.join(" · ")}` : ""}`
     : `Stock footage: ${(visual.queries?.length ? visual.queries : [visual.query]).join(" / ")}${visual.card ? `. If none fits, "${visual.card}" on the board` : ""}`;
@@ -344,7 +357,9 @@ const Step = ({ n, children }: { n: number; children: ReactNode }) => (
 
 /* ---------- done ---------- */
 
-function Built({ video, busy, onPictures, onRemove }: { video: CreateVideo; busy: string | null; onPictures: () => void; onRemove: () => void }) {
+function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
+  video: CreateVideo; wps: number; busy: string | null; onPictures: () => void; onRebuild: () => void; onRemove: () => void;
+}) {
   const { data: clips = [] } = useClips();
   const clip = clips.find((c) => c.id === video.clip_id);
   return (
@@ -365,6 +380,12 @@ function Built({ video, busy, onPictures, onRemove }: { video: CreateVideo; busy
           </Tip>
           <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
         </div>
+        <details className="mt-1" open={video.mine?.clips.length > 0 || undefined}>
+          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-fg">
+            Your own clips{video.mine?.clips.length ? ` (${video.mine.clips.length})` : ""}
+          </summary>
+          <div className="mt-2"><MyClips video={video} wps={wps} onRebuild={onRebuild} busyRebuild={busy === "rebuild"} /></div>
+        </details>
       </div>
     </div>
   );

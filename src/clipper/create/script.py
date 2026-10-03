@@ -42,6 +42,11 @@ class Visual(BaseModel):
     amounts: list[float] = Field(default_factory=list)    # wave: amplitudes; particles: how many
     idea: str = ""                  # sketch: what to draw, for the sketcher (create/sketch.py)
     sketch: Sketch | None = None    # sketch: the drawing, made after the script (leave empty)
+    # The user's own clip for this sentence (create/userclips.py, D119). Set by the user or the
+    # placer, never by the script writer; the planned picture above stays as the filler.
+    clip: str = ""                  # id of one of the video's own clips; "" = the planned picture
+    clip_start: float | None = None  # seconds into that clip; None = where the last sentence left off
+    fill: Literal["auto", "planned", "loop", "slow", "hold"] = "auto"   # when the clip is too short
 
 
 class Beat(BaseModel):
@@ -139,7 +144,15 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") 
         script = Script.model_validate(json.loads(answer))
     except (ValueError, TypeError) as exc:
         raise CreateError("the script came back unreadable; try again") from exc
-    return tidy(script)
+    return tidy(_without_clips(script))
+
+
+def _without_clips(script: Script) -> Script:
+    """A written script has no clips of the user's: the writer sees these fields in its schema
+    and could invent ids."""
+    return script.model_copy(update={"beats": [
+        b.model_copy(update={"visual": b.visual.model_copy(update={"clip": "", "clip_start": None, "fill": "auto"})})
+        for b in script.beats]})
 
 
 def tidy(script: Script) -> Script:
@@ -276,8 +289,11 @@ def replan(script: Script) -> tuple[Script, str]:
         if len(planned.beats) != len(script.beats):
             raise CreateError("the new plan changed the sentences; try again")
         # The words are the recording's: only the pictures are taken from the new plan.
+        # ...and the user's own clips stay where they were put (D119).
         fresh = tidy(script.model_copy(update={"beats": [
-            b.model_copy(update={"visual": p.visual, "emphasis": p.emphasis or b.emphasis})
+            b.model_copy(update={"visual": p.visual.model_copy(update={
+                "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
+                "emphasis": p.emphasis or b.emphasis})
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
         review = check(fresh)
         if review.ok or not review.problems:

@@ -334,6 +334,7 @@ class Snapshot:
         earnings = [p.est_earnings for p in posts if p.est_earnings is not None]
         st = self.state.get(name, {})
         auto = st.get("auto_post")
+        locked = stats.locked_earnings(posts, lambda _: brief)
         return Campaign(
             name=name, title=editor.title_of(brief) if brief else editor.pretty(name),
             marketplace=brief.marketplace if brief else "", has_brief=brief is not None, archived=bool(st.get("archived")),
@@ -348,6 +349,8 @@ class Snapshot:
             est_earnings=round(sum(earnings), 2) if earnings else None,
             to_submit=sum(1 for p in posts if not p.submitted_at),
             last_post=max((p.posted_at for p in posts if p.posted_at), default=None),
+            min_payout_usd=brief.min_payout_usd if brief else None,
+            locked_usd=locked[0], locked_posts=locked[1],
             **self.money(name, brief, posts))
 
     def money(self, name: str, brief: CampaignConfig | None, posts: list[Post]) -> dict:
@@ -718,8 +721,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                         money += stats.estimate_earnings(v, brief.reward_per_1k_usd, brief.min_payout_usd,
                                                          brief.max_payout_usd) or 0.0
                 earned_by_day.append(round(money, 2))
+        locked_usd, locked_posts = stats.locked_earnings(posts, lambda p: snap.campaigns.get(p.campaign))
         return Home(
             metrics=Metrics(
+                locked_usd=locked_usd, locked_posts=locked_posts,
                 est_earnings=round(sum(earnings), 2) if earnings else None,
                 views=sum(views), posts=len(posts),
                 median_views=statistics.median(views) if views else None,

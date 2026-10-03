@@ -150,6 +150,22 @@ def estimate_earnings(views: float | None, rate: float | None, minimum: float | 
     return round(amount, 2)
 
 
+def locked_earnings(posts, brief_of) -> tuple[float, int]:
+    """What posts have earned on paper but that sits under their campaign's minimum payout, so
+    pays nothing yet (D118): (dollars, how many posts). `brief_of(post)` gives the campaign
+    brief or None. A post that has cleared its minimum, or has no rate, adds nothing."""
+    dollars, count = 0.0, 0
+    for p in posts:
+        brief = brief_of(p)
+        if brief is None or p.est_earnings != 0 or not p.views:
+            continue
+        paper = estimate_earnings(p.views, brief.reward_per_1k_usd, None, brief.max_payout_usd) or 0.0
+        if paper > 0:
+            dollars += paper
+            count += 1
+    return round(dollars, 2), count
+
+
 #: A post's views are compared with others' once it's this old: a short gets
 #: most of its views in its first days, so younger posts would look like flops.
 OUTCOME_HOURS = 72

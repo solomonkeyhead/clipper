@@ -2161,3 +2161,29 @@ judged without anyone knowing which AI made them. Changes:
 4. The Dashboard opens with a channel card: the one next step for today's Short.
 5. Settings: everyday options first; the unused auto-post switch and the paid-tier preview
    moved under "Advanced" (open when auto-post is on). The AI card says it is for clipping.
+
+## D119 — The user's own clips in a Short; minimums on the earnings card (2026-10-03)
+
+**Own clips.** A Create video takes clips the user likes (`create/userclips.py`, the "Your own
+clips" panel on the video). Where a clip goes lives on the sentence (`Visual.clip`,
+`clip_start`, `fill`), so it survives script edits and "New pictures"; the planned picture
+stays behind it as the filler. Placing is mixable: by hand per sentence; "In order" (free,
+no model); "Place them for me" (the model sees a filmstrip per clip and matches clips to
+sentences, every clip used unless "only where they fit", diagram sentences left alone unless a
+clip clearly fits); and at build time, with "place for me" on and nothing placed, the
+automatic way runs by itself. If the model can't answer (plan limit, offline, bad answer,
+over 12 clips) the in-order layout is used and the note says why. When a clip is shorter than
+its sentence: under 0.8s short, its last picture is held; otherwise the planned footage or
+diagram takes the rest. The video-wide setting or a per-sentence one can instead repeat the
+clip, slow it (at most 2x, then held) or hold. A clip carries on across the sentences after
+its first, and when it has run out the planned picture is used. Clips are framed like stock
+(faces, else the middle); their sound is dropped. Checks on upload: a video type, readable,
+has pictures, at least 0.5s, under 3 GB, at most 30, no duplicate; low resolution is flagged;
+refused or removed files go to the Recycle Bin. Clips can't change while a video is building.
+A rebuild locks the video at once. A clip that can't be cut falls back to the planned picture
+with a note, never a failed build. Notes ("Your clips:" block) stay on the finished video.
+
+**Earnings.** The Dashboard's earnings card now sets the estimate beside what has actually
+been paid (recorded payouts), and says how much is earned on paper by posts still under their
+campaign's minimum payout, which pays nothing yet (`stats.locked_earnings`; the minimum is
+applied per post, as `estimate_earnings` always has). Campaign cards and pages show the same.
