@@ -605,3 +605,49 @@ export const useWhatsWorking = () =>
   useQuery({ queryKey: ["whats-working"], queryFn: () => unwrap(api.GET("/api/learning/compare")) });
 export const tightenEdit = (body: EditBody) =>
   post<{ edit: unknown; removed: number; cuts: { start: number; end: number; why: string }[] }>("/api/editor/tighten", body);
+
+/* ---------- Create: the user's own channel (D108) ---------- */
+
+export interface CreateVisual { kind: "stock" | "diagram"; query: string; template: string; title: string; labels: string[] }
+export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }
+export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number }
+export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string }
+export interface CreateVideo {
+  id: number; topic_id: number | null; status: "draft" | "approved" | "voiced" | "building" | "built" | "failed";
+  script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;
+  created_at: string; stage: string | null; pct: number | null;
+}
+export interface CreateView {
+  channel: { name: string; handle: string; voice: string; campaign: string; words_per_second: number };
+  topics: CreateTopic[]; videos: CreateVideo[];
+}
+
+export const useCreate = () =>
+  useQuery({ queryKey: ["create"], queryFn: async () => {
+    const res = await fetch("/api/create");
+    if (!res.ok) throw new Error(res.statusText);
+    return res.json() as Promise<CreateView>;
+  } });
+
+async function send<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data as T;
+}
+
+export const createApi = {
+  ideas: (count = 20) => send<{ added: number }>("POST", "/api/create/ideas", { count }),
+  skip: (topic: number) => send("POST", `/api/create/topics/${topic}/skip`),
+  script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
+  rewrite: (video: number) => send("POST", `/api/create/videos/${video}/rewrite`),
+  edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
+  approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
+  build: (video: number) => send("POST", `/api/create/videos/${video}/build`),
+  remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),
+  voice: async (video: number, file: File) => {
+    const res = await fetch(`/api/create/videos/${video}/voice/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+  },
+};

@@ -1980,3 +1980,31 @@ told the teaser stops short (opening-v5). Not taken from the report: -12 LUFS (p
 normalise; Clipper stays at -14), cutting every pause over 0.3 s (the D59 rules stay),
 a fixed 0.5-1 s trim (word and page boundaries instead), a hard 1-frame white strobe.
 "Open on the payoff" stays off until the test renders (data/cold-open-test) are approved.
+
+## D108 — Create: original Shorts for your own channel (2026-10-03)
+
+The user's own channel, the German Professor (@German.Professor: everyday physics, voice
+"Marshal" on ElevenLabs), took 1h+ per video by hand. Create (create/, /create, G M) makes
+one in about five minutes of their time:
+1. Ideas (topics.py): a backlog, ~70% things the viewer feels in their own body -- on the
+   channel those did 2-5x the views of object topics.
+2. Script (script.py): written as the Professor from the channel's own nine scripts
+   (data/create/channel.json: persona, rules, examples with views) -- a "why do you"
+   question, a myth-bust, a chain of causes, one analogy, a deadpan two-beat ending,
+   80-125 words -- split into beats with a picture each (stock, or a diagram about one in
+   three, never first or twice running); then a physics check by a stricter pass, with one
+   rewrite if it finds errors, and what it said shown. Edit, take another, approve.
+3. Voice, by hand: free local models (Chatterbox, Kokoro) were judged not good enough by
+   the user; Marshal stays on ElevenLabs. Copy script -> generate -> drop the MP3 in.
+   Clipper's Whisper times it; the script's words are matched to what was heard
+   (voice.py), so captions keep the script's spelling; beats cut between sentences.
+4. Build (build.py): per beat, Pixabay stock (stock.py; the model picks from candidate
+   thumbnails -- the search alone found a lipstick for "ear" and a tiger for "yawning";
+   if it can't answer, Pixabay's top match) filled to 9:16 with a slow 6% push-in, split at
+   4.5 s; or a chalkboard diagram (diagrams.py: forces, circle, equation, compare, chain,
+   graph; Caveat chalk hand, Inter where it lacks a glyph; drawn in y 400-1040, clear of
+   the hook and captions). Joined with the channel watermark, Clipper's captions and the
+   question as hook, loudness -14 LUFS, then the cover frame; filed under the channel's
+   own campaign (campaigns/german-professor.yaml), so posting, stats and What's working
+   apply. ~1 minute when the AI answers promptly.
+Later: music (not yet wanted), longer "deep dive" videos, a premium-plan AI helper.

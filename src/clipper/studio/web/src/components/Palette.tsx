@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
   BarChart3, Film, Search, Sparkles, GraduationCap, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
-  Settings, Sun, UserCircle2,
+  Settings, Sun, UserCircle2, Wand2,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCampaigns, useClips, useSyncNow } from "@/api/client";
@@ -92,6 +92,7 @@ export function CommandPalette() {
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
+          <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />
           <Item icon={<Send />} label="Clips ready to post" onSelect={go("/clips", { status: "ready" })} />
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
@@ -133,7 +134,7 @@ export function CommandPalette() {
 
 const SHORTCUTS: [string, [string, string][]][] = [
   ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then D", "Dashboard"], ["I", "Ask Clipper"], ["G then C", "Campaigns"],
-    ["G then N", "New clips"], ["G then L", "Clips"], ["G then R", "Learning"],
+    ["G then N", "New clips"], ["G then L", "Clips"], ["G then M", "Create"], ["G then R", "Learning"],
     ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
     ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"],

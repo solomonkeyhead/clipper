@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import difflib
 import re
-import shutil
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -39,16 +38,6 @@ class Timings(BaseModel):
 
 def folder(video_id: int) -> Path:
     return ensure(data_root() / "create" / "videos" / str(video_id))
-
-
-def keep(video_id: int, upload: Path, name: str) -> Path:
-    """Keep the dropped-in voice file with the video's other files."""
-    suffix = Path(name).suffix.lower()
-    if suffix not in AUDIO:
-        raise CreateError(f"that isn't an audio file Clipper reads ({', '.join(sorted(AUDIO))})")
-    dest = folder(video_id) / f"voice{suffix}"
-    shutil.copyfile(upload, dest)
-    return dest
 
 
 def _norm(word: str) -> str:

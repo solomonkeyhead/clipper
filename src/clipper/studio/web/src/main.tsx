@@ -20,6 +20,7 @@ const queryClient = new QueryClient({
 
 // Pages opened now and then load when first opened, keeping the first screen quick.
 const CampaignEditorPage = lazyRouteComponent(() => import("./pages/CampaignEditor"), "CampaignEditorPage");
+const CreatePage = lazyRouteComponent(() => import("./pages/CreatePage"), "CreatePage");
 const EditorPage = lazyRouteComponent(() => import("./pages/EditorPage"), "EditorPage");
 const LearningPage = lazyRouteComponent(() => import("./pages/LearningPage"), "LearningPage");
 const AccountsPage = lazyRouteComponent(() => import("./pages/SettingsPages"), "AccountsPage");
@@ -54,6 +55,8 @@ const routes = [
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
     }),
   }),
+  // Create (D108): original Shorts for the user's own channel.
+  createRoute({ getParentRoute: () => root, path: "/create", component: CreatePage }),
   // The editor (D103): a library clip, or a source video for a campaign.
   createRoute({
     getParentRoute: () => root, path: "/edit", component: EditorPage,

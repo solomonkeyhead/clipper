@@ -1114,6 +1114,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             rerenders.submit(c.id, c.title)
         return {"queued": len(todo)}
 
+    # ---------- Create: the user's own channel (D108) ----------
+    from . import create_api
+
+    create_api.routes(app, broker.publish)
+
     # ---------- the editor (D103) ----------
 
     EDIT_LABELS = {"internal_cuts": "Cuts inside the clip", "visual_effects": "Zooms",

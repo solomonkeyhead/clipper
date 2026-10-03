@@ -1,7 +1,7 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   AlertTriangle, BarChart3, Film, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
-  Settings, UserCircle2, WifiOff,
+  Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useCampaigns, useClips, useJobs, useStatus, useSyncNow } from "@/api/client";
@@ -36,6 +36,7 @@ function useNav(): NavItem[] {
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
     { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C", badge: active.size },
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
+    { to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
     { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },
     { to: "/learning", label: "Learning", icon: <GraduationCap />, keys: "G R" },
@@ -176,7 +177,7 @@ export function AppShell() {
   };
   useHotkeys({
     g: () => { pendingG.current = Date.now(); },
-    d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"),
+    d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"), m: goto("/create"),
     s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"),
     "[": toggle,
     i: () => setAsk(true),

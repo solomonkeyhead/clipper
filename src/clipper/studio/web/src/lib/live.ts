@@ -55,6 +55,8 @@ export function useLiveUpdates() {
         });
       });
       source.addEventListener("campaigns.changed", refreshClips);
+      // Create's videos being timed and built (D108).
+      source.addEventListener("create.changed", () => void qc.invalidateQueries({ queryKey: ["create"] }));
       // The editor's light copy of a video is ready to scrub (D103).
       source.addEventListener("editor.ready", () => void qc.invalidateQueries({ queryKey: ["editor"] }));
       source.addEventListener("import.progress", (e) => {
