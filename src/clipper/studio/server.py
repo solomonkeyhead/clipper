@@ -1189,6 +1189,30 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             raise HTTPException(404, "no such video")
         return clip_editor.peaks(source_id)
 
+    @app.post("/api/editor/tighten")
+    def editor_tighten(body: dict) -> dict:
+        """The edit with its pauses and fillers cut, as ordinary cuts to adjust or undo."""
+        from ..campaign.edits import permissions
+        from ..editing import ClipEdit, blocked, tighten
+        from ..ingest.download import load_info
+        from ..models import Transcript
+        from ..paths import work_dir
+        from ..runner import _loudness
+
+        sid = str(body.get("source_id") or "")
+        if not clip_editor.prepared(sid):
+            raise HTTPException(404, "no such video")
+        found = editor_campaign(str(body.get("campaign") or ""))
+        no = blocked(permissions(found))
+        if "internal_cuts" in no:
+            raise HTTPException(400, f"No cuts inside the clip: {no['internal_cuts']}")
+        info = load_info(sid)
+        edit = ClipEdit.model_validate(body.get("edit") or {}).tidy(info.media.duration)
+        words = Transcript.load(work_dir(sid) / "transcript.json").words
+        tightened, cuts = tighten(edit, words, _loudness(info), min_length=found.duration.min_seconds or 0.0)
+        return {"edit": tightened.model_dump(), "removed": round(edit.length - tightened.length, 2),
+                "cuts": [{"start": c.start, "end": c.end, "why": c.reason} for c in cuts]}
+
     @app.post("/api/editor/preview")
     def editor_preview(body: dict) -> dict:
         """A quick draft render of the edit, through the real pipeline: exactly the

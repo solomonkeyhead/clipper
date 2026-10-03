@@ -140,3 +140,26 @@ def apply_fixes(words: list[Word], fixes: list[WordFix]) -> list[Word]:
         else:
             hidden.add(near)
     return [w for i, w in enumerate(out) if i not in hidden]
+
+
+def tighten(edit: ClipEdit, words: list[Word], loudness, *, min_length: float = 0.0) -> tuple[ClipEdit, list]:
+    """`edit` with its dead air and fillers cut, by the same rules Clipper uses on
+    podcasts (render/tighten.py): each piece is tightened on its own, keeping its
+    zoom, and the clip never drops under `min_length`. Returns it and the cuts."""
+    from .render.tighten import keep_segments, plan_cuts
+
+    found = [(p, plan_cuts(words, p.start, p.end, loudness)) for p in edit.pieces]
+    spare = edit.length - min_length - 0.5  # what can go without breaking the minimum
+    chosen = sorted((c for _, cuts in found for c in cuts), key=lambda c: -c.length)
+    allowed, taken = set(), 0.0
+    for cut in chosen:
+        if taken + cut.length <= spare:
+            allowed.add(id(cut))
+            taken += cut.length
+    pieces, made = [], []
+    for piece, cuts in found:
+        mine = [c for c in cuts if id(c) in allowed]
+        made += mine
+        pieces += [Piece(start=round(a, 3), end=round(b, 3), zoom=piece.zoom)
+                   for a, b in keep_segments(mine, piece.start, piece.end)]
+    return edit.model_copy(update={"pieces": pieces}), sorted(made, key=lambda c: c.start)

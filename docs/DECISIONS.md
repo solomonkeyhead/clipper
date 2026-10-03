@@ -1923,7 +1923,10 @@ are exactly the clip's. The brief still decides: an edit class it or the campaig
 forbids is refused even by hand (with its words); one that's merely off by default
 (Clipper doesn't cut scripted scenes itself) is the person's call. Briefs that say
 "only use the provided footage" / "no outside footage" now forbid overlays and added
-audio. Not yet: B-roll, auto silence cuts as editable cuts, saved styles.
+audio. Not yet: B-roll, saved styles. Tighten (T, 2026-10-02): the podcast pause and
+filler rules (render/tighten.py) run on each piece and come back as ordinary cuts to
+drag, restore or undo; never under the campaign's minimum; refused where the brief
+forbids internal cuts. Gaps that aren't quiet (laughter, crosstalk) are kept.
 
 ## D104 — The cover, chosen and put first (2026-10-02)
 

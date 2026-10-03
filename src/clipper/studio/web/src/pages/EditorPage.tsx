@@ -1,11 +1,11 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
-  AlertTriangle, ArrowLeft, Eye, Loader2, Lock, Pause, Play, Redo2, Scissors, SplitSquareHorizontal, Undo2, ZoomIn,
+  AlertTriangle, ArrowLeft, Eye, Loader2, Lock, Pause, Play, Redo2, Scissors, SplitSquareHorizontal, Undo2, Wind, ZoomIn,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  prepareEditor, previewEdit, saveEdit, useEditor, useJobs, usePeaks, type EditorView, type EditRule,
+  prepareEditor, previewEdit, saveEdit, tightenEdit, useEditor, useJobs, usePeaks, type EditorView, type EditRule,
 } from "@/api/client";
 import { Button, CaptionTitle, Card, Kbd, Skeleton, Tip } from "@/components/ui";
 import {
@@ -218,7 +218,7 @@ function Workbench({ view }: { view: EditorView }) {
   /* preview and save */
   const [preview, setPreview] = useState<{ url: string; of: Edit } | null>(null);
   const [tab, setTab] = useState<"source" | "preview">("source");
-  const [busy, setBusy] = useState<"preview" | "save" | null>(null);
+  const [busy, setBusy] = useState<"preview" | "save" | "tighten" | null>(null);
   const body = () => ({ source_id: view.source_id, campaign: view.campaign, clip: view.clip_id, edit: tidy(edit, duration) });
   const makePreview = async () => {
     if (problems.length || busy) return;
@@ -230,6 +230,24 @@ function Workbench({ view }: { view: EditorView }) {
       setTab("preview");
     } catch (e) {
       toast.error("Couldn't make the preview", { description: (e as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+  // Pauses and fillers cut by Clipper's podcast rules, as ordinary cuts (Ctrl Z puts them back).
+  const tighten = async () => {
+    if (!edit.pieces.length || blocked("internal_cuts") || busy) return;
+    setBusy("tighten");
+    try {
+      const done = await tightenEdit(body());
+      if (!done.cuts.length) toast("Nothing to tighten", { description: "No pause or filler long enough to cut." });
+      else {
+        commit({ ...(done.edit as Edit), hook: edit.hook, fixes: edit.fixes });
+        toast.success(`Cut ${done.cuts.length} pause${done.cuts.length === 1 ? "" : "s"} and filler${done.cuts.length === 1 ? "" : "s"} (${done.removed.toFixed(1)}s)`,
+          { description: "They're ordinary cuts: drag their edges, double-click to put one back, or Ctrl Z." });
+      }
+    } catch (e) {
+      toast.error("Couldn't tighten", { description: (e as Error).message });
     } finally {
       setBusy(null);
     }
@@ -275,7 +293,7 @@ function Workbench({ view }: { view: EditorView }) {
         arrowright: () => seek(t + (e.shiftKey ? 1 : frame)),
         home: () => seek(startOf(edit)),
         end: () => seek(endOf(edit)),
-        i: act.in, o: act.out, s: act.split, z: act.zoom, q: act.trimStart, w: act.trimEnd,
+        i: act.in, o: act.out, s: act.split, z: act.zoom, q: act.trimStart, w: act.trimEnd, t: () => void tighten(),
         delete: act.remove, backspace: act.remove,
         p: () => void makePreview(),
         escape: () => { setPiece(null); setRange(null); },
@@ -356,6 +374,10 @@ function Workbench({ view }: { view: EditorView }) {
               <Tool label="Start here" keys="I" onClick={act.in}>Start</Tool>
               <Tool label="End here" keys="O" onClick={act.out}>End</Tool>
               <Tool label="Split at the playhead" keys="S" onClick={act.split}><SplitSquareHorizontal className="size-3.5" /> Split</Tool>
+              <Tool label={blocked("internal_cuts") ? `No cuts inside the clip: ${why("internal_cuts")}` : "Cut dead air and filler words, like Clipper does on podcasts"} keys="T"
+                    onClick={() => void tighten()} disabled={blocked("internal_cuts") || !edit.pieces.length || busy !== null}>
+                {busy === "tighten" ? <Loader2 className="size-3.5 animate-spin" /> : <Wind className="size-3.5" />} Tighten
+              </Tool>
               <Tool label={blocked("visual_effects") ? `No zooms: ${why("visual_effects")}` : "Punch in on this piece: none, 1.1×, 1.2×"} keys="Z"
                     onClick={act.zoom} disabled={blocked("visual_effects") || current === null}>
                 <ZoomIn className="size-3.5" /> {current !== null && edit.pieces[current]?.zoom !== 1 ? `${edit.pieces[current].zoom}×` : "Zoom"}
@@ -370,7 +392,7 @@ function Workbench({ view }: { view: EditorView }) {
       <Timeline view={view} edit={edit} t={t} seek={seek} commit={commit} piece={piece} setPiece={setPiece} words={words} playing={playing} />
       <p className="text-xs text-subtle">
         <Kbd>Space</Kbd> play · <Kbd>J</Kbd><Kbd>K</Kbd><Kbd>L</Kbd> back, stop, faster · <Kbd>←</Kbd><Kbd>→</Kbd> a frame (Shift: a second) ·
-        {" "}<Kbd>I</Kbd><Kbd>O</Kbd> start, end · <Kbd>S</Kbd> split · <Kbd>Q</Kbd><Kbd>W</Kbd> trim to the playhead · <Kbd>Z</Kbd> zoom ·
+        {" "}<Kbd>I</Kbd><Kbd>O</Kbd> start, end · <Kbd>S</Kbd> split · <Kbd>Q</Kbd><Kbd>W</Kbd> trim to the playhead · <Kbd>Z</Kbd> zoom · <Kbd>T</Kbd> tighten ·
         {" "}<Kbd>Del</Kbd> cut what's selected · drag across words to select them · <Kbd>P</Kbd> preview
       </p>
     </div>

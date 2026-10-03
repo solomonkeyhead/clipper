@@ -160,3 +160,18 @@ def test_a_clip_ids_stamp_gives_its_start():
     assert from_slug_timestamp("003_21m23s") == 1283
     assert from_slug_timestamp("001_1h02m03s") == 3723
     assert from_slug_timestamp("manual") is None
+
+
+def test_tightening_cuts_pauses_keeps_zooms_and_the_minimum():
+    from clipper.editing import tighten
+
+    # Sentences with long pauses between them, in two pieces.
+    ws = words((0.0, 0.4, "Hello"), (0.4, 0.9, "there."), (2.5, 2.9, "This"), (2.9, 3.4, "is"), (3.4, 3.9, "long."),
+               (5.5, 5.9, "Then"), (5.9, 6.4, "more."), (8.0, 8.4, "And"), (8.4, 8.9, "end."),
+               (10.5, 10.9, "Last"), (10.9, 11.4, "line."))
+    edit = ClipEdit(pieces=[Piece(start=0, end=6.5, zoom=1.1), Piece(start=7.8, end=11.6)])
+    tight, cuts = tighten(edit, ws, None)
+    assert cuts and tight.length < edit.length
+    assert all(p.zoom == 1.1 for p in tight.pieces if p.end <= 6.5)
+    kept, _ = tighten(edit, ws, None, min_length=edit.length - 0.6)
+    assert kept.length >= edit.length - 0.6  # never under the campaign's minimum

@@ -603,3 +603,5 @@ export const saveEdit = (body: EditBody) => post<{ queued: boolean; clip?: numbe
 export type WhatsWorking = components["schemas"]["WhatsWorking"];
 export const useWhatsWorking = () =>
   useQuery({ queryKey: ["whats-working"], queryFn: () => unwrap(api.GET("/api/learning/compare")) });
+export const tightenEdit = (body: EditBody) =>
+  post<{ edit: unknown; removed: number; cuts: { start: number; end: number; why: string }[] }>("/api/editor/tighten", body);
