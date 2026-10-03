@@ -591,8 +591,9 @@ export function SettingsPage() {
         />
         <Row
           title="Open on the payoff"
-          body={<>New clips start with a second or two of their best line, then play from the setup, so the first frame
-            gives a scroller a reason to stay. Skipped when a brief forbids re-edits, or when no line works on its own.</>}
+          body={<>Podcast and stream clips start with the first half of their best line, stopping just before it lands, then
+            a quick flash back to the setup, and end on that line so they loop. Never on scripted TV or film, where it spoils
+            the joke; skipped when a brief forbids re-edits or no line works on its own.</>}
           control={settings ? (
             <Switch label="Open on the payoff" checked={settings.payoff_first !== "0"}
                     onChange={(v) => save.mutate({ payoff_first: v ? "1" : "0" })} />
