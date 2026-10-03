@@ -34,6 +34,9 @@ from .base import (
 log = get_logger(__name__)
 
 DEFAULT_MODEL = "claude-opus-5-5"
+#: The API-price value of every call made so far (Claude Code reports it; on a plan it is
+#: not billed), for measuring what a video costs per model.
+spent_usd = 0.0
 EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
 
 
@@ -120,6 +123,8 @@ class ClaudeCodeBackend(LLMBackend):
             text = _json_in(text)
         if not text.strip():
             raise LLMError("Claude Code returned nothing")
+        global spent_usd
+        spent_usd += float(reply.get("total_cost_usd") or 0)  # what the call would cost at API prices
         usage = reply.get("usage") or {}
         return LLMResponse(text=text, model=self.model, prompt_tokens=usage.get("input_tokens", 0),
                            output_tokens=usage.get("output_tokens", 0), latency=time.perf_counter() - started)
