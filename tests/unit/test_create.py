@@ -58,16 +58,16 @@ class TestStock:
         seen = []
         results = {"ear close up": HITS[:2], "headphones": HITS[2:]}
         monkeypatch.setattr(stock, "search", lambda q: results.get(q, []))
-        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits: seen.append([h["id"] for h in hits]) or hits[1])
+        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="": (seen.append([h["id"] for h in hits]) or hits[1], []))
         assert stock.choose(["ear close up", "headphones"], 6.0, used={4}, sentence="Your middle ear")["id"] == 2
         assert seen[0] == [3, 2, 1]  # long enough and vertical, long enough, too short; 4 already used
 
     def test_nothing_fitting_or_no_judge_means_a_chalk_card(self, monkeypatch):
         monkeypatch.setattr(stock, "search", lambda q: HITS)
-        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits: None)
+        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="": (None, []))
         assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # a chalk card instead
 
-        def busy(sentence, q, hits):
+        def busy(sentence, q, hits, ctx=""):
             raise stock._NoAnswer
         monkeypatch.setattr(stock, "_judge", busy)
         assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # no judge: a card too
@@ -223,9 +223,49 @@ def test_a_loose_match_is_not_good_enough(monkeypatch):
     monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
     for score, expect in ((6, None), (7, 2)):
         monkeypatch.setattr(stock, "ask", lambda *a, score=score, **k: f'{{"pick": 2, "score": {score}}}')
-        hit = stock._judge("Your voice sounds deeper inside your head.", "voice", HITS[:3])
+        hit, _ = stock._judge("Your voice sounds deeper inside your head.", "voice", HITS[:3])
         assert (hit and hit["id"]) == expect
     assert hit["center"] == 0.5  # where the subject is, for the crop
+
+
+def test_the_judge_sees_the_script_and_searches_again_with_its_own_words(monkeypatch):
+    """D124: nothing good enough, so its better searches get one more look; Gemini first."""
+    monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
+    results = {"wall music": HITS[:2], "subwoofer speaker": HITS[2:4]}
+    monkeypatch.setattr(stock, "search", lambda q: results.get(q, []))
+    prompts, answers = [], iter(['{"pick": 1, "score": 3, "better": ["subwoofer speaker", "wall music"]}',
+                                 '{"pick": 1, "score": 8}'])
+    seen_kw = []
+
+    def fake(system, user, schema, **kw):
+        prompts.append(user)
+        seen_kw.append(kw)
+        return next(answers)
+
+    monkeypatch.setattr(stock, "ask", fake)
+    hit = stock.choose(["wall music"], 2.0, set(), sentence="Like music through a wall.", context="A video about sound.")
+    assert hit and hit["id"] in (3, 4) and len(prompts) == 2
+    assert "A video about sound." in prompts[0] and all(k.get("footage") for k in seen_kw)
+
+
+def test_footage_goes_to_gemini_first_and_isnt_stopped_by_claude_only(monkeypatch):
+    from clipper.create import ai
+
+    class B:
+        def __init__(self, name):
+            self.name, self.calls = name, 0
+
+        def describe(self):
+            return self.name
+
+        def complete(self, request):
+            self.calls += 1
+            return type("R", (), {"text": self.name})()
+
+    claude, gemini = B("claude_code"), B("gemini")
+    monkeypatch.setattr(ai, "backends", lambda config, model=None: [claude, gemini])
+    assert ai.ask("s", "u", None, temperature=0.0, quick=True, footage=True) == "gemini"
+    assert ai.ask("s", "u", None, temperature=0.0) == "claude_code"   # everything else: Claude first
 
 
 def test_diagram_pieces_arrive_as_they_are_said():

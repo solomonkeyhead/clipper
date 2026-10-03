@@ -90,8 +90,9 @@ def stage(t: float, d: float, i: int, n: int, label: int | None = None) -> float
     drawn on a fixed schedule ran ahead of, or behind, the words)."""
     cues = CUES.get()
     if label is not None and label < len(cues) and cues[label] is not None:
-        # Never later than 60% in: a cue word said at the very end left the board empty.
-        return ease((t - min(cues[label], 0.6 * d) + 0.15) / 0.45)
+        # On its word, but up for at least the last 1.2 s (a cue said at the very end left the
+        # board empty); in a drawing held over several sentences, parts arrive late on purpose (D124).
+        return ease((t - min(cues[label], max(0.6 * d, d - 1.2)) + 0.15) / 0.45)
     window = 0.6 * d
     each = window / max(1, n)
     return ease((t - i * each * 0.85) / max(0.25, each))

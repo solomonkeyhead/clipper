@@ -65,6 +65,8 @@ llm:
   create_quick_model: claude-sonnet-5-5
   # Claude set up but out of usage? Stop and say so, rather than let Gemini make it (D117).
   create_claude_only: true
+  # Who judges stock footage: gemini (free key; Claude only if Gemini can't) or claude (D124).
+  create_footage_judge: gemini
   # Caption fixes ruled wrong on review ("heard -> replacement"); never applied again.
   # Every applied fix is listed per clip in report.md -- add a bad one here.
   rejected_caption_fixes:

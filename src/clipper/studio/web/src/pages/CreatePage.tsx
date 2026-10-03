@@ -390,20 +390,23 @@ function CheckNote({ text }: { text: string }) {
 }
 
 const blankVisual = (): CreateVisual => ({ kind: "stock", query: "", queries: [], template: "", title: "", labels: [] });
-type PictureKind = "auto" | "stock" | "card" | "sketch";
+type PictureKind = "auto" | "stock" | "card" | "sketch" | "hold";
 const kindOf = (v: CreateVisual): PictureKind =>
-  !v.manual ? "auto" : v.kind === "stock" ? "stock" : v.template === "card" ? "card" : "sketch";
+  v.hold ? "hold" : !v.manual ? "auto" : v.kind === "stock" ? "stock" : v.template === "card" ? "card" : "sketch";
 
 /** Choosing a sentence's picture yourself (D120): footage by your own search words, a chalk
  *  phrase, or a drawing you describe. "Automatic" hands it back to Clipper. */
-function PictureChoice({ visual, emphasis, onChange }: {
-  visual: CreateVisual; emphasis: string; onChange: (v: CreateVisual, emphasis?: string) => void;
+function PictureChoice({ visual, emphasis, onChange, canHold }: {
+  visual: CreateVisual; emphasis: string; onChange: (v: CreateVisual, emphasis?: string) => void; canHold: boolean;
 }) {
   const kind = kindOf(visual);
   const value = kind === "stock" ? (visual.queries?.length ? visual.queries : [visual.query]).filter(Boolean).join(", ")
     : kind === "card" ? visual.title : kind === "sketch" ? visual.idea ?? "" : "";
   const placeholder = kind === "stock" ? "search words, e.g. skull, sound waves" : kind === "card" ? "the phrase to chalk on the board" : "what to draw";
-  const pick = (next: PictureKind) => {
+  const pick = (raw: PictureKind) => {
+    if (raw === "hold") return onChange({ ...visual, hold: true });
+    const next = raw;
+    visual = { ...visual, hold: false };
     if (next === "auto") return onChange({ ...visual, manual: false });
     if (next === "stock") return onChange({ ...visual, kind: "stock", manual: true, queries: visual.queries?.length ? visual.queries : visual.query ? [visual.query] : [] });
     if (next === "card") return onChange({ ...visual, kind: "diagram", template: "card", manual: true, title: visual.title || emphasis });
@@ -426,8 +429,9 @@ function PictureChoice({ visual, emphasis, onChange }: {
         <option value="stock">Footage I search for</option>
         <option value="card">Chalk phrase</option>
         <option value="sketch">Drawing I describe</option>
+        {(canHold || kind === "hold") && <option value="hold">Keep the drawing above, building on</option>}
       </select>
-      {kind !== "auto" && (
+      {kind !== "auto" && kind !== "hold" && (
         <input key={`${kind}-${value}`} defaultValue={value} placeholder={placeholder} aria-label={placeholder}
                onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
                onBlur={(e) => e.target.value.trim() !== value && commit(e.target.value)}
@@ -482,7 +486,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
             </div>
             {!locked && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <PictureChoice visual={b.visual} emphasis={b.emphasis} onChange={(v, emphasis) => patch(i, { visual: v, ...(emphasis !== undefined ? { emphasis } : {}) })} />
+                <PictureChoice visual={b.visual} emphasis={b.emphasis} canHold={i > 0 && (beats[i - 1].visual.kind === "diagram" || !!beats[i - 1].visual.hold)} onChange={(v, emphasis) => patch(i, { visual: v, ...(emphasis !== undefined ? { emphasis } : {}) })} />
                 <Tip label="The word shown highlighted in the captions">
                   <input key={b.emphasis} defaultValue={b.emphasis} placeholder="highlight word" aria-label={`Highlight word, sentence ${i + 1}`}
                          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
@@ -520,6 +524,15 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
 }
 
 function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }) {
+  if (visual.hold && !visual.clip) {
+    return (
+      <Tip label="The drawing above stays on screen through this sentence, its parts arriving as they're said.">
+        <span className="flex items-center gap-1.5 self-start rounded-md border border-accent/40 px-2 py-1.5 text-xs text-accent">
+          <Shapes className="size-3.5 shrink-0" /><span className="truncate">Same drawing, continued</span>
+        </span>
+      </Tip>
+    );
+  }
   if (visual.clip) {
     return (
       <Tip label="Your own clip. The planned picture fills any time it doesn't cover.">

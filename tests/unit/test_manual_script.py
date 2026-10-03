@@ -217,5 +217,67 @@ def test_footage_by_search_words_when_no_model_can_look(monkeypatch):
     got = stock.choose(["microphone recording studio"], 3.0, set(), sentence="That is the only route a microphone gets.")
     assert got["id"] == 2 and got["center"] is None and stock.unjudged == ["That is the only route a microphone gets."]
     # the judge saying "nothing good enough" is still respected: no fallback then
-    monkeypatch.setattr(stock, "_judge", lambda *a, **k: None)
+    monkeypatch.setattr(stock, "_judge", lambda *a, **k: (None, []))
     assert stock.choose(["microphone recording studio"], 3.0, set(), sentence="x") is None
+
+
+# ---------- a drawing held over several sentences (D124) ----------
+
+def _held_script():
+    d = Visual(kind="diagram", template="sketch", idea="a face", manual=True)
+    return Script(title="t", beats=[
+        Beat(text="Why does it sound odd to you?", visual=Visual(kind="stock", query="voice")),
+        Beat(text="Sound reaches your ears two ways.", visual=d),
+        Beat(text="Route one is air, round the cheek.", visual=Visual(kind="stock", query="air", hold=True)),
+        Beat(text="Route two is bone, through the jaw.", visual=Visual(kind="stock", query="bone", hold=True)),
+        Beat(text="So you hear more bass than us.", visual=Visual(kind="stock", query="bass"))])
+
+
+def test_held_sentences_join_the_drawing_before_them():
+    s = scripts.tidy(_held_script())
+    assert scripts.spans(s) == [[0], [1, 2, 3], [4]]
+    # a hold after footage, or on the first sentence, is dropped; long chains stop at MAX_HOLD
+    first = scripts.tidy(Script(title="t", beats=[Beat(text="One two three four.", visual=Visual(kind="stock", query="x", hold=True))]))
+    assert not first.beats[0].visual.hold
+    after_stock = scripts.tidy(_held_script().model_copy(update={"beats": [
+        *_held_script().beats[:1], _held_script().beats[2]]}))
+    assert not after_stock.beats[1].visual.hold
+    long = _held_script().model_copy(update={"beats": [*_held_script().beats[:2],
+                                                       *[_held_script().beats[2]] * (scripts.MAX_HOLD + 2)]})
+    held = [b.visual.hold for b in scripts.tidy(long).beats]
+    assert held.count(True) == scripts.MAX_HOLD
+    # a held picture counts once towards "never three diagrams in a row"
+    three = scripts.tidy(Script(title="t", beats=[
+        Beat(text="Opening line goes here now.", visual=Visual(kind="stock", query="x")),
+        Beat(text="A diagram goes here now.", visual=Visual(kind="diagram", template="forces", labels=["a"])),
+        Beat(text="Held on goes here now.", visual=Visual(kind="stock", query="x", hold=True)),
+        Beat(text="Another diagram goes here.", visual=Visual(kind="diagram", template="forces", labels=["b"]))]))
+    assert three.beats[3].visual.kind == "diagram"
+
+
+def test_a_held_drawing_is_one_shot_with_every_word(tmp_path, monkeypatch):
+    from clipper.create import build
+    from clipper.create.voice import TimedWord, Timings
+
+    s = scripts.tidy(_held_script())
+    shots = []
+
+    def fake(i, beat, visual, seconds, said, script_, work, used, tag=""):
+        shots.append((i, round(seconds, 2), [w for _, w in said]))
+        return [tmp_path / f"{i}.mp4"]
+
+    monkeypatch.setattr(build, "_planned", fake)
+    spans = [(0.0, 2.0), (2.0, 4.0), (4.0, 7.0), (7.0, 10.0), (10.0, 12.0)]
+    words = [TimedWord(text=w, start=a + 0.1 * k, end=a + 0.1 * k + 0.05)
+             for b, (a, _) in zip(s.beats, spans, strict=True) for k, w in enumerate(b.text.split())]
+    build.shots(s, Timings(words=words, beats=spans, duration=12.0, matched=1.0), tmp_path)
+    assert [x[:2] for x in shots] == [(0, 2.0), (1, 8.0), (4, 2.0)]
+    assert "bone," in shots[1][2] and "air," in shots[1][2]       # the drawing hears all three sentences
+
+
+def test_a_part_on_a_late_word_arrives_late_but_is_seen():
+    from clipper.create.diagrams import CUES, stage
+
+    CUES.set((None, 9.0, 11.9))
+    assert stage(8.0, 12.0, 1, 3, label=1) == 0.0 and stage(9.6, 12.0, 1, 3, label=1) == 1.0   # on its word
+    assert stage(11.5, 12.0, 2, 3, label=2) == 1.0          # said at the very end: still up for the last 1.2 s

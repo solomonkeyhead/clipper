@@ -613,6 +613,7 @@ export interface CreateVisual {
   kind: "stock" | "diagram"; query: string; queries?: string[]; card?: string; template: string; title: string; labels: string[];
   clip?: string; clip_start?: number | null; fill?: ClipFill;   // the user's own clip for this sentence (D119)
   manual?: boolean; idea?: string; sketch?: unknown;            // a picture the user chose (D120)
+  hold?: boolean;                                                // keep the drawing before on screen (D124)
 }
 export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
 export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }

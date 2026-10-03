@@ -2250,3 +2250,24 @@ the voice box through the jaw (3); vocal cords, a bone and a snail-shell inner e
 the vibration travelling through (5); a low wave getting through a slab of bone while a high one
 fades (6, was a bar chart); and two faces, with the bone route marked "only you" and thin air
 waves to the friend's ear (8).
+
+## D124 — Drawings that stay up and build; footage judged by Gemini, with context and a second search (2026-10-03)
+
+The "two routes" drawing was up for a moment, then footage cut in, while the voice went on
+explaining those very routes. Now a sentence can **hold** the drawing before it (`Visual.hold`,
+up to 3 sentences): the build makes one shot of the drawing over all of them and hands it every
+word said meanwhile, so each part arrives on the word that explains it ("air", "bone", "vocal
+cords"). A part cued late is still on screen for at least the last 1.2 s (the old rule capped
+every cue at 60% of the shot, which would have shown the end of the explanation early). The
+writer is told to use hold, the sketcher draws a held drawing for all its sentences and is told
+to build the picture on its words, "never three diagrams in a row" counts a held drawing once,
+and the page offers "Keep the drawing above, building on" per sentence. The ready-made script's
+sentences 3-5 are now one face drawing built in step with the voice. The vocal-cords chain
+drawing was judged off and is gone; the bass and friend drawings were judged good and stay.
+
+**Footage.** The user chose the free Gemini key for footage: `llm.create_footage_judge: gemini`
+(Gemini first, Claude only if Gemini can't; `create_claude_only` doesn't apply to this job). That
+also frees most of a video's Claude usage, as the judge was the biggest part of it. The judge
+now sees the whole script (a "wall" in a video about sound), and when nothing scores 7, it
+suggests up to two better searches, which get one more look before the sentence falls back to
+chalk.

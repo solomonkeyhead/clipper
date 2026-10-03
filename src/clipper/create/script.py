@@ -22,7 +22,7 @@ from . import channel as channels
 from .ai import CreateError, ask
 from .sketch import Sketch
 
-PROMPT_VERSION = "create-script-v4"
+PROMPT_VERSION = "create-script-v5"
 TEMPLATES = ("sketch", "forces", "circle", "equation", "compare", "chain", "graph", "wave", "particles", "ray", "number")
 
 
@@ -50,6 +50,10 @@ class Visual(BaseModel):
     # Chosen by the user on the page (D120): kept as picked when the script is tidied or the
     # pictures are planned again, not bent to the rules the writer's plans are held to.
     manual: bool = False
+    # Keep the drawing before this sentence on screen through it (D124): one picture that builds
+    # as the explanation goes on ("two routes... route one is air... route two is bone"), its
+    # parts arriving on the words of all those sentences, instead of a new shot each sentence.
+    hold: bool = False
 
 
 class Beat(BaseModel):
@@ -84,7 +88,12 @@ short), 5 to 14 words. For every beat plan ONE picture:
   head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
   no footage fits ("bone conduction", "100 degrees").
 - kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
-  About half the beats; never the first beat; never three diagrams in a row. Prefer a
+  About half the beats; never the first beat; never three diagrams in a row.
+  hold: when the next sentence (up to 3 of them) goes on explaining the same picture ("two
+  routes... route one is air... route two is bone"), set hold = true on those sentences: the
+  drawing from the beat before stays up and builds as the voice explains each part, instead
+  of a new picture each sentence. Plan the drawing on the first of them, with its idea covering
+  all they say. Only after a diagram; a held sentence needs no picture of its own. Prefer a
   diagram to footage that would only loosely match. Templates:
   * sketch (the default for HOW something works): a chalk drawing of the real thing, made
     by an illustrator after you. idea = one or two sentences saying exactly what to draw:
@@ -224,20 +233,50 @@ def from_text(title: str, text: str, description: str = "", hashtags: list[str] 
     return tidy(made)
 
 
+#: At most this many sentences after a drawing may keep it on screen (D124).
+MAX_HOLD = 3
+
+
+def _emphasis(beat: Beat) -> str:
+    """The highlight word, if it's really in the sentence."""
+    words = {w.strip(".,!?;:'\"").lower() for w in beat.text.split()}
+    return beat.emphasis if beat.emphasis.strip(".,!?").lower() in words else ""
+
+
+def spans(script: Script) -> list[list[int]]:
+    """The sentences grouped by picture: a drawing and the sentences that hold it (D124)."""
+    groups: list[list[int]] = []
+    for i, b in enumerate(script.beats):
+        if b.visual.hold and groups and not b.visual.clip:
+            groups[-1].append(i)
+        else:
+            groups.append([i])
+    return groups
+
+
 def tidy(script: Script) -> Script:
     """Rules the model can bend, put straight: known templates, no diagram first or three
     in a row, an emphasis word that's really in its beat, at most 5 hashtags."""
     beats = []
+    pictures: list[str] = []   # the kind of each picture so far: a held sentence adds none
+    held = 0
     for i, beat in enumerate(script.beats):
         v = beat.visual
+        if v.hold:
+            # Held on: only after a drawing, and not for ever (a picture held past ~15 s goes stale).
+            if pictures and pictures[-1] == "diagram" and held < MAX_HOLD:
+                held += 1
+                beats.append(beat.model_copy(update={"emphasis": _emphasis(beat)}))
+                continue
+            v = v.model_copy(update={"hold": False})
+        held = 0
         if v.manual and (v.kind == "stock" or v.template in (*TEMPLATES, "card")):
             # The user's own pick stands: no rule moves it (a chalk card first, say).
             if v.kind == "stock":
                 queries = [q.strip() for q in [*v.queries, v.query] if q.strip()] or [_query_from(beat.text)]
                 v = v.model_copy(update={"queries": list(dict.fromkeys(queries))[:3], "query": queries[0]})
-            words = {w.strip(".,!?;:'\"").lower() for w in beat.text.split()}
-            emphasis = beat.emphasis if beat.emphasis.strip(".,!?").lower() in words else ""
-            beats.append(beat.model_copy(update={"visual": v, "emphasis": emphasis}))
+            beats.append(beat.model_copy(update={"visual": v, "emphasis": _emphasis(beat)}))
+            pictures.append(v.kind)
             continue
         diagram = v.kind == "diagram" and v.template in TEMPLATES
         # Bars of nothing in particular, or an equation with no formula, teach nothing.
@@ -249,15 +288,14 @@ def tidy(script: Script) -> Script:
             diagram = False
         if diagram and v.template == "number" and not any(c.isdigit() for c in v.title):
             diagram = False
-        if diagram and (i == 0 or (len(beats) >= 2 and all(b.visual.kind == "diagram" for b in beats[-2:]))):
+        if diagram and (i == 0 or pictures[-2:] == ["diagram", "diagram"]):
             diagram = False
         if not diagram:
             queries = [q for q in [*v.queries, v.query] if q.strip()] or [_query_from(beat.text)]
             v = v.model_copy(update={"kind": "stock", "queries": list(dict.fromkeys(queries))[:3],
                                      "query": queries[0], "card": v.card or beat.emphasis or _query_from(beat.text)})
-        words = {w.strip(".,!?;:'\"").lower() for w in beat.text.split()}
-        emphasis = beat.emphasis if beat.emphasis.strip(".,!?").lower() in words else ""
-        beats.append(beat.model_copy(update={"visual": v, "emphasis": emphasis}))
+        beats.append(beat.model_copy(update={"visual": v, "emphasis": _emphasis(beat)}))
+        pictures.append(v.kind)
     tags = [("#" + t.lstrip("#")).replace(" ", "") for t in script.hashtags if t.strip("# ")][:5]
     return script.model_copy(update={"beats": beats, "hashtags": tags})
 

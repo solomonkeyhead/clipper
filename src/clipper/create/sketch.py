@@ -45,7 +45,10 @@ GRID_W, GRID_H = 1000, 600
 
 DRAW = """You draw quick, clear chalkboard sketches for a 45-second physics video on a phone, in
 the style of a good lecturer: the real thing, simply drawn, a few labels, motion where things
-move. One sketch shows what one sentence says, so a viewer gets it in two seconds.
+move. One sketch shows what its sentence says, so a viewer gets it in two seconds. When it
+stays up for several sentences, it builds as they go: the object first, then each part on the
+word where the voice explains it, so the picture grows with the explanation and is never
+finished before the voice gets there.
 
 The board is a grid 1000 wide, 600 tall; x right, y DOWN; (0, 0) top left. Keep everything
 inside x 30-970, y 30-570. Keep the bottom-right corner (x > 740 and y > 400) EMPTY: the
@@ -69,7 +72,9 @@ Colours: chalk (white, the default), yellow (the main idea, the path that matter
 (the other path or thing being compared), red (only for danger or heat), dim (guides,
 outlines of background things). dashed for paths and guides.
 Order the marks as they should appear: the object first, then what happens to it. Give a
-mark cue = one word of the sentence, copied exactly, to appear when the voice says it.
+mark cue = one word of the sentence(s), copied exactly, to appear when the voice says it: a
+path on the word that names it ("air", "bone"), a label on its own word. Every mark after the
+first few should have a cue.
 
 Rules: 4-14 marks. Draw the physical thing, not a flow chart -- never boxes with words in
 them unless the sentence is about a list. Every label short and true. Proportions right
@@ -182,14 +187,19 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
 def draw_all(script) -> tuple[object, list[str]]:
     """Every sketch beat of `script` drawn (at once: each takes the model a while); a beat
     whose sketch fails becomes stock footage with its card. Returns the script and notes."""
+    from .script import spans
+
     beats = list(script.beats)
     todo = [i for i, b in enumerate(beats) if b.visual.kind == "diagram" and b.visual.template == "sketch"
             and not (b.visual.sketch and b.visual.sketch.marks) and not b.visual.clip]  # a clip of the user's: drawn only if needed
     notes = []
 
     def one(i: int):
+        # A drawing held over the next sentences is drawn for all of them, so its parts can
+        # arrive on their words (D124).
         v = beats[i].visual
-        return draw(beats[i].text, v.idea, script.text, v.title)
+        group = next((g for g in spans(script) if g[0] == i), [i])
+        return draw(" ".join(beats[k].text for k in group), v.idea, script.text, v.title)
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         done = list(pool.map(lambda i: (i, _safe(one, i)), todo))

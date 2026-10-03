@@ -58,9 +58,11 @@ def backends(config, model: str | None = None) -> list:
 
 
 def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple[bytes, str]] | None = None,
-        quick: bool = False) -> str:
+        quick: bool = False, footage: bool = False) -> str:
     """The first model's answer; `quick` for small, many-times jobs (the footage judge),
-    which go to `llm.create_quick_model` to spare the plan's usage (D116)."""
+    which go to `llm.create_quick_model` to spare the plan's usage (D116). `footage` is the
+    footage judge itself: by `llm.create_footage_judge`, Gemini first, and never stopped by
+    `create_claude_only`, as the user chose Gemini for that job (D124)."""
     from ..config import Config
     from ..llm.base import LLMRequest, miss_level
 
@@ -68,8 +70,10 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
     config = Config.load()
     order = backends(config, config.llm.create_quick_model if quick else None)
     claude = [b for b in order if b.name in ("anthropic", "claude_code")]
+    if footage and config.llm.create_footage_judge == "gemini":
+        order = [b for b in order if b not in claude] + claude
     for backend in order:
-        if config.llm.create_claude_only and claude and backend not in claude:
+        if config.llm.create_claude_only and claude and backend not in claude and not footage:
             # Claude was there but didn't answer: stop rather than let Gemini draw (D117).
             why = misses.get(claude[0].describe(), "it didn't answer")
             raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "

@@ -28,7 +28,7 @@ from ..utils.logging import get_logger
 from . import channel as channels
 from . import diagrams, stock, store, userclips
 from .ai import CreateError
-from .script import Script, Visual
+from .script import Script, Visual, spans
 from .voice import Timings, folder
 
 log = get_logger(__name__)
@@ -174,7 +174,7 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
         return [diagrams.render(visual, seconds, work / f"{i:02d}{tag}_diagram.mp4", words=said)]
     parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
     queries = visual.queries or [visual.query]
-    hits = [stock.choose(queries, part, used, sentence=beat.text) for part in parts]
+    hits = [stock.choose(queries, part, used, sentence=beat.text, context=script.text) for part in parts]
     for hit in hits:
         if hit:
             used.add(hit["id"])
@@ -238,16 +238,24 @@ def _own(i: int, visual: Visual, seconds: float, own: dict, cursor: dict, defaul
 
 def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict | None = None,
           notes: list[str] | None = None, default_fill: str = "auto") -> list[Path]:
-    """One shot (or two) per sentence. `own` maps clip ids to (file, seconds, name) for the
+    """One shot (or two) per picture: a sentence, or a drawing and the sentences that hold it (D124). `own` maps clip ids to (file, seconds, name) for the
     user's clips; a sentence with one gets it, cut or filled to the sentence, followed by its
     planned picture for any time the clip couldn't cover (D119)."""
     made, used, cursor = [], set(), {}
     own = own or {}
     notes = notes if notes is not None else []
-    for i, (beat, (a, b)) in enumerate(zip(script.beats, timings.beats, strict=True)):
+    groups = []
+    for group in spans(script):
+        root = script.beats[group[0]].visual
+        # Only a drawing is held on: a clip or footage first plays its own sentence alone.
+        groups += [group] if root.kind == "diagram" and not root.clip else [[i] for i in group]
+    for n, group in enumerate(groups):
+        i, beat = group[0], script.beats[group[0]]
         if progress:
-            progress(f"Shot {i + 1} of {len(script.beats)}", 10 + 60 * i / len(script.beats))
+            progress(f"Shot {n + 1} of {len(groups)}", 10 + 60 * n / len(groups))
+        a, b = timings.beats[group[0]][0], timings.beats[group[-1]][1]
         seconds = b - a
+        # Every word said while the picture is up, so a part can arrive on any of them (D124).
         said = [(w.start - a, w.text) for w in timings.words if a - 0.05 <= w.start < b]
         if beat.visual.clip:
             got = _own(i, beat.visual, seconds, own, cursor, default_fill, work, notes)

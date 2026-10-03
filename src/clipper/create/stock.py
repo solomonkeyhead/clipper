@@ -164,7 +164,12 @@ Then score how well that best one fits, honestly:
 Below 7 a chalkboard card is shown instead, which is better than a loose match, so don't
 round up. Answer pick = its number (0 if none), score, and center: where across that
 thumbnail the subject is, 0 = left edge, 0.5 = middle, 1 = right edge (the video is cropped
-to a tall strip around it, so put it on the thing the sentence is about)."""
+to a tall strip around it, so put it on the thing the sentence is about).
+You also get the whole script, so you know what the video is about and what the sentence
+means in it (a "wall" in a video about sound is a wall music comes through, not a climbing
+wall). If nothing scores 7 or more, give better: up to 2 new searches, 2 to 4 plain words each,
+for things stock libraries really film ("man listening to headphones", "subwoofer speaker"),
+that would show this sentence."""
 
 #: The judge's score a clip needs to be used; below it the beat gets a chalk card (D110).
 #: Picks were judged "very poor" when any non-zero pick was taken.
@@ -175,6 +180,7 @@ class _Pick(BaseModel):
     pick: int
     score: int = 0
     center: float = 0.5
+    better: list[str] = []      # when nothing fits: searches more likely to find it (D124)
 
 
 def _thumb(hit: dict) -> bytes | None:
@@ -200,25 +206,29 @@ class _NoAnswer(Exception):
     """The model couldn't look (busy, offline): not the same as "none of these fit"."""
 
 
-def _judge(sentence: str, query: str, hits: list[dict]) -> dict | None:
-    """The candidate the model says shows the sentence, or None if none does."""
+def _judge(sentence: str, query: str, hits: list[dict], context: str = "") -> tuple[dict | None, list[str]]:
+    """The candidate the model says shows the sentence (None if none does), and the better
+    searches it suggests when none does."""
     shown = [(h, t) for h in hits if (t := _thumb(h))]
     if not shown:
         raise _NoAnswer
     try:
         listed = "\n".join(f"{i}. {'tall' if h['height'] > h['width'] else 'wide'}, {h.get('tags') or 'no tags'}"
                            for i, (h, _) in enumerate(shown, start=1))
-        prompt = (f"Sentence: {sentence}\nSearched for: {query}\n"
+        prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "")
+                  + f"Sentence: {sentence}\nSearched for: {query}\n"
                   f"Thumbnails 1 to {len(shown)}, in order:\n{listed}")
-        answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True)
+        answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True,
+                     footage=True)
         verdict = _Pick.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
         raise _NoAnswer from exc
     n = verdict.pick
+    better = [" ".join(q.split()[:5]) for q in verdict.better if q.strip()][:2]
     if not 1 <= n <= len(shown) or verdict.score < GOOD_ENOUGH:
         log.info("create: no footage good enough for %r (best %s scored %s)", sentence[:60], n, verdict.score)
-        return None
-    return {**shown[n - 1][0], "center": min(1.0, max(0.0, verdict.center))}
+        return None, better
+    return {**shown[n - 1][0], "center": min(1.0, max(0.0, verdict.center))}, []
 
 
 #: Sentences whose footage was picked by its search words alone, as no model could look (D122).
@@ -252,23 +262,36 @@ def by_words(queries: list[str], ranked: list[dict]) -> dict | None:
     return None
 
 
-def choose(queries: list[str], seconds: float, used: set, sentence: str = "") -> dict | None:
-    """The best unused clip for a beat of `seconds`, judged against the sentence across all
-    its searches at once; None when nothing fits (the beat gets a chalkboard card instead,
-    never a generic stand-in: "science laboratory" footage opened a video once)."""
+def _pool(queries: list[str], used: set, seconds: float) -> list[dict]:
     pool: list[dict] = []
     for q in queries:
         for h in search(q)[:PER_QUERY]:
             if h["id"] not in used and all(h["id"] != p["id"] for p in pool):
                 pool.append(h)
-    if not pool:
-        return None
     # Long enough first, then vertical, keeping the search order within each.
-    ranked = sorted(pool, key=lambda h: (h["duration"] < seconds + 0.3, h["height"] <= h["width"]))[:CANDIDATES]
+    return sorted(pool, key=lambda h: (h["duration"] < seconds + 0.3, h["height"] <= h["width"]))[:CANDIDATES]
+
+
+def choose(queries: list[str], seconds: float, used: set, sentence: str = "", context: str = "") -> dict | None:
+    """The best unused clip for a beat of `seconds`, judged against the sentence (and the whole
+    script, `context`) across all its searches at once. When none is good enough the judge's
+    own better searches get one more look (D124). None when nothing fits: the beat gets a
+    chalkboard card instead, never a generic stand-in ("science laboratory" opened a video once)."""
+    ranked = _pool(queries, used, seconds)
+    if not ranked:
+        return None
     if not sentence:
         return ranked[0]
     try:
-        return _judge(sentence, " / ".join(queries), ranked)
+        hit, better = _judge(sentence, " / ".join(queries), ranked, context)
+        if hit is None and better:
+            tried = {q.lower() for q in queries}
+            fresh = [q for q in better if q.lower() not in tried]
+            again = _pool(fresh, used, seconds) if fresh else []
+            if again:
+                log.info("create: footage searched again for %r: %s", sentence[:60], " / ".join(fresh))
+                hit, _ = _judge(sentence, " / ".join(fresh), again, context)
+        return hit
     except _NoAnswer:
         hit = by_words(queries, ranked)
         if hit:
