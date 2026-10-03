@@ -48,7 +48,9 @@ def test_showing_its_title_is_free_but_choosing_is_paid(client, data_root):
     cid = add(data_root, "c1", "second line", "first line")
     with db.connect() as con:
         db.set_setting(con, "plan", "free")
-    assert client.post(f"/api/clips/{cid}/rerender", json={"hook": "second line"}).status_code == 200
+    kept = client.post(f"/api/clips/{cid}/rerender", json={"hook": "second line"})
+    assert kept.status_code == 200 and kept.json()["hook"] == "second line"  # the hook asked for, not the next line
+    assert client.post(f"/api/clips/{cid}/rerender", json={"hook": "first line"}).json()["hook"] == "first line"
     assert client.post(f"/api/clips/{cid}/rerender", json={"hook": "my own"}).status_code == 402
     assert client.put(f"/api/clips/{cid}/caption", json={"caption": "cap b  #x"}).status_code == 402
 

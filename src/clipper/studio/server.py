@@ -1059,8 +1059,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             raise HTTPException(404, "no such clip")
         if found.posts or found.status in ("posted", "submitted"):
             raise HTTPException(400, "it's posted: its video is what's live")
-        if hook and hook != found.title:  # showing its own title fixes a mismatch: free
-            plans.require("choose_lines")
+        if hook:
+            # The hook asked for is the one used. Its own title or current hook is free
+            # (showing the title fixes a mismatch); any other line is a paid choice.
+            if hook not in (found.title, found.hook):
+                plans.require("choose_lines")
         else:
             campaign = load_campaigns().get(found.campaign)
             lines = [h for h in (campaign.hook_texts if campaign else ()) if h != found.hook]
