@@ -455,3 +455,42 @@ class EditorView(BaseModel):
     clip_id: int | None = None
     clip_status: str | None = None
     edit: dict | None = None       # editing.ClipEdit: pieces, hook, fixes
+
+
+class CompareSide(BaseModel):
+    posts: int
+    median_views: float | None = None
+    skip_rate: float | None = None     # Instagram: % who swipe away in the first 3 s
+
+
+class CompareRow(BaseModel):
+    platform: str
+    yes: CompareSide
+    no: CompareSide
+    ratio: float | None = None
+    verdict: str
+
+
+class Comparison(BaseModel):
+    """Posts with a change against posts without it (learn/compare.py, D105)."""
+    key: str
+    title: str
+    yes_label: str
+    no_label: str
+    rows: list[CompareRow]
+
+
+class HookResult(BaseModel):
+    campaign: str
+    platform: str
+    hook: str
+    posts: int
+    median_views: float
+
+
+class WhatsWorking(BaseModel):
+    age_hours: int
+    min_each: int
+    comparisons: list[Comparison]
+    hooks: list[HookResult]
+    disclosed_since: str               # TikTok posts from this date count as switch on

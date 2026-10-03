@@ -73,6 +73,7 @@ from .api_models import (
     Setup,
     SinceLastVisit,
     Status,
+    WhatsWorking,
     WhopFeed,
 )
 from .events import Broker
@@ -1411,6 +1412,39 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         result = feedback.report(clips, Config.load().llm.rubric_weights.as_dict(), active=active)
         return Learning(active=active, min_for_weights=feedback.MIN_FOR_WEIGHTS,
                         min_for_agreement=feedback.MIN_FOR_AGREEMENT, **result.__dict__)
+
+    @app.get("/api/learning/compare")
+    def whats_working() -> WhatsWorking:
+        """Posts with each change against posts without it, fairly (D105)."""
+        from ..learn import compare
+
+        snap = Snapshot()
+        since = snap.settings.get("tiktok_disclosed_since", "")
+        disclosed_from = compare.parse(since)
+        history: dict[str, list] = {}
+        with db.connect() as con:
+            for r in con.execute("SELECT url, at, views, skip_rate_pct FROM snapshots ORDER BY at"):
+                history.setdefault(r["url"], []).append((compare.parse(r["at"]), r["views"], r["skip_rate_pct"]))
+        raw = {c["id"]: c for c in snap.raw_clips}
+        facts = []
+        for clip in snap.clips:
+            scores = json.loads(raw[clip.id].get("scores") or "{}") or {}
+            for p in clip.posts:
+                posted = compare.parse(p.posted_at)
+                traits = {"cover": scores.get("cover") is not None, "edited": bool(scores.get("edit"))}
+                if scores.get("picked_by") == "auto":  # only Clipper's picks can open on a payoff
+                    traits["payoff"] = bool(scores.get("teaser"))
+                if p.platform == "tiktok" and disclosed_from and posted:
+                    traits["disclosed"] = posted >= disclosed_from
+                facts.append(compare.PostFacts(
+                    url=p.url, platform=p.platform, posted_at=posted,
+                    history=tuple(h for h in history.get(p.url.split("?", 1)[0], []) if h[0]),
+                    traits=traits, hook=clip.hook or "", campaign=clip.campaign))
+        return WhatsWorking(age_hours=compare.AGE_HOURS, min_each=compare.MIN_EACH,
+                            comparisons=[c.__dict__ | {"rows": [r.__dict__ | {"yes": r.yes.__dict__, "no": r.no.__dict__}
+                                                                for r in c.rows]}
+                                         for c in compare.compare(facts)],
+                            hooks=[h.__dict__ for h in compare.hooks(facts)], disclosed_since=since)
 
     @app.get("/api/posts/history")
     def post_history(url: str) -> list[PostPoint]:

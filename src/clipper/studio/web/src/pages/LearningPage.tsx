@@ -1,7 +1,9 @@
-import { Lightbulb } from "lucide-react";
-import { useLearning, useSetSettings, useSettings, type Learning } from "@/api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { FlaskConical, Lightbulb } from "lucide-react";
+import { useLearning, useSetSettings, useSettings, useWhatsWorking, type Learning, type WhatsWorking } from "@/api/client";
+import { PlatformIcon } from "@/components/PlatformIcon";
 import { Card, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
-import { cn, formatCount } from "@/lib/utils";
+import { cn, formatCount, PLATFORM_NAME } from "@/lib/utils";
 
 const VERDICT: Record<string, { text: string; tone: string }> = {
   strong: { text: "Strong", tone: "text-success" },
@@ -66,6 +68,105 @@ function insights(r: Report): React.ReactNode[] {
   return out;
 }
 
+type Side = WhatsWorking["comparisons"][number]["rows"][number]["yes"];
+
+function SideCell({ label, side }: { label: string; side: Side }) {
+  return (
+    <div className="min-w-0">
+      <div className="truncate text-xs text-muted">{label}</div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="num text-xl">{side.median_views != null ? formatCount(side.median_views) : "–"}</span>
+        <span className="text-xs text-subtle">{side.posts} post{side.posts === 1 ? "" : "s"}</span>
+      </div>
+      {side.skip_rate != null && (
+        <Tip label="Instagram's skip rate: the share who swipe away in the first 3 seconds. Lower is better.">
+          <span className="text-xs text-muted">{side.skip_rate}% swipe away</span>
+        </Tip>
+      )}
+    </div>
+  );
+}
+
+/** Each change Clipper made, posts with it against posts without, fairly (D105). */
+function WhatsWorkingCard() {
+  const { data } = useWhatsWorking();
+  const { data: settings } = useSettings();
+  const save = useSetSettings();
+  const qc = useQueryClient();
+  if (!data) return <Skeleton className="h-48" />;
+  const since = (settings?.tiktok_disclosed_since ?? data.disclosed_since).slice(0, 10);
+  const hookGroups = new Map<string, typeof data.hooks>();
+  for (const h of data.hooks) {
+    const key = `${h.campaign}|${h.platform}`;
+    hookGroups.set(key, [...(hookGroups.get(key) ?? []), h]);
+  }
+  return (
+    <Card className="flex flex-col gap-4 p-5">
+      <div>
+        <h2 className="flex items-center gap-2 text-md font-semibold"><FlaskConical className="size-4 text-accent" /> What's working</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          Views {data.age_hours} hours after posting, compared within each platform (medians, so one viral post doesn't decide it).
+          A verdict needs {data.min_each} posts on each side.
+        </p>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {data.comparisons.map((c) => (
+          <div key={c.key} className="flex flex-col gap-2 rounded-lg border border-line p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">{c.title}</h3>
+              {c.key === "disclosed" && (
+                <label className="flex items-center gap-1.5 text-xs text-muted">
+                  On since
+                  <input type="date" value={since} aria-label="Switch on since"
+                         onChange={(e) => e.target.value && save.mutate({ tiktok_disclosed_since: `${e.target.value} 00:00` },
+                           { onSuccess: () => void qc.invalidateQueries({ queryKey: ["whats-working"] }) })}
+                         className="h-7 rounded-md border border-line bg-surface-2 px-1.5 text-xs" />
+                </label>
+              )}
+            </div>
+            {c.rows.length ? c.rows.map((r) => {
+              const better = r.ratio != null && r.ratio > 1.2, worse = r.ratio != null && r.ratio < 0.8;
+              return (
+                <div key={r.platform} className="grid grid-cols-[auto_1fr_1fr] items-center gap-3 border-t border-line pt-2 first-of-type:border-0 first-of-type:pt-0">
+                  <Tip label={PLATFORM_NAME[r.platform] ?? r.platform}><span><PlatformIcon platform={r.platform} className="size-4" /></span></Tip>
+                  <SideCell label={c.yes_label} side={r.yes} />
+                  <SideCell label={c.no_label} side={r.no} />
+                  <span className={cn("col-span-3 text-xs font-medium",
+                    better ? "text-money" : worse ? "text-warning" : "text-muted")}>{r.verdict}</span>
+                </div>
+              );
+            }) : <p className="text-xs text-subtle">No posts on either side yet.</p>}
+          </div>
+        ))}
+      </div>
+      {hookGroups.size > 0 && (
+        <div>
+          <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">On-screen hooks, best first</h3>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {[...hookGroups.entries()].map(([key, rows]) => {
+              const top = Math.max(1, ...rows.map((r) => r.median_views));
+              return (
+                <div key={key} className="flex flex-col gap-1.5 rounded-lg border border-line p-3">
+                  <span className="flex items-center gap-1.5 text-xs text-muted"><PlatformIcon platform={rows[0].platform} className="size-3.5" />{rows[0].campaign}</span>
+                  {rows.slice(0, 6).map((h) => (
+                    <div key={h.hook} className="flex items-center gap-2 text-xs">
+                      <span className="min-w-0 flex-1 truncate" title={h.hook}>{h.hook}</span>
+                      <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-surface-3">
+                        <span className="block h-full rounded-full bg-accent" style={{ width: `${(h.median_views / top) * 100}%` }} />
+                      </span>
+                      <span className="tabular w-16 shrink-0 text-right">{formatCount(h.median_views)} <span className="text-subtle">×{h.posts}</span></span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function LearningPage() {
   const { data: report, isLoading } = useLearning();
   const { data: settings } = useSettings();
@@ -103,6 +204,8 @@ export function LearningPage() {
           </span>
         </Card>
       </div>
+
+      <WhatsWorkingCard />
 
       {insights(report).length > 0 && (
         <Card className="flex flex-col gap-2 p-5">

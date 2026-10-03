@@ -853,6 +853,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/learning/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whats Working
+         * @description Posts with each change against posts without it, fairly (D105).
+         */
+        get: operations["whats_working_api_learning_compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/posts/history": {
         parameters: {
             query?: never;
@@ -2050,6 +2070,42 @@ export interface components {
             /** Rerender Error */
             rerender_error?: string | null;
         };
+        /** CompareRow */
+        CompareRow: {
+            /** Platform */
+            platform: string;
+            yes: components["schemas"]["CompareSide"];
+            no: components["schemas"]["CompareSide"];
+            /** Ratio */
+            ratio?: number | null;
+            /** Verdict */
+            verdict: string;
+        };
+        /** CompareSide */
+        CompareSide: {
+            /** Posts */
+            posts: number;
+            /** Median Views */
+            median_views?: number | null;
+            /** Skip Rate */
+            skip_rate?: number | null;
+        };
+        /**
+         * Comparison
+         * @description Posts with a change against posts without it (learn/compare.py, D105).
+         */
+        Comparison: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Yes Label */
+            yes_label: string;
+            /** No Label */
+            no_label: string;
+            /** Rows */
+            rows: components["schemas"]["CompareRow"][];
+        };
         /** Dimension */
         Dimension: {
             /** Key */
@@ -2252,6 +2308,19 @@ export interface components {
             first_run: {
                 [key: string]: boolean;
             };
+        };
+        /** HookResult */
+        HookResult: {
+            /** Campaign */
+            campaign: string;
+            /** Platform */
+            platform: string;
+            /** Hook */
+            hook: string;
+            /** Posts */
+            posts: number;
+            /** Median Views */
+            median_views: number;
         };
         /** Learning */
         Learning: {
@@ -2649,6 +2718,19 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WhatsWorking */
+        WhatsWorking: {
+            /** Age Hours */
+            age_hours: number;
+            /** Min Each */
+            min_each: number;
+            /** Comparisons */
+            comparisons: components["schemas"]["Comparison"][];
+            /** Hooks */
+            hooks: components["schemas"]["HookResult"][];
+            /** Disclosed Since */
+            disclosed_since: string;
         };
         /** WhopFeed */
         WhopFeed: {
@@ -4335,6 +4417,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Learning"];
+                };
+            };
+        };
+    };
+    whats_working_api_learning_compare_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhatsWorking"];
                 };
             };
         };

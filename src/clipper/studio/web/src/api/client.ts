@@ -597,3 +597,9 @@ export const prepareEditor = (campaign: string, source: string) =>
 export type EditBody = { source_id: string; campaign: string; clip?: number | null; edit: unknown };
 export const previewEdit = (body: EditBody) => post<{ url: string; length: number }>("/api/editor/preview", body);
 export const saveEdit = (body: EditBody) => post<{ queued: boolean; clip?: number; job?: Job }>("/api/editor/save", body);
+
+/* ---------- what's working (D105) ---------- */
+
+export type WhatsWorking = components["schemas"]["WhatsWorking"];
+export const useWhatsWorking = () =>
+  useQuery({ queryKey: ["whats-working"], queryFn: () => unwrap(api.GET("/api/learning/compare")) });

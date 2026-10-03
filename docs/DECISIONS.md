@@ -1936,3 +1936,14 @@ already shows it; after the payoff opening (D97) if there is one. Same gate as t
 payoff (a brief forbidding re-edits skips it); Settings -> "Pick the cover", on by
 default; the library's thumbnail shows the cover. ~10 s of scoring and one more
 encode per clip. YouTube Shorts picks its own frame. Existing clips are unchanged.
+
+## D105 — What's working (2026-10-02)
+
+Three changes landed at once (payoff openings, chosen covers, TikTok's branded-content
+switch), so the Learning page now compares posts with each against posts without
+(learn/compare.py, /api/learning/compare): views 48 hours after posting from the sync
+snapshots (12 h slack; younger posts don't count), within one platform, medians, a
+verdict only with 3 posts a side; Instagram's skip rate beside it. Also "cut in the
+editor", and each on-screen hook's median views per campaign and platform. The TikTok
+switch isn't recorded per post: TikTok posts from a date (setting
+tiktok_disclosed_since, 2026-10-02, editable on the card) count as switch on.
