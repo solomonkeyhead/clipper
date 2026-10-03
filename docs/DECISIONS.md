@@ -2205,3 +2205,13 @@ phrase, a drawing they describe), marked `Visual.manual` so tidy-up rules and "P
 alone. "Plan pictures" and "Check physics" are separate buttons; "Another take" is hidden for the
 user's own scripts (it would overwrite them; the server refuses too); "Edit the script again" undoes
 approval. A manual drawing's idea is used when it is drawn at build time.
+
+## D121 — Ready-made scripts that ship with Clipper (2026-10-03)
+
+The user's weekly Claude plan limit was spent until Oct 4, so a script and its diagrams were made
+in a cloud session instead and shipped as data: `create/library/*.json` (the script with its chalk
+sketches already drawn, marked `manual` so nothing redoes them). Create lists them under "Ready-made"
+with a "Use it" button (`GET/POST /api/create/ready`); the video starts as a draft with no AI call.
+The first is "Why does your voice sound so different on a recording?" (109 words, 9 sentences: four
+footage beats, four drawings, one bar chart). Its footage beats still ask the footage judge when
+built, and draw a chalk card if the model is unavailable.

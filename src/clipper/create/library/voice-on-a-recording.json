@@ -1,0 +1,913 @@
+{
+ "name": "voice-on-a-recording",
+ "about": "Why your voice sounds different on a recording: two routes to your ears, and the microphone only gets one. Pictures drawn by hand, so no AI is needed to build it.",
+ "script": {
+  "title": "Why does your voice sound so different on a recording?",
+  "beats": [
+   {
+    "text": "Why does your voice sound so different on a recording?",
+    "emphasis": "recording",
+    "visual": {
+     "kind": "stock",
+     "query": "woman recording voice message phone",
+     "queries": [
+      "woman recording voice message phone",
+      "person talking into smartphone",
+      "recording microphone studio"
+     ],
+     "card": "your recorded voice",
+     "template": "",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "",
+     "sketch": null,
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": false
+    }
+   },
+   {
+    "text": "You think the recording is wrong. I say it is the only honest witness.",
+    "emphasis": "honest",
+    "visual": {
+     "kind": "stock",
+     "query": "man listening headphones surprised",
+     "queries": [
+      "man listening headphones surprised",
+      "person wearing headphones",
+      "man frowning listening"
+     ],
+     "card": "the honest witness",
+     "template": "",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "",
+     "sketch": null,
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": false
+    }
+   },
+   {
+    "text": "When you talk, sound reaches your ears by two routes.",
+    "emphasis": "two",
+    "visual": {
+     "kind": "diagram",
+     "query": "",
+     "queries": [],
+     "card": "",
+     "template": "sketch",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "A head seen from above: sound reaches both ears through the air and through the skull",
+     "sketch": {
+      "title": "",
+      "marks": [
+       {
+        "kind": "circle",
+        "xy": [
+         500.0,
+         336.0140186915888,
+         225.7359813084112
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": ""
+       },
+       {
+        "kind": "line",
+        "xy": [
+         469.10981308411215,
+         119.78271028037383,
+         500.0,
+         79.38785046728972,
+         530.8901869158879,
+         119.78271028037383
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": ""
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         250.50233644859816,
+         336.0140186915888,
+         30.89018691588785
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "ears"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         749.4976635514018,
+         336.0140186915888,
+         30.89018691588785
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "ears"
+       },
+       {
+        "kind": "dot",
+        "xy": [
+         500.0,
+         336.0140186915888
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "talk"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         500.0,
+         407.29906542056074
+        ],
+        "text": "voice",
+        "color": "yellow",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "talk"
+       },
+       {
+        "kind": "curve",
+        "xy": [
+         500.0,
+         53.25,
+         393.0724299065421,
+         53.25,
+         303.9661214953271,
+         104.33761682242991,
+         244.5619158878505,
+         193.44392523364485,
+         221.98831775700938,
+         276.60981308411215
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": true,
+        "cycles": 3.0,
+        "cue": "two"
+       },
+       {
+        "kind": "curve",
+        "xy": [
+         500.0,
+         53.25,
+         606.9275700934579,
+         53.25,
+         696.0338785046729,
+         104.33761682242991,
+         755.4380841121496,
+         193.44392523364485,
+         778.0116822429907,
+         276.60981308411215
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": true,
+        "cycles": 3.0,
+        "cue": "two"
+       },
+       {
+        "kind": "arrow",
+        "xy": [
+         224.36448598130843,
+         262.3528037383178,
+         219.6121495327103,
+         290.8668224299065
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "two"
+       },
+       {
+        "kind": "arrow",
+        "xy": [
+         775.6355140186917,
+         262.3528037383178,
+         780.3878504672897,
+         290.8668224299065
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "two"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         131.6939252336449,
+         134.03971962616822
+        ],
+        "text": "air",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "routes"
+       },
+       {
+        "kind": "arrow",
+        "xy": [
+         490.49532710280374,
+         336.0140186915888,
+         288.5210280373832,
+         336.0140186915888
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "routes"
+       },
+       {
+        "kind": "arrow",
+        "xy": [
+         509.50467289719626,
+         336.0140186915888,
+         711.4789719626168,
+         336.0140186915888
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "routes"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         500.0,
+         270.6693925233645
+        ],
+        "text": "bone",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "routes"
+       }
+      ]
+     },
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": true
+    }
+   },
+   {
+    "text": "Route one is air. That is the only route a microphone gets.",
+    "emphasis": "air",
+    "visual": {
+     "kind": "diagram",
+     "query": "",
+     "queries": [],
+     "card": "",
+     "template": "sketch",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "Sound waves crossing the air from a head to a microphone",
+     "sketch": {
+      "title": "",
+      "marks": [
+       {
+        "kind": "circle",
+        "xy": [
+         223.2300751879699,
+         307.5,
+         136.83007518796992
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": ""
+       },
+       {
+        "kind": "text",
+        "xy": [
+         223.2300751879699,
+         307.5
+        ],
+        "text": "you",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "Route"
+       },
+       {
+        "kind": "dot",
+        "xy": [
+         362.54796992481204,
+         307.5
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "one"
+       },
+       {
+        "kind": "wave",
+        "xy": [
+         391.1578947368421,
+         307.5,
+         708.3548872180452,
+         307.5
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 6.0,
+        "cue": "air"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         546.6466165413534,
+         214.20676691729324
+        ],
+        "text": "air",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "air"
+       },
+       {
+        "kind": "loop",
+        "xy": [
+         807.8676691729323,
+         183.10902255639098,
+         882.5022556390978,
+         183.10902255639098,
+         913.6,
+         251.52406015037593,
+         882.5022556390978,
+         319.9390977443609,
+         807.8676691729323,
+         319.9390977443609,
+         776.7699248120301,
+         251.52406015037593
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "microphone"
+       },
+       {
+        "kind": "line",
+        "xy": [
+         845.1849624060151,
+         319.9390977443609,
+         845.1849624060151,
+         431.890977443609
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "microphone"
+       },
+       {
+        "kind": "line",
+        "xy": [
+         782.9894736842106,
+         438.11052631578946,
+         907.3804511278196,
+         438.11052631578946
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "microphone"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         832.7458646616542,
+         108.47443609022557
+        ],
+        "text": "microphone",
+        "color": "chalk",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "microphone"
+       }
+      ]
+     },
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": true
+    }
+   },
+   {
+    "text": "Route two is bone. Your vocal cords shake your skull straight to your inner ear.",
+    "emphasis": "bone",
+    "visual": {
+     "kind": "diagram",
+     "query": "",
+     "queries": [],
+     "card": "",
+     "template": "sketch",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "Vibrations from the vocal cords carried through the skull to the inner ears",
+     "sketch": {
+      "title": "",
+      "marks": [
+       {
+        "kind": "circle",
+        "xy": [
+         500.0,
+         307.5,
+         254.25000000000003
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "bone"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         500.0,
+         307.5,
+         222.1342105263158
+        ],
+        "text": "",
+        "color": "dim",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "bone"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         500.0,
+         55.0
+        ],
+        "text": "skull",
+        "color": "chalk",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "skull"
+       },
+       {
+        "kind": "dot",
+        "xy": [
+         500.0,
+         307.5
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "vocal"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         500.0,
+         387.7894736842105
+        ],
+        "text": "vocal cords",
+        "color": "yellow",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "vocal"
+       },
+       {
+        "kind": "wave",
+        "xy": [
+         483.9421052631579,
+         307.5,
+         336.7447368421052,
+         307.5
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "shake"
+       },
+       {
+        "kind": "wave",
+        "xy": [
+         516.0578947368421,
+         307.5,
+         663.2552631578948,
+         307.5
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "shake"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         299.27631578947364,
+         307.5,
+         34.7921052631579
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "inner"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         299.27631578947364,
+         307.5,
+         14.719736842105265
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "inner"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         700.7236842105264,
+         307.5,
+         34.7921052631579
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "inner"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         700.7236842105264,
+         307.5,
+         14.719736842105265
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "inner"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         700.7236842105264,
+         220.51973684210526
+        ],
+        "text": "inner ear",
+        "color": "chalk",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "ear"
+       }
+      ]
+     },
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": true
+    }
+   },
+   {
+    "text": "Bone carries low pitches better than high ones, so you hear extra bass.",
+    "emphasis": "bass",
+    "visual": {
+     "kind": "diagram",
+     "query": "",
+     "queries": [],
+     "card": "",
+     "template": "compare",
+     "title": "Bass you hear",
+     "labels": [
+      "In your head",
+      "Recorded"
+     ],
+     "values": [
+      9.0,
+      5.0
+     ],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "",
+     "sketch": null,
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": true
+    }
+   },
+   {
+    "text": "Like music through a wall: you mostly hear the bass.",
+    "emphasis": "bass",
+    "visual": {
+     "kind": "stock",
+     "query": "speaker playing music in room",
+     "queries": [
+      "speaker playing music in room",
+      "bass speaker music",
+      "man covering ears loud music"
+     ],
+     "card": "music through a wall",
+     "template": "",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "",
+     "sketch": null,
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": false
+    }
+   },
+   {
+    "text": "Everyone else hears only the air version: higher, thinner, and a little rude.",
+    "emphasis": "air",
+    "visual": {
+     "kind": "diagram",
+     "query": "",
+     "queries": [],
+     "card": "",
+     "template": "sketch",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "Your voice reaching a friend through the air only",
+     "sketch": {
+      "title": "",
+      "marks": [
+       {
+        "kind": "circle",
+        "xy": [
+         204.57142857142856,
+         307.5,
+         118.17142857142858
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": ""
+       },
+       {
+        "kind": "text",
+        "xy": [
+         204.57142857142856,
+         132.60628571428572
+        ],
+        "text": "you",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "Everyone"
+       },
+       {
+        "kind": "dot",
+        "xy": [
+         320.37942857142855,
+         307.5
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "hears"
+       },
+       {
+        "kind": "wave",
+        "xy": [
+         346.3771428571428,
+         307.5,
+         659.5314285714286,
+         307.5
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 1,
+        "dashed": false,
+        "cycles": 11.0,
+        "cue": "air"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         500.0,
+         396.12857142857143
+        ],
+        "text": "air only",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "air"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         795.4285714285714,
+         307.5,
+         118.17142857142858
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "Everyone"
+       },
+       {
+        "kind": "circle",
+        "xy": [
+         674.8937142857143,
+         307.5,
+         18.90742857142857
+        ],
+        "text": "",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "Everyone"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         795.4285714285714,
+         132.60628571428572
+        ],
+        "text": "friend",
+        "color": "chalk",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "Everyone"
+       },
+       {
+        "kind": "text",
+        "xy": [
+         500.0,
+         212.96285714285713
+        ],
+        "text": "higher, thinner",
+        "color": "blue",
+        "size": 1,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "higher"
+       }
+      ]
+     },
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": true
+    }
+   },
+   {
+    "text": "Your skull has been flattering you for years. The microphone does not.",
+    "emphasis": "flattering",
+    "visual": {
+     "kind": "stock",
+     "query": "man looking in mirror smiling",
+     "queries": [
+      "man looking in mirror smiling",
+      "woman smiling at mirror",
+      "person admiring reflection"
+     ],
+     "card": "flattering",
+     "template": "",
+     "title": "",
+     "labels": [],
+     "values": [],
+     "directions": [],
+     "equation": "",
+     "shape": "",
+     "subject": "",
+     "amounts": [],
+     "idea": "",
+     "sketch": null,
+     "clip": "",
+     "clip_start": null,
+     "fill": "auto",
+     "manual": false
+    }
+   }
+  ],
+  "description": "You hear yourself through air and through bone.\nBone adds bass. A microphone only gets the air.\nSo the recording is not wrong. You were just flattered by your own skull.",
+  "hashtags": [
+   "#physics",
+   "#science",
+   "#voice"
+  ]
+ }
+}

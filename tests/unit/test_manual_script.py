@@ -114,3 +114,29 @@ def test_endpoints_for_a_script_of_your_own(client, monkeypatch):
     store.update_video(row["id"], status="building")
     assert client.post(f"/api/create/videos/{row['id']}/plan").status_code == 409
     assert json.loads(json.dumps(store.video(row["id"])["script"]))["title"] == "Bone"
+
+
+def test_the_ready_made_script_is_sound(client):
+    """The bundled script reads right, its drawings are on the board, and it can be started."""
+    from clipper.create import store
+    from clipper.create.diagrams import frame
+
+    listed = client.get("/api/create/ready").json()
+    assert [r["name"] for r in listed] == ["voice-on-a-recording"]
+    assert listed[0]["title"] == "Why does your voice sound so different on a recording?" and 80 <= listed[0]["words"] <= 125
+    made = client.post("/api/create/ready/voice-on-a-recording")
+    assert made.status_code == 200
+    row = store.video(made.json()["id"])
+    script = Script.model_validate(row["script"])
+    assert row["topic_id"] is None and len(script.beats) == 9 and len(script.hashtags) == 3
+    assert all(len(b.text.split()) <= 16 for b in script.beats) and len(script.beats[0].text.split()) <= 14
+    for b in script.beats:
+        assert b.emphasis, b.text                         # a highlight word that is really in the sentence
+        if b.visual.kind == "stock":
+            assert b.visual.queries and b.visual.card
+        elif b.visual.template == "sketch":
+            marks = b.visual.sketch.marks
+            assert len(marks) >= 4 and all(30 <= v <= 970 for m in marks if m.kind != "text"
+                                           for v in (m.xy[:2] if m.kind == "circle" else m.xy))
+            frame(b.visual, 4.0, 4.0)                      # draws without error
+    assert client.post("/api/create/ready/nope").status_code == 404

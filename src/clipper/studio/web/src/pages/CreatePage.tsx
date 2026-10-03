@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
   Trash2, Upload, Wand2, X,
@@ -88,10 +88,36 @@ function YourOwn() {
       setBusy(false);
     }
   };
+  const { data: ready = [] } = useQuery({ queryKey: ["create", "ready"], queryFn: createApi.ready, staleTime: 60_000 });
+  const start = async (name: string) => {
+    setBusy(true);
+    try {
+      await createApi.useReady(name);
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   if (!open) {
     return (
-      <div className="flex">
-        <Button variant="secondary" onClick={() => setOpen(true)}><PenLine className="size-4" /> Write your own script</Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex"><Button variant="secondary" onClick={() => setOpen(true)}><PenLine className="size-4" /> Write your own script</Button></div>
+        {ready.length > 0 && (
+          <Card className="flex flex-col gap-1 p-3">
+            <span className="text-xs font-medium text-muted">Ready-made: written and drawn already</span>
+            {ready.map((r) => (
+              <div key={r.name} className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{r.title}</div>
+                  <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
+                </div>
+                <Button size="sm" variant="primary" disabled={busy} onClick={() => void start(r.name)}>Use it</Button>
+              </div>
+            ))}
+          </Card>
+        )}
       </div>
     );
   }

@@ -437,6 +437,38 @@ def routes(app: FastAPI, publish) -> None:
         store.update_video(video_id, check_notes=f"{notes}\nChecked by: {who}.")
         return {"notes": notes}
 
+    # ---------- ready-made scripts that ship with Clipper (D121) ----------
+
+    def _ready() -> dict[str, dict]:
+        import json as _json
+
+        from ..create.script import Script
+
+        found = {}
+        folder = Path(__file__).resolve().parent.parent / "create" / "library"
+        for path in sorted(folder.glob("*.json")):
+            try:
+                data = _json.loads(path.read_text(encoding="utf-8"))
+                found[path.stem] = {"about": str(data.get("about", "")), "script": Script.model_validate(data["script"])}
+            except (OSError, ValueError, KeyError):
+                log.warning("create: unreadable ready-made script %s", path.name)
+        return found
+
+    @app.get("/api/create/ready")
+    def create_ready() -> list[dict]:
+        """Scripts that come with Clipper, written and drawn already: nothing to wait for."""
+        return [{"name": name, "title": r["script"].title, "about": r["about"], "words": r["script"].words}
+                for name, r in _ready().items()]
+
+    @app.post("/api/create/ready/{name}")
+    def create_from_ready(name: str) -> dict:
+        found = _ready().get(name)
+        if found is None:
+            raise HTTPException(404, "no such ready-made script")
+        return {"id": store.add_video(None, found["script"].model_dump(),
+                                      "A ready-made script: the words and the pictures are already done. "
+                                      "Footage is searched for when you build; edit anything you like.")}
+
     @app.delete("/api/create/videos/{video_id}")
     def create_delete(video_id: int) -> dict:
         """Remove a video from Create (its files to the Recycle Bin; a finished clip stays in Clips)."""

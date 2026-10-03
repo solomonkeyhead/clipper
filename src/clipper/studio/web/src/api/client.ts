@@ -666,6 +666,8 @@ export const createApi = {
   remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),
   own: (body: { title: string; text: string; description: string; hashtags: string; plan: boolean }) =>
     send<{ id: number }>("POST", "/api/create/videos", body),
+  ready: () => fetch("/api/create/ready").then((r) => r.json() as Promise<{ name: string; title: string; about: string; words: number }[]>),
+  useReady: (name: string) => send<{ id: number }>("POST", `/api/create/ready/${encodeURIComponent(name)}`),
   plan: (video: number) => send("POST", `/api/create/videos/${video}/plan`),
   check: (video: number) => send<{ notes: string }>("POST", `/api/create/videos/${video}/check`),
   clipAdd: async (video: number, file: File) => {
