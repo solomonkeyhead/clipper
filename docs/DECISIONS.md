@@ -2056,3 +2056,25 @@ shown whole over a blur looked small; the user wants full-frame vertical, croppe
 3. Stock fills the frame again, the crop placed on the subject: faces when YuNet finds
    them across the shot (the biggest weighted most), else where the footage judge says the
    subject is in the thumbnail (center, 0-1), else the middle; clamped to the picture.
+
+## D112 — Clipper updates itself; sketches fitted to the board; no black shots (2026-10-03)
+
+The user restarts Clipper after each push; pulling by hand was one step too many. And
+video 76, the first with D111 sketches, was "really bad": sketches a few marks in a
+corner, some sentences on an empty board, a line struck through "vibration", four
+seconds of black screen (a "velvet curtain" clip cropped on its dark middle), and a
+glossy 3D microphone.
+1. selfupdate.py: `clipper studio` fetches and fast-forwards master before starting, then
+   runs again on the new code; reinstalls when pyproject.toml or uv.lock changed. Skipped,
+   with a line in the window, on local edits, another branch, its own commits or no
+   network; CLIPPER_NO_UPDATE=1 turns it off.
+2. sketch.fit: every sketch is scaled and centred by its shapes to fill the board (labels
+   keep their size, move with what they name and stay on the board); marks missing their
+   numbers are dropped; fewer than 3, or only words, is a failed sketch (footage or a card
+   instead). Applied after drawing and after each review.
+3. The first mark appears at once and no cue waits past 60% of the sentence, so the board
+   is never empty; words are drawn last with a rim of board, so lines never cross them.
+4. A stock shot that comes out nearly black is re-cropped on the middle, then replaced by
+   a sketch. The judge now scores 3D renders, visualiser rings and dark clips as cheap.
+5. The notes under a script name the model that wrote and drew it ("Written and drawn
+   by: ..."), since 75 and 76 were judged without knowing whether Claude or Gemini made them.

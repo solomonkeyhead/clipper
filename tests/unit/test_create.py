@@ -300,7 +300,7 @@ class TestSketch:
 
         from clipper.create import sketch
 
-        first = {"marks": self.MARKS[:2]}
+        first = {"marks": self.MARKS[:3]}
         fixed = {"marks": self.MARKS}
         seen = []
 
@@ -326,3 +326,33 @@ class TestSketch:
         planned = script(("Why?", Visual()), ("How.", Visual(kind="diagram", template="sketch", idea="a head")))
         drawn, notes = sketch.draw_all(planned)
         assert drawn.beats[1].visual.kind == "stock" and notes
+
+
+def test_a_tiny_or_off_scale_sketch_is_fitted_to_the_board_and_an_empty_one_refused():
+    from clipper.create.sketch import FIT_X, FIT_Y, Mark, Sketch, fit
+
+    tiny = Sketch(marks=[Mark(kind="circle", xy=[0.2, 0.3, 0.05]), Mark(kind="arrow", xy=[0.3, 0.3, 0.45, 0.3]),
+                         Mark(kind="dot", xy=[0.5, 0.32]),
+                         Mark(kind="line", xy=[0.1, 0.1, 0.2])])  # normalised numbers, and one mark short of a point
+    fitted = fit(tiny)
+    assert [m.kind for m in fitted.marks] == ["circle", "arrow", "dot"]  # the broken line is dropped
+    xs = [v for m in fitted.marks for v in (m.xy[:1] + m.xy[2:3] if m.kind == "arrow" else m.xy[:1])]
+    assert min(xs) >= FIT_X[0] - 1 and max(xs) <= FIT_X[1] + 1 and max(xs) - min(xs) > 500  # fills the width
+    assert all(FIT_Y[0] - 1 <= m.xy[1] <= FIT_Y[1] + 1 for m in fitted.marks)
+    with pytest.raises(CreateError):
+        fit(Sketch(marks=[Mark(kind="text", xy=[1, 1], text="air"), Mark(kind="text", xy=[2, 2], text="bone")]))
+
+
+def test_a_black_shot_is_caught(tmp_path):
+    import shutil
+    import subprocess
+
+    from clipper.create.build import _too_dark
+
+    if not shutil.which("ffmpeg"):
+        pytest.skip("no ffmpeg")
+    for name, source, dark in (("black", "color=black:size=270x480", True), ("bars", "testsrc2=size=270x480", False)):
+        out = tmp_path / f"{name}.mp4"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"{source}:rate=30", "-t", "1",
+                        "-pix_fmt", "yuv420p", str(out)], check=True)
+        assert _too_dark(out) is dark

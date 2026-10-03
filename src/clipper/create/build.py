@@ -98,6 +98,27 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
     return out
 
 
+def _too_dark(shot: Path) -> bool:
+    """Whether a finished shot is all but black: a "velvet curtain" clip cropped on its dark
+    middle gave four seconds of black screen (D112). Judged on a frame a third of the way in."""
+    import io
+    import subprocess
+
+    from PIL import Image, ImageStat
+
+    from ..render.ffmpeg import ffmpeg_path
+
+    seconds = probe(shot).duration or 1.0
+    try:
+        png = subprocess.run([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{seconds / 3:.2f}", "-i", str(shot),
+                              "-frames:v", "1", "-vf", "scale=270:480", "-f", "image2pipe", "-vcodec", "png", "-"],
+                             capture_output=True, timeout=60, check=True).stdout
+        stat = ImageStat.Stat(Image.open(io.BytesIO(png)).convert("L"))
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return stat.mean[0] < 28 and stat.stddev[0] < 22
+
+
 def _fallback(beat, script: Script) -> Visual:
     """For a sentence no footage fits: a sketch of it, else its phrase chalked on the board
     (a single word like "stranger" on an empty board opened a video once, D111)."""
@@ -136,8 +157,20 @@ def shots(script: Script, timings: Timings, work: Path, progress=None) -> list[P
             made.append(diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}_sketch.mp4", words=said))
             continue
         hits = [h or hits[0] for h in hits]  # half a sentence without its own clip keeps the first
+        clips = []
         for k, (part, hit) in enumerate(zip(parts, hits, strict=True)):
-            made.append(_stock_shot(stock.fetch(hit), part, work / f"{i:02d}_{k}_stock.mp4", hit.get("center")))
+            out = work / f"{i:02d}_{k}_stock.mp4"
+            clip = _stock_shot(stock.fetch(hit), part, out, hit.get("center"))
+            if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
+                clip = _stock_shot(stock.fetch(hit), part, out, 0.5)
+            if _too_dark(clip):
+                clips = []
+                break
+            clips.append(clip)
+        if not clips:
+            made.append(diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}_sketch.mp4", words=said))
+            continue
+        made += clips
     return made
 
 

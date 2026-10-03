@@ -154,8 +154,9 @@ Then score how well that best one fits, honestly:
   9-10 it shows exactly what the sentence says;
   7-8  a clear, natural match a viewer gets at once;
   4-6  related, but loose, generic or needs explaining (a lab for "your voice");
-  0-3  unrelated, confusing, or cheap-looking (cartoonish, a green background, text or a
-       logo burned in, a stock-footage cliche).
+  0-3  unrelated, confusing, or cheap-looking (cartoonish, a glossy 3D render or CGI, neon
+       audio-visualiser rings, a green background, text or a logo burned in, mostly black or
+       too dark to read on a phone, a stock-footage cliche).
 Below 7 a chalkboard card is shown instead, which is better than a loose match, so don't
 round up. Answer pick = its number (0 if none), score, and center: where across that
 thumbnail the subject is, 0 = left edge, 0.5 = middle, 1 = right edge (the video is cropped

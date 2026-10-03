@@ -12,6 +12,10 @@ from ..utils.logging import get_logger
 
 log = get_logger(__name__)
 
+#: Which model answered last ("anthropic:claude-opus-5-5"), for the page's notes: two
+#: videos were judged before anyone knew whether Claude or Gemini had made them.
+last_used = ""
+
 #: Claude thinks before it answers: a whole script can take a couple of minutes.
 CLAUDE_TIMEOUT = 240.0
 
@@ -46,10 +50,13 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
     from ..config import Config
     from ..llm.base import LLMRequest, miss_level
 
+    global last_used
     for backend in backends(Config.load()):
         try:
-            return backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
+            text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text
+            last_used = backend.describe()
+            return text
         except Exception as exc:
             log.log(miss_level(exc), "create: %s did not answer (%s)", backend.describe(), str(exc)[:160])
     raise CreateError("no AI model answered; try again in a minute")

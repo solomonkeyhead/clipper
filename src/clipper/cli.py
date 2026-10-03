@@ -936,6 +936,13 @@ def studio(
 ) -> None:
     """Open the Control Center: every campaign's clips, captions, links and stats."""
     setup_logging(verbose)
+    from . import selfupdate
+
+    news = selfupdate.pull()
+    if news:
+        console.print(f"Clipper {news}")
+    if news.startswith("updated"):
+        selfupdate.restart()  # the code just pulled, not what this process already loaded
     from .studio import server
 
     console.print(f"Control Center at [bold]http://127.0.0.1:{port}/[/bold]  "

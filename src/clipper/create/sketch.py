@@ -90,6 +90,56 @@ class _Review(BaseModel):
     sketch: Sketch
 
 
+#: Where a sketch is fitted on the grid: clear of the edges, the title, the button corner.
+FIT_X, FIT_Y = (40, 960), (40, 560)
+TEXT_W, TEXT_H = {1: 22, 2: 28, 3: 40}, {1: 60, 2: 75, 3: 105}
+POINTS = {"line": 4, "arrow": 4, "curve": 4, "loop": 6, "circle": 3, "dot": 2, "box": 4, "text": 2, "wave": 4,
+          "mover": 4}
+
+
+def _extent(m: Mark) -> list[tuple[float, float]]:
+    """The points a mark covers, words and circles included."""
+    xy = m.xy
+    if m.kind == "circle":
+        x, y, r = xy[:3]
+        return [(x - r, y - r), (x + r, y + r)]
+    if m.kind == "text":
+        half = len(m.text) * TEXT_W.get(m.size, 28) / 2
+        return [(xy[0] - half, xy[1] - TEXT_H.get(m.size, 75) / 2), (xy[0] + half, xy[1] + TEXT_H.get(m.size, 75) / 2)]
+    return [(xy[k], xy[k + 1]) for k in range(0, len(xy) - 1, 2)]
+
+
+def fit(sketch: Sketch, title: bool = False) -> Sketch:
+    """The sketch scaled and centred to fill the board (D112): drawings came back tiny in a
+    corner, or in another scale altogether (0-1, or off the grid) and so invisible. Marks
+    without the numbers their kind needs are dropped; too little left is a failure."""
+    marks = [m for m in sketch.marks if len(m.xy) >= POINTS[m.kind] and (m.kind != "text" or m.text.strip())]
+    if len(marks) < 3 or all(m.kind == "text" for m in marks):
+        raise CreateError("the sketch had too little in it to draw")
+    # Scaled by its shapes: the words keep their size and move with what they label.
+    pts = [p for m in marks if m.kind != "text" for p in _extent(m)]
+    x0, x1 = min(p[0] for p in pts), max(p[0] for p in pts)
+    y0, y1 = min(p[1] for p in pts), max(p[1] for p in pts)
+    top = 110 if title else FIT_Y[0]
+    room_w, room_h = (FIT_X[1] - FIT_X[0]) * 0.8, (FIT_Y[1] - top) * 0.8  # a margin for the labels
+    scale = min(room_w / max(x1 - x0, 1e-6), room_h / max(y1 - y0, 1e-6))
+    ox = FIT_X[0] + ((FIT_X[1] - FIT_X[0]) - (x1 - x0) * scale) / 2
+    oy = top + ((FIT_Y[1] - top) - (y1 - y0) * scale) / 2
+
+    def move(m: Mark) -> Mark:
+        xy = list(m.xy)
+        if m.kind == "circle":
+            xy = [ox + (xy[0] - x0) * scale, oy + (xy[1] - y0) * scale, xy[2] * scale]
+        else:
+            xy = [ox + (v - x0) * scale if k % 2 == 0 else oy + (v - y0) * scale for k, v in enumerate(xy)]
+        if m.kind == "text":  # kept whole on the board
+            half_w, half_h = len(m.text) * TEXT_W.get(m.size, 28) / 2, TEXT_H.get(m.size, 75) / 2
+            xy = [min(max(xy[0], FIT_X[0] + half_w), FIT_X[1] - half_w), min(max(xy[1], top + half_h), FIT_Y[1] - half_h)]
+        return m.model_copy(update={"xy": xy})
+
+    return sketch.model_copy(update={"marks": [move(m) for m in marks]})
+
+
 def _png(sketch: Sketch, title: str = "") -> bytes:
     """The finished sketch, the diagram band only, small: what the reviewer looks at."""
     from .diagrams import BOTTOM, TOP, W, frame
@@ -110,6 +160,7 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
         sketch = Sketch.model_validate(json.loads(ask(DRAW, user, Sketch, temperature=0.4)))
     except (ValueError, TypeError) as exc:
         raise CreateError("the sketch came back unreadable") from exc
+    sketch = fit(sketch, bool(title or sketch.title))
     for _ in range(rounds):
         try:
             answer = ask(DRAW + "\n\n" + REVIEW, user + "\nYour sketch:\n" + sketch.model_dump_json(),
@@ -121,7 +172,10 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
         if review.ok or not review.sketch.marks:
             break
         log.info("create: sketch fixed: %s", "; ".join(review.problems)[:200])
-        sketch = review.sketch
+        try:
+            sketch = fit(review.sketch, bool(title or review.sketch.title))
+        except CreateError:  # the "fix" broke it: keep the one we had
+            break
     return sketch
 
 

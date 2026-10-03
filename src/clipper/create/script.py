@@ -242,10 +242,12 @@ def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Scr
 
 def _sketched(script: Script, note: str) -> tuple[Script, str]:
     """The script with its sketches drawn (they're drawn last, for the final words)."""
+    from . import ai
     from .sketch import draw_all
 
     drawn, notes = draw_all(script)
-    return tidy(drawn), "\n".join([note, *notes])
+    who = ai.last_used.split(":", 1)[-1] if ai.last_used else "unknown"
+    return tidy(drawn), "\n".join([note, *notes, f"Written and drawn by: {who}."])
 
 
 def replan(script: Script) -> tuple[Script, str]:
