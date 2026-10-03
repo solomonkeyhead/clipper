@@ -163,6 +163,28 @@ CREATE TABLE IF NOT EXISTS snapshots (
     skip_rate_pct REAL,
     PRIMARY KEY (url, at)
 );
+-- Create (D108): the backlog of ideas for the user's own channel, and the videos made from them.
+CREATE TABLE IF NOT EXISTS create_topics (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    question    TEXT NOT NULL,
+    angle       TEXT NOT NULL DEFAULT '',  -- the physics behind it, in a few words
+    felt        INTEGER NOT NULL DEFAULT 0, -- about something felt in your own body
+    status      TEXT NOT NULL DEFAULT 'new', -- new | used | skipped
+    created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS create_videos (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id    INTEGER,
+    status      TEXT NOT NULL DEFAULT 'draft', -- draft | approved | voiced | building | built | failed
+    script      TEXT NOT NULL DEFAULT '{}',    -- create.script.Script
+    check_notes TEXT NOT NULL DEFAULT '',      -- what the physics check said
+    voice       TEXT NOT NULL DEFAULT '',      -- the dropped-in voiceover's file
+    timings     TEXT NOT NULL DEFAULT '',      -- each beat's start and end in the voiceover
+    clip_id     INTEGER,                       -- the finished video, in the library
+    error       TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
 """
 
 #: Defaults for `settings`; stored values win.

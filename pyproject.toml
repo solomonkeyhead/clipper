@@ -24,6 +24,8 @@ dependencies = [
     "yt-dlp>=2025.1.1",
     "soundfile>=0.13",
     "opencv-python-headless>=4.11",
+    # Create's animated diagrams (create/diagrams.py)
+    "pillow>=11.0",
     # llm backends
     "google-genai>=1.0",
     "httpx>=0.28",
