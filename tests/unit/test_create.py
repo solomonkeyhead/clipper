@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from clipper.create import stock, store
@@ -264,7 +266,7 @@ def test_wide_footage_is_cropped_tall_around_its_subject(tmp_path):
 
 
 class TestSketch:
-    MARKS = [
+    MARKS: ClassVar[list[dict]] = [
         {"kind": "loop", "xy": [380, 110, 560, 110, 640, 250, 600, 500, 430, 500, 330, 340]},
         {"kind": "circle", "xy": [420, 300, 26], "color": "dim"},
         {"kind": "curve", "xy": [640, 400, 800, 330, 560, 250, 450, 300], "color": "blue", "dashed": True, "cue": "air"},
