@@ -1,13 +1,34 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp } from "lucide-react";
 import { useCampaigns, useClips, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
-import { Button, Card, Metric, PageHeader, Skeleton } from "@/components/ui";
+import { Button, Card, Metric, PageHeader, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
 function greeting() {
   const h = new Date().getHours();
-  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  return h < 12 ? "Morning." : h < 18 ? "Afternoon." : "Evening.";
+}
+
+/** The money, big and lime: what you've earned, and what's actually been paid (D99, D102). */
+function Earnings({ est, paid, views, posts }: { est: number | null; paid: number | null | undefined; views: number; posts: number }) {
+  return (
+    <Tip label="Estimate: views ÷ 1,000 × each campaign's rate. Campaigns verify views themselves.">
+      <Card className="flex flex-col gap-3 p-5 sm:col-span-2">
+        <span className="text-xs font-medium text-muted">Estimated earnings, active campaigns</span>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="num text-[clamp(2.8rem,5vw,4rem)] leading-none text-money">{est === null ? "–" : formatMoney(est)}</span>
+          <span className="text-sm text-muted">
+            {est === null ? "Add a campaign's pay rate to see this" : <>from <b className="text-fg">{formatCount(views)}</b> views on <b className="text-fg">{posts}</b> posts</>}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-dashed border-line-strong pt-3 text-sm text-muted">
+          {paid != null ? <span>Paid so far <b className="text-fg">{formatMoney(paid)}</b></span>
+            : <span>Paid so far: record payouts on each campaign's page</span>}
+        </div>
+      </Card>
+    </Tip>
+  );
 }
 
 function PipelineColumn({ title, status, clips, tone }: {
@@ -116,17 +137,16 @@ export function DashboardPage() {
 
   return (
     <div className="fade-in flex flex-col gap-8">
-      <PageHeader title={greeting()} subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : "Here's where your clips stand."} />
+      <PageHeader
+        title={!firstRun && by("ready").length ? `${greeting()} ${by("ready").length} clip${by("ready").length === 1 ? "" : "s"} to post` : greeting()}
+        hi={`${by("ready").length} clip`}
+        subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : "Here's where your clips stand."} />
       {firstRun && <GetStarted done={home.first_run} />}
       {home.first_run.clips && <>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Metric label="Est. earnings" tone="money" value={formatMoney(m.est_earnings)}
-                hint="Estimate: views ÷ 1,000 × each campaign's rate. Campaigns verify views themselves."
-                sub={m.est_earnings === null ? "Add a campaign's pay rate"
-                  : m.paid_usd != null ? `${formatMoney(m.paid_usd)} paid so far` : "active campaigns"} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Earnings est={m.est_earnings} paid={m.paid_usd} views={m.views} posts={m.posts} />
         <Metric label="Views" value={formatCount(m.views)} sub="active campaigns" />
-        <Metric label="Posts" value={m.posts} sub="active campaigns" />
         <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more" />
       </div>
 

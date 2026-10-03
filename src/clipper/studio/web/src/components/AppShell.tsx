@@ -13,7 +13,7 @@ import { AccountScope } from "./AccountScope";
 import { AskPanel } from "./AskPanel";
 import { ClipSheet } from "./clips";
 import { CommandPalette, ShortcutSheet } from "./Palette";
-import { Button, Kbd, Tip } from "./ui";
+import { Button, Kbd, Mark, Tip } from "./ui";
 
 interface NavItem {
   to: string;
@@ -54,18 +54,20 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
     <Link
       to={item.to}
       className={cn(
-        "group flex h-9 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-muted",
+        "group flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted",
         "transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-fg",
-        active && "bg-surface-2 text-fg",
+        // The page you're on is the lit word.
+        active && "bg-accent font-bold text-accent-fg hover:bg-accent-hover hover:text-accent-fg",
         collapsed && "justify-center px-0",
       )}
     >
-      <span className={cn("[&>svg]:size-[18px] [&>svg]:stroke-[1.75]", active && "text-accent")}>{item.icon}</span>
+      <span className="[&>svg]:size-[18px] [&>svg]:stroke-[1.9]">{item.icon}</span>
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
       {!collapsed && item.badge ? (
         <span className={cn(
           "tabular min-w-5 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold",
-          item.tone === "accent" ? "bg-accent-soft text-accent"
+          active ? "bg-accent-fg/15 text-accent-fg"
+            : item.tone === "accent" ? "bg-accent-soft text-accent"
             : item.tone === "warning" ? "bg-[color-mix(in_oklch,var(--warning)_16%,transparent)] text-warning"
             : "bg-surface-3 text-muted",
         )}>{item.badge}</span>
@@ -200,10 +202,8 @@ export function AppShell() {
         collapsed ? "w-14" : "w-60",
       )}>
         <div className={cn("flex h-12 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
-          <div className="grid size-7 place-items-center rounded-md bg-accent text-accent-fg shadow-1">
-            <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z" /></svg>
-          </div>
-          {!collapsed && <span className="text-md font-semibold tracking-tight">Clipper</span>}
+          <Mark className="h-7 text-fg" />
+          {!collapsed && <span className="cap text-xl">Clipper</span>}
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2" aria-label="Main">
           {nav.map((item) => <NavLink key={item.to} item={item} collapsed={collapsed} />)}

@@ -1891,3 +1891,16 @@ heavier body text in dark mode (light-on-dark already reads heavier), dots inste
 of status words (worse for colour-blind users), appending to the clipboard (breaks
 pasting into separate fields), sample data (fake data in a real library), and a
 watermark check (clips are rendered from source files, never platform downloads).
+
+## D102 — Clipper's own look (2026-10-02)
+
+Checked against the big players' live sites: OpusClip and CapCut are black and
+white, Submagic and Whop orange, Vyro cyan, Klap and Vizard purple, Captions a
+light serif. Nobody pairs ink with lime or sets headings as captions, so that is
+Clipper: ink #0A0A0D with one lime #D7FF3A for the thing that matters in a view
+(the page you're on, the main action, money), like the spoken word in a caption;
+page titles in Bricolage Grotesque, upper case and outlined like a clip's
+captions, words popping in one by one (off under reduced motion); Figtree for
+text; the mark is a 9:16 frame with a lime caption bar, and empty states reuse
+the frame. Light mode swaps lime for a deep olive, as lime can't carry text on
+white. Canvas: claude.ai/artifact/EApUVMgcrh6MLqgLerwrag.

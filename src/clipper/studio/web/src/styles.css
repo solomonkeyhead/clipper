@@ -1,33 +1,41 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
+@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/bricolage-grotesque";
 @import "@fontsource/jetbrains-mono/400.css";
 
 /* Design tokens (docs: research spec section b). Dark is the default; `.light`
    overrides. Never use raw colours in components: use these via Tailwind. */
+/* Design tokens. Clipper's look (D102): ink and lime, headings set like the
+   captions burned into a clip. Lime marks the one thing that matters in a view
+   (and money), like the word being spoken in a caption. Dark is the default;
+   `.light` overrides. Never use raw colours in components: use these via Tailwind. */
 :root {
-  --bg: oklch(0.16 0.005 270);
-  --surface-1: oklch(0.19 0.006 270);
-  --surface-2: oklch(0.22 0.007 270);
-  --surface-3: oklch(0.26 0.008 270);
-  --border: oklch(1 0 0 / 0.08);
-  --border-strong: oklch(1 0 0 / 0.14);
-  --text: oklch(0.96 0.003 270);
-  --text-muted: oklch(0.72 0.01 270);
-  --text-subtle: oklch(0.64 0.01 270);
-  --accent: oklch(0.66 0.19 285);
-  --accent-hover: oklch(0.71 0.19 285);
-  --accent-fg: oklch(0.99 0 0);
-  --accent-soft: oklch(0.66 0.19 285 / 0.16);
-  --focus-ring: oklch(0.75 0.17 285);
-  --money: oklch(0.80 0.15 165);
-  --success: oklch(0.74 0.16 150);
-  --warning: oklch(0.82 0.15 80);
-  --danger: oklch(0.66 0.21 25);
-  --info: oklch(0.72 0.13 240);
+  --bg: #0A0A0D;
+  --surface-1: #141419;
+  --surface-2: #1C1C23;
+  --surface-3: #26262F;
+  --border: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.14);
+  --text: #F5F5F7;
+  --text-muted: #A1A1AE;
+  /* 4.5:1 or better on every surface (WCAG AA). */
+  --text-subtle: #8E8E9A;
+  --accent: #D7FF3A;
+  --accent-hover: #E4FF75;
+  --accent-fg: #0A0A0D;
+  --accent-soft: rgb(215 255 58 / 0.13);
+  --focus-ring: #D7FF3A;
+  --money: #D7FF3A;
+  --success: #5BE3A6;
+  --warning: #FFC857;
+  --danger: #FF6B5A;
+  --info: #7CC4FF;
+  /* Caption headings: white with a black outline, as on a clip. */
+  --cap-shadow: 0 0 3px #000, 0 0 3px #000, 0 2px 0 #000;
 
-  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.30), inset 0 1px 0 oklch(1 0 0 / 0.04);
-  --shadow-2: 0 4px 12px oklch(0 0 0 / 0.35), inset 0 1px 0 oklch(1 0 0 / 0.05);
-  --shadow-3: 0 12px 32px oklch(0 0 0 / 0.45), inset 0 1px 0 oklch(1 0 0 / 0.06);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.40);
+  --shadow-2: 0 6px 16px rgb(0 0 0 / 0.45);
+  --shadow-3: 0 16px 40px rgb(0 0 0 / 0.55);
 
   --dur-instant: 80ms; --dur-fast: 120ms; --dur-base: 150ms; --dur-enter: 200ms;
   --dur-exit: 140ms; --dur-panel: 280ms;
@@ -37,28 +45,31 @@
 
   color-scheme: dark;
 }
+/* Lime can't carry text on white, so light mode's accent is a deep olive. */
 :root.light {
-  --bg: oklch(0.985 0.002 270);
-  --surface-1: oklch(1 0 0);
-  --surface-2: oklch(0.97 0.003 270);
-  --surface-3: oklch(0.94 0.004 270);
-  --border: oklch(0 0 0 / 0.08);
-  --border-strong: oklch(0 0 0 / 0.14);
-  --text: oklch(0.20 0.01 270);
-  --text-muted: oklch(0.45 0.01 270);
-  --text-subtle: oklch(0.52 0.01 270);
-  --accent: oklch(0.55 0.21 285);
-  --accent-hover: oklch(0.50 0.21 285);
-  --accent-soft: oklch(0.55 0.21 285 / 0.10);
-  --focus-ring: oklch(0.55 0.21 285);
-  --money: oklch(0.52 0.13 165);
-  --success: oklch(0.55 0.15 150);
-  --warning: oklch(0.62 0.15 70);
-  --danger: oklch(0.55 0.21 25);
-  --info: oklch(0.52 0.14 240);
-  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.06);
-  --shadow-2: 0 4px 12px oklch(0 0 0 / 0.08);
-  --shadow-3: 0 12px 32px oklch(0 0 0 / 0.14);
+  --bg: #F6F6F4;
+  --surface-1: #FFFFFF;
+  --surface-2: #F0F0F3;
+  --surface-3: #E6E6EB;
+  --border: rgb(10 10 13 / 0.09);
+  --border-strong: rgb(10 10 13 / 0.16);
+  --text: #0A0A0D;
+  --text-muted: #4E4E58;
+  --text-subtle: #62626C;
+  --accent: #4F6B00;
+  --accent-hover: #435C00;
+  --accent-fg: #FFFFFF;
+  --accent-soft: rgb(79 107 0 / 0.10);
+  --focus-ring: #4F6B00;
+  --money: #3F7A12;
+  --success: #17804F;
+  --warning: #A86400;
+  --danger: #C8341F;
+  --info: #1F6FB8;
+  --cap-shadow: none;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.06);
+  --shadow-2: 0 4px 12px rgb(0 0 0 / 0.08);
+  --shadow-3: 0 12px 32px rgb(0 0 0 / 0.14);
   color-scheme: light;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -85,12 +96,13 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-info: var(--info);
-  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-sans: "Figtree Variable", system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
   --shadow-3: var(--shadow-3);
@@ -115,9 +127,26 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv11", "ss01";
 }
 h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
+h2, h3 { font-family: var(--font-display); }
+
+/* A caption heading: heavy, upper case, outlined like the words on a clip.
+   `.cap-hi` lights the word that matters; `.cap-word`s pop in one by one. */
+.cap {
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  text-shadow: var(--cap-shadow);
+}
+.cap-hi { color: var(--accent); }
+.cap-word { display: inline-block; animation: word-in 360ms var(--ease-decelerate) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes word-in { from { opacity: 0; transform: translateY(0.25em) scale(0.94); } }
+@media (prefers-reduced-motion: reduce) { .cap-word { animation: none; } }
+/* Big numbers (money, views) in the display face. */
+.num { font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .tabular { font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: var(--accent-soft); }
@@ -143,7 +172,7 @@ h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
 .prose-answer li + li { margin-top: 0.25em; }
 .prose-answer h1, .prose-answer h2, .prose-answer h3 { font-weight: 600; font-size: 0.95rem; margin-top: 1em; }
 .prose-answer strong { font-weight: 600; }
-.prose-answer code { font-family: var(--font-mono, monospace); font-size: 0.85em; background: var(--surface-3); padding: 0 0.3em; border-radius: 4px; }
+.prose-answer code { font-family: var(--font-mono); font-size: 0.85em; background: var(--surface-3); padding: 0 0.3em; border-radius: 4px; }
 .prose-answer table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
 .prose-answer th, .prose-answer td { border-bottom: 1px solid var(--border); padding: 0.35em 0.5em; text-align: left; }
 .prose-answer blockquote { border-left: 2px solid var(--border-strong); padding-left: 0.75em; color: var(--text-muted); }

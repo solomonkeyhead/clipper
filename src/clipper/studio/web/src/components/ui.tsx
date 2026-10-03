@@ -151,8 +151,9 @@ export function EmptyState({ icon, title, body, action }: {
   icon: ReactNode; title: string; body?: ReactNode; action?: ReactNode;
 }) {
   return (
-    <div className="fade-in flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-line px-6 py-14 text-center">
-      <div className="grid size-11 place-items-center rounded-full bg-surface-2 text-muted">{icon}</div>
+    <div className="fade-in flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line-strong px-6 py-14 text-center">
+      {/* The empty 9:16 frame: a clip waiting to happen. */}
+      <div className="grid h-[72px] w-[41px] place-items-center rounded-[10px] border-2 border-line-strong text-muted [&_svg]:size-5">{icon}</div>
       <div className="text-md font-semibold">{title}</div>
       {body && <div className="max-w-md text-sm text-muted">{body}</div>}
       {action}
@@ -171,19 +172,60 @@ export function Switch({ checked, onChange, label, id }: {
       aria-label={label}
       className="relative h-5 w-9 shrink-0 rounded-full bg-surface-3 transition-colors duration-[var(--dur-base)] data-[state=checked]:bg-accent"
     >
-      <RadixSwitch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white shadow-1 transition-transform duration-[var(--dur-base)] ease-standard data-[state=checked]:translate-x-[18px]" />
+      <RadixSwitch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white shadow-1 transition-transform duration-[var(--dur-base)] ease-standard data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-accent-fg" />
     </RadixSwitch.Root>
   );
 }
 
-export function PageHeader({ title, subtitle, actions }: {
-  title: ReactNode; subtitle?: ReactNode; actions?: ReactNode;
+/** Clipper's mark: a 9:16 clip with its caption on, the lime bar being the
+ *  word spoken right now (D102). */
+export function Mark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 18 32" className={cn("h-7 w-auto shrink-0", className)} aria-hidden>
+      <rect x="1.25" y="1.25" width="15.5" height="29.5" rx="4" fill="none" stroke="currentColor" strokeWidth="2.5" />
+      <rect x="4" y="17.5" width="10" height="3.5" rx="1" fill="var(--accent)" />
+      <rect x="5" y="23" width="6" height="2.2" rx="0.8" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * A heading set like a clip's caption: heavy, outlined, words popping in one
+ * by one, with `hi` (a word or phrase in it) lit in lime. A title that isn't
+ * plain text is shown as it is.
+ */
+export function CaptionTitle({ text, hi, as: Tag = "h1", className }: {
+  text: ReactNode; hi?: string; as?: "h1" | "h2"; className?: string;
+}) {
+  if (typeof text !== "string") return <Tag className={cn("cap", className)}>{text}</Tag>;
+  const at = hi ? text.toLowerCase().indexOf(hi.toLowerCase()) : -1;
+  const words = text.split(/\s+/).filter(Boolean);
+  let pos = 0;
+  return (
+    <Tag className={cn("cap", className)} aria-label={text}>
+      {words.map((word, i) => {
+        const start = text.indexOf(word, pos);
+        pos = start + word.length;
+        const lit = at >= 0 && start >= at && start < at + (hi?.length ?? 0);
+        return (
+          <span key={i} aria-hidden>
+            <span className={cn("cap-word", lit && "cap-hi")} style={{ "--i": i } as React.CSSProperties}>{word}</span>
+            {i < words.length - 1 && " "}
+          </span>
+        );
+      })}
+    </Tag>
+  );
+}
+
+export function PageHeader({ title, hi, subtitle, actions }: {
+  title: ReactNode; hi?: string; subtitle?: ReactNode; actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+        <CaptionTitle text={title} hi={hi} className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+        {subtitle && <p className="mt-2 text-sm text-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -196,7 +238,7 @@ export function Metric({ label, value, hint, tone, sub }: {
   const body = (
     <Card className="flex flex-col gap-1 p-4">
       <span className="text-xs font-medium text-muted">{label}</span>
-      <span className={cn("tabular text-2xl font-semibold", tone === "money" && "text-money")}>{value}</span>
+      <span className={cn("num text-[1.9rem] leading-tight", tone === "money" && "text-money")}>{value}</span>
       {sub && <span className="text-xs text-muted">{sub}</span>}
     </Card>
   );

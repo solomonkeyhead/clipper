@@ -744,7 +744,7 @@ export function ClipSheet() {
                   {clip.file_exists && (
                     <a href={downloadUrl(clip.id)} download
                        className="inline-flex h-9 flex-1 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
-                      <Download className="size-4" /> Download <Kbd className="ml-auto border-white/30 bg-white/10 text-white">D</Kbd>
+                      <Download className="size-4" /> Download <Kbd className="ml-auto border-accent-fg/30 bg-accent-fg/10 text-accent-fg">D</Kbd>
                     </a>
                   )}
                   <Tip label="Show in folder"><Button variant="secondary" size="icon" aria-label="Show in folder" onClick={() => void showFile(clip.id)}>
@@ -777,7 +777,7 @@ export function ClipSheet() {
                   {(clip.status === "posted" || clip.status === "submitted") && <SubmitButton clip={clip} size="md" />}
                   {clip.status === "ready" ? (
                     <Button variant="primary" onClick={() => setStatus(clip, "posted")}>
-                      <Upload className="size-4" /> Mark posted <Kbd className="border-white/30 bg-white/10 text-white">P</Kbd>
+                      <Upload className="size-4" /> Mark posted <Kbd className="border-accent-fg/30 bg-accent-fg/10 text-accent-fg">P</Kbd>
                     </Button>
                   ) : clip.status === "skipped" ? (
                     <Button variant="secondary" onClick={() => setStatus(clip, "ready")}>
