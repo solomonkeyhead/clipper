@@ -622,7 +622,7 @@ export interface CreateTopic { id: number; question: string; angle: string; felt
 export interface CreateVideo {
   id: number; topic_id: number | null; status: "draft" | "approved" | "voiced" | "building" | "built" | "failed";
   script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;
-  created_at: string; stage: string | null; pct: number | null; mine: Mine;
+  created_at: string; stage: string | null; pct: number | null; mine: Mine; cancelling?: boolean;
 }
 export interface CreateView {
   channel: { name: string; handle: string; voice: string; campaign: string; words_per_second: number };
@@ -661,6 +661,7 @@ export const createApi = {
   rewrite: (video: number) => send("POST", `/api/create/videos/${video}/rewrite`),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
+  cancel: (video: number) => send<{ stopping: boolean }>("POST", `/api/create/videos/${video}/cancel`),
   build: (video: number) => send("POST", `/api/create/videos/${video}/build`),
   pictures: (video: number) => send("POST", `/api/create/videos/${video}/pictures`),
   remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),

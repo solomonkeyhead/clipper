@@ -4,8 +4,11 @@ required; D109 added Pexels, whose people footage is far better than Pixabay's).
 Both searches are loose ("human ear close up" found a lipstick, "man yawning in
 an airplane seat" a tiger) and thin on people doing specific things, so each beat
 has three searches, most specific first; the model looks at the candidates from all
-of them, both libraries, with the sentence, picks one and scores it; under 7 of 10
-(or when no model can look) the beat gets a chalkboard card (create/diagrams.py) rather than unrelated footage.
+of them, both libraries, with the sentence, picks one and scores it; under 7 of 10 the
+beat gets a chalkboard card (create/diagrams.py) rather than unrelated footage. When no
+model can look (the plan's limit, offline), the clip whose library description holds the
+search's words is used instead, and the notes say so (D122): turning every footage
+sentence into chalk made a video all diagrams.
 Green-screen and transparent-background clips are left out. Long enough and unused
 in the video first. A library without a key is skipped. Searches are cached for a
 day and downloads for good (both ask API users to cache), under data/create/stock/.
@@ -17,6 +20,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -217,6 +221,37 @@ def _judge(sentence: str, query: str, hits: list[dict]) -> dict | None:
     return {**shown[n - 1][0], "center": min(1.0, max(0.0, verdict.center))}
 
 
+#: Sentences whose footage was picked by its search words alone, as no model could look (D122).
+unjudged: list[str] = []
+_STOP = {"the", "and", "with", "for", "from", "into", "onto", "of", "a", "an", "in", "on", "at", "to", "his",
+         "her", "their", "your", "close", "closeup", "up", "shot", "footage", "video", "view"}
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z]+", text.lower()) if len(w) >= 3 and w not in _STOP]
+
+
+def _same(a: str, b: str) -> bool:
+    """One word or a form of it ("record", "recording")."""
+    return a == b or (min(len(a), len(b)) >= 5 and a[:5] == b[:5])
+
+
+def by_words(queries: list[str], ranked: list[dict]) -> dict | None:
+    """With no model to look: the first candidate (in the libraries' own order of relevance)
+    whose description has every word of a search, or all but one of a long one, the most specific
+    search first. None if nothing matches that well: a chalk card beats a lipstick for an ear."""
+    for query in queries:
+        wanted = _words(query)
+        if not wanted:
+            continue
+        need = len(wanted) if len(wanted) <= 2 else len(wanted) - 1
+        for hit in ranked:
+            have = _words(hit.get("tags", ""))
+            if sum(1 for w in wanted if any(_same(w, h) for h in have)) >= need:
+                return {**hit, "center": None}
+    return None
+
+
 def choose(queries: list[str], seconds: float, used: set, sentence: str = "") -> dict | None:
     """The best unused clip for a beat of `seconds`, judged against the sentence across all
     its searches at once; None when nothing fits (the beat gets a chalkboard card instead,
@@ -235,7 +270,10 @@ def choose(queries: list[str], seconds: float, used: set, sentence: str = "") ->
     try:
         return _judge(sentence, " / ".join(queries), ranked)
     except _NoAnswer:
-        return None  # no one to judge: a chalk card, as the search alone picked lipsticks for ears
+        hit = by_words(queries, ranked)
+        if hit:
+            unjudged.append(sentence)
+        return hit
 
 
 def fetch(hit: dict) -> Path:

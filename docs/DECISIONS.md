@@ -2215,3 +2215,22 @@ with a "Use it" button (`GET/POST /api/create/ready`); the video starts as a dra
 The first is "Why does your voice sound so different on a recording?" (109 words, 9 sentences: four
 footage beats, four drawings, one bar chart). Its footage beats still ask the footage judge when
 built, and draw a chalk card if the model is unavailable.
+
+## D122 — Cancel a build; footage even when Claude can't judge it; the ready-made script redrawn (2026-10-03)
+
+The ready-made video came out all diagrams. Its footage sentences need the footage judge, Claude
+was at its plan limit, and a footage sentence with no judge became a drawing or a chalk card. With
+no model to look, `stock.by_words` now takes the first candidate (in the libraries' own order of
+relevance) whose description holds every word of a search, or all but one of a long one. The most
+specific search goes first, and when nothing matches that well the sentence still gets chalk. The
+build notes name how many shots were picked that way. "Your clips:" notes became "Build notes:".
+The judge saying "nothing good enough" is still final.
+
+**Cancel.** A Cancel button on a building video (`POST .../cancel`): the build stops at its next step.
+The video goes back to its last finished version (the old file is replaced only at the very end),
+or to "Try again" if it never had one. A build left "building" by closing Clipper is put back at
+once. A video can't be deleted mid-build. A finished video has "Build again" (same words, voice
+and pictures; footage picked again).
+
+**Ready-made script.** Sentence 4 is now microphone footage, so no more than two drawings come in a
+row (5 footage, 4 drawn). Every drawing moves: dots travel the air and bone routes and ride the waves.

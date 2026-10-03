@@ -279,7 +279,16 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       <div className="flex flex-col gap-2">
         <div className="flex justify-between text-sm"><span>{video.stage ?? "Starting…"}</span><span className="tabular text-muted">{Math.round(video.pct ?? 0)}%</span></div>
         <div className="h-2 overflow-hidden rounded-full bg-surface-3"><div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(3, video.pct ?? 0)}%` }} /></div>
-        <p className="text-xs text-muted">Timing your voice, finding footage, drawing the diagrams. About a minute; you can leave this page.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="flex-1 text-xs text-muted">Timing your voice, finding footage, drawing the diagrams. About a minute; you can leave this page.</p>
+          <Tip label="Stops at the next step. A video built before stays as it was.">
+            <Button size="sm" variant="ghost" disabled={busy !== null || video.cancelling}
+                    onClick={run("cancel", () => createApi.cancel(video.id), "Stopping the build")}>
+              {video.cancelling || busy === "cancel" ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+              {video.cancelling ? "Stopping…" : "Cancel"}
+            </Button>
+          </Tip>
+        </div>
       </div>
     );
   }
@@ -579,6 +588,11 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
           <Tip label="Same words and voice: footage and diagrams planned again, then built">
             <Button variant="secondary" disabled={busy !== null} onClick={onPictures}>
               {busy === "pictures" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "pictures" ? "Planning…" : "New pictures"}
+            </Button>
+          </Tip>
+          <Tip label="Same words, voice and pictures, built again: footage is picked again (use it once Claude can judge footage again)">
+            <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
+              {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
             </Button>
           </Tip>
           <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>

@@ -295,6 +295,78 @@
         "dashed": false,
         "cycles": 3.0,
         "cue": "routes"
+       },
+       {
+        "kind": "mover",
+        "xy": [
+         500.0,
+         53.25,
+         393.0724299065421,
+         53.25,
+         303.9661214953271,
+         104.33761682242991,
+         244.5619158878505,
+         193.44392523364485,
+         221.98831775700938,
+         276.60981308411215
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "two"
+       },
+       {
+        "kind": "mover",
+        "xy": [
+         500.0,
+         53.25,
+         606.9275700934579,
+         53.25,
+         696.0338785046729,
+         104.33761682242991,
+         755.4380841121496,
+         193.44392523364485,
+         778.0116822429907,
+         276.60981308411215
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "two"
+       },
+       {
+        "kind": "mover",
+        "xy": [
+         500.0,
+         336.0140186915888,
+         288.5210280373832,
+         336.0140186915888
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "routes"
+       },
+       {
+        "kind": "mover",
+        "xy": [
+         500.0,
+         336.0140186915888,
+         711.4789719626168,
+         336.0140186915888
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "routes"
        }
       ]
      },
@@ -306,13 +378,17 @@
    },
    {
     "text": "Route one is air. That is the only route a microphone gets.",
-    "emphasis": "air",
+    "emphasis": "microphone",
     "visual": {
-     "kind": "diagram",
-     "query": "",
-     "queries": [],
-     "card": "",
-     "template": "sketch",
+     "kind": "stock",
+     "query": "microphone recording studio",
+     "queries": [
+      "microphone recording studio",
+      "podcast microphone talking",
+      "singer recording vocals studio"
+     ],
+     "card": "air only",
+     "template": "",
      "title": "",
      "labels": [],
      "values": [],
@@ -321,150 +397,12 @@
      "shape": "",
      "subject": "",
      "amounts": [],
-     "idea": "Sound waves crossing the air from a head to a microphone",
-     "sketch": {
-      "title": "",
-      "marks": [
-       {
-        "kind": "circle",
-        "xy": [
-         223.2300751879699,
-         307.5,
-         136.83007518796992
-        ],
-        "text": "",
-        "color": "chalk",
-        "size": 2,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": ""
-       },
-       {
-        "kind": "text",
-        "xy": [
-         223.2300751879699,
-         307.5
-        ],
-        "text": "you",
-        "color": "yellow",
-        "size": 2,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": "Route"
-       },
-       {
-        "kind": "dot",
-        "xy": [
-         362.54796992481204,
-         307.5
-        ],
-        "text": "",
-        "color": "yellow",
-        "size": 2,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": "one"
-       },
-       {
-        "kind": "wave",
-        "xy": [
-         391.1578947368421,
-         307.5,
-         708.3548872180452,
-         307.5
-        ],
-        "text": "",
-        "color": "blue",
-        "size": 2,
-        "dashed": false,
-        "cycles": 6.0,
-        "cue": "air"
-       },
-       {
-        "kind": "text",
-        "xy": [
-         546.6466165413534,
-         214.20676691729324
-        ],
-        "text": "air",
-        "color": "blue",
-        "size": 2,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": "air"
-       },
-       {
-        "kind": "loop",
-        "xy": [
-         807.8676691729323,
-         183.10902255639098,
-         882.5022556390978,
-         183.10902255639098,
-         913.6,
-         251.52406015037593,
-         882.5022556390978,
-         319.9390977443609,
-         807.8676691729323,
-         319.9390977443609,
-         776.7699248120301,
-         251.52406015037593
-        ],
-        "text": "",
-        "color": "chalk",
-        "size": 2,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": "microphone"
-       },
-       {
-        "kind": "line",
-        "xy": [
-         845.1849624060151,
-         319.9390977443609,
-         845.1849624060151,
-         431.890977443609
-        ],
-        "text": "",
-        "color": "chalk",
-        "size": 2,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": "microphone"
-       },
-       {
-        "kind": "line",
-        "xy": [
-         782.9894736842106,
-         438.11052631578946,
-         907.3804511278196,
-         438.11052631578946
-        ],
-        "text": "",
-        "color": "chalk",
-        "size": 2,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": "microphone"
-       },
-       {
-        "kind": "text",
-        "xy": [
-         832.7458646616542,
-         108.47443609022557
-        ],
-        "text": "microphone",
-        "color": "chalk",
-        "size": 1,
-        "dashed": false,
-        "cycles": 3.0,
-        "cue": "microphone"
-       }
-      ]
-     },
+     "idea": "",
+     "sketch": null,
      "clip": "",
      "clip_start": null,
      "fill": "auto",
-     "manual": true
+     "manual": false
     }
    },
    {
@@ -653,6 +591,36 @@
         "dashed": false,
         "cycles": 3.0,
         "cue": "ear"
+       },
+       {
+        "kind": "mover",
+        "xy": [
+         500.0,
+         307.5,
+         299.27631578947364,
+         307.5
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "straight"
+       },
+       {
+        "kind": "mover",
+        "xy": [
+         500.0,
+         307.5,
+         700.7236842105264,
+         307.5
+        ],
+        "text": "",
+        "color": "yellow",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "straight"
        }
       ]
      },
@@ -864,6 +832,21 @@
         "dashed": false,
         "cycles": 3.0,
         "cue": "higher"
+       },
+       {
+        "kind": "mover",
+        "xy": [
+         328.65142857142854,
+         307.5,
+         659.5314285714286,
+         307.5
+        ],
+        "text": "",
+        "color": "blue",
+        "size": 2,
+        "dashed": false,
+        "cycles": 3.0,
+        "cue": "air"
        }
       ]
      },

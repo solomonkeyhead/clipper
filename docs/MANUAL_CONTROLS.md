@@ -17,6 +17,7 @@ is the order I'd build them.
 | Physics check | Runs on every AI script | On demand only, never changes your words | **Done** | |
 | Picture per sentence | AI plans footage or a diagram | Choose footage by your own search words, a chalk phrase, or a drawing you describe; "Plan pictures" only fills the ones you left alone | **Done** | |
 | Your own footage | none | Drop clips; place by hand, in order, or by AI; fill gaps by hand or automatically | **Done** (D119) | |
+| Stopping a build | Ran to the end | Cancel while it builds (stops at the next step; a finished version stays); Build again on a finished video | **Done** (D122) | |
 | Which stock clip | The AI judge picks one of ~6 | Show the candidates per sentence and click to swap, or "search again" with new words | Gap | M |
 | Redo one picture | "New pictures" redoes all of them | A "new picture" button on a single sentence | Gap | S |
 | Diagram contents | Templates and sketches are generated | Edit labels, numbers, arrows and colours of a diagram; move or delete a sketch's words | Gap | L |

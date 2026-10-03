@@ -21,6 +21,30 @@ log = get_logger(__name__)
 #: video id -> (stage, percent) while it's being timed or built.
 progress: dict[int, tuple[str, float]] = {}
 _lock = threading.Lock()
+#: Videos with a build waiting or under way, and those the user asked to stop (D122).
+_running: set[int] = set()
+cancelled: set[int] = set()
+
+
+class Cancelled(Exception):
+    """The user pressed Cancel: the build stops at its next step."""
+
+
+def _check(video_id: int) -> None:
+    if video_id in cancelled:
+        raise Cancelled
+
+
+def _stopped(video_id: int) -> None:
+    """Where a cancelled build leaves the video: its last finished version if it has one (the old
+    file is only replaced at the very end of a build), else ready to build again."""
+    from ..create import store
+
+    row = store.video(video_id)
+    if row and row["clip_id"]:
+        store.update_video(video_id, status="built", error="")
+    else:
+        store.update_video(video_id, status="failed", error="Build cancelled. Press Try again to build it.")
 
 
 def _view() -> dict:
@@ -36,6 +60,7 @@ def _view() -> dict:
         stage = progress.get(v["id"])
         v["stage"], v["pct"] = (stage if stage else (None, None))
         v.pop("timings", None)
+        v["cancelling"] = v["id"] in cancelled
         try:  # the user's own clips for this video (D119)
             v["mine"] = userclips.view(v["id"], Script.model_validate(v["script"]))
         except ValueError:
@@ -52,24 +77,35 @@ def _work(video_id: int, publish) -> None:
     from ..ingest.probe import probe
 
     def step(stage: str, pct: float) -> None:
+        _check(video_id)  # every step is a place a cancelled build stops
         progress[video_id] = (stage, pct)
         publish("create.changed", {"id": video_id})
 
-    with _lock:
-        try:
-            row = store.video(video_id)
-            step("Listening to the voice", 3)
-            path = Path(row["voice"])
-            timings = voice.align(Script.model_validate(row["script"]), voice.heard(path), probe(path).duration)
-            store.update_video(video_id, timings=timings.model_dump(), status="building", error="")
-            build.build(video_id, progress=step)
-        except Exception as exc:  # shown on the page
-            log.warning("create: video %s failed: %s\n%s", video_id, exc, traceback.format_exc())
-            store.update_video(video_id, status="failed", error=str(exc)[:400])
-        finally:
-            progress.pop(video_id, None)
-            publish("create.changed", {"id": video_id})
-            publish("clips.changed", {})
+    _running.add(video_id)
+    try:
+        with _lock:
+            try:
+                _check(video_id)  # cancelled while it waited for another build to finish
+                row = store.video(video_id)
+                step("Listening to the voice", 3)
+                path = Path(row["voice"])
+                timings = voice.align(Script.model_validate(row["script"]), voice.heard(path), probe(path).duration)
+                _check(video_id)
+                store.update_video(video_id, timings=timings.model_dump(), status="building", error="")
+                build.build(video_id, progress=step)
+            except Cancelled:
+                log.info("create: video %s build cancelled", video_id)
+                _stopped(video_id)
+            except Exception as exc:  # shown on the page
+                log.warning("create: video %s failed: %s\n%s", video_id, exc, traceback.format_exc())
+                store.update_video(video_id, status="failed", error=str(exc)[:400])
+            finally:
+                progress.pop(video_id, None)
+    finally:
+        _running.discard(video_id)
+        cancelled.discard(video_id)
+        publish("create.changed", {"id": video_id})
+        publish("clips.changed", {})
 
 
 def _editable(row: dict) -> None:
@@ -469,6 +505,22 @@ def routes(app: FastAPI, publish) -> None:
                                       "A ready-made script: the words and the pictures are already done. "
                                       "Footage is searched for when you build; edit anything you like.")}
 
+    @app.post("/api/create/videos/{video_id}/cancel")
+    def create_cancel(video_id: int) -> dict:
+        """Stop a build (D122). It stops at its next step, a few seconds at most unless the AI is
+        mid-answer; the last finished version stays. A build that isn't running at all (Clipper
+        was closed during it) is put back at once."""
+        row = video_or_404(video_id)
+        if row["status"] not in ("voiced", "building"):
+            raise HTTPException(400, "it isn't being built")
+        if video_id in _running:
+            cancelled.add(video_id)
+            publish("create.changed", {"id": video_id})
+            return {"stopping": True}
+        _stopped(video_id)
+        publish("create.changed", {"id": video_id})
+        return {"stopping": False}
+
     @app.delete("/api/create/videos/{video_id}")
     def create_delete(video_id: int) -> dict:
         """Remove a video from Create (its files to the Recycle Bin; a finished clip stays in Clips)."""
@@ -477,6 +529,8 @@ def routes(app: FastAPI, publish) -> None:
         from . import db
 
         row = video_or_404(video_id)
+        if row["status"] in ("voiced", "building") and video_id in _running:
+            raise HTTPException(409, "it's being built: cancel the build first")
         with db.connect() as con:
             con.execute("DELETE FROM create_videos WHERE id=?", (video_id,))
         if row["topic_id"]:

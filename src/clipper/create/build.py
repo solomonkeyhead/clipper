@@ -321,6 +321,7 @@ def build(video_id: int, progress=None) -> int:
     script, timings = Script.model_validate(row["script"]), Timings.model_validate(row["timings"])
     channel, config = channels.load(), Config.load()
     notes: list[str] = []
+    stock.unjudged.clear()
     own = userclips.files(video_id)
     if own or userclips.load(video_id)["clips"]:
         # The sentences' real lengths now known: clips placed for the user if they asked (D119).
@@ -359,6 +360,10 @@ def build(video_id: int, progress=None) -> int:
             "scores": json.dumps({"picked_by": "create", "create": video_id, "cover": cover_at,
                                   "text": script.text}),
         })
+    if stock.unjudged:
+        n = len(stock.unjudged)
+        notes.append(f"Footage for {n} sentence{'s' if n != 1 else ''} was picked by its search words only, as Claude "
+                     "couldn't look at it: check those shots, or press Build again once Claude is back.")
     placed = {b.visual.clip for b in script.beats if b.visual.clip}
     idle = [name for cid, (_, _, name) in own.items() if cid not in placed]
     if idle:

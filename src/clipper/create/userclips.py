@@ -44,7 +44,8 @@ MAX_BYTES = 3 * 1024**3
 MAX_AI_CLIPS = 12         # the model looks at one filmstrip per clip; more than this is too many images
 LOW_RES = 720             # a clip shorter than this (its short side) looks soft filling a phone
 FILLS = ("auto", "planned", "loop", "slow", "hold")
-MARK = "Your clips:"      # the line the notes block starts with
+MARK = "Build notes:"     # the line the notes block starts with
+_OLD_MARKS = ("Your clips:",)   # its earlier name, still cleaned up
 _lock = threading.Lock()
 
 
@@ -438,13 +439,13 @@ def prepare(video_id: int, script: Script, seconds: list[float]) -> tuple[Script
     return script, note
 
 
-# ---------- the notes block ----------
+# ---------- the notes block (what the clips, the footage and placing did) ----------
 
 def with_notes(existing: str, lines: list[str]) -> str:
-    """`existing` with the "Your clips:" block replaced by `lines` (none: removed)."""
+    """`existing` with the "Build notes:" block replaced by `lines` (none: removed)."""
     kept, skipping = [], False
     for line in existing.split("\n"):
-        if line.startswith(MARK):
+        if line.startswith((MARK, *_OLD_MARKS)):
             skipping = True
             continue
         if skipping and line.startswith("  - "):

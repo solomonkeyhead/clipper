@@ -104,6 +104,7 @@ def test_notes_block_is_replaced_not_piled_up():
     assert two.count(userclips.MARK) == 1 and "  - c" in two and "  - a" not in two
     assert userclips.with_notes(two, []) == base
     assert userclips.with_notes("", ["x"]).startswith(userclips.MARK)
+    assert userclips.with_notes("Physics ok.\nYour clips:\n  - old", ["new"]) == f"Physics ok.\n{userclips.MARK}\n  - new"
 
 
 def test_estimates_never_below_a_beat_floor():
@@ -380,7 +381,7 @@ def test_the_endpoints_end_to_end(data_root, tmp_path):
     placed = client.post(f"{base}/place", json={"how": "order"})
     assert placed.status_code == 200 and "Placed 1 of 1" in placed.json()["note"]
     row = store.video(video)
-    assert row["script"]["beats"][0]["visual"]["clip"] == "c1" and "Your clips:" in row["check_notes"]
+    assert row["script"]["beats"][0]["visual"]["clip"] == "c1" and userclips.MARK in row["check_notes"]
     assert row["status"] == "draft" and row["script"].get("take", 1) == 1       # nothing else disturbed
 
     by_hand = client.put(f"{base}/placement", json={"beat": 3, "clip": "c1", "start": 1.5, "fill": "loop"})

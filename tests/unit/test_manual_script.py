@@ -140,3 +140,56 @@ def test_the_ready_made_script_is_sound(client):
                                            for v in (m.xy[:2] if m.kind == "circle" else m.xy))
             frame(b.visual, 4.0, 4.0)                      # draws without error
     assert client.post("/api/create/ready/nope").status_code == 404
+
+
+# ---------- cancelling a build, footage with no model to judge it (D122) ----------
+
+def test_a_build_can_be_cancelled(client):
+    from clipper.create import store
+    from clipper.studio import create_api
+
+    vid = store.add_video(None, Script(title="t", beats=[Beat(text="One two three four.")]).model_dump())
+    assert client.post(f"/api/create/videos/{vid}/cancel").status_code == 400          # not building
+    # stuck after Clipper was closed mid-build: put back at once
+    store.update_video(vid, status="building")
+    assert client.post(f"/api/create/videos/{vid}/cancel").json() == {"stopping": False}
+    assert store.video(vid)["status"] == "failed" and "cancelled" in store.video(vid)["error"]
+    # a video built before goes back to its finished version
+    store.update_video(vid, status="voiced", clip_id=42)
+    client.post(f"/api/create/videos/{vid}/cancel")
+    assert store.video(vid)["status"] == "built"
+    # a running build is asked to stop, and stops at its next step; it can't be deleted meanwhile
+    store.update_video(vid, status="voiced")
+    create_api._running.add(vid)
+    try:
+        assert client.post(f"/api/create/videos/{vid}/cancel").json() == {"stopping": True}
+        assert next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)["cancelling"] is True
+        assert client.delete(f"/api/create/videos/{vid}").status_code == 409
+    finally:
+        create_api._running.discard(vid)
+    create_api._work(vid, lambda *a: None)          # it sees the request before doing anything
+    assert store.video(vid)["status"] == "built" and vid not in create_api.cancelled
+
+
+def test_footage_by_search_words_when_no_model_can_look(monkeypatch):
+    from clipper.create import stock
+
+    hits = [{"id": 1, "tags": "lipstick, makeup", "duration": 9, "width": 1920, "height": 1080},
+            {"id": 2, "tags": "studio, microphone, music, recording", "duration": 9, "width": 1920, "height": 1080},
+            {"id": 3, "tags": "podcast", "duration": 9, "width": 1080, "height": 1920}]
+    assert stock.by_words(["microphone recording studio"], hits)["id"] == 2
+    assert stock.by_words(["human ear close up"], hits) is None                        # never a lipstick for an ear
+    assert stock.by_words(["podcast"], hits)["id"] == 3
+    assert stock.by_words(["the of"], hits) is None
+
+    def no_one(*a, **k):
+        raise stock._NoAnswer
+
+    monkeypatch.setattr(stock, "search", lambda q: hits)
+    monkeypatch.setattr(stock, "_judge", no_one)
+    stock.unjudged.clear()
+    got = stock.choose(["microphone recording studio"], 3.0, set(), sentence="That is the only route a microphone gets.")
+    assert got["id"] == 2 and got["center"] is None and stock.unjudged == ["That is the only route a microphone gets."]
+    # the judge saying "nothing good enough" is still respected: no fallback then
+    monkeypatch.setattr(stock, "_judge", lambda *a, **k: None)
+    assert stock.choose(["microphone recording studio"], 3.0, set(), sentence="x") is None
