@@ -20,6 +20,7 @@ const queryClient = new QueryClient({
 
 // Pages opened now and then load when first opened, keeping the first screen quick.
 const CampaignEditorPage = lazyRouteComponent(() => import("./pages/CampaignEditor"), "CampaignEditorPage");
+const EditorPage = lazyRouteComponent(() => import("./pages/EditorPage"), "EditorPage");
 const LearningPage = lazyRouteComponent(() => import("./pages/LearningPage"), "LearningPage");
 const AccountsPage = lazyRouteComponent(() => import("./pages/SettingsPages"), "AccountsPage");
 const SettingsPage = lazyRouteComponent(() => import("./pages/SettingsPages"), "SettingsPage");
@@ -50,6 +51,15 @@ const routes = [
   createRoute({
     getParentRoute: () => root, path: "/new", component: NewClipsPage,
     validateSearch: (s: Record<string, unknown>): { campaign?: string } => ({
+      campaign: typeof s.campaign === "string" ? s.campaign : undefined,
+    }),
+  }),
+  // The editor (D103): a library clip, or a source video for a campaign.
+  createRoute({
+    getParentRoute: () => root, path: "/edit", component: EditorPage,
+    validateSearch: (s: Record<string, unknown>): { clip?: number; source?: string; campaign?: string } => ({
+      clip: s.clip !== undefined && s.clip !== "" && !Number.isNaN(Number(s.clip)) ? Number(s.clip) : undefined,
+      source: typeof s.source === "string" ? s.source : undefined,
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
     }),
   }),

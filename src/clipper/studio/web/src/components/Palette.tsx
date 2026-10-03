@@ -139,7 +139,7 @@ const SHORTCUTS: [string, [string, string][]][] = [
     ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"],
     ["Shift / Ctrl click", "Select several"], ["Esc", "Clear selection"]]],
   ["Open clip", [["J / K", "Next / previous clip"], ["Y", "Good"], ["B", "Not good"], ["C", "Copy caption"], ["L", "Copy link"],
-    ["D", "Download"], ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip, then next"], ["F", "Show in folder"],
+    ["D", "Download"], ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip, then next"], ["E", "Edit"], ["F", "Show in folder"],
     ["Delete", "Delete (undo)"], ["Esc", "Close"]]],
 ];
 

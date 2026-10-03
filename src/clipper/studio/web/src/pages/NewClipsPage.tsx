@@ -82,7 +82,9 @@ function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; c
 }
 
 const modeLabel = (job: Job) =>
-  job.mode === "manual" ? `${job.ranges.length} hand-picked`
+  job.mode === "prepare" ? "getting it ready to edit"
+    : job.mode === "manual" && job.edits?.length ? "made in the editor"
+    : job.mode === "manual" ? `${job.ranges.length} hand-picked`
     : job.mode === "top" ? `up to ${job.top} clips` : "Clipper decides how many";
 
 /** A finished video: one line, its details on a click (the list can run to dozens after a batch). */
@@ -253,6 +255,25 @@ function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, cl
   );
 }
 
+/** The way into the editor (D103): cut the clip yourself, by its words. */
+function OpenEditor({ source, campaign }: { source: string; campaign: string }) {
+  const ready = Boolean(source && campaign);
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-accent/40 bg-accent-soft p-4">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold">Cut it yourself in the editor</div>
+        <p className="text-xs text-muted">Pick the moment by its words, trim to the frame, cut lines out, punch in, fix captions, then preview exactly what you'll get.</p>
+      </div>
+      {ready ? (
+        <Link to="/edit" search={{ source, campaign }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+          <Scissors className="size-4" /> Open in the editor
+        </Link>
+      ) : <span className="text-xs text-muted">{campaign ? "Pick a video first" : "Pick a campaign first"}</span>}
+    </div>
+  );
+}
+
 function RangeEditor({ source, ranges, setRanges }: {
   source: string; ranges: Range[]; setRanges: (r: Range[]) => void;
 }) {
@@ -267,8 +288,8 @@ function RangeEditor({ source, ranges, setRanges }: {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted">
-        Clipper cuts exactly these moments, then frames, captions and checks them like any other clip. Good for scenes
-        without much talking, which it can't find by itself.
+        Or just type the times: Clipper cuts exactly these moments, then frames, captions and checks them like any other
+        clip. Good for scenes without much talking, which it can't find by itself.
       </p>
       {source && playable ? (
         <div className="flex flex-col gap-2">
@@ -517,7 +538,10 @@ export function NewClipsPage() {
                 </span>
               </div>
             )}
-            {mode === "manual" && <RangeEditor source={source} ranges={ranges} setRanges={setRanges} />}
+            {mode === "manual" && <>
+              <OpenEditor source={source} campaign={campaign} />
+              <RangeEditor source={source} ranges={ranges} setRanges={setRanges} />
+            </>}
           </div>
         </Step>
 

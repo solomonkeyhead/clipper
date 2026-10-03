@@ -317,9 +317,17 @@ def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
         start, end = edit.start, edit.end
     else:
         start, end = float(clip["start_s"]), float(clip["end_s"])
-    corrector, recheck = _correction(config, backend_override, info)
-    audio = Path(info.audio_path) if info.audio_path else None
-    listener = recheck or (AudioRecheck(audio, config.transcription) if audio and audio.exists() else None)
+    if draft:
+        # The editor's preview is for timing and framing, so it's quick: no second
+        # listen and no AI spelling pass on the captions (the real render does both),
+        # and faces sampled half as often.
+        corrector = recheck = listener = None
+        config = config.model_copy(update={"render": config.render.model_copy(
+            update={"face_sample_fps": config.render.face_sample_fps / 2})})
+    else:
+        corrector, recheck = _correction(config, backend_override, info)
+        audio = Path(info.audio_path) if info.audio_path else None
+        listener = recheck or (AudioRecheck(audio, config.transcription) if audio and audio.exists() else None)
     words = transcript.words
     if listener is not None:
         words = with_range_transcript(words, start, end, listener.words_between(start, end))

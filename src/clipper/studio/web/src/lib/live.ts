@@ -35,9 +35,14 @@ export function useLiveUpdates() {
       });
       source.addEventListener("clips.changed", refreshClips);
       source.addEventListener("job.progress", (e) => {
-        const job = JSON.parse((e as MessageEvent).data) as { id: number; status: string; name: string; clips: number; message: string };
+        const job = JSON.parse((e as MessageEvent).data) as { id: number; status: string; name: string; clips: number; message: string; mode: string };
         const before = qc.getQueryData<{ id: number; status: string }[]>(["jobs"])?.find((j) => j.id === job.id);
-        if (before && before.status !== job.status && (job.status === "done" || job.status === "failed")) {
+        const finished = before && before.status !== job.status && (job.status === "done" || job.status === "failed");
+        if (job.mode === "prepare") {
+          // Read for the editor (D103): the editor page takes it from here.
+          if (finished && job.status === "failed") toast.error(`${job.name}: couldn't get it ready to edit`, { description: job.message });
+          if (finished) void qc.invalidateQueries({ queryKey: ["editor"] });
+        } else if (finished) {
           // Whatever page is open: clipping runs in the background (D74).
           if (job.status === "failed") toast.error(`${job.name}: clipping failed`, { description: job.message });
           else toast.success(job.clips ? `${job.name}: ${job.clips} clip${job.clips === 1 ? "" : "s"} made` : `${job.name}: no clips good enough`,
@@ -50,6 +55,8 @@ export function useLiveUpdates() {
         });
       });
       source.addEventListener("campaigns.changed", refreshClips);
+      // The editor's light copy of a video is ready to scrub (D103).
+      source.addEventListener("editor.ready", () => void qc.invalidateQueries({ queryKey: ["editor"] }));
       source.addEventListener("import.progress", (e) => {
         const item = JSON.parse((e as MessageEvent).data) as { id: number };
         qc.setQueryData<{ id: number }[]>(["imports"], (old = []) =>

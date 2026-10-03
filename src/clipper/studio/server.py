@@ -1146,8 +1146,15 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         edit = None
         if row is not None:
             saved = (json.loads(row.get("scores") or "{}") or {}).get("edit")
-            edit = saved or {"pieces": [{"start": row["start_s"], "end": row["end_s"], "zoom": 1.0}],
-                             "hook": row.get("hook") or "", "fixes": []}
+            start, end = row.get("start_s"), row.get("end_s")
+            if start is None or end is None:
+                # Clips filed before their range was kept: the start is in the id, the length known.
+                from ..utils.timecode import from_slug_timestamp
+
+                start = from_slug_timestamp(row.get("clip_id") or "")
+                end = start + float(row.get("duration_s") or 30) if start is not None else None
+            pieces = [{"start": start, "end": end, "zoom": 1.0}] if start is not None and end is not None else []
+            edit = saved or {"pieces": pieces, "hook": row.get("hook") or "", "fixes": []}
         return EditorView(
             source_id=sid, prepared=True, source=info.media.path, name=info.title or Path(info.media.path).name,
             campaign=found.name, duration=info.media.duration, fps=info.media.fps or 30.0,

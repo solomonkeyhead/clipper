@@ -152,3 +152,11 @@ class TestApi:
         for path in ("/api/editor/preview", "/api/editor/save"):
             refused = client.post(path, json={"source_id": "a394", "campaign": "chad-powers-s2", "edit": edit})
             assert refused.status_code == 400 and "jump cuts" in refused.json()["detail"]
+
+
+def test_a_clip_ids_stamp_gives_its_start():
+    from clipper.utils.timecode import from_slug_timestamp
+
+    assert from_slug_timestamp("003_21m23s") == 1283
+    assert from_slug_timestamp("001_1h02m03s") == 3723
+    assert from_slug_timestamp("manual") is None

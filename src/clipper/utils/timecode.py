@@ -53,6 +53,17 @@ def to_slug_timestamp(seconds: float) -> str:
     return f"{h}h{m:02d}m{s:02d}s" if h else f"{m}m{s:02d}s"
 
 
+def from_slug_timestamp(text: str) -> float | None:
+    """The seconds in a ``12m34s`` / ``1h02m03s`` stamp inside `text` (a clip id), or None."""
+    import re
+
+    found = re.search(r"(?:(\d+)h)?(\d+)m(\d+)s", text or "")
+    if not found:
+        return None
+    h, m, s = (int(g or 0) for g in found.groups())
+    return float(h * 3600 + m * 60 + s)
+
+
 def format_duration(seconds: float) -> str:
     """Human-readable duration for reports and logs: ``1h02m``, ``3m21s``, ``8.4s``."""
     if seconds < 60:

@@ -564,6 +564,138 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/editor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Editor View
+         * @description A video to edit: a library clip (`clip`), or a source video and campaign.
+         */
+        get: operations["editor_view_api_editor_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/editor/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Editor Prepare
+         * @description Read and transcribe a video so the editor can open it: a job, with progress.
+         */
+        post: operations["editor_prepare_api_editor_prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/editor/{source_id}/proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Editor Proxy */
+        get: operations["editor_proxy_api_editor__source_id__proxy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/editor/{source_id}/peaks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Editor Peaks */
+        get: operations["editor_peaks_api_editor__source_id__peaks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/editor/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Editor Preview
+         * @description A quick draft render of the edit, through the real pipeline: exactly the
+         *     framing, captions and hook the clip will have, smaller and faster.
+         */
+        post: operations["editor_preview_api_editor_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/editor/{source_id}/preview/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Editor Preview File */
+        get: operations["editor_preview_file_api_editor__source_id__preview__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/editor/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Editor Save
+         * @description Render the edit for real: over its clip (`clip`), or as a new clip.
+         */
+        post: operations["editor_save_api_editor_save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/clips/{clip_id}/caption": {
         parameters: {
             query?: never;
@@ -1954,6 +2086,103 @@ export interface components {
             how: string;
             /** Posted On */
             posted_on: string[];
+        };
+        /**
+         * EditRule
+         * @description One kind of edit and whether this campaign takes it (campaign/edits.py).
+         */
+        EditRule: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Allowed */
+            allowed: boolean;
+            /** Blocked */
+            blocked: boolean;
+            /** Why */
+            why: string;
+        };
+        /**
+         * EditorView
+         * @description What the editor needs to open a video (D103).
+         */
+        EditorView: {
+            /** Source Id */
+            source_id: string;
+            /** Prepared */
+            prepared: boolean;
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Campaign
+             * @default
+             */
+            campaign: string;
+            /**
+             * Duration
+             * @default 0
+             */
+            duration: number;
+            /**
+             * Fps
+             * @default 30
+             */
+            fps: number;
+            /**
+             * Has Audio
+             * @default true
+             */
+            has_audio: boolean;
+            /**
+             * Proxy Ready
+             * @default false
+             */
+            proxy_ready: boolean;
+            /**
+             * Words
+             * @default []
+             */
+            words: components["schemas"]["EditorWord"][];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["EditRule"][];
+            /** Min Seconds */
+            min_seconds?: number | null;
+            /** Max Seconds */
+            max_seconds?: number | null;
+            /**
+             * Hooks
+             * @default []
+             */
+            hooks: string[];
+            /** Clip Id */
+            clip_id?: number | null;
+            /** Clip Status */
+            clip_status?: string | null;
+            /** Edit */
+            edit?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** EditorWord */
+        EditorWord: {
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
+            /** Text */
+            text: string;
         };
         /** Fit */
         Fit: {
@@ -3588,6 +3817,244 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editor_view_api_editor_get: {
+        parameters: {
+            query?: {
+                campaign?: string;
+                source?: string;
+                clip?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditorView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editor_prepare_api_editor_prepare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editor_proxy_api_editor__source_id__proxy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editor_peaks_api_editor__source_id__peaks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editor_preview_api_editor_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editor_preview_file_api_editor__source_id__preview__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    editor_save_api_editor_save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -227,10 +227,12 @@ export interface RunReport {
 }
 export interface Job {
   id: number; campaign: string; source: string; name: string; top: number | null;
-  mode: JobMode; ranges: [number, number][];
+  mode: JobMode | "prepare"; ranges: [number, number][];
+  /** Clips made in the editor (D103); a "prepare" job reads a video for it. */
+  edits?: unknown[];
   status: "queued" | "running" | "done" | "failed"; stage: string; pct: number;
   clips: number; message: string; created: string; finished: string;
-  report?: RunReport | Record<string, never>;
+  report?: RunReport | { source_id?: string } | Record<string, never>;
 }
 
 export const useSources = () =>
@@ -559,3 +561,39 @@ export function useDeleteGroup() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["account-groups"] }); qc.invalidateQueries({ queryKey: keys.accounts }); },
   });
 }
+
+/* ---------- the editor (D103) ---------- */
+
+export type EditorView = components["schemas"]["EditorView"];
+export type EditRule = components["schemas"]["EditRule"];
+
+/** A video to edit: a library clip, or a source video for a campaign. */
+export const useEditor = (q: { clip?: number; source?: string; campaign?: string }) =>
+  useQuery({
+    queryKey: ["editor", q.clip ?? null, q.source ?? null, q.campaign ?? null],
+    queryFn: () => unwrap(api.GET("/api/editor", { params: { query: q } })),
+    enabled: q.clip !== undefined || Boolean(q.source && q.campaign),
+    retry: false,
+  });
+
+export const usePeaks = (sourceId: string | undefined) =>
+  useQuery({
+    queryKey: ["editor-peaks", sourceId],
+    queryFn: () => unwrap(api.GET("/api/editor/{source_id}/peaks", { params: { path: { source_id: sourceId ?? "" } } })),
+    enabled: Boolean(sourceId),
+    staleTime: Infinity,
+  });
+
+async function post<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data as T;
+}
+
+export const prepareEditor = (campaign: string, source: string) =>
+  post<Job>("/api/editor/prepare", { campaign, source });
+
+export type EditBody = { source_id: string; campaign: string; clip?: number | null; edit: unknown };
+export const previewEdit = (body: EditBody) => post<{ url: string; length: number }>("/api/editor/preview", body);
+export const saveEdit = (body: EditBody) => post<{ queued: boolean; clip?: number; job?: Job }>("/api/editor/save", body);

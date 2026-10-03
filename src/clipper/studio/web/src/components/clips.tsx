@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   AlertTriangle, Check, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
-  Lock, Pencil, ShieldAlert, Upload, X, XCircle,
+  Lock, Pencil, Scissors, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -696,6 +697,9 @@ export function ClipSheet() {
   };
   // Skipping is a triage decision: move straight on to the next clip. (Not good
   // stays, so you can say why; posting stays, as posts are spaced hours apart.)
+  // The editor (D103) is its own page: the sheet closes on the way.
+  const navigate = useNavigate();
+  const edit = (c: Clip) => { setOpen(null); void navigate({ to: "/edit", search: { clip: c.id } }); };
   const skip = (c: Clip) => {
     const next = neighbour(1);
     setStatus(c, "skipped");
@@ -719,6 +723,7 @@ export function ClipSheet() {
       else rate.mutate({ id: clip.id, rating: clip.rating != null && clip.rating <= 2 ? null : 1, reasons: clip.reasons });
     },
     f: () => clip && void showFile(clip.id),
+    e: () => clip && (clip.status === "ready" || clip.status === "skipped") && edit(clip),
     d: () => clip?.file_exists && window.location.assign(downloadUrl(clip.id)),
     Delete: () => clip && remove(clip),
   }, { enabled: clip !== null, inDialog: true });
@@ -752,6 +757,13 @@ export function ClipSheet() {
                   </Button></Tip>
                   <DeleteButton clip={clip} size="md" />
                 </div>
+                {(clip.status === "ready" || clip.status === "skipped") && (
+                  <Tip label="Trim to the frame, cut words out, punch in, fix captions" keys="E">
+                    <Button variant="secondary" onClick={() => edit(clip)}>
+                      <Scissors className="size-4" /> Edit the clip
+                    </Button>
+                  </Tip>
+                )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-4">
                 <div className="flex items-start justify-between gap-3">

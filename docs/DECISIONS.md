@@ -1904,3 +1904,23 @@ captions, words popping in one by one (off under reduced motion); Figtree for
 text; the mark is a 9:16 frame with a lime caption bar, and empty states reuse
 the frame. Light mode swaps lime for a deep olive, as lime can't carry text on
 white. Canvas: claude.ai/artifact/EApUVMgcrh6MLqgLerwrag.
+
+## D103 — The editor (2026-10-02)
+
+Cut a clip by hand: from "I'll pick them" on New clips (any video; it's read and
+transcribed first, as a job) or "Edit the clip" (E) on a ready clip. An edit is the
+pieces of the source kept, in order, each with a zoom (none, 1.1x, 1.2x), the hook,
+and caption-word fixes (editing.py). It renders through the normal pipeline: pieces
+joined (render/prepare.join_segments, now with a zoom per piece), captions following
+the cuts, QA and the brief's checks; saved into the clip (scores.edit) so it reopens
+as left. The page: words to pick by dragging (keep only / add / cut), double-click to
+fix a caption word; a 360p copy with a keyframe every 12 frames to scrub, the 9:16
+frame and captions drawn over it; a timeline with the waveform, drag-to-trim with
+snapping to words and the playhead; NLE keys (Space, J/K/L, I/O, S, Q/W, Z, arrows,
+Ctrl+Z); undo per action; unsaved edits kept in the browser. Preview is a real draft
+render (~25 s; no second listen or AI spelling pass) so framing, captions and hook
+are exactly the clip's. The brief still decides: an edit class it or the campaign
+forbids is refused even by hand (with its words); one that's merely off by default
+(Clipper doesn't cut scripted scenes itself) is the person's call. Briefs that say
+"only use the provided footage" / "no outside footage" now forbid overlays and added
+audio. Not yet: B-roll, auto silence cuts as editable cuts, saved styles.
