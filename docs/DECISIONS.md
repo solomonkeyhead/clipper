@@ -2187,3 +2187,21 @@ with a note, never a failed build. Notes ("Your clips:" block) stay on the finis
 been paid (recorded payouts), and says how much is earned on paper by posts still under their
 campaign's minimum payout, which pays nothing yet (`stats.locked_earnings`; the minimum is
 applied per post, as `estimate_earnings` always has). Campaign cards and pages show the same.
+
+## D120 — Manual first-class: the user's own script, and a list of what is still automatic-only (2026-10-03)
+
+The user does not want Clipper to be all-automatic: many users need some steps and not others, and
+should find a full studio, not a vending machine. Rule: automatic by default, manual always
+available, nothing manual behind a plan tier (recorded in CLAUDE.md; the gaps are tabled in
+docs/MANUAL_CONTROLS.md).
+
+Shipped with it: **write your own script.** "Write your own script" on Create takes pasted or typed
+text (`script.split_beats`: a line is a sentence if the user broke lines, else split after . ! ?
+but not after "Dr." "e.g." or 3.5, fragments joined, over-long sentences cut at a comma) and keeps every
+word. Optional: Claude plans pictures and checks physics, and if it can't, the script is kept with
+plain searches and a note. Drafts can now add, remove and move sentences; edit the description,
+hashtags and highlight word; and choose each picture (footage by their own search words, a chalk
+phrase, a drawing they describe), marked `Visual.manual` so tidy-up rules and "Plan pictures" leave it
+alone. "Plan pictures" and "Check physics" are separate buttons; "Another take" is hidden for the
+user's own scripts (it would overwrite them; the server refuses too); "Edit the script again" undoes
+approval. A manual drawing's idea is used when it is drawn at build time.

@@ -612,6 +612,7 @@ export type ClipFill = "auto" | "planned" | "loop" | "slow" | "hold";
 export interface CreateVisual {
   kind: "stock" | "diagram"; query: string; queries?: string[]; card?: string; template: string; title: string; labels: string[];
   clip?: string; clip_start?: number | null; fill?: ClipFill;   // the user's own clip for this sentence (D119)
+  manual?: boolean; idea?: string; sketch?: unknown;            // a picture the user chose (D120)
 }
 export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
 export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
@@ -663,6 +664,10 @@ export const createApi = {
   build: (video: number) => send("POST", `/api/create/videos/${video}/build`),
   pictures: (video: number) => send("POST", `/api/create/videos/${video}/pictures`),
   remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),
+  own: (body: { title: string; text: string; description: string; hashtags: string; plan: boolean }) =>
+    send<{ id: number }>("POST", "/api/create/videos", body),
+  plan: (video: number) => send("POST", `/api/create/videos/${video}/plan`),
+  check: (video: number) => send<{ notes: string }>("POST", `/api/create/videos/${video}/check`),
   clipAdd: async (video: number, file: File) => {
     const res = await fetch(`/api/create/videos/${video}/clips/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
     const data = await res.json().catch(() => ({}));

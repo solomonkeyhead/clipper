@@ -1,11 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, CheckCircle2, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, RefreshCw, Shapes, Trash2, Upload,
-  Wand2, X,
+  AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
+  Trash2, Upload, Wand2, X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { createApi, useClips, useCreate, useCreateAI, type CreateScript, type CreateTopic, type CreateVideo } from "@/api/client";
+import {
+  createApi, useClips, useCreate, useCreateAI, type CreateScript, type CreateTopic, type CreateVideo, type CreateVisual,
+} from "@/api/client";
 import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { cn, copyText } from "@/lib/utils";
@@ -21,8 +23,8 @@ export function CreatePage() {
       <div>
         <CaptionTitle text="Make a Short" hi="Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
         <p className="mt-2 text-sm text-muted">
-          For <b className="text-fg">{data.channel.name}</b> ({data.channel.handle}). Pick an idea, approve the script, make the voice on
-          ElevenLabs, drop it in: Clipper builds the rest.
+          For <b className="text-fg">{data.channel.name}</b> ({data.channel.handle}). Pick an idea or write your own script, approve it, make the voice on
+          ElevenLabs, drop it in: Clipper builds the rest. Every step has a manual option.
         </p>
         <AIStrip />
       </div>
@@ -30,8 +32,9 @@ export function CreatePage() {
         {/* The video in progress comes first on a phone-width window; the ideas wait below it. */}
         <div className="order-2 lg:order-1"><Ideas topics={data.topics} /></div>
         <div className="order-1 flex flex-col gap-4 lg:order-2">
+          <YourOwn />
           {data.videos.length === 0 && (
-            <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it: the script takes about 20 seconds." />
+            <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (about 20 seconds), or write your own script." />
           )}
           {data.videos.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} wps={data.channel.words_per_second} />)}
         </div>
@@ -57,6 +60,67 @@ function AIStrip() {
       {miss && <span className="text-subtle">Last problem: {miss[1]}</span>}
       {ai.spent_usd > 0 && <span className="text-subtle">This session so far: about ${ai.spent_usd.toFixed(2)} at API prices (free on a plan).</span>}
     </p>
+  );
+}
+
+/** Write the script yourself (D120): paste or type it, and Clipper cuts it into sentences, keeping every
+ *  word. Pictures and the physics check are optional help, not a requirement. */
+function YourOwn() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [description, setDescription] = useState("");
+  const [hashtags, setHashtags] = useState("");
+  const [plan, setPlan] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const count = text.split(/\s+/).filter(Boolean).length;
+  const create = async () => {
+    setBusy(true);
+    try {
+      await createApi.own({ title, text, description, hashtags, plan });
+      toast.success("Script created", { description: plan ? "Pictures planned and physics checked." : "Choose the pictures yourself, or press Plan pictures." });
+      setTitle(""); setText(""); setDescription(""); setHashtags(""); setOpen(false);
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);   // what was typed stays in the box
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open) {
+    return (
+      <div className="flex">
+        <Button variant="secondary" onClick={() => setOpen(true)}><PenLine className="size-4" /> Write your own script</Button>
+      </div>
+    );
+  }
+  const field = "rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-accent focus:outline-none";
+  return (
+    <Card className="flex flex-col gap-3 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold"><PenLine className="size-4 text-accent" /> Your own script</h2>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional: the first sentence is used)" aria-label="Title" className={cn(field, "font-semibold")} />
+      <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} aria-label="Script"
+                placeholder={"Paste or type your script. Each sentence becomes one picture.\nPress Enter to cut it yourself: one line is one sentence."}
+                className={cn(field, "resize-y")} />
+      <p className={cn("text-xs", count && (count < 70 || count > 130) ? "text-warning" : "text-muted")}>
+        {count} words · about {Math.round(count / 2.6)}s read aloud{count > 130 ? " · long for a Short" : count && count < 70 ? " · short for a Short" : ""}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description for the post (optional)" aria-label="Description" className={cn(field, "resize-none")} />
+        <textarea rows={2} value={hashtags} onChange={(e) => setHashtags(e.target.value)} placeholder="#hashtags (optional)" aria-label="Hashtags" className={cn(field, "resize-none")} />
+      </div>
+      <label className="flex items-start gap-2 text-sm text-muted">
+        <input type="checkbox" className="mt-1" checked={plan} onChange={(e) => setPlan(e.target.checked)} />
+        <span>Plan the pictures and check the physics for me. Your words are never changed. Leave it off to choose every picture yourself.</span>
+      </label>
+      <div className="flex items-center gap-2">
+        <Button variant="primary" disabled={busy || !text.trim()} onClick={() => void create()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy ? (plan ? "Planning…" : "Creating…") : "Create"}
+        </Button>
+        <Button variant="ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
+      </div>
+    </Card>
   );
 }
 
@@ -215,12 +279,35 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
           <Button variant="primary" disabled={busy !== null} onClick={run("approve", () => createApi.approve(video.id))}>
             <CheckCircle2 className="size-4" /> Approve script
           </Button>
-          <Button variant="secondary" disabled={busy !== null} onClick={run("rewrite", () => createApi.rewrite(video.id), "A new take")}>
-            {busy === "rewrite" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "rewrite" ? "Writing…" : "Another take"}
-          </Button>
+          {video.topic_id !== null && (
+            <Tip label="Write a different script for the same idea. Replaces what's here.">
+              <Button variant="secondary" disabled={busy !== null} onClick={run("rewrite", () => createApi.rewrite(video.id), "A new take")}>
+                {busy === "rewrite" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "rewrite" ? "Writing…" : "Another take"}
+              </Button>
+            </Tip>
+          )}
+          <Tip label="Claude plans a picture for each sentence you haven't chosen one for, and checks the physics. Your words stay as written.">
+            <Button variant="secondary" disabled={busy !== null} onClick={run("plan", () => createApi.plan(video.id), "Pictures planned")}>
+              {busy === "plan" ? <Loader2 className="size-4 animate-spin" /> : <Shapes className="size-4" />} {busy === "plan" ? "Planning…" : "Plan pictures"}
+            </Button>
+          </Tip>
+          <Tip label="Claude reads the script for physics mistakes and tells you; it changes nothing.">
+            <Button variant="secondary" disabled={busy !== null} onClick={run("check", () => createApi.check(video.id), "Physics checked")}>
+              {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : "Check physics"}
+            </Button>
+          </Tip>
           <Button variant="ghost" className="ml-auto" disabled={busy !== null} onClick={remove}><Trash2 className="size-4" /> Delete</Button>
         </div>
-      ) : <VoiceStep video={video} />}
+      ) : (
+        <>
+          <VoiceStep video={video} />
+          {video.status === "approved" && (
+            <Button variant="ghost" className="self-start" disabled={busy !== null} onClick={run("unapprove", () => createApi.edit(video.id, {}))}>
+              <PenLine className="size-4" /> Edit the script again
+            </Button>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -236,12 +323,62 @@ function CheckNote({ text }: { text: string }) {
   );
 }
 
+const blankVisual = (): CreateVisual => ({ kind: "stock", query: "", queries: [], template: "", title: "", labels: [] });
+type PictureKind = "auto" | "stock" | "card" | "sketch";
+const kindOf = (v: CreateVisual): PictureKind =>
+  !v.manual ? "auto" : v.kind === "stock" ? "stock" : v.template === "card" ? "card" : "sketch";
+
+/** Choosing a sentence's picture yourself (D120): footage by your own search words, a chalk
+ *  phrase, or a drawing you describe. "Automatic" hands it back to Clipper. */
+function PictureChoice({ visual, emphasis, onChange }: {
+  visual: CreateVisual; emphasis: string; onChange: (v: CreateVisual, emphasis?: string) => void;
+}) {
+  const kind = kindOf(visual);
+  const value = kind === "stock" ? (visual.queries?.length ? visual.queries : [visual.query]).filter(Boolean).join(", ")
+    : kind === "card" ? visual.title : kind === "sketch" ? visual.idea ?? "" : "";
+  const placeholder = kind === "stock" ? "search words, e.g. skull, sound waves" : kind === "card" ? "the phrase to chalk on the board" : "what to draw";
+  const pick = (next: PictureKind) => {
+    if (next === "auto") return onChange({ ...visual, manual: false });
+    if (next === "stock") return onChange({ ...visual, kind: "stock", manual: true, queries: visual.queries?.length ? visual.queries : visual.query ? [visual.query] : [] });
+    if (next === "card") return onChange({ ...visual, kind: "diagram", template: "card", manual: true, title: visual.title || emphasis });
+    return onChange({ ...visual, kind: "diagram", template: "sketch", manual: true, idea: visual.idea ?? "", sketch: null });
+  };
+  const commit = (text: string) => {
+    const t = text.trim();
+    if (kind === "stock") {
+      const q = t.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 3);
+      return onChange({ ...visual, queries: q, query: q[0] ?? "" });
+    }
+    if (kind === "card") return onChange({ ...visual, title: t });
+    if (kind === "sketch") return onChange({ ...visual, idea: t, sketch: null });
+  };
+  const field = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <select value={kind} aria-label="Picture" className={field} onChange={(e) => pick(e.target.value as PictureKind)}>
+        <option value="auto">Picture: automatic</option>
+        <option value="stock">Footage I search for</option>
+        <option value="card">Chalk phrase</option>
+        <option value="sketch">Drawing I describe</option>
+      </select>
+      {kind !== "auto" && (
+        <input key={`${kind}-${value}`} defaultValue={value} placeholder={placeholder} aria-label={placeholder}
+               onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
+               onBlur={(e) => e.target.value.trim() !== value && commit(e.target.value)}
+               className={cn(field, "min-w-48 flex-1")} />
+      )}
+    </div>
+  );
+}
+
 function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
   const qc = useQueryClient();
   const s = video.script;
   const [beats, setBeats] = useState(s.beats);
   const [title, setTitle] = useState(s.title);
-  useEffect(() => { setBeats(s.beats); setTitle(s.title); }, [s]);
+  const [description, setDescription] = useState(s.description ?? "");
+  const [tags, setTags] = useState((s.hashtags ?? []).join(" "));
+  useEffect(() => { setBeats(s.beats); setTitle(s.title); setDescription(s.description ?? ""); setTags((s.hashtags ?? []).join(" ")); }, [s]);
   const save = async (next: Partial<CreateScript>) => {
     try {
       await createApi.edit(video.id, next);
@@ -250,28 +387,68 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
       toast.error((e as Error).message);
     }
   };
+  /** Structural changes (add, remove, move, a picture) save at once; text saves when you leave it. */
+  const commit = (next: typeof beats) => { setBeats(next); void save({ beats: next }); };
+  const patch = (i: number, change: Partial<(typeof beats)[number]>) => commit(beats.map((x, j) => (j === i ? { ...x, ...change } : x)));
+  const move = (i: number, by: number) => {
+    const next = [...beats];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    commit(next);
+  };
   const n = words({ ...s, beats });
   const seconds = Math.round(n / wps);
   const locked = video.status !== "draft";
+  const small = "size-7";
   return (
     <div className="flex flex-col gap-2">
       <input value={title} disabled={locked} onChange={(e) => setTitle(e.target.value)}
              onBlur={() => title !== s.title && void save({ title })} aria-label="Title"
              className="rounded-md border border-line bg-surface-2 px-3 py-2 font-semibold focus:border-accent focus:outline-none disabled:opacity-80" />
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {beats.map((b, i) => (
-          <div key={i} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_200px]">
-            <textarea rows={2} value={b.text} disabled={locked} aria-label={`Sentence ${i + 1}`}
-                      onChange={(e) => setBeats(beats.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-                      onBlur={() => b.text !== s.beats[i]?.text && void save({ beats })}
-                      className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
-            <Picture visual={b.visual} />
+          <div key={i} className={cn("flex flex-col gap-1.5", !locked && "rounded-md border border-line p-2")}>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_200px]">
+              <textarea rows={2} value={b.text} disabled={locked} aria-label={`Sentence ${i + 1}`}
+                        onChange={(e) => setBeats(beats.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                        onBlur={() => b.text !== s.beats[i]?.text && void save({ beats })}
+                        className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+              <Picture visual={b.visual} />
+            </div>
+            {!locked && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <PictureChoice visual={b.visual} emphasis={b.emphasis} onChange={(v, emphasis) => patch(i, { visual: v, ...(emphasis !== undefined ? { emphasis } : {}) })} />
+                <Tip label="The word shown highlighted in the captions">
+                  <input key={b.emphasis} defaultValue={b.emphasis} placeholder="highlight word" aria-label={`Highlight word, sentence ${i + 1}`}
+                         onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
+                         onBlur={(e) => e.target.value.trim() !== b.emphasis && patch(i, { emphasis: e.target.value.trim() })}
+                         className="h-8 w-32 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
+                </Tip>
+                <span className="ml-auto flex items-center">
+                  <Tip label="Move up"><Button size="icon" variant="ghost" className={small} aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="size-3.5" /></Button></Tip>
+                  <Tip label="Move down"><Button size="icon" variant="ghost" className={small} aria-label="Move down" disabled={i === beats.length - 1} onClick={() => move(i, 1)}><ArrowDown className="size-3.5" /></Button></Tip>
+                  <Tip label="Add a sentence below"><Button size="icon" variant="ghost" className={small} aria-label="Add a sentence below"
+                    onClick={() => commit([...beats.slice(0, i + 1), { text: "New sentence.", emphasis: "", visual: blankVisual() }, ...beats.slice(i + 1)])}><Plus className="size-3.5" /></Button></Tip>
+                  <Tip label="Remove this sentence"><Button size="icon" variant="ghost" className={small} aria-label="Remove this sentence" disabled={beats.length <= 1}
+                    onClick={() => commit(beats.filter((_, j) => j !== i))}><X className="size-3.5" /></Button></Tip>
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>
       <p className={cn("text-xs", n < 70 || n > 130 ? "text-warning" : "text-muted")}>
-        {n} words · about {seconds}s read aloud{n > 130 ? " · long for a Short" : n < 70 ? " · short; Another take may give more" : ""}
+        {n} words · about {seconds}s read aloud{n > 130 ? " · long for a Short" : n < 70 ? " · short for a Short" : ""}
       </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <textarea rows={2} value={description} disabled={locked} aria-label="Description" placeholder="Description for the post"
+                  onChange={(e) => setDescription(e.target.value)}
+                  onBlur={() => description !== (s.description ?? "") && void save({ description })}
+                  className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+        <textarea rows={2} value={tags} disabled={locked} aria-label="Hashtags" placeholder="#hashtags, up to 5"
+                  onChange={(e) => setTags(e.target.value)}
+                  onBlur={() => tags !== (s.hashtags ?? []).join(" ") && void save({ hashtags: tags.split(/[\s,]+/).filter(Boolean) })}
+                  className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+      </div>
     </div>
   );
 }

@@ -153,8 +153,9 @@ def _fallback(beat, script: Script) -> Visual:
     from .sketch import draw
 
     try:
-        drawn = draw(beat.text, f"A simple, striking sketch of what this sentence shows; the key idea: "
-                                f"{beat.visual.card or beat.emphasis}.", script.text)
+        idea = beat.visual.idea.strip() or (f"A simple, striking sketch of what this sentence shows; the key idea: "
+                                            f"{beat.visual.card or beat.emphasis}.")  # the user's own idea, if they gave one (D120)
+        drawn = draw(beat.text, idea, script.text)
         if drawn.marks:
             return Visual(kind="diagram", template="sketch", sketch=drawn)
     except CreateError as exc:

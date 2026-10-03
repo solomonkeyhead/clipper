@@ -47,6 +47,9 @@ class Visual(BaseModel):
     clip: str = ""                  # id of one of the video's own clips; "" = the planned picture
     clip_start: float | None = None  # seconds into that clip; None = where the last sentence left off
     fill: Literal["auto", "planned", "loop", "slow", "hold"] = "auto"   # when the clip is too short
+    # Chosen by the user on the page (D120): kept as picked when the script is tidied or the
+    # pictures are planned again, not bent to the rules the writer's plans are held to.
+    manual: bool = False
 
 
 class Beat(BaseModel):
@@ -151,8 +154,74 @@ def _without_clips(script: Script) -> Script:
     """A written script has no clips of the user's: the writer sees these fields in its schema
     and could invent ids."""
     return script.model_copy(update={"beats": [
-        b.model_copy(update={"visual": b.visual.model_copy(update={"clip": "", "clip_start": None, "fill": "auto"})})
+        b.model_copy(update={"visual": b.visual.model_copy(update={"clip": "", "clip_start": None, "fill": "auto", "manual": False})})
         for b in script.beats]})
+
+
+#: Short words that end in a full stop without ending the sentence.
+_ABBREVIATIONS = {"dr", "mr", "mrs", "ms", "vs", "etc", "e.g", "i.e", "approx", "st", "no", "fig", "eq", "ca", "cf", "prof"}
+
+
+def split_beats(text: str) -> list[str]:
+    """A written script cut into one spoken sentence per beat. A script with line breaks is
+    taken as the user cut it, a line a beat. Otherwise it is split after . ! ? (not after
+    "Dr.", "e.g.", "3.5"), a too-short fragment joins the next sentence, and a too-long one
+    is split at a semicolon or comma near its middle, so each beat is a breath long."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [re.sub(r"^\s*(?:[-*\u2022]|\d{1,2}[.)])\s+", "", ln) for ln in text.split("\n")]
+    lines = [" ".join(ln.split()) for ln in lines if ln.strip()]
+    if len(lines) >= 2:
+        return lines
+    flat = " ".join(lines)
+    pieces, start = [], 0
+    for m in re.finditer(r"[.!?]+[\"')\]]*\s+(?=[\"'(\[]?[A-Z0-9])", flat):
+        before = flat[start:m.start()].split()
+        if before and before[-1].lower().rstrip(".") in _ABBREVIATIONS:
+            continue
+        pieces.append(flat[start:m.end()].strip())
+        start = m.end()
+    if flat[start:].strip():
+        pieces.append(flat[start:].strip())
+    merged: list[str] = []
+    carry = ""
+    for piece in pieces:
+        piece = f"{carry} {piece}".strip()
+        carry = ""
+        if len(piece.split()) < 4:
+            carry = piece
+            continue
+        merged.append(piece)
+    if carry:
+        if merged:
+            merged[-1] = f"{merged[-1]} {carry}"
+        else:
+            merged.append(carry)
+    out: list[str] = []
+    for piece in merged:
+        words = piece.split()
+        if len(words) > 26:
+            cuts = [i for i, w in enumerate(words) if w.endswith((";", ",")) and 6 <= i + 1 <= len(words) - 6]
+            if cuts:
+                at = min(cuts, key=lambda i: abs(i + 1 - len(words) / 2)) + 1
+                out += [" ".join(words[:at]), " ".join(words[at:])]
+                continue
+        out.append(piece)
+    return out
+
+
+def from_text(title: str, text: str, description: str = "", hashtags: list[str] | None = None) -> Script:
+    """The user's own script (D120): their words, one beat per sentence, a plain footage search
+    on each from the sentence's longest words until pictures are planned or chosen."""
+    beats = split_beats(text)
+    if not beats:
+        raise CreateError("write the script first: there are no sentences in it")
+    if len(beats) > 40 or sum(len(b.split()) for b in beats) > 400:
+        raise CreateError("that's too long for a Short (over 400 words); cut it down")
+    title = " ".join(title.split()) or beats[0].rstrip(".!?")[:60]
+    made = Script(title=title[:100], description=description.strip()[:1000],
+                  hashtags=[h for h in (hashtags or []) if h.strip()],
+                  beats=[Beat(text=b, visual=Visual(kind="stock", query=_query_from(b))) for b in beats])
+    return tidy(made)
 
 
 def tidy(script: Script) -> Script:
@@ -161,6 +230,15 @@ def tidy(script: Script) -> Script:
     beats = []
     for i, beat in enumerate(script.beats):
         v = beat.visual
+        if v.manual and (v.kind == "stock" or v.template in (*TEMPLATES, "card")):
+            # The user's own pick stands: no rule moves it (a chalk card first, say).
+            if v.kind == "stock":
+                queries = [q.strip() for q in [*v.queries, v.query] if q.strip()] or [_query_from(beat.text)]
+                v = v.model_copy(update={"queries": list(dict.fromkeys(queries))[:3], "query": queries[0]})
+            words = {w.strip(".,!?;:'\"").lower() for w in beat.text.split()}
+            emphasis = beat.emphasis if beat.emphasis.strip(".,!?").lower() in words else ""
+            beats.append(beat.model_copy(update={"visual": v, "emphasis": emphasis}))
+            continue
         diagram = v.kind == "diagram" and v.template in TEMPLATES
         # Bars of nothing in particular, or an equation with no formula, teach nothing.
         if diagram and v.template == "compare" and not v.title.strip():
@@ -290,8 +368,9 @@ def replan(script: Script) -> tuple[Script, str]:
             raise CreateError("the new plan changed the sentences; try again")
         # The words are the recording's: only the pictures are taken from the new plan.
         # ...and the user's own clips stay where they were put (D119).
+        # ...and so do the pictures the user chose themselves (D120).
         fresh = tidy(script.model_copy(update={"beats": [
-            b.model_copy(update={"visual": p.visual.model_copy(update={
+            b.model_copy(update={"visual": b.visual if b.visual.manual else p.visual.model_copy(update={
                 "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
                 "emphasis": p.emphasis or b.emphasis})
             for b, p in zip(script.beats, planned.beats, strict=True)]}))

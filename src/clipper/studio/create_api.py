@@ -145,7 +145,10 @@ def routes(app: FastAPI, publish) -> None:
         from ..create import script
 
         row = video_or_404(video_id)
-        topic = store.topic(row["topic_id"]) if row["topic_id"] else None
+        if not row["topic_id"]:  # the user's own script: no one to rewrite it from (D120)
+            raise HTTPException(400, "this is your own script, so there's no other take to write; "
+                                     "edit it, or use Plan pictures and Check physics")
+        topic = store.topic(row["topic_id"])
         question = topic["question"] if topic else row["script"].get("title", "")
         take = int(row["script"].get("take", 1)) + 1
         written, notes = await asyncio.to_thread(ai, script.write_checked, question,
@@ -377,6 +380,62 @@ def routes(app: FastAPI, publish) -> None:
         _put_script(row, script)
         publish("create.changed", {"id": video_id})
         return {"ok": True}
+
+    # ---------- the user's own script (D120) ----------
+
+    @app.post("/api/create/videos")
+    async def create_own(body: dict) -> dict:
+        """A script the user wrote: their words kept as they are, cut into sentences. With
+        `plan`, the model also plans the pictures and checks the physics; if it can't, the
+        script is kept anyway with plain footage searches and a note saying why."""
+        from ..create import script as scripts
+
+        tags = body.get("hashtags") or []
+        if isinstance(tags, str):
+            tags = tags.replace(",", " ").split()
+        try:
+            written = scripts.from_text(str(body.get("title") or ""), str(body.get("text") or ""),
+                                        str(body.get("description") or ""), [str(t) for t in tags])
+        except CreateError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        notes = "Written by you."
+        if body.get("plan"):
+            try:
+                written, planned = await asyncio.to_thread(scripts.replan, written)
+                notes = f"Written by you.\n{planned}"
+            except CreateError as exc:
+                notes = f"Written by you. The pictures weren't planned ({exc}); press Plan pictures to try again."
+        return {"id": store.add_video(None, written.model_dump(), notes)}
+
+    @app.post("/api/create/videos/{video_id}/plan")
+    async def create_plan(video_id: int) -> dict:
+        """Plan the pictures for the script as it is now (sentences kept as written, pictures the
+        user chose themselves kept too), with the physics check and the sketches drawn."""
+        from ..create import script as scripts
+
+        row = video_or_404(video_id)
+        _editable(row)
+        if row["status"] not in ("draft", "approved"):
+            raise HTTPException(400, "use New pictures on a finished video")
+        planned, notes = await asyncio.to_thread(ai, scripts.replan, _script(row))
+        store.update_video(video_id, script={**planned.model_dump(), "take": row["script"].get("take", 1)},
+                           check_notes=notes)
+        return {"ok": True}
+
+    @app.post("/api/create/videos/{video_id}/check")
+    async def create_check(video_id: int) -> dict:
+        """The physics check on its own, as the script stands."""
+        from ..create import ai as ai_module
+        from ..create import script as scripts
+
+        row = video_or_404(video_id)
+        ai_module.misses.clear()
+        review = await asyncio.to_thread(ai, scripts.check, _script(row))
+        notes = ("Physics check: no problems found." if review.ok or not review.problems
+                 else "Physics check:\n" + "\n".join(f"- {p}" for p in review.problems))
+        who = ai_module.last_used.split(":", 1)[-1] if ai_module.last_used else "unknown"
+        store.update_video(video_id, check_notes=f"{notes}\nChecked by: {who}.")
+        return {"notes": notes}
 
     @app.delete("/api/create/videos/{video_id}")
     def create_delete(video_id: int) -> dict:

@@ -21,6 +21,11 @@ so a push to master reaches him on his next start.
   for a D-number or a word, don't read it whole.
 - Code style: match the surrounding code; docstrings say why, with the D-number.
 
+## Design rule
+Automatic is the default and manual is always there (D120): every step Clipper does for the user
+shows what it did and lets them take over, partly or wholly, and nothing manual sits behind a plan
+tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row when you add a step.
+
 ## Standing rules
 - Never send Marc's email address anywhere.
 - Secrets only in `.env` (git-ignored), never in the repo or in logs.
