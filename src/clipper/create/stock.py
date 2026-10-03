@@ -4,8 +4,8 @@ required; D109 added Pexels, whose people footage is far better than Pixabay's).
 Both searches are loose ("human ear close up" found a lipstick, "man yawning in
 an airplane seat" a tiger) and thin on people doing specific things, so each beat
 has three searches, most specific first; the model looks at the candidates from all
-of them, both libraries, with the sentence and picks one, or none -- then the beat
-gets a chalkboard card (create/diagrams.py) rather than unrelated footage.
+of them, both libraries, with the sentence, picks one and scores it; under 7 of 10
+(or when no model can look) the beat gets a chalkboard card (create/diagrams.py) rather than unrelated footage.
 Green-screen and transparent-background clips are left out. Long enough and unused
 in the video first. A library without a key is skipped. Searches are cached for a
 day and downloads for good (both ask API users to cache), under data/create/stock/.
@@ -25,7 +25,10 @@ from PIL import Image
 from pydantic import BaseModel
 
 from ..paths import data_root, ensure
+from ..utils.logging import get_logger
 from .ai import CreateError, ask
+
+log = get_logger(__name__)
 
 API = "https://pixabay.com/api/videos/"
 PEXELS = "https://api.pexels.com/videos/search"
@@ -140,19 +143,28 @@ def pixabay(query: str) -> list[dict]:
 CANDIDATES = 12
 PER_QUERY = 6
 
-PICK = """You choose stock footage for one sentence of a short educational video, shown full
-screen on a phone (tall 9:16 frame, so the middle of a wide shot is what stays). You see
-numbered thumbnails of candidate clips, each with what its library says it shows. Pick the
-one a viewer would instantly connect with what the sentence says: the thing itself, or a
-person plainly experiencing it, centred and close enough to read on a phone. A close,
-everyday match is fine (headphones for hearing, a microphone for recording). Answer 0 if
-every one is unrelated, would confuse the viewer, or looks cheap (cartoonish, a green
-background, text or a logo burned in). A chalkboard card is shown instead, so 0 is better
-than a loose match. Answer pick = its number, or 0."""
+PICK = """You choose stock footage for one sentence of a short educational video, shown on a
+phone. You see numbered thumbnails of candidate clips, each with what its library says it
+shows. Find the one a viewer would instantly connect with what the sentence says: the thing
+itself, or a person plainly experiencing it, clear and close enough to read on a phone. A
+close, everyday match counts (headphones for hearing, a microphone for recording).
+Then score how well that best one fits, honestly:
+  9-10 it shows exactly what the sentence says;
+  7-8  a clear, natural match a viewer gets at once;
+  4-6  related, but loose, generic or needs explaining (a lab for "your voice");
+  0-3  unrelated, confusing, or cheap-looking (cartoonish, a green background, text or a
+       logo burned in, a stock-footage cliche).
+Below 7 a chalkboard card is shown instead, which is better than a loose match, so don't
+round up. Answer pick = its number (0 if none) and score."""
+
+#: The judge's score a clip needs to be used; below it the beat gets a chalk card (D110).
+#: Picks were judged "very poor" when any non-zero pick was taken.
+GOOD_ENOUGH = 7
 
 
 class _Pick(BaseModel):
     pick: int
+    score: int = 0
 
 
 def _thumb(hit: dict) -> bytes | None:
@@ -189,10 +201,14 @@ def _judge(sentence: str, query: str, hits: list[dict]) -> dict | None:
         prompt = (f"Sentence: {sentence}\nSearched for: {query}\n"
                   f"Thumbnails 1 to {len(shown)}, in order:\n{listed}")
         answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown])
-        n = _Pick.model_validate(json.loads(answer)).pick
+        verdict = _Pick.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
         raise _NoAnswer from exc
-    return shown[n - 1][0] if 1 <= n <= len(shown) else None
+    n = verdict.pick
+    if not 1 <= n <= len(shown) or verdict.score < GOOD_ENOUGH:
+        log.info("create: no footage good enough for %r (best %s scored %s)", sentence[:60], n, verdict.score)
+        return None
+    return shown[n - 1][0]
 
 
 def choose(queries: list[str], seconds: float, used: set, sentence: str = "") -> dict | None:
@@ -213,7 +229,7 @@ def choose(queries: list[str], seconds: float, used: set, sentence: str = "") ->
     try:
         return _judge(sentence, " / ".join(queries), ranked)
     except _NoAnswer:
-        return pool[0]  # no one to ask: the most specific search's own best match
+        return None  # no one to judge: a chalk card, as the search alone picked lipsticks for ears
 
 
 def fetch(hit: dict) -> Path:

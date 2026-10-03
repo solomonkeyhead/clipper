@@ -36,19 +36,32 @@ log = get_logger(__name__)
 W, H, FPS = 1080, 1920, 30
 MAX_SHOT = 4.5
 PUSH_IN = 0.06
+#: Where a wide clip's middle sits: in the diagrams' band, above the captions.
+WIDE_CENTER = 760
 WATERMARK_WIDTH = 150
 
 
 def _stock_shot(src: Path, seconds: float, out: Path) -> Path:
-    """`seconds` of a stock clip, filled to 9:16, pushing in slowly."""
-    length = probe(src).duration or seconds
+    """`seconds` of a stock clip on the 9:16 frame, pushing in slowly. A tall clip fills
+    it; a wide one is shown whole, across the middle, over a blurred, darkened copy of
+    itself -- cropping a wide shot to a phone's width kept a sliver of the middle and cut
+    the subject out (D110)."""
+    info = probe(src)
+    length = info.duration or seconds
     offset = min(length * 0.15, max(0.0, length - seconds - 0.1))
-    zoom = (f"scale=w='trunc({W}*(1+{PUSH_IN}*t/{seconds:.3f})/2)*2':h=-2:eval=frame,"
-            f"crop={W}:{H}")
+    push = f"(1+{PUSH_IN}*t/{seconds:.3f})"
+    if info.width > info.height * 1.05:
+        h = round(W * 9 / 16 / 2) * 2
+        vf = (f"split[a][b];[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+              f"boxblur=40:2,eq=brightness=-0.18[bg];"
+              f"[b]scale=w='trunc({W}*1.08*{push}/2)*2':h=-2:eval=frame,crop='min(iw,{W})':'min(ih,{h})'[fg];"
+              f"[bg][fg]overlay=(W-w)/2:{WIDE_CENTER}-h/2,fps={FPS},setsar=1")
+    else:
+        vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+              f"scale=w='trunc({W}*{push}/2)*2':h=-2:eval=frame,crop={W}:{H},fps={FPS},setsar=1")
     run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y",
          *(["-stream_loop", "-1"] if length < seconds + offset else ["-ss", f"{offset:.3f}"]),
-         "-i", str(src), "-t", f"{seconds:.3f}", "-an",
-         "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},{zoom},fps={FPS},setsar=1",
+         "-i", str(src), "-t", f"{seconds:.3f}", "-an", "-filter_complex" if "[" in vf else "-vf", vf,
          "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", str(out)])
     return out
 
@@ -60,7 +73,8 @@ def shots(script: Script, timings: Timings, work: Path, progress=None) -> list[P
             progress(f"Shot {i + 1} of {len(script.beats)}", 10 + 60 * i / len(script.beats))
         seconds = b - a
         if beat.visual.kind == "diagram":
-            made.append(diagrams.render(beat.visual, seconds, work / f"{i:02d}_diagram.mp4"))
+            said = [(w.start - a, w.text) for w in timings.words if a - 0.05 <= w.start < b]
+            made.append(diagrams.render(beat.visual, seconds, work / f"{i:02d}_diagram.mp4", words=said))
             continue
         parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
         queries = beat.visual.queries or [beat.visual.query]

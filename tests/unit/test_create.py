@@ -60,7 +60,7 @@ class TestStock:
         assert stock.choose(["ear close up", "headphones"], 6.0, used={4}, sentence="Your middle ear")["id"] == 2
         assert seen[0] == [3, 2, 1]  # long enough and vertical, long enough, too short; 4 already used
 
-    def test_nothing_fitting_means_no_footage_but_no_answer_trusts_the_search(self, monkeypatch):
+    def test_nothing_fitting_or_no_judge_means_a_chalk_card(self, monkeypatch):
         monkeypatch.setattr(stock, "search", lambda q: HITS)
         monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits: None)
         assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # a chalk card instead
@@ -68,7 +68,7 @@ class TestStock:
         def busy(sentence, q, hits):
             raise stock._NoAnswer
         monkeypatch.setattr(stock, "_judge", busy)
-        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s")["id"] == 1  # the search's own best
+        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # no judge: a card too
 
     def test_green_screen_footage_is_left_out(self, monkeypatch, tmp_path):
         import httpx
@@ -215,3 +215,39 @@ def test_claude_goes_first_only_with_a_key(monkeypatch):
     assert first.name == "anthropic" and first.model == config.llm.create_model
     free = config.model_copy(update={"llm": config.llm.model_copy(update={"create_model": None})})
     assert all(b.name != "anthropic" for b in ai.backends(free))
+
+
+def test_a_loose_match_is_not_good_enough(monkeypatch):
+    monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
+    for score, expect in ((6, None), (7, 2)):
+        monkeypatch.setattr(stock, "ask", lambda *a, score=score, **k: f'{{"pick": 2, "score": {score}}}')
+        hit = stock._judge("Your voice sounds deeper inside your head.", "voice", HITS[:3])
+        assert (hit and hit["id"]) == expect
+
+
+def test_diagram_pieces_arrive_as_they_are_said():
+    from clipper.create.diagrams import cues
+
+    v = Visual(kind="diagram", template="chain", labels=["bone vibrates", "skull carries bass", "deeper voice"])
+    said = [(0.0, "Your"), (0.3, "bones"), (0.8, "vibrate,"), (1.5, "and"), (1.7, "your"), (2.0, "skull"),
+            (2.6, "carries"), (3.4, "the"), (3.6, "bass.")]
+    assert cues(v, said) == [0.3, 2.0, None]  # "deeper" is never said: it keeps the default schedule
+    # A later label said earlier than the one before it still waits its turn.
+    assert cues(Visual(labels=["skull", "bones"]), said) == [2.0, None]
+
+
+def test_wide_footage_is_shown_whole_not_cropped(tmp_path):
+    import shutil
+    import subprocess
+
+    from clipper.create.build import H, W, _stock_shot
+    from clipper.ingest.probe import probe
+
+    if not shutil.which("ffmpeg"):
+        pytest.skip("no ffmpeg")
+    src = tmp_path / "wide.mp4"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30",
+                    "-t", "2", str(src)], check=True)
+    out = _stock_shot(src, 1.5, tmp_path / "out.mp4")
+    info = probe(out)
+    assert (info.width, info.height) == (W, H) and info.duration == pytest.approx(1.5, abs=0.1)

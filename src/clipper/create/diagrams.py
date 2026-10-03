@@ -13,6 +13,7 @@ y 1100-1200), clear of the platform's buttons.
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import math
 import random
 import re
@@ -77,11 +78,41 @@ def ease(x: float) -> float:
     return 1 - (1 - x) ** 3
 
 
-def stage(t: float, d: float, i: int, n: int) -> float:
-    """How far element `i` of `n` has arrived at time `t`: they come in turn over 60% of `d`."""
+#: When each label's words are spoken, seconds into the shot (None: not said), for the
+#: frame being drawn; set by render().
+CUES: contextvars.ContextVar[list[float | None]] = contextvars.ContextVar("cues", default=[])
+
+
+def stage(t: float, d: float, i: int, n: int, label: int | None = None) -> float:
+    """How far element `i` of `n` has arrived at time `t`: they come in turn over 60% of `d`;
+    or, for the element showing label `label`, just as the voice says it (D110: pieces
+    drawn on a fixed schedule ran ahead of, or behind, the words)."""
+    cues = CUES.get()
+    if label is not None and label < len(cues) and cues[label] is not None:
+        return ease((t - cues[label] + 0.15) / 0.45)
     window = 0.6 * d
     each = window / max(1, n)
     return ease((t - i * each * 0.85) / max(0.25, each))
+
+
+def _stem(word: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", word.lower())[:5]
+
+
+def cues(v: Visual, words: list[tuple[float, str]]) -> list[float | None]:
+    """When each label is first said in the shot's words ((start, text) pairs, seconds into
+    the shot): the earliest word sharing a stem with one of the label's words of 3+ letters,
+    never before the label ahead of it, so pieces still arrive in order."""
+    spoken = [(at, _stem(w)) for at, w in words if len(_stem(w)) >= 3]
+    out: list[float | None] = []
+    last = 0.0
+    for label in v.labels:
+        keys = {_stem(w) for w in label.split() if len(_stem(w)) >= 3}
+        hit = next((at for at, w in spoken if at >= last and any(w.startswith(k) or k.startswith(w) for k in keys)), None)
+        out.append(hit)
+        if hit is not None:
+            last = hit
+    return out
 
 
 def text(draw: ImageDraw.ImageDraw, xy: tuple[float, float], s: str, size: int, fill=CHALK,
@@ -144,7 +175,7 @@ def forces(draw, v: Visual, t: float, d: float) -> None:
     # What the forces act on, written in its box (an empty square read as "a box").
     text(draw, (cx, cy), v.subject, 52, CHALK, max_width=160, reveal=(p0 - 0.6) / 0.4)
     for i, label in enumerate(labels):
-        p = stage(t, d, i + 2, len(labels) + 2)
+        p = stage(t, d, i + 2, len(labels) + 2, label=i)
         dx, dy = DIRS.get(dirs[i], (0, -1))
         length = want[i] * scale * p
         start = (cx + dx * 100, cy + dy * 100)
@@ -173,7 +204,7 @@ def circle(draw, v: Visual, t: float, d: float) -> None:
         return
     ang = -math.pi / 2 + 2 * math.pi * t / 2.6
     x, y = cx + r * math.cos(ang), cy + r * math.sin(ang)
-    pv, pi = stage(t, d, 2, 4), stage(t, d, 3, 4)
+    pv, pi = stage(t, d, 2, 4, label=0), stage(t, d, 3, 4, label=1)
     tang = (-math.sin(ang), math.cos(ang))
     arrow(draw, (x, y), (x + tang[0] * 230 * pv, y + tang[1] * 230 * pv), YELLOW, width=12)
     arrow(draw, (x, y), (x + (cx - x) * 0.6 * pi, y + (cy - y) * 0.6 * pi), BLUE, width=12)
@@ -212,7 +243,7 @@ def equation(draw, v: Visual, t: float, d: float) -> None:
         span = width(size)
         draw.line([(W / 2 - span / 2, TOP + 245), (W / 2 + span / 2, TOP + 245)], fill=YELLOW, width=6)
     for i, label in enumerate(labels):
-        p = stage(t, d, len(tokens) + i, n)
+        p = stage(t, d, len(tokens) + i, n, label=i)
         text(draw, (W / 2, TOP + 340 + i * 88), label, 64, YELLOW if i == 0 else CHALK, reveal=p)
 
 
@@ -223,7 +254,7 @@ def compare(draw, v: Visual, t: float, d: float) -> None:
     title(draw, v, stage(t, d, 0, 3))
     base = BOTTOM - 70
     for i, (label, value) in enumerate(zip(labels, values, strict=True)):
-        p = stage(t, d, i + 1, 3)
+        p = stage(t, d, i + 1, 3, label=i)
         x = 330 + i * 420
         height = 400 * (value / top) * p
         color = YELLOW if i == 0 else BLUE
@@ -243,9 +274,10 @@ def chain(draw, v: Visual, t: float, d: float) -> None:
     y = first + (BOTTOM - first - total) / 2
     title(draw, v, stage(t, d, 0, n + 1)) if v.title else None
     for i, step in enumerate(steps):
-        p = stage(t, d, i + (1 if v.title else 0), n + (1 if v.title else 0))
-        if p <= 0:
-            break
+        p = stage(t, d, i + (1 if v.title else 0), n + (1 if v.title else 0), label=i)
+        if p <= 0:  # not said yet; a later step said already still shows, in its place
+            y += box + gap
+            continue
         color = YELLOW if i == n - 1 else CHALK
         draw.rounded_rectangle((150, y, W - 150, y + box), radius=28, outline=color, width=8)
         text(draw, (W / 2, y + box / 2), step, 64, color, max_width=700, reveal=p)
@@ -308,9 +340,9 @@ def wave(draw, v: Visual, t: float, d: float) -> None:
     lane = (BOTTOM - 20 - first) / n
     x0, x1 = 150, W - 150
     for i, label in enumerate(labels):
-        p = stage(t, d, i + 1, n + 1)
+        p = stage(t, d, i + 1, n + 1, label=i)
         if p <= 0:
-            break
+            continue
         mid = first + lane * i + lane / 2 + 25
         cycles = 1.2 + 4.8 * max(0.0, freqs[i]) / top_f
         amp = (lane / 2 - 60) * max(0.15, amps[i] / top_a)
@@ -336,9 +368,9 @@ def particles(draw, v: Visual, t: float, d: float) -> None:
     box_w = 380 if n == 2 else 600
     y0, y1 = TOP + (150 if v.title else 40), BOTTOM - 90
     for i, label in enumerate(labels):
-        p = stage(t, d, i + 1, n + 1)
+        p = stage(t, d, i + 1, n + 1, label=i)
         if p <= 0:
-            break
+            continue
         cx = W / 2 if n == 1 else (W / 2 - 230 if i == 0 else W / 2 + 230)
         x0, x1 = cx - box_w / 2, cx + box_w / 2
         color = YELLOW if i == 0 else BLUE
@@ -435,8 +467,10 @@ def frame(v: Visual, t: float, d: float) -> Image.Image:
     return img
 
 
-def render(v: Visual, seconds: float, out: Path) -> Path:
-    """The diagram as a silent 1080x1920 clip of exactly `seconds`."""
+def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] | None = None) -> Path:
+    """The diagram as a silent 1080x1920 clip of exactly `seconds`; with the shot's spoken
+    `words` ((start, text), seconds into the shot), each label arrives as it's said."""
+    CUES.set(cues(v, words or []))
     frames = max(1, round(seconds * FPS))
     proc = subprocess.Popen(
         [str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
