@@ -85,6 +85,24 @@ def routes(app: FastAPI, publish) -> None:
     def create_view() -> dict:
         return _view()
 
+    @app.get("/api/create/ai")
+    def create_ai() -> dict:
+        """Which AI Create will ask, and why any didn't answer. Makes no model call, so the
+        page can show it at all times: Claude or Gemini was a guess for two videos (D118)."""
+        from ..config import Config
+        from ..create import ai as create_ai_module
+        from ..llm import claude_code
+
+        config = Config.load()
+        try:
+            order = [b.describe() for b in create_ai_module.backends(config)]
+            problem = ""
+        except CreateError as exc:
+            order, problem = [], str(exc)
+        return {"order": order, "last_used": create_ai_module.last_used, "misses": dict(create_ai_module.misses),
+                "claude_only": config.llm.create_claude_only, "problem": problem,
+                "spent_usd": round(claude_code.spent_usd, 2)}
+
     @app.post("/api/create/ideas")
     async def create_ideas(body: dict | None = None) -> dict:
         from ..create import topics

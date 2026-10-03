@@ -34,9 +34,10 @@ function useNav(): NavItem[] {
   const waiting = clips.filter((c) => (c.status === "ready" || c.status === "posted") && active.has(c.campaign)).length;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
+    // Create is the daily job, so it sits right under the Dashboard (D118).
+    { to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" },
     { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C", badge: active.size },
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
-    { to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
     { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },
     { to: "/learning", label: "Learning", icon: <GraduationCap />, keys: "G R" },

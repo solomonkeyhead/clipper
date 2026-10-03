@@ -89,10 +89,10 @@ export function CommandPalette() {
         <Command.Empty className="px-4 py-8 text-center text-sm text-muted">No results.</Command.Empty>
         <Group heading="Go to">
           <Item icon={<LayoutDashboard />} label="Dashboard" keys="G D" onSelect={go("/")} />
+          <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
-          <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />
           <Item icon={<Send />} label="Clips ready to post" onSelect={go("/clips", { status: "ready" })} />
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />

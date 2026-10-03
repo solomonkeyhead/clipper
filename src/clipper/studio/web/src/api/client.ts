@@ -629,6 +629,17 @@ export const useCreate = () =>
     return res.json() as Promise<CreateView>;
   } });
 
+export interface CreateAI {
+  order: string[]; last_used: string; misses: Record<string, string>; claude_only: boolean; problem: string; spent_usd: number;
+}
+/** Which AI Create will ask, and why any didn't answer (no model call; D118). */
+export const useCreateAI = () =>
+  useQuery({ queryKey: ["create", "ai"], queryFn: async () => {
+    const res = await fetch("/api/create/ai");
+    if (!res.ok) throw new Error(res.statusText);
+    return res.json() as Promise<CreateAI>;
+  }, staleTime: 10_000 });
+
 async function send<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));

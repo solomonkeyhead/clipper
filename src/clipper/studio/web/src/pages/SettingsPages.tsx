@@ -475,9 +475,10 @@ function AIKey() {
     <Card className="flex flex-col gap-4 p-5" id="ai">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-md font-semibold">AI model</h2>
+          <h2 className="text-md font-semibold">AI model for clipping</h2>
           <p className="mt-0.5 text-sm text-muted">
-            Clipper uses Google's Gemini to find the best moments, write captions and read campaign briefs. It's free:
+            Clipping uses Google's Gemini to find the best moments, write captions and read campaign briefs. (Create, for your own
+            channel, uses your Claude plan; the Create page shows which AI is answering.) Gemini is free:
             get a key at <Ext href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</Ext> (sign in, <b className="text-fg">Create API key</b>, copy).
           </p>
         </div>
@@ -569,16 +570,6 @@ export function SettingsPage() {
       <AIKey />
       <Card className="divide-y divide-line px-5">
         <Row
-          title="Auto-post approved clips"
-          body={<>On: an approved clip posts itself through each platform's official API, after a 10-minute
-            hold you can cancel. Off: every post waits for your click. Posting from Clipper arrives in the next
-            update; this choice is saved for it.</>}
-          control={settings ? (
-            <Switch label="Auto-post" checked={settings.auto_post === "1"}
-                    onChange={(v) => save.mutate({ auto_post: v ? "1" : "0" })} />
-          ) : <Skeleton className="h-5 w-9" />}
-        />
-        <Row
           title="Sync every"
           body="How often Clipper fetches views and stats from your connected accounts while it's open. X is read at most hourly, since it charges per read."
           control={settings ? (
@@ -625,30 +616,46 @@ export function SettingsPage() {
           }
         />
         <Row
-          title="Plan (preview)"
-          body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats, up to 10 clips
-            a video and 3 videos at a time. <b className="text-fg">Research</b>: adds the Ask chat, choosing a clip's on-screen line,
-            writing your own captions, and 10 videos at a time. <b className="text-fg">Pro</b>: everything, including every clip a video
-            has, several accounts per platform with groups, and auto-posting once it's available. Nothing is billed; switch to see each tier.</>}
-          control={settings ? (
-            <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">
-              {([["free", "Free"], ["research", "Research"], ["pro", "Pro"]] as const).map(([value, label]) => (
-                <button key={value} role="radio" aria-checked={settings.plan === value}
-                        onClick={() => save.mutate({ plan: value }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ["research"] }) })}
-                        className={cn("h-8 rounded-sm px-3 text-sm",
-                          settings.plan === value ? "bg-surface-1 text-fg shadow-1" : "text-muted hover:text-fg")}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          ) : <Skeleton className="h-9 w-48" />}
-        />
-        <Row
           title="Single-key shortcuts"
           body="Keys like J, K, C and P. They never fire while you're typing. Ctrl K works either way."
           control={<Switch label="Single-key shortcuts" checked={shortcuts} onChange={setShortcutKeys} />}
         />
       </Card>
+      {/* Not used day to day: a switch for a feature still to come, and a preview of paid tiers (D118). */}
+      <details open={settings?.auto_post === "1" || undefined} className="group rounded-lg border border-line bg-surface-1">
+        <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted hover:text-fg">Advanced</summary>
+        <div className="divide-y divide-line px-5">
+          <Row
+            title="Auto-post approved clips"
+            body={<>On: an approved clip posts itself through each platform's official API, after a 10-minute
+              hold you can cancel. Off: every post waits for your click. Posting from Clipper arrives in the next
+              update; this choice is saved for it.</>}
+            control={settings ? (
+              <Switch label="Auto-post" checked={settings.auto_post === "1"}
+                      onChange={(v) => save.mutate({ auto_post: v ? "1" : "0" })} />
+            ) : <Skeleton className="h-5 w-9" />}
+          />
+          <Row
+            title="Plan (preview)"
+            body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats, up to 10 clips
+              a video and 3 videos at a time. <b className="text-fg">Research</b>: adds the Ask chat, choosing a clip's on-screen line,
+              writing your own captions, and 10 videos at a time. <b className="text-fg">Pro</b>: everything, including every clip a video
+              has, several accounts per platform with groups, and auto-posting once it's available. Nothing is billed; switch to see each tier.</>}
+            control={settings ? (
+              <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">
+                {([["free", "Free"], ["research", "Research"], ["pro", "Pro"]] as const).map(([value, label]) => (
+                  <button key={value} role="radio" aria-checked={settings.plan === value}
+                          onClick={() => save.mutate({ plan: value }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ["research"] }) })}
+                          className={cn("h-8 rounded-sm px-3 text-sm",
+                            settings.plan === value ? "bg-surface-1 text-fg shadow-1" : "text-muted hover:text-fg")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : <Skeleton className="h-9 w-48" />}
+          />
+        </div>
+      </details>
       <SystemCheck />
     </div>
   );

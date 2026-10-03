@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp } from "lucide-react";
-import { useCampaigns, useClips, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
+import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp, Wand2 } from "lucide-react";
+import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
 import { Button, Card, Metric, PageHeader, Skeleton, Sparkline, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatCount, formatMoney } from "@/lib/utils";
@@ -65,8 +65,34 @@ function PipelineColumn({ title, status, clips, tone }: {
   );
 }
 
+/** Where today's Short stands and the one thing to do next, with a button to it (D118). */
+function ChannelCard() {
+  const { data } = useCreate();
+  if (!data) return null;
+  const video = data.videos.find((v) => v.status !== "built");
+  const last = data.videos[0];
+  const [text, action]: [string, string] = !video
+    ? [last ? `Last Short: ${last.script.title || "Untitled"}. Ready for the next one?` : "No Short yet.", "Make a Short"]
+    : video.status === "draft" ? [`“${video.script.title || "Untitled"}” is written: read it and approve it.`, "Open the script"]
+    : video.status === "approved" ? [`“${video.script.title}” is approved: make the voice on ElevenLabs and drop it in.`, "Add the voice"]
+    : video.status === "failed" ? [`“${video.script.title}” didn't build: ${video.error || "see why"}.`, "See why"]
+    : [`“${video.script.title}” is building${video.pct != null ? `: ${Math.round(video.pct)}%` : ""}.`, "Watch it"];
+  return (
+    <Card className="flex flex-wrap items-center gap-3 p-4">
+      <Wand2 className="size-5 shrink-0 text-accent" />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-medium text-muted">{data.channel.name}</div>
+        <div className="text-sm">{text}</div>
+      </div>
+      <Link to="/create" className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+        {action} <ArrowRight className="size-3.5" />
+      </Link>
+    </Card>
+  );
+}
+
 const STEPS: { key: string; title: string; body: string; to: string; action: string }[] = [
-  { key: "ai", title: "Add your free AI key", body: "Clipper uses it to find the best moments and write captions. Takes a minute.",
+  { key: "ai", title: "Add your free Gemini key", body: "Clipping uses it to find the best moments and write captions. Takes a minute. (Create uses your Claude plan instead.)",
     to: "/settings", action: "Add key" },
   { key: "campaign", title: "Add a campaign", body: "Paste the brief of a campaign you've joined; Clipper fills in its rules.",
     to: "/campaigns/new", action: "Add campaign" },
@@ -149,6 +175,7 @@ export function DashboardPage() {
         title={!firstRun && by("ready").length ? `${greeting()} ${by("ready").length} clip${by("ready").length === 1 ? "" : "s"} to post` : greeting()}
         hi={`${by("ready").length} clip`}
         subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : "Here's where your clips stand."} />
+      <ChannelCard />
       {firstRun && <GetStarted done={home.first_run} />}
       {home.first_run.clips && <>
 

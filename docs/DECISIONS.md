@@ -2147,3 +2147,17 @@ was awful again. With `llm.create_claude_only` (on), when Claude is set up but d
 answer, Create stops with the reason ("Claude isn't available right now (...weekly
 limit...)") and changes nothing, rather than making a video the user will throw away.
 Gemini still does the job when no Claude is set up at all, or with the setting off.
+
+## D118 — The page rearranged around the daily job (2026-10-03)
+
+Reviewed every page of the Control Center for where things sit. Create is the job done
+daily, yet it was fourth in the sidebar, absent from the Dashboard, and its notes ("Written
+and drawn by", what failed) vanished once a video was built, which is why two videos were
+judged without anyone knowing which AI made them. Changes:
+1. Create sits right under Dashboard (sidebar, phone tabs, command menu).
+2. Create shows, under its title, which AI will write and draw and the last problem
+   (`GET /api/create/ai`, no model call); the notes stay visible on a built video.
+3. On a narrow window the video in progress comes before the ideas list.
+4. The Dashboard opens with a channel card: the one next step for today's Short.
+5. Settings: everyday options first; the unused auto-post switch and the paid-tier preview
+   moved under "Advanced" (open when auto-post is on). The AI card says it is for clipping.

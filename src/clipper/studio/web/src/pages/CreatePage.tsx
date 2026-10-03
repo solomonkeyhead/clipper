@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { createApi, useClips, useCreate, type CreateScript, type CreateTopic, type CreateVideo } from "@/api/client";
+import { createApi, useClips, useCreate, useCreateAI, type CreateScript, type CreateTopic, type CreateVideo } from "@/api/client";
 import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { cn, copyText } from "@/lib/utils";
@@ -23,10 +23,12 @@ export function CreatePage() {
           For <b className="text-fg">{data.channel.name}</b> ({data.channel.handle}). Pick an idea, approve the script, make the voice on
           ElevenLabs, drop it in: Clipper builds the rest.
         </p>
+        <AIStrip />
       </div>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
-        <Ideas topics={data.topics} />
-        <div className="flex flex-col gap-4">
+        {/* The video in progress comes first on a phone-width window; the ideas wait below it. */}
+        <div className="order-2 lg:order-1"><Ideas topics={data.topics} /></div>
+        <div className="order-1 flex flex-col gap-4 lg:order-2">
           {data.videos.length === 0 && (
             <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it: the script takes about 20 seconds." />
           )}
@@ -34,6 +36,26 @@ export function CreatePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Which AI writes and draws, always in view: Claude or Gemini was a guess for two videos (D118). */
+function AIStrip() {
+  const { data: ai } = useCreateAI();
+  if (!ai) return null;
+  const first = ai.order[0] ?? "";
+  const claude = first.startsWith("claude_code") || first.startsWith("anthropic");
+  const miss = Object.entries(ai.misses)[0];
+  const text = ai.problem ? ai.problem
+    : claude ? `Written and drawn by ${first.split(":").pop()} on your Claude plan.`
+    : `Claude isn't set up: ${first.split(":").pop() || "no AI"} will write and draw.`;
+  return (
+    <p className={cn("mt-1 flex flex-wrap items-center gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>
+      {claude && !ai.problem ? <CheckCircle2 className="size-3.5 text-success" /> : <AlertTriangle className="size-3.5" />}
+      {text}
+      {miss && <span className="text-subtle">Last problem: {miss[1]}</span>}
+      {ai.spent_usd > 0 && <span className="text-subtle">This session so far: about ${ai.spent_usd.toFixed(2)} at API prices (free on a plan).</span>}
+    </p>
   );
 }
 
@@ -332,6 +354,8 @@ function Built({ video, busy, onPictures, onRemove }: { video: CreateVideo; busy
       ) : <div className="grid aspect-[9/16] w-56 place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <p className="text-sm">It's in your library under <b>{video.script.title}</b>, with the title, description and hashtags ready to copy.</p>
+        {/* Who wrote and drew it, and what didn't work, stay visible after the build (D118). */}
+        <CheckNote text={video.check_notes} />
         <div className="flex flex-wrap gap-2">
           {clip && <Button variant="primary" onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
           <Tip label="Same words and voice: footage and diagrams planned again, then built">
