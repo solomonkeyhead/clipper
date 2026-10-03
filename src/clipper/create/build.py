@@ -28,7 +28,7 @@ from ..utils.logging import get_logger
 from . import channel as channels
 from . import diagrams, stock, store
 from .ai import CreateError
-from .script import Script
+from .script import Script, Visual
 from .voice import Timings, folder
 
 log = get_logger(__name__)
@@ -63,8 +63,13 @@ def shots(script: Script, timings: Timings, work: Path, progress=None) -> list[P
             made.append(diagrams.render(beat.visual, seconds, work / f"{i:02d}_diagram.mp4"))
             continue
         parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
+        queries = beat.visual.queries or [beat.visual.query]
         for k, part in enumerate(parts):
-            hit = stock.choose(beat.visual.query, part, used, sentence=beat.text)
+            hit = stock.choose(queries, part, used, sentence=beat.text)
+            if hit is None:  # nothing fits: the phrase on the board, never unrelated footage
+                card = Visual(kind="diagram", template="card", title=beat.visual.card or beat.emphasis or beat.text)
+                made.append(diagrams.render(card, part, work / f"{i:02d}_{k}_card.mp4"))
+                continue
             used.add(hit["id"])
             made.append(_stock_shot(stock.fetch(hit), part, work / f"{i:02d}_{k}_stock.mp4"))
     return made
@@ -144,6 +149,8 @@ def build(video_id: int, progress=None) -> int:
     rel = f"{channel.campaign}/{video_id:03d}_{slugify(script.title, max_length=50)}.mp4"
     dest = library.clip_path(rel)
     dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists():  # an earlier build of this video: to the Recycle Bin, not overwritten
+        recycle(dest)
     shutil.move(str(out), str(dest))
     caption = "\n\n".join(x for x in (script.description, " ".join(script.hashtags)) if x)
     with db.connect() as con:

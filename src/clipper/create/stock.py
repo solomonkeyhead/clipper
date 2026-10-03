@@ -1,9 +1,11 @@
 """Stock footage from Pixabay (free for commercial use, no credit required).
 
 Pixabay's search is loose ("human ear close up" found a lipstick, "man yawning in
-an airplane seat" a tiger), so the model looks at the candidates' thumbnails with
-the sentence and picks the one that shows it, or none; a query with nothing fitting
-is retried with fewer words. Among fits, long enough and unused in the video.
+an airplane seat" a tiger) and thin on people doing specific things, so each beat
+has three searches, most specific first; the model looks at the candidates from all
+of them with the sentence and picks one, or none -- then the beat gets a chalkboard
+card (create/diagrams.py) rather than unrelated footage. Green-screen and
+transparent-background clips are left out. Long enough and unused in the video first.
 Searches are cached for a day and downloads for good (Pixabay asks API users to
 cache), under data/create/stock/.
 """
@@ -24,7 +26,8 @@ from .ai import CreateError, ask
 
 API = "https://pixabay.com/api/videos/"
 SEARCH_HOURS = 24
-FALLBACK = "science laboratory"
+#: Footage that looks cheap on a phone: an unkeyed green screen, a transparent background.
+CHEAP = ("green screen", "greenscreen", "chroma", "blue screen", "alpha channel", "transparent")
 
 
 def _dir() -> Path:
@@ -57,7 +60,7 @@ def search(query: str) -> list[dict]:
             continue
         good = [v for v in renditions if min(v["width"], v["height"]) >= 1080]
         v = min(good, key=lambda v: v.get("size", 0)) if good else max(renditions, key=lambda v: v["width"])
-        if h.get("isLowQuality"):
+        if h.get("isLowQuality") or any(c in h.get("tags", "").lower() for c in CHEAP):
             continue
         thumb = (h["videos"].get("tiny") or {}).get("thumbnail") or v.get("thumbnail", "")
         hits.append({"id": h["id"], "duration": h.get("duration", 0), "tags": h.get("tags", ""),
@@ -66,12 +69,14 @@ def search(query: str) -> list[dict]:
     return hits
 
 
-CANDIDATES = 6
+CANDIDATES = 9
+PER_QUERY = 5
 
 PICK = """You choose stock footage for one sentence of a short educational video. You see
-numbered thumbnails of candidate clips. Pick the one that most literally shows what the
-sentence is about, as a viewer would read it in a second. Reject anything unrelated,
-misleading or merely decorative. Answer pick = its number, or 0 if none fits."""
+numbered thumbnails of candidate clips. Pick the one a viewer would instantly connect with
+what the sentence says. A close, everyday match is fine (headphones for hearing, a
+microphone for recording). Answer 0 if every one is unrelated, would confuse the viewer, or
+looks cheap (cartoonish, a green background). Answer pick = its number, or 0."""
 
 
 class _Pick(BaseModel):
@@ -110,27 +115,25 @@ def _judge(sentence: str, query: str, hits: list[dict]) -> dict | None:
     return shown[n - 1][0] if 1 <= n <= len(shown) else None
 
 
-def choose(query: str, seconds: float, used: set[int], sentence: str = "") -> dict:
-    """The best unused clip for a beat of `seconds`: one that shows the sentence."""
-    words = query.split()
-    # The whole query, then without its first word (never down to one vague word), then a fallback.
-    tries = [" ".join(words[i:]) for i in range(max(1, len(words) - 1))] + [FALLBACK]
-    for q in tries:
-        hits = [h for h in search(q) if h["id"] not in used]
-        if not hits:
-            continue
-        # Long enough first, then vertical, keeping Pixabay's relevance order within each.
-        ranked = sorted(hits[: CANDIDATES * 2], key=lambda h: (h["duration"] < seconds + 0.3,
-                                                                 h["height"] <= h["width"]))[:CANDIDATES]
-        if q == FALLBACK or not sentence:
-            return ranked[0]
-        try:
-            picked = _judge(sentence, q, ranked)
-        except _NoAnswer:
-            return ranked[0]  # no one to ask: Pixabay's own best match for the fullest query
-        if picked:
-            return picked
-    raise CreateError(f"no stock footage found for {query!r}")
+def choose(queries: list[str], seconds: float, used: set[int], sentence: str = "") -> dict | None:
+    """The best unused clip for a beat of `seconds`, judged against the sentence across all
+    its searches at once; None when nothing fits (the beat gets a chalkboard card instead,
+    never a generic stand-in: "science laboratory" footage opened a video once)."""
+    pool: list[dict] = []
+    for q in queries:
+        for h in search(q)[:PER_QUERY]:
+            if h["id"] not in used and all(h["id"] != p["id"] for p in pool):
+                pool.append(h)
+    if not pool:
+        return None
+    # Long enough first, then vertical, keeping the search order within each.
+    ranked = sorted(pool, key=lambda h: (h["duration"] < seconds + 0.3, h["height"] <= h["width"]))[:CANDIDATES]
+    if not sentence:
+        return ranked[0]
+    try:
+        return _judge(sentence, " / ".join(queries), ranked)
+    except _NoAnswer:
+        return pool[0]  # no one to ask: the most specific search's own best match
 
 
 def fetch(hit: dict) -> Path:

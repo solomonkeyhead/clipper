@@ -20,13 +20,15 @@ from pydantic import BaseModel, Field
 from . import channel as channels
 from .ai import CreateError, ask
 
-PROMPT_VERSION = "create-script-v1"
+PROMPT_VERSION = "create-script-v2"
 TEMPLATES = ("forces", "circle", "equation", "compare", "chain", "graph")
 
 
 class Visual(BaseModel):
     kind: Literal["stock", "diagram"] = "stock"
-    query: str = ""                 # stock: 2-4 concrete, filmable words
+    query: str = ""                 # stock: the first search (kept for older scripts)
+    queries: list[str] = Field(default_factory=list)   # stock: searches, most specific first
+    card: str = ""                  # if no footage fits: the phrase chalked on the board instead
     template: str = ""              # diagram: one of TEMPLATES
     title: str = ""
     labels: list[str] = Field(default_factory=list)
@@ -59,10 +61,14 @@ class Script(BaseModel):
 
 VISUALS = """Split the script into beats: one spoken sentence each (two only if both are very
 short), 5 to 14 words. For every beat plan ONE picture:
-- kind "stock": real footage that literally shows what is said, as a search query of 2-4
-  concrete, filmable words ("boiling pasta pot", "airplane window clouds", "elevator doors
-  closing", "person touching cold metal railing"). Never abstract words ("pressure",
-  "physics", "energy").
+- kind "stock": real footage that literally shows what is said. Give queries: three searches
+  of a free stock-footage library, most specific first, then broader, 1-3 words each, naming
+  subjects such libraries really have: objects, places, nature, everyday scenes, and people
+  only in common situations ("woman wearing headphones", "man talking on phone", "boiling
+  pot", "airplane window", "elevator doors"). Never abstract words ("pressure", "physics",
+  "energy"), never a specific person's action that nobody films ("person touching side of
+  head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
+  no footage fits ("bone conduction", "100 degrees").
 - kind "diagram": an animated diagram, when the beat explains HOW it works. About one beat in
   three; never two diagrams in a row; never the first beat. Templates:
   * forces: an object with labelled arrows. labels = the forces ("gravity", "floor pushes
@@ -74,8 +80,10 @@ short), 5 to 14 words. For every beat plan ONE picture:
   * compare: two things side by side as bars. labels = [thing A, thing B], values = their
     sizes, title = what is compared ("Heat flow").
   * chain: causes leading to an effect, 2-4 short steps. labels = the steps.
-  * graph: a curve. title = what it shows, labels = [x axis, y axis], shape =
-    "rising"/"falling"/"peak"/"wave".
+  * graph: a curve. title = what it shows, labels = [x axis, y axis], shape = how the y
+    quantity changes as the x quantity grows: "rising" (y goes up), "falling" (y goes down),
+    "peak" (up then down), "wave". It must agree with the sentence: "bone absorbs high
+    frequencies" with x = frequency and y = loudness is "falling".
   Keep every label under 4 words.
 For each beat also give emphasis: the single most important word in it, copied exactly.
 
@@ -117,7 +125,9 @@ def tidy(script: Script) -> Script:
         if diagram and (i == 0 or (beats and beats[-1].visual.kind == "diagram")):
             diagram = False
         if not diagram:
-            v = v.model_copy(update={"kind": "stock", "query": v.query or _query_from(beat.text)})
+            queries = [q for q in [*v.queries, v.query] if q.strip()] or [_query_from(beat.text)]
+            v = v.model_copy(update={"kind": "stock", "queries": list(dict.fromkeys(queries))[:3],
+                                     "query": queries[0], "card": v.card or beat.emphasis or _query_from(beat.text)})
         words = {w.strip(".,!?;:'\"").lower() for w in beat.text.split()}
         emphasis = beat.emphasis if beat.emphasis.strip(".,!?").lower() in words else ""
         beats.append(beat.model_copy(update={"visual": v, "emphasis": emphasis}))
@@ -139,12 +149,31 @@ class Review(BaseModel):
 CHECK = """You are a physics professor checking a 45-second educational script for a general
 audience. Simplifying is fine; stating something false is not. Flag only real errors: wrong
 mechanisms, wrong formulas, wrong numbers, misleading claims, or a myth stated as fact. Jokes
-and analogies are fine unless they teach something false. Return ok=true with no problems if
-it is correct. Otherwise list each problem in one sentence with the correct physics."""
+and analogies are fine unless they teach something false. Check the diagrams too: a curve,
+arrow, bar or equation that disagrees with its sentence or with the physics is an error
+(graph shape says how the y axis changes as the x axis grows). Return ok=true with no
+problems if it is correct. Otherwise list each problem in one sentence with the correct physics."""
+
+
+def _diagrams(script: Script) -> str:
+    """The diagrams in words, for the check: a curve or arrow that says the opposite of the
+    sentence teaches it wrong (a graph rose while the line said high notes are absorbed)."""
+    lines = []
+    for i, b in enumerate(script.beats, start=1):
+        v = b.visual
+        if v.kind != "diagram":
+            continue
+        parts = [f"{v.template}", f"title {v.title!r}" if v.title else "", f"labels {v.labels}" if v.labels else "",
+                 f"shape {v.shape}" if v.shape else "", f"values {v.values}" if v.values else "",
+                 f"directions {v.directions}" if v.directions else "", f"equation {v.equation!r}" if v.equation else ""]
+        lines.append(f"- Over sentence {i} (\"{b.text}\"): " + ", ".join(p for p in parts if p))
+    return "\n".join(lines)
 
 
 def check(script: Script) -> Review:
-    answer = ask(CHECK, f"Title: {script.title}\nScript:\n{script.text}", Review, temperature=0.0)
+    diagrams = _diagrams(script)
+    user = f"Title: {script.title}\nScript:\n{script.text}" + (f"\n\nDiagrams shown:\n{diagrams}" if diagrams else "")
+    answer = ask(CHECK, user, Review, temperature=0.0)
     try:
         return Review.model_validate(json.loads(answer))
     except (ValueError, TypeError):
@@ -164,3 +193,31 @@ def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Scr
         return script, "Physics check: fixed after a first draft got this wrong:\n" + \
             "\n".join(f"- {p}" for p in review.problems)
     return script, "Physics check: no problems found."
+
+
+def replan(script: Script) -> tuple[Script, str]:
+    """New pictures for an approved script, every word kept (its voice is already made):
+    the visuals planned again, then checked, once more if the check finds a problem."""
+    channel = channels.load()
+    beats = "\n".join(f"{i}. {b.text}" for i, b in enumerate(script.beats, start=1))
+    feedback = ""
+    for _ in range(2):
+        user = (f"This approved script is already recorded, sentence by sentence. Keep every sentence "
+                f"exactly as written, in order, one beat each, and plan the pictures again.\n\n"
+                f"Title: {script.title}\n{beats}\n" + (f"\nFix these problems:\n{feedback}\n" if feedback else ""))
+        answer = ask(_system(channel), user, Script, temperature=0.4)
+        try:
+            planned = Script.model_validate(json.loads(answer))
+        except (ValueError, TypeError) as exc:
+            raise CreateError("the new pictures came back unreadable; try again") from exc
+        if len(planned.beats) != len(script.beats):
+            raise CreateError("the new plan changed the sentences; try again")
+        # The words are the recording's: only the pictures are taken from the new plan.
+        fresh = tidy(script.model_copy(update={"beats": [
+            b.model_copy(update={"visual": p.visual, "emphasis": p.emphasis or b.emphasis})
+            for b, p in zip(script.beats, planned.beats, strict=True)]}))
+        review = check(fresh)
+        if review.ok or not review.problems:
+            return fresh, "Pictures planned again. Physics check: no problems found."
+        feedback = "\n".join(f"- {p}" for p in review.problems)
+    return fresh, "Pictures planned again. Physics check, still unsure:\n" + feedback

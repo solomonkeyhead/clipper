@@ -171,6 +171,21 @@ def routes(app: FastAPI, publish) -> None:
         threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
         return {"queued": True}
 
+    @app.post("/api/create/videos/{video_id}/pictures")
+    async def create_pictures(video_id: int) -> dict:
+        """New pictures for the same words and voice, then built again."""
+        from ..create import script
+        from ..create.script import Script
+
+        row = video_or_404(video_id)
+        if not row["voice"]:
+            raise HTTPException(400, "drop the voiceover in first")
+        planned, notes = await asyncio.to_thread(ai, script.replan, Script.model_validate(row["script"]))
+        store.update_video(video_id, script={**planned.model_dump(), "take": row["script"].get("take", 1)},
+                           check_notes=notes, status="voiced", error="")
+        threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
+        return {"queued": True}
+
     @app.post("/api/create/videos/{video_id}/build")
     def create_build(video_id: int) -> dict:
         """Build again (after a failure, or to pick new footage)."""

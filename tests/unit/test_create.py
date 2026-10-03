@@ -20,7 +20,7 @@ class TestTidy:
         s = tidy(script(("Why do you get dizzy?", d), ("Fluid moves.", d), ("It keeps moving.", d),
                         ("Your brain is confused.", Visual(kind="diagram", template="tornado"))))
         assert [b.visual.kind for b in s.beats] == ["stock", "diagram", "stock", "stock"]
-        assert s.beats[0].visual.query  # a fallback query from the sentence
+        assert s.beats[0].visual.queries and s.beats[0].visual.card  # searches and a chalk card from the sentence
 
     def test_emphasis_must_be_in_the_beat_and_at_most_five_hashtags(self):
         s = Script(title="t", beats=[Beat(text="Physics wins.", emphasis="wins"), Beat(text="Dignity does not.", emphasis="pop")],
@@ -52,25 +52,39 @@ HITS = [{"id": i, "duration": dur, "tags": "", "url": "", "width": w, "height": 
 
 
 class TestStock:
-
-    def test_the_model_picks_from_long_enough_vertical_first_candidates(self, monkeypatch):
+    def test_the_model_judges_all_searches_at_once_long_enough_and_vertical_first(self, monkeypatch):
         seen = []
-        monkeypatch.setattr(stock, "search", lambda q: HITS)
+        results = {"ear close up": HITS[:2], "headphones": HITS[2:]}
+        monkeypatch.setattr(stock, "search", lambda q: results.get(q, []))
         monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits: seen.append([h["id"] for h in hits]) or hits[1])
-        assert stock.choose("ear close up", 6.0, used={4}, sentence="Your middle ear")["id"] == 2
+        assert stock.choose(["ear close up", "headphones"], 6.0, used={4}, sentence="Your middle ear")["id"] == 2
         assert seen[0] == [3, 2, 1]  # long enough and vertical, long enough, too short; 4 already used
 
-    def test_none_fitting_tries_fewer_words_but_no_answer_trusts_the_search(self, monkeypatch):
-        asked = []
-        monkeypatch.setattr(stock, "search", lambda q: asked.append(q) or HITS)
+    def test_nothing_fitting_means_no_footage_but_no_answer_trusts_the_search(self, monkeypatch):
+        monkeypatch.setattr(stock, "search", lambda q: HITS)
         monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits: None)
-        assert stock.choose("man yawning airplane", 2.0, used=set(), sentence="s")["id"] == 3
-        assert asked == ["man yawning airplane", "yawning airplane", stock.FALLBACK]
+        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # a chalk card instead
 
         def busy(sentence, q, hits):
             raise stock._NoAnswer
         monkeypatch.setattr(stock, "_judge", busy)
-        assert stock.choose("man yawning airplane", 2.0, used=set(), sentence="s")["id"] == 3
+        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s")["id"] == 1  # the search's own best
+
+    def test_green_screen_footage_is_left_out(self, monkeypatch, tmp_path):
+        import httpx
+
+        class Reply:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                video = {"tiny": {"url": "u", "width": 1080, "height": 1920, "thumbnail": "t"}}
+                return {"hits": [{"id": 1, "tags": "skeleton, green screen", "videos": video},
+                                 {"id": 2, "tags": "skeleton, halloween", "videos": video}]}
+        monkeypatch.setattr(stock, "_dir", lambda: tmp_path)
+        monkeypatch.setattr(stock, "_key", lambda: "k")
+        monkeypatch.setattr(httpx, "get", lambda *a, **k: Reply())
+        assert [h["id"] for h in stock.search("dancing skeleton")] == [2]
 
 
 def test_topics_and_videos_in_the_database(data_root):
@@ -93,6 +107,7 @@ def test_topics_and_videos_in_the_database(data_root):
     Visual(kind="diagram", template="compare", labels=["metal", "wood"], values=[9, 2]),
     Visual(kind="diagram", template="chain", labels=["cold", "slow ions", "less current"]),
     Visual(kind="diagram", template="graph", labels=["altitude", "boiling point"], shape="falling"),
+    Visual(kind="diagram", template="card", title="bone conduction"),
 ])
 def test_every_diagram_draws_through_its_whole_sentence(v):
     from clipper.create.diagrams import BOTTOM, H, W, frame
@@ -103,3 +118,11 @@ def test_every_diagram_draws_through_its_whole_sentence(v):
     # Nothing drawn in the caption band.
     band = img.crop((0, BOTTOM + 60, W, BOTTOM + 160)).convert("L")
     assert max(band.getdata()) < 120
+
+
+def test_the_physics_check_sees_the_diagrams():
+    from clipper.create.script import _diagrams
+
+    s = Script(title="t", beats=[Beat(text="Bone absorbs high frequencies.", visual=Visual(
+        kind="diagram", template="graph", labels=["frequency", "loudness"], shape="rising"))])
+    assert "shape rising" in _diagrams(s) and "Bone absorbs high frequencies." in _diagrams(s)

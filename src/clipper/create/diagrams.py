@@ -275,7 +275,19 @@ def graph(draw, v: Visual, t: float, d: float) -> None:
         draw.ellipse((tx - 16, ty - 16, tx + 16, ty + 16), fill=YELLOW)
 
 
-DRAW = {"forces": forces, "circle": circle, "equation": equation, "compare": compare, "chain": chain, "graph": graph}
+def card(draw, v: Visual, t: float, d: float) -> None:
+    """A phrase chalked big on the board: for a sentence no footage shows."""
+    phrase = (v.title or "").strip()
+    p = stage(t, d, 0, 1)
+    text(draw, (W / 2, (TOP + BOTTOM) / 2 - 40), phrase, 150, CHALK, max_width=900, reveal=p)
+    if p > 0.7:
+        span = min(860, draw.textlength(phrase, font=font_for(phrase, 150)))
+        y = (TOP + BOTTOM) / 2 + 60
+        draw.line([(W / 2 - span / 2, y), (W / 2 - span / 2 + span * ease((p - 0.7) / 0.3), y)], fill=YELLOW, width=8)
+
+
+DRAW = {"forces": forces, "circle": circle, "equation": equation, "compare": compare, "chain": chain, "graph": graph,
+        "card": card}
 
 
 def frame(v: Visual, t: float, d: float) -> Image.Image:

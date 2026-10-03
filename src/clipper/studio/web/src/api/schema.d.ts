@@ -709,6 +709,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/create/videos/{video_id}/pictures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Pictures
+         * @description New pictures for the same words and voice, then built again.
+         */
+        post: operations["create_pictures_api_create_videos__video_id__pictures_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/create/videos/{video_id}/build": {
         parameters: {
             query?: never;
@@ -4379,6 +4399,39 @@ export interface operations {
             path: {
                 video_id: number;
                 filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pictures_api_create_videos__video_id__pictures_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
             };
             cookie?: never;
         };

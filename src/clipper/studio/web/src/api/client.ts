@@ -608,7 +608,7 @@ export const tightenEdit = (body: EditBody) =>
 
 /* ---------- Create: the user's own channel (D108) ---------- */
 
-export interface CreateVisual { kind: "stock" | "diagram"; query: string; template: string; title: string; labels: string[] }
+export interface CreateVisual { kind: "stock" | "diagram"; query: string; queries?: string[]; card?: string; template: string; title: string; labels: string[] }
 export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }
 export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number }
 export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string }
@@ -644,6 +644,7 @@ export const createApi = {
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
   build: (video: number) => send("POST", `/api/create/videos/${video}/build`),
+  pictures: (video: number) => send("POST", `/api/create/videos/${video}/pictures`),
   remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),
   voice: async (video: number, file: File) => {
     const res = await fetch(`/api/create/videos/${video}/voice/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });

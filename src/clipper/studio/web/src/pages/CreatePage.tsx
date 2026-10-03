@@ -170,7 +170,9 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       </div>
     );
   }
-  if (video.status === "built") return <Built video={video} onRebuild={run("build", () => createApi.build(video.id), "Building it again")} onRemove={remove} />;
+  if (video.status === "built") {
+    return <Built video={video} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")} onRemove={remove} />;
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -250,7 +252,8 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
 
 function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }) {
   const diagram = visual.kind === "diagram";
-  const tip = diagram ? `${visual.template} diagram${visual.labels.length ? `: ${visual.labels.join(" · ")}` : ""}` : `Stock footage of "${visual.query}"`;
+  const tip = diagram ? `${visual.template} diagram${visual.labels.length ? `: ${visual.labels.join(" · ")}` : ""}`
+    : `Stock footage: ${(visual.queries?.length ? visual.queries : [visual.query]).join(" / ")}${visual.card ? `. If none fits, "${visual.card}" on the board` : ""}`;
   return (
     <Tip label={tip}>
       <span className={cn("flex items-center gap-1.5 self-start rounded-md border px-2 py-1.5 text-xs",
@@ -319,7 +322,7 @@ const Step = ({ n, children }: { n: number; children: ReactNode }) => (
 
 /* ---------- done ---------- */
 
-function Built({ video, onRebuild, onRemove }: { video: CreateVideo; onRebuild: () => void; onRemove: () => void }) {
+function Built({ video, busy, onPictures, onRemove }: { video: CreateVideo; busy: string | null; onPictures: () => void; onRemove: () => void }) {
   const { data: clips = [] } = useClips();
   const clip = clips.find((c) => c.id === video.clip_id);
   return (
@@ -331,8 +334,10 @@ function Built({ video, onRebuild, onRemove }: { video: CreateVideo; onRebuild: 
         <p className="text-sm">It's in your library under <b>{video.script.title}</b>, with the title, description and hashtags ready to copy.</p>
         <div className="flex flex-wrap gap-2">
           {clip && <Button variant="primary" onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
-          <Tip label="Make the video again from the same script and voice">
-            <Button variant="secondary" onClick={onRebuild}><RefreshCw className="size-4" /> Build again</Button>
+          <Tip label="Same words and voice: footage and diagrams planned again, then built">
+            <Button variant="secondary" disabled={busy !== null} onClick={onPictures}>
+              {busy === "pictures" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "pictures" ? "Planning…" : "New pictures"}
+            </Button>
           </Tip>
           <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
         </div>
