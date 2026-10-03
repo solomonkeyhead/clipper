@@ -75,10 +75,12 @@ short), 5 to 14 words. For every beat plan ONE picture:
     up"), directions = "up"/"down"/"left"/"right" for each, values = their relative sizes.
   * circle: something moving on a circle, with its velocity and the inward pull. labels =
     [what moves, the inward force].
-  * equation: a formula built up piece by piece. equation = the formula ("F = m x a"),
-    labels = what each symbol means ("F: force", "m: mass", "a: acceleration").
+  * equation: a REAL physics formula, built up piece by piece. equation = the formula
+    ("F = m x a", "a = v² / r"), labels = what each symbol means ("F: force", "m: mass").
+    Only a formula a physics textbook would print; never a made-up word equation
+    ("sound = air + bone") -- use chain for that.
   * compare: two things side by side as bars. labels = [thing A, thing B], values = their
-    sizes, title = what is compared ("Heat flow").
+    sizes, title = the quantity compared, always ("Heat flow", "Bass reaching your ear").
   * chain: causes leading to an effect, 2-4 short steps. labels = the steps.
   * graph: a curve. title = what it shows, labels = [x axis, y axis], shape = how the y
     quantity changes as the x quantity grows: "rising" (y goes up), "falling" (y goes down),
@@ -122,6 +124,11 @@ def tidy(script: Script) -> Script:
     for i, beat in enumerate(script.beats):
         v = beat.visual
         diagram = v.kind == "diagram" and v.template in TEMPLATES
+        # Bars of nothing in particular, or an equation with no formula, teach nothing.
+        if diagram and v.template == "compare" and not v.title.strip():
+            diagram = False
+        if diagram and v.template == "equation" and not any(c in v.equation for c in "=<>"):
+            diagram = False
         if diagram and (i == 0 or (beats and beats[-1].visual.kind == "diagram")):
             diagram = False
         if not diagram:
@@ -151,8 +158,8 @@ audience. Simplifying is fine; stating something false is not. Flag only real er
 mechanisms, wrong formulas, wrong numbers, misleading claims, or a myth stated as fact. Jokes
 and analogies are fine unless they teach something false. Check the diagrams too: a curve,
 arrow, bar or equation that disagrees with its sentence or with the physics is an error
-(graph shape says how the y axis changes as the x axis grows). Return ok=true with no
-problems if it is correct. Otherwise list each problem in one sentence with the correct physics."""
+(graph shape says how the y axis changes as the x axis grows); so is an "equation" that is not
+a real physics formula. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct physics."""
 
 
 def _diagrams(script: Script) -> str:

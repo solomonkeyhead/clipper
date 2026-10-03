@@ -126,3 +126,12 @@ def test_the_physics_check_sees_the_diagrams():
     s = Script(title="t", beats=[Beat(text="Bone absorbs high frequencies.", visual=Visual(
         kind="diagram", template="graph", labels=["frequency", "loudness"], shape="rising"))])
     assert "shape rising" in _diagrams(s) and "Bone absorbs high frequencies." in _diagrams(s)
+
+
+def test_no_made_up_equations_or_bars_of_nothing():
+    fake = Visual(kind="diagram", template="equation", equation="sound means air plus bone")
+    untitled = Visual(kind="diagram", template="compare", labels=["bone", "tissue"], values=[90, 40])
+    real = Visual(kind="diagram", template="equation", equation="F = m x a")
+    s = tidy(script(("Why?", Visual()), ("Fake.", fake), ("Gap.", Visual()), ("Bars.", untitled),
+                    ("Gap.", Visual()), ("Real.", real)))
+    assert [b.visual.kind for b in s.beats] == ["stock", "stock", "stock", "stock", "stock", "diagram"]
