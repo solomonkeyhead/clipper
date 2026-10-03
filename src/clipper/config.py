@@ -184,6 +184,10 @@ class LLMConfig(StrictModel):
     # Seconds to wait on `correction_model` before falling back. Gemini's API
     # refuses deadlines under 10s.
     correction_timeout: float = Field(default=30.0, ge=10)
+    # Create (D109) writes scripts, plans and checks diagrams and picks footage with this
+    # Claude model first when ANTHROPIC_API_KEY is set (billed, ~$0.30-0.60 a video), then
+    # falls back to the models above. None keeps Create on the free models only.
+    create_model: str | None = None
     # Hard-drop candidates both prompts say need earlier context. Off for
     # scripted TV, where nearly every scene "needs context" by that standard
     # yet works as a clip: on a sitcom episode 26 of 48 were dropped for it.

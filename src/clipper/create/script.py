@@ -4,8 +4,9 @@ way to lose an educational channel's trust).
 
 A beat is one spoken sentence, or two very short ones: one shot. Each gets either
 stock footage that literally shows what's said, or an animated diagram when it
-explains a mechanism -- about one beat in three, never two in a row -- so the
-picture changes every 3-5 seconds instead of holding one clip for 50 (the
+explains a mechanism -- about half the beats, never the first, never three in a
+row (D109: stock is thin on people doing specific things, the board never is) --
+so the picture changes every 3-5 seconds instead of holding one clip for 50 (the
 channel's own videos used 1-3 shots each).
 """
 
@@ -20,8 +21,8 @@ from pydantic import BaseModel, Field
 from . import channel as channels
 from .ai import CreateError, ask
 
-PROMPT_VERSION = "create-script-v2"
-TEMPLATES = ("forces", "circle", "equation", "compare", "chain", "graph")
+PROMPT_VERSION = "create-script-v3"
+TEMPLATES = ("forces", "circle", "equation", "compare", "chain", "graph", "wave", "particles", "ray", "number")
 
 
 class Visual(BaseModel):
@@ -35,7 +36,9 @@ class Visual(BaseModel):
     values: list[float] = Field(default_factory=list)
     directions: list[str] = Field(default_factory=list)   # forces: up | down | left | right, per label
     equation: str = ""
-    shape: str = ""                 # graph: rising | falling | peak | wave
+    shape: str = ""                 # graph: rising | falling | peak | wave; ray: refract | reflect
+    subject: str = ""               # forces: what the arrows push on, written in its box
+    amounts: list[float] = Field(default_factory=list)    # wave: amplitudes; particles: how many
 
 
 class Beat(BaseModel):
@@ -69,12 +72,25 @@ short), 5 to 14 words. For every beat plan ONE picture:
   "energy"), never a specific person's action that nobody films ("person touching side of
   head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
   no footage fits ("bone conduction", "100 degrees").
-- kind "diagram": an animated diagram, when the beat explains HOW it works. About one beat in
-  three; never two diagrams in a row; never the first beat. Templates:
-  * forces: an object with labelled arrows. labels = the forces ("gravity", "floor pushes
-    up"), directions = "up"/"down"/"left"/"right" for each, values = their relative sizes.
+- kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
+  About half the beats; never the first beat; never three diagrams in a row. Prefer a
+  diagram to footage that would only loosely match. Templates:
+  * forces: an object with labelled arrows. subject = the object, 1-2 words ("you",
+    "car"), labels = the forces ("gravity", "floor pushes up"), directions =
+    "up"/"down"/"left"/"right" for each, values = their relative sizes, true to the physics
+    (an elevator speeding up going up: floor pushes harder than gravity).
   * circle: something moving on a circle, with its velocity and the inward pull. labels =
     [what moves, the inward force].
+  * wave: one or two waves travelling. labels = what each is ("low note", "high note"),
+    values = relative frequency, amounts = relative amplitude (loudness, brightness).
+  * particles: molecules bouncing in one or two boxes. labels = what each box is ("cold
+    air", "hot air"), values = relative speed (temperature), amounts = relative number
+    (density, pressure). For heat, pressure, evaporation, smell, sound travelling.
+  * ray: a light ray meeting a surface. labels = [medium above, medium below], values = their
+    refractive indices (air 1.0, water 1.33, glass 1.5), shape = "refract" or "reflect".
+    The bend is computed, so the indices must be right.
+  * number: one striking real figure. title = the number with its unit ("343 m/s",
+    "37 °C", "1,000x"), labels = [what it is, 2-5 words]. Only a figure you are sure of.
   * equation: a REAL physics formula, built up piece by piece. equation = the formula
     ("F = m x a", "a = v² / r"), labels = what each symbol means ("F: force", "m: mass").
     Only a formula a physics textbook would print; never a made-up word equation
@@ -118,7 +134,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") 
 
 
 def tidy(script: Script) -> Script:
-    """Rules the model can bend, put straight: known templates, no diagram first or twice
+    """Rules the model can bend, put straight: known templates, no diagram first or three
     in a row, an emphasis word that's really in its beat, at most 5 hashtags."""
     beats = []
     for i, beat in enumerate(script.beats):
@@ -129,7 +145,9 @@ def tidy(script: Script) -> Script:
             diagram = False
         if diagram and v.template == "equation" and not any(c in v.equation for c in "=<>"):
             diagram = False
-        if diagram and (i == 0 or (beats and beats[-1].visual.kind == "diagram")):
+        if diagram and v.template == "number" and not any(c.isdigit() for c in v.title):
+            diagram = False
+        if diagram and (i == 0 or (len(beats) >= 2 and all(b.visual.kind == "diagram" for b in beats[-2:]))):
             diagram = False
         if not diagram:
             queries = [q for q in [*v.queries, v.query] if q.strip()] or [_query_from(beat.text)]
@@ -158,8 +176,10 @@ audience. Simplifying is fine; stating something false is not. Flag only real er
 mechanisms, wrong formulas, wrong numbers, misleading claims, or a myth stated as fact. Jokes
 and analogies are fine unless they teach something false. Check the diagrams too: a curve,
 arrow, bar or equation that disagrees with its sentence or with the physics is an error
-(graph shape says how the y axis changes as the x axis grows); so is an "equation" that is not
-a real physics formula. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct physics."""
+(graph shape says how the y axis changes as the x axis grows; wave values are frequencies and
+amounts amplitudes; particles values are speeds and amounts how many; ray values are refractive
+indices; forces values are relative sizes); so is an "equation" that is not a real physics
+formula, or a "number" that is not the true figure. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct physics."""
 
 
 def _diagrams(script: Script) -> str:
@@ -170,8 +190,10 @@ def _diagrams(script: Script) -> str:
         v = b.visual
         if v.kind != "diagram":
             continue
-        parts = [f"{v.template}", f"title {v.title!r}" if v.title else "", f"labels {v.labels}" if v.labels else "",
+        parts = [f"{v.template}", f"title {v.title!r}" if v.title else "", f"subject {v.subject!r}" if v.subject else "",
+                 f"labels {v.labels}" if v.labels else "",
                  f"shape {v.shape}" if v.shape else "", f"values {v.values}" if v.values else "",
+                 f"amounts {v.amounts}" if v.amounts else "",
                  f"directions {v.directions}" if v.directions else "", f"equation {v.equation!r}" if v.equation else ""]
         lines.append(f"- Over sentence {i} (\"{b.text}\"): " + ", ".join(p for p in parts if p))
     return "\n".join(lines)

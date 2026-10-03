@@ -2008,3 +2008,26 @@ one in about five minutes of their time:
    own campaign (campaigns/german-professor.yaml), so posting, stats and What's working
    apply. ~1 minute when the AI answers promptly.
 Later: music (not yet wanted), longer "deep dive" videos, a premium-plan AI helper.
+
+## D109 — Create: Claude draws the board, Pexels for people (2026-10-03)
+
+Pixabay's footage of people was thin (lab shots for "hearing your own voice"), and the
+diagrams Gemini planned were judged poor in both look and accuracy. So:
+1. Claude first (create/ai.py, llm/anthropic_backend.py): with ANTHROPIC_API_KEY in .env,
+   Create's writer, diagram planner, physics check and footage judge ask
+   `llm.create_model` (claude-opus-5-5) first, Gemini after. Billed, about $0.30-0.60 a
+   video; without the key nothing changes and nothing is spent. The backend now sends
+   the pydantic schema as a structured output, takes images, sends no temperature
+   (current models and the 1.x SDK have none) and treats a refusal as "ask the next one".
+2. More board, less loose footage (script.py): diagrams on about half the beats (was one in
+   three), never first, never three running (was never two). The prompt says a diagram
+   beats footage that only loosely matches.
+3. Four new diagrams (diagrams.py): wave (frequency, amplitude), particles (speed =
+   temperature, count = density), ray (Snell's law computed from the refractive indices,
+   with total internal reflection, so the bend is right by construction), number (one
+   true figure counting up). The forces box names its object; the circle's legend says
+   which arrow is the motion. A "number" without digits is dropped like a fake equation.
+4. Pexels beside Pixabay (stock.py): both searched, alternating, Pexels first; ids kept
+   apart ("pexels-123"). Pexels has no tags, so the words of its page address stand in.
+   The judge sees each candidate's tags and shape, thumbnails shrunk to 360 px, and is
+   told a chalk card is better than a loose match. Either key is enough.

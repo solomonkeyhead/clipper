@@ -1,7 +1,8 @@
 """Animated physics diagrams, drawn on a chalkboard (the Professor's lecture hall).
 
-Six templates the script fills in (create/script.py Visual): forces, circle,
-equation, compare, chain, graph. Each is drawn frame by frame with Pillow and
+Ten templates the script fills in (create/script.py Visual): forces, circle,
+equation, compare, chain, graph, wave, particles, ray, number; and the card, a
+phrase chalked big when no footage fits. Each is drawn frame by frame with Pillow and
 encoded to a clip exactly as long as its sentence: the pieces arrive over the
 first 60% of it, one after another, then hold, with the moving parts (a dot
 on its circle, a graph's tip) still moving. Everything sits between y 400 and
@@ -14,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import math
 import random
+import re
 import string
 import subprocess
 from functools import cache
@@ -139,6 +141,8 @@ def forces(draw, v: Visual, t: float, d: float) -> None:
     p0 = stage(t, d, 1 if v.title else 0, len(labels) + 2)
     s = 90 * p0
     draw.rounded_rectangle((cx - s, cy - s, cx + s, cy + s), radius=24, outline=CHALK, width=10)
+    # What the forces act on, written in its box (an empty square read as "a box").
+    text(draw, (cx, cy), v.subject, 52, CHALK, max_width=160, reveal=(p0 - 0.6) / 0.4)
     for i, label in enumerate(labels):
         p = stage(t, d, i + 2, len(labels) + 2)
         dx, dy = DIRS.get(dirs[i], (0, -1))
@@ -174,8 +178,13 @@ def circle(draw, v: Visual, t: float, d: float) -> None:
     arrow(draw, (x, y), (x + tang[0] * 230 * pv, y + tang[1] * 230 * pv), YELLOW, width=12)
     arrow(draw, (x, y), (x + (cx - x) * 0.6 * pi, y + (cy - y) * 0.6 * pi), BLUE, width=12)
     draw.ellipse((x - 34, y - 34, x + 34, y + 34), fill=CHALK)
-    labels = [*v.labels, "moving", "pull inward"][:2]
-    for i, (label, color) in enumerate(zip(labels, (YELLOW, BLUE), strict=True)):
+    mover, pull = [*v.labels, "", "pull inward"][:2]
+    if mover and p > 0.6:  # what goes round, keyed at the centre, clear of the moving arrows
+        draw.ellipse((cx - 150, cy - 14, cx - 122, cy + 14), fill=CHALK)
+        text(draw, (cx - 105, cy), mover, 56, CHALK, anchor="lm", max_width=270, reveal=(p - 0.6) / 0.4)
+    # The legend says what each arrow is: the yellow one is always the motion.
+    for i, (label, color) in enumerate(zip(("direction of motion", pull or "pull inward"), (YELLOW, BLUE),
+                                           strict=True)):
         q = (pv, pi)[i]
         if q > 0.3:
             y0 = BOTTOM - 85 + i * 66
@@ -286,8 +295,138 @@ def card(draw, v: Visual, t: float, d: float) -> None:
         draw.line([(W / 2 - span / 2, y), (W / 2 - span / 2 + span * ease((p - 0.7) / 0.3), y)], fill=YELLOW, width=8)
 
 
+def wave(draw, v: Visual, t: float, d: float) -> None:
+    """One or two waves travelling right: values = how often each one wiggles (frequency),
+    amounts = how tall (amplitude). Two waves stack, for "high note vs low note"."""
+    labels = v.labels[:2] or [""]
+    n = len(labels)
+    freqs = [*v.values[:n], *[1.0] * n][:n]
+    amps = [*v.amounts[:n], *[1.0] * n][:n]
+    top_f, top_a = max(freqs) or 1.0, max(amps) or 1.0
+    title(draw, v, stage(t, d, 0, n + 1))
+    first = TOP + (150 if v.title else 40)
+    lane = (BOTTOM - 20 - first) / n
+    x0, x1 = 150, W - 150
+    for i, label in enumerate(labels):
+        p = stage(t, d, i + 1, n + 1)
+        if p <= 0:
+            break
+        mid = first + lane * i + lane / 2 + 25
+        cycles = 1.2 + 4.8 * max(0.0, freqs[i]) / top_f
+        amp = (lane / 2 - 60) * max(0.15, amps[i] / top_a)
+        color = YELLOW if i == 0 else BLUE
+        text(draw, (W / 2, mid - lane / 2 + 15), label, 60, color, max_width=800, reveal=p)
+        end = x0 + (x1 - x0) * p
+        phase = 2 * math.pi * 0.8 * t  # every wave moves at the same speed across the board
+        pts = [(x, mid + amp * math.sin(2 * math.pi * cycles * (x - x0) / (x1 - x0) - phase * cycles / 3))
+               for x in [x0 + k * 4 for k in range(int((end - x0) / 4) + 1)]]
+        if len(pts) > 1:
+            draw.line(pts, fill=color, width=9, joint="curve")
+
+
+def particles(draw, v: Visual, t: float, d: float) -> None:
+    """Molecules bouncing in one or two boxes: values = how fast (temperature), amounts = how
+    many (density, pressure). For heat, pressure, evaporation, smell."""
+    labels = v.labels[:2] or [""]
+    n = len(labels)
+    speeds = [*v.values[:n], *[1.0] * n][:n]
+    counts = [*v.amounts[:n], *[1.0] * n][:n]
+    top_s, top_c = max(speeds) or 1.0, max(counts) or 1.0
+    title(draw, v, stage(t, d, 0, n + 1))
+    box_w = 380 if n == 2 else 600
+    y0, y1 = TOP + (150 if v.title else 40), BOTTOM - 90
+    for i, label in enumerate(labels):
+        p = stage(t, d, i + 1, n + 1)
+        if p <= 0:
+            break
+        cx = W / 2 if n == 1 else (W / 2 - 230 if i == 0 else W / 2 + 230)
+        x0, x1 = cx - box_w / 2, cx + box_w / 2
+        color = YELLOW if i == 0 else BLUE
+        draw.rectangle((x0, y0, x1, y1), outline=CHALK, width=8)
+        text(draw, (cx, y1 + 50), label, 60, color, max_width=box_w + 40, reveal=p)
+        rnd = random.Random(31 + i)  # the same molecules every frame
+        many = max(3, round(18 * max(0.0, counts[i]) / top_c))
+        speed = 60 + 520 * max(0.0, speeds[i]) / top_s
+        r, inner_w, inner_h = 16, (x1 - x0) - 48, (y1 - y0) - 48
+        for _ in range(many):
+            px, py, ang = rnd.random() * inner_w, rnd.random() * inner_h, rnd.random() * 2 * math.pi
+            # Bouncing off the walls: position folded back into the box.
+            fx = (px + speed * math.cos(ang) * t) % (2 * inner_w)
+            fy = (py + speed * math.sin(ang) * t) % (2 * inner_h)
+            fx = fx if fx <= inner_w else 2 * inner_w - fx
+            fy = fy if fy <= inner_h else 2 * inner_h - fy
+            x, y = x0 + 24 + fx, y0 + 24 + fy
+            s = r * p
+            draw.ellipse((x - s, y - s, x + s, y + s), fill=color)
+
+
+def ray(draw, v: Visual, t: float, d: float) -> None:
+    """A light ray meeting a surface: labels = [medium above, medium below], values = their
+    refractive indices (air 1.0, water 1.33, glass 1.5), shape "reflect" for a mirror. The bend
+    is Snell's law, so it is right; a dashed line shows where the light would have gone."""
+    above, below = [*v.labels, "air", "water"][:2]
+    n1, n2 = [*v.values[:2], 1.0, 1.33][:2]
+    title(draw, v, stage(t, d, 0, 4))
+    cy = (TOP + (150 if v.title else 40) + BOTTOM) / 2 + 20
+    p1, p2, p3 = stage(t, d, 1, 4), stage(t, d, 2, 4), stage(t, d, 3, 4)
+    if p1 > 0:  # the lower medium, a shade lighter
+        draw.rectangle((90, cy, W - 90, BOTTOM - 20), fill=tuple(c + 14 for c in BOARD))
+    draw.line([(90, cy), (90 + (W - 180) * p1, cy)], fill=CHALK, width=6)
+    text(draw, (110, cy - 45), above, 58, DIM, anchor="lm", max_width=360, reveal=p1)
+    text(draw, (110, cy + 50), below, 58, DIM, anchor="lm", max_width=360, reveal=p1)
+    hit = (W / 2 + 40, cy)
+    for k in range(10):  # the normal, dashed
+        if p1 > 0.5:
+            ya = cy - 260 + k * 52
+            draw.line([(hit[0], ya), (hit[0], ya + 24)], fill=DIM, width=4)
+    # 52 degrees: steep enough to see the bend, past water's and glass's critical angles
+    # (49, 42) so light trying to leave them reflects back, as it really does.
+    th1 = math.radians(52)
+    up, down = min(330, (cy - TOP - (150 if v.title else 40)) / math.cos(th1)), (BOTTOM - 40 - cy) / math.cos(th1)
+    start = (hit[0] - up * math.sin(th1), hit[1] - up * math.cos(th1))
+    arrow(draw, start, (start[0] + (hit[0] - start[0]) * p2, start[1] + (hit[1] - start[1]) * p2), YELLOW, width=10)
+    if p2 < 1:
+        return
+    s2 = (n1 / n2) * math.sin(th1) if n2 else 2.0
+    if v.shape == "reflect" or s2 > 1:  # a mirror, or total internal reflection
+        out = (hit[0] + up * math.sin(th1), hit[1] - up * math.cos(th1))
+    else:
+        th2 = math.asin(s2)
+        length = min(330, (BOTTOM - 40 - cy) / math.cos(th2))
+        out = (hit[0] + length * math.sin(th2), hit[1] + length * math.cos(th2))
+        straight = (hit[0] + down * math.sin(th1), hit[1] + down * math.cos(th1))
+        for k in range(8):  # where it would have gone without the bend
+            a, b = k / 8, (k + 0.5) / 8
+            if b <= p3:
+                draw.line([(hit[0] + (straight[0] - hit[0]) * a, hit[1] + (straight[1] - hit[1]) * a),
+                           (hit[0] + (straight[0] - hit[0]) * b, hit[1] + (straight[1] - hit[1]) * b)],
+                          fill=DIM, width=5)
+    arrow(draw, hit, (hit[0] + (out[0] - hit[0]) * p3, hit[1] + (out[1] - hit[1]) * p3), YELLOW, width=10)
+
+
+NUMBER = re.compile(r"^([^\d]*)(\d[\d,]*(?:\.\d+)?)(.*)$")
+
+
+def number(draw, v: Visual, t: float, d: float) -> None:
+    """One striking number, counting up, with what it is underneath ("343 m/s", "speed of
+    sound"). The count lands on the exact figure and holds."""
+    figure = (v.title or "").strip()
+    p = stage(t, d, 0, 2)
+    m = NUMBER.match(figure)
+    if m and p < 1:
+        head, digits, tail = m.groups()
+        value = float(digits.replace(",", ""))
+        places = len(digits.split(".")[1]) if "." in digits else 0
+        shown = f"{value * p:,.{places}f}" if "," in digits else f"{value * p:.{places}f}"
+        figure = head + shown + tail
+    mid = (TOP + BOTTOM) / 2 - 60
+    text(draw, (W / 2, mid), figure, 190, YELLOW, max_width=940, reveal=min(1.0, p * 4))
+    caption = v.labels[0] if v.labels else ""
+    text(draw, (W / 2, mid + 160), caption, 70, CHALK, max_width=880, reveal=stage(t, d, 1, 2))
+
+
 DRAW = {"forces": forces, "circle": circle, "equation": equation, "compare": compare, "chain": chain, "graph": graph,
-        "card": card}
+        "wave": wave, "particles": particles, "ray": ray, "number": number, "card": card}
 
 
 def frame(v: Visual, t: float, d: float) -> Image.Image:
