@@ -63,6 +63,8 @@ llm:
   create_via_claude_plan: true
   # The footage judge, ~9 small calls a video: Sonnet, to spare the plan's usage (D116).
   create_quick_model: claude-sonnet-5-5
+  # Claude set up but out of usage? Stop and say so, rather than let Gemini make it (D117).
+  create_claude_only: true
   # Caption fixes ruled wrong on review ("heard -> replacement"); never applied again.
   # Every applied fix is listed per clip in report.md -- add a bad one here.
   rejected_caption_fixes:

@@ -2138,3 +2138,12 @@ pulled to disk and never used.
 3. The footage judge (about 9 calls a video) asks `llm.create_quick_model`, Sonnet 5.5, to
    spare the plan's usage; scripts and sketches stay on create_model. The user chose the
    plan over an API key: measured, a video is ~$1.00 at API prices on Opus, ~$0.50 on Sonnet.
+
+## D117 — No quiet fall to Gemini (2026-10-03)
+
+D116 worked: the user's Clipper reached Claude Code -- which refused, the Claude plan's
+weekly limit being used up ("resets Oct 4, 6pm"). Gemini answered instead, and the video
+was awful again. With `llm.create_claude_only` (on), when Claude is set up but doesn't
+answer, Create stops with the reason ("Claude isn't available right now (...weekly
+limit...)") and changes nothing, rather than making a video the user will throw away.
+Gemini still does the job when no Claude is set up at all, or with the setting off.

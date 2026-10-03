@@ -66,7 +66,14 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
 
     global last_used
     config = Config.load()
-    for backend in backends(config, config.llm.create_quick_model if quick else None):
+    order = backends(config, config.llm.create_quick_model if quick else None)
+    claude = [b for b in order if b.name in ("anthropic", "claude_code")]
+    for backend in order:
+        if config.llm.create_claude_only and claude and backend not in claude:
+            # Claude was there but didn't answer: stop rather than let Gemini draw (D117).
+            why = misses.get(claude[0].describe(), "it didn't answer")
+            raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "
+                              "later, or set llm.create_claude_only: false to let Gemini do it")
         try:
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text

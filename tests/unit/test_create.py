@@ -428,3 +428,30 @@ def test_on_windows_claude_cmd_gets_no_json_or_line_breaks_on_its_command_line(m
     assert json.loads(reply.text) == {"pick": 3, "score": 9}
     assert "--json-schema" not in seen["args"] and "--system-prompt-file" in seen["args"]
     assert not any("\n" in a for a in seen["args"]) and "JSON Schema" in seen["prompt"]
+
+
+def test_when_claude_is_out_of_usage_create_stops_instead_of_using_gemini(monkeypatch):
+    from clipper.create import ai
+    from clipper.llm.base import RateLimited
+
+    class Claude:
+        name = "claude_code"
+
+        def describe(self):
+            return "claude_code:claude-opus-5-5"
+
+        def complete(self, request):
+            raise RateLimited("Claude plan limit: You've hit your weekly limit")
+
+    class Gemini:
+        name = "gemini"
+
+        def describe(self):
+            return "gemini:flash"
+
+        def complete(self, request):
+            raise AssertionError("Gemini must not be asked")
+
+    monkeypatch.setattr(ai, "backends", lambda config, model=None: [Claude(), Gemini()])
+    with pytest.raises(CreateError, match="weekly limit"):
+        ai.ask("s", "u", None, temperature=0)

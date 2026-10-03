@@ -194,6 +194,9 @@ class LLMConfig(StrictModel):
     # The footage judge (about 9 calls a video, a simple look at thumbnails) asks this one;
     # None = create_model. Sonnet uses about half the plan usage Opus does (D116).
     create_quick_model: str | None = None
+    # When Claude is set up but can't answer (a plan's weekly limit), stop with the reason
+    # instead of falling back to Gemini, whose scripts and drawings were judged awful (D117).
+    create_claude_only: bool = True
     # Hard-drop candidates both prompts say need earlier context. Off for
     # scripted TV, where nearly every scene "needs context" by that standard
     # yet works as a clip: on a sitcom episode 26 of 48 were dropped for it.
