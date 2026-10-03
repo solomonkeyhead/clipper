@@ -38,7 +38,7 @@ from .windows import _continues
 
 log = get_logger(__name__)
 
-PROMPT_VERSION = "opening-v4"
+PROMPT_VERSION = "opening-v5"
 #: Lines said just before a clip that it may reach back to.
 BEFORE_LINES = 4
 #: Lines into a clip it may start later on.
@@ -55,6 +55,11 @@ REST_CHARS = 500
 #: A payoff teaser: a whole line this long (render/teaser.py), this far in at least.
 PAYOFF_SECONDS = (0.8, 3.5)
 PAYOFF_INTO_CLIP = 4.0
+#: ...and at most this far: a longer setup after the teaser and viewers give up (D107).
+PAYOFF_MAX_SETUP = 45.0
+#: A payoff in the last part of the clip ends it (plus a breath), so it loops into the teaser.
+PAYOFF_ENDS_AFTER = 0.7
+PAYOFF_TAIL = 0.4
 #: Only a payoff the model rates at least this is teased: a weak teaser is worse than none.
 PAYOFF_MIN_STRENGTH = 8
 
@@ -81,9 +86,10 @@ real setup. Cut warm-up, never setup: choose the LATEST line that still keeps th
 whole setup. If the current start is already the best, return it.
 
 PAYOFF. The one line a viewer would quote: the punchline, the reveal, the most \
-outrageous or awkward thing said. It is ALSO shown for a second or two before the \
-clip begins, as a teaser, so it must grab a stranger on its own and make them want \
-to see how it got there ("I'm not sure that I thought it through!", "Because you \
+outrageous or awkward thing said. Its FIRST part is ALSO shown for a second or two \
+before the clip begins, as a teaser that stops just before the line lands, so its \
+opening words must already raise the stakes and make a stranger need the ending \
+and to see how it got there ("I'm not sure that I thought it through!", "Because you \
 told them that I gave you chlamydia."). It must be surprising, funny or shocking \
 read cold, with no context at all. Not a teaser: a plain answer or agreement ("It's \
 definitely true", "Yeah, exactly"), a vague line ("What are you hiding?"), or one \
@@ -159,7 +165,7 @@ def options(candidate: Candidate, sentences: list[Sentence], *,
 def teaser_fits(start: int, payoff: int, end: float, sentences: list[Sentence], max_seconds: float) -> bool:
     """A payoff after `start`, far enough in, with the clip and teaser in length."""
     line = sentences[payoff]
-    return (payoff > start and line.start - sentences[start].start >= PAYOFF_INTO_CLIP
+    return (payoff > start and PAYOFF_INTO_CLIP <= line.start - sentences[start].start <= PAYOFF_MAX_SETUP
             and end - sentences[start].start + line.duration <= max_seconds)
 
 

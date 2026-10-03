@@ -103,6 +103,13 @@ def teaser_allowed(campaign: CampaignConfig) -> bool:
     return "re_edit" not in forbidden_by(campaign.brief_rules)
 
 
+def cold_open_allowed(campaign: CampaignConfig) -> bool:
+    """Whether a clip may open on its payoff (D97, D107): never on scripted TV or film,
+    where the setup-then-punchline rhythm is the scene and a joke shown first is a joke
+    spoiled; nor where a brief forbids re-edits (`teaser_allowed`)."""
+    return teaser_allowed(campaign) and content_type(campaign) != "scripted"
+
+
 def permissions(campaign: CampaignConfig) -> Permissions:
     kind = content_type(campaign)
     defaults = dict(DEFAULTS[kind])

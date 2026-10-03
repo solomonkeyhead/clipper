@@ -1962,3 +1962,21 @@ Chips with counts filter the list; the choice is remembered. The dashboard's ear
 card and views tile gained 14-day trend lines from the sync snapshots, each post priced by
 its own campaign's rate, minimum and cap (so the line ends on the card's number); recorded
 payouts show beside it as "Actually paid".
+
+## D107 — Cold opens, rebuilt (2026-10-02)
+
+The first payoff-first openings (D97) were worse to watch than plain clips. Research
+(cold-open report, 2026-10-02) and the renders agreed on why: on scripted TV and film
+the setup-then-punchline rhythm is the scene, and Clipper showed the whole payoff (a
+closed loop) with a hard, unsignalled cut. Now: never on scripted footage
+(edits.cold_open_allowed; Please Like Me and Chad Powers get none); the teaser stops in
+the gap before the payoff line's last ~40% of words -- pulled back to where that caption
+page starts, because a page shows all its words at once and gave the punchline away --
+and a line under 3 words isn't teased; the jump back is a soft white bloom (2 frames out,
+4 in) with quarter-sine fades either side, never silence; the hook isn't drawn over the
+teaser when the clip already shows it; the payoff must come within 45 s; a payoff in the
+last 30% of the clip ends it (plus 0.4 s) so it loops into the teaser. The chooser is
+told the teaser stops short (opening-v5). Not taken from the report: -12 LUFS (platforms
+normalise; Clipper stays at -14), cutting every pause over 0.3 s (the D59 rules stay),
+a fixed 0.5-1 s trim (word and page boundaries instead), a hard 1-frame white strobe.
+"Open on the payoff" stays off until the test renders (data/cold-open-test) are approved.

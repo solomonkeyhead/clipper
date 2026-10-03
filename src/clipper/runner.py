@@ -161,7 +161,7 @@ def _choose_openings(picks: list[Pick], outcome: ScoreOutcome, config: Config,
                      backend_override: str | None, campaign: CampaignConfig) -> None:
     """Start each chosen clip on the line that hooks, and mark the payoff it opens
     with when "Open on the payoff" is on (candidates/opening.py, D93, D97)."""
-    from .campaign.edits import teaser_allowed
+    from .campaign.edits import cold_open_allowed
     from .candidates import opening
 
     # One call per video, judging what's funny cold: the stronger model when it
@@ -174,7 +174,7 @@ def _choose_openings(picks: list[Pick], outcome: ScoreOutcome, config: Config,
     opening.apply(picks, outcome.sentences.sentences, backends,
                   min_seconds=config.candidates.min_seconds,
                   max_seconds=config.candidates.max_seconds, cache=LLMCache(),
-                  payoff=payoff_first() and teaser_allowed(campaign))
+                  payoff=payoff_first() and cold_open_allowed(campaign))
 
 
 def payoff_first() -> bool:
@@ -357,7 +357,10 @@ def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
         hook = clean(hook, campaign)
     # The payoff it opened on, if it had one (D97).
     # An edited clip doesn't open on its payoff: its timeline is the edit's.
-    teaser = None if edit is not None else (json.loads(clip.get("scores") or "{}") or {}).get("teaser")
+    from .campaign.edits import cold_open_allowed
+
+    teaser = (None if edit is not None or not cold_open_allowed(campaign)
+              else (json.loads(clip.get("scores") or "{}") or {}).get("teaser"))
     plan = plan.model_copy(update={"clip_id": clip["clip_id"], "hook_text": hook.strip(),
                                    "hook_shown": bool(hook.strip()) and config.render.show_hook_text,
                                    "teaser": _teaser(tuple(teaser), start, end, campaign) if teaser else None})
@@ -893,7 +896,7 @@ def _render_plan(
     rules = compliance.check_clip(plan, campaign, duration=rendered.duration)
     # The checked clip, with its payoff shown first (render/teaser.py, D97); not on a
     # tightened timeline, where the payoff's times no longer line up.
-    from .campaign.edits import teaser_allowed
+    from .campaign.edits import cold_open_allowed, teaser_allowed
 
     passed = qa.status != "fail" and rules.status != "fail"
     hook_on_top = render_plan.hook_text if render_plan.hook_shown else ""
@@ -905,12 +908,23 @@ def _render_plan(
 
         cover_at = pick(output, rendered.duration, ass_text=context.ass_text)
     before = rendered.duration
-    if passed and plan.teaser and render_source is source_path and teaser_allowed(campaign):
+    if passed and plan.teaser and render_source is source_path and cold_open_allowed(campaign):
         from .render.teaser import prepend
 
         a, b = plan.teaser
-        prepend(output, a - render_plan.start, b - render_plan.start, hook=hook_on_top, config=config,
-                work_dir=work, draft=draft, has_audio=info.media.has_audio)
+        # The payoff's words on the clip's clock, so the teaser can stop before it resolves.
+        spoken = [(w.start - render_plan.start, w.end - render_plan.start, w.text) for w in render_words
+                  if a - 0.05 <= w.start and w.end <= b + 0.05]
+        from .render.cover import hook_showing
+        from .render.teaser import page_starts
+
+        # The hook isn't drawn twice where the clip already shows it; the teaser stops
+        # before the caption page holding the punchline appears.
+        at = a - render_plan.start
+        prepend(output, at, b - render_plan.start,
+                hook="" if hook_showing(context.ass_text, at) else hook_on_top, config=config,
+                work_dir=work, draft=draft, has_audio=info.media.has_audio, words=spoken,
+                pages=page_starts(context.ass_text))
         rendered = probe(output)
     if cover_at is not None:
         from .render.cover import hook_showing, put_first
@@ -998,9 +1012,14 @@ def _build_plan(
                    if v.candidate_id == candidate.candidate_id), None)
     scores = (values.llm_a or values.llm_b) if values else None
 
+    # Opening on its payoff (D97, D107): and when that comes late, ending on it too.
+    teaser = _teaser(candidate.payoff, bounds.start, bounds.end, campaign)
+    end = _end_on_payoff(teaser, bounds.start, bounds.end, campaign)
+    notes = bounds.notes if end == bounds.end else [*bounds.notes, "ends on its payoff, to loop into the teaser"]
+
     text = " ".join(
         w.text for w in transcript.words
-        if bounds.start <= (w.start + w.end) / 2 < bounds.end
+        if bounds.start <= (w.start + w.end) / 2 < end
     ).strip() or candidate.text
 
     plan = ClipPlan(
@@ -1008,7 +1027,7 @@ def _build_plan(
         candidate_id=candidate.candidate_id,
         rank=rank,
         start=bounds.start,
-        end=bounds.end,
+        end=end,
         text=text,
         composite=pick.scored.composite,
         hook_text=(rotation.pick(campaign, "hook", campaign.hook_texts)
@@ -1016,12 +1035,12 @@ def _build_plan(
         suggested_caption=scores.suggested_caption if scores else "",
         hashtags=list(scores.hashtags) if scores else [],
         caption_style=config.render.caption_style,
-        refine_notes=bounds.notes,
+        refine_notes=notes,
         lead_in=next((round(w.start - bounds.start, 2) for w in transcript.words
-                      if bounds.start - 0.05 <= w.start < bounds.end), None),
+                      if bounds.start - 0.05 <= w.start < end), None),
         hook_shown=bool(config.render.show_hook_text
                         and (campaign.hook_texts or _hook(values, scores))),
-        teaser=_teaser(candidate.payoff, bounds.start, bounds.end, campaign),
+        teaser=teaser,
     )
     return compliance.apply_campaign_caption(plan, campaign, pick=rotation.pick)
 
@@ -1030,14 +1049,30 @@ def _teaser(payoff: tuple[float, float] | None, start: float, end: float,
             campaign: CampaignConfig) -> tuple[float, float] | None:
     """The payoff to open on, if it's still inside the refined clip, far enough in,
     and the two together fit the campaign's length (D97)."""
-    from .candidates.opening import PAYOFF_INTO_CLIP
+    from .candidates.opening import PAYOFF_INTO_CLIP, PAYOFF_MAX_SETUP
 
     if payoff is None:
         return None
     a, b = payoff
-    if a - start < PAYOFF_INTO_CLIP or b > end or (end - start) + (b - a) > campaign.duration.max_seconds:
+    if (not PAYOFF_INTO_CLIP <= a - start <= PAYOFF_MAX_SETUP or b > end
+            or (end - start) + (b - a) > campaign.duration.max_seconds):
         return None
     return payoff
+
+
+def _end_on_payoff(teaser: tuple[float, float] | None, start: float, end: float,
+                   campaign: CampaignConfig) -> float:
+    """Where a clip that opens on its payoff ends: right after the payoff when it comes
+    in the clip's last part, so the clip loops back into its teaser (D107)."""
+    from .candidates.opening import PAYOFF_ENDS_AFTER, PAYOFF_TAIL
+
+    if teaser is None:
+        return end
+    cut = teaser[1] + PAYOFF_TAIL
+    if cut < end and teaser[1] >= start + PAYOFF_ENDS_AFTER * (end - start) \
+            and cut - start >= campaign.duration.min_seconds:
+        return cut
+    return end
 
 
 def _hook(values, scores) -> str:
