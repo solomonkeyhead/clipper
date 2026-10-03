@@ -441,6 +441,8 @@ class ClipPlan(Artifact):
     teaser: tuple[float, float] | None = None
     # Made in the editor: the pieces kept, hook and caption fixes (editing.py, D103).
     edit: dict | None = None
+    # Where its cover frame came from, seconds into the clip before it was put first (D104).
+    cover: float | None = None
 
     @property
     def duration(self) -> float:

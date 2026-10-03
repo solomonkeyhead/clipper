@@ -29,19 +29,37 @@ MIN_INTO_CLIP = 4.0
 FADE = 0.06
 
 
+def hook_filter(clip: Path, hook: str, length: float, *, config: Config, work_dir: Path,
+                draft: bool, tag: str) -> str:
+    """An `ass` filter showing only the on-screen hook for `length` seconds."""
+    rc = config.render
+    width, height = output_size(rc, draft=draft)
+    ass = work_dir / f"{clip.stem}.{tag}.ass"
+    cap.write_ass(cap.build_ass([], style=cap.get_style(rc.caption_style), width=width, height=height,
+                                safe_area=rc.safe_area, clip_start=0.0, duration=length,
+                                hook_text=hook if rc.show_hook_text else "",
+                                hook_seconds=length if rc.show_hook_text else 0.0), ass)
+    return f"ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(bundled_fonts_dir())}'"
+
+
+def reencode_args(config: Config) -> list[str]:
+    """A second encode of the same frames: a touch higher quality than the first."""
+    rc = config.render
+    encoder, _ = select_video_encoder(rc.encoder)
+    if encoder == "h264_nvenc":
+        return ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", str(max(rc.nvenc_cq - 2, 0)),
+                "-b:v", "0", "-profile:v", "high"]
+    return ["-c:v", "libx264", "-preset", rc.x264_preset, "-crf", str(max(rc.crf - 2, 0)),
+            "-profile:v", "high", "-level", "4.2"]
+
+
 def prepend(clip: Path, start: float, end: float, *, hook: str, config: Config, work_dir: Path,
             draft: bool = False, has_audio: bool = True) -> Path:
     """`clip` with its own `start`-`end` (seconds into it) played first. Replaces
     `clip` in place and returns it; on any failure the clip is left as it was."""
     rc = config.render
-    width, height = output_size(rc, draft=draft)
     length = end - start
-    ass = work_dir / f"{clip.stem}.teaser.ass"
-    cap.write_ass(cap.build_ass([], style=cap.get_style(rc.caption_style), width=width, height=height,
-                                safe_area=rc.safe_area, clip_start=0.0, duration=length,
-                                hook_text=hook if rc.show_hook_text else "",
-                                hook_seconds=length if rc.show_hook_text else 0.0), ass)
-    subs = f"ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(bundled_fonts_dir())}'"
+    subs = hook_filter(clip, hook, length, config=config, work_dir=work_dir, draft=draft, tag="teaser")
     video = (f"[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,{subs}[tv];"
              f"[0:v]setpts=PTS-STARTPTS[mv]")
     if has_audio:
@@ -50,12 +68,7 @@ def prepend(clip: Path, start: float, end: float, *, hook: str, config: Config, 
                  f"[0:a]asetpts=PTS-STARTPTS[ma];[tv][ta][mv][ma]concat=n=2:v=1:a=1[v][a]")
     else:
         audio = ";[tv][mv]concat=n=2:v=1:a=0[v]"
-    encoder, _ = select_video_encoder(rc.encoder)
-    # A second encode of the same frames: a touch higher quality than the first.
-    video_args = (["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", str(max(rc.nvenc_cq - 2, 0)),
-                   "-b:v", "0", "-profile:v", "high"] if encoder == "h264_nvenc"
-                  else ["-c:v", "libx264", "-preset", rc.x264_preset, "-crf", str(max(rc.crf - 2, 0)),
-                        "-profile:v", "high", "-level", "4.2"])
+    video_args = reencode_args(config)
     out = clip.with_name(f"{clip.stem}.teased{clip.suffix}")
     args = ["-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(clip),
             "-filter_complex", video + audio, "-map", "[v]",

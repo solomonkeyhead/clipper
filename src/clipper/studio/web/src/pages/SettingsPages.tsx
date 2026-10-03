@@ -599,6 +599,16 @@ export function SettingsPage() {
           ) : <Skeleton className="h-5 w-9" />}
         />
         <Row
+          title="Pick the cover"
+          body={<>Clipper finds each clip's best still (a clear face, sharp, well lit) and puts it on the first frame with the
+            hook, so TikTok and Instagram show it as the cover and you don't have to choose one. It's held for 1/15 of a
+            second, too short to notice when it plays. Skipped when a brief forbids re-edits.</>}
+          control={settings ? (
+            <Switch label="Pick the cover" checked={settings.auto_cover !== "0"}
+                    onChange={(v) => save.mutate({ auto_cover: v ? "1" : "0" })} />
+          ) : <Skeleton className="h-5 w-9" />}
+        />
+        <Row
           title="Theme"
           body="Dark suits watching video; light can be easier for long reading."
           control={

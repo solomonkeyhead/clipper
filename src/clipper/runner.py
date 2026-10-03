@@ -189,6 +189,18 @@ def payoff_first() -> bool:
         return True
 
 
+def cover_first() -> bool:
+    """The Control Center's "Pick the cover" setting (on unless turned off, D104)."""
+    from .studio import db
+
+    try:
+        with db.connect() as con:
+            return db.settings(con).get("auto_cover", "1") == "1"
+    except Exception as exc:  # no library: the default
+        log.debug("cover setting unread: %s", exc)
+        return True
+
+
 def clip_limit(top: int | None, campaign: CampaignConfig) -> int:
     """How many clips to make at most: an explicit count wins over the campaign's
     cap (asking for 10 used to give 4 when the campaign said 4); with neither,
@@ -883,15 +895,33 @@ def _render_plan(
     # tightened timeline, where the payoff's times no longer line up.
     from .campaign.edits import teaser_allowed
 
-    if (plan.teaser and qa.status != "fail" and rules.status != "fail"
-            and render_source is source_path and teaser_allowed(campaign)):
+    passed = qa.status != "fail" and rules.status != "fail"
+    hook_on_top = render_plan.hook_text if render_plan.hook_shown else ""
+    # The cover (render/cover.py, D104): its best still, found on the checked clip,
+    # whose captions' times are known; put first once the payoff (if any) is.
+    cover_at = None
+    if passed and not draft and cover_first() and teaser_allowed(campaign):
+        from .render.cover import pick
+
+        cover_at = pick(output, rendered.duration, ass_text=context.ass_text)
+    before = rendered.duration
+    if passed and plan.teaser and render_source is source_path and teaser_allowed(campaign):
         from .render.teaser import prepend
 
         a, b = plan.teaser
-        prepend(output, a - render_plan.start, b - render_plan.start,
-                hook=render_plan.hook_text if render_plan.hook_shown else "", config=config,
+        prepend(output, a - render_plan.start, b - render_plan.start, hook=hook_on_top, config=config,
                 work_dir=work, draft=draft, has_audio=info.media.has_audio)
         rendered = probe(output)
+    if cover_at is not None:
+        from .render.cover import hook_showing, put_first
+
+        # The payoff in front moved every frame along by its own length; a frame
+        # from the opening seconds already carries the hook, so it isn't drawn twice.
+        put_first(output, cover_at + max(0.0, rendered.duration - before),
+                  hook="" if hook_showing(context.ass_text, cover_at) else hook_on_top, config=config,
+                  work_dir=work, fps=int(config.render.fps), has_audio=info.media.has_audio)
+        rendered = probe(output)
+        plan = plan.model_copy(update={"cover": cover_at})
 
     return ClipRecord(
         plan=plan,

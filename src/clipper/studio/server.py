@@ -1742,7 +1742,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         path = library.clip_path(found["file"]) if found else None
         if path is None or not path.exists():
             raise HTTPException(404, "no such clip file")
-        still = library.thumbnail(path)
+        # A clip that opens on its chosen cover shows that, as the platforms will (D104).
+        covered = (json.loads(found.get("scores") or "{}") or {}).get("cover") is not None
+        still = library.thumbnail(path, at=0.0 if covered else 1.5)
         if still is None:
             raise HTTPException(404, "could not make a still")
         return FileResponse(still, media_type="image/jpeg",

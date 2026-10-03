@@ -1924,3 +1924,15 @@ forbids is refused even by hand (with its words); one that's merely off by defau
 (Clipper doesn't cut scripted scenes itself) is the person's call. Briefs that say
 "only use the provided footage" / "no outside footage" now forbid overlays and added
 audio. Not yet: B-roll, auto silence cuts as editable cuts, saved styles.
+
+## D104 — The cover, chosen and put first (2026-10-02)
+
+TikTok and Instagram use a post's first frame as its cover unless one is picked.
+Once a clip passes its checks, render/cover.py scores its finished frames every
+0.4 s -- a readable face (YuNet: size, centred, upper frame), sharpness, colour,
+between caption lines -- scaled by exposure so a dark frame can't win -- and holds
+the best for the first two frames (1/15 s), with the hook over it unless that frame
+already shows it; after the payoff opening (D97) if there is one. Same gate as the
+payoff (a brief forbidding re-edits skips it); Settings -> "Pick the cover", on by
+default; the library's thumbnail shows the cover. ~10 s of scoring and one more
+encode per clip. YouTube Shorts picks its own frame. Existing clips are unchanged.

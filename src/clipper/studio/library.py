@@ -80,11 +80,14 @@ def scores_of(record: ClipRecord) -> dict:
     text = record.plan.text[:TEXT_CHARS]
     if record.plan.candidate_id == "manual":
         # Made in the editor: its edit, so it opens there as it was left (D103).
-        return {"picked_by": "hand", "text": text, "text_v": 2, "edit": record.plan.edit}
+        return {"picked_by": "hand", "text": text, "text_v": 2, "edit": record.plan.edit,
+                "cover": record.plan.cover}
     llm = record.raw.get("llm")
     return {"picked_by": "auto", "text": text, "text_v": 2,
             # The payoff it opens on, so a re-render keeps it (render/teaser.py).
             "teaser": list(record.plan.teaser) if record.plan.teaser else None,
+            # Opens on its chosen cover frame (render/cover.py, D104).
+            "cover": record.plan.cover,
             "score": round(llm, 2) if llm is not None else None,
             "rubric": record.rubric, "composite": round(record.plan.composite, 4),
             "pool": record.pool, "pool_rank": record.pool_rank,
