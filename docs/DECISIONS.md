@@ -2031,3 +2031,8 @@ diagrams Gemini planned were judged poor in both look and accuracy. So:
    apart ("pexels-123"). Pexels has no tags, so the words of its page address stand in.
    The judge sees each candidate's tags and shape, thumbnails shrunk to 360 px, and is
    told a chalk card is better than a loose match. Either key is enough.
+4. From the user's video 75 (built before 1-3): diagram text was too small for a phone
+   (labels 58-64 px, chain boxes 120 px), so labels are now 68-80 px, titles 96, chain
+   boxes up to 150. The board below the band stays empty on purpose: captions end by
+   y 1240 and the platforms' own text sits under that (D59). Silhouette/matte clips are
+   dropped with green screens: white figures on black closed that video.

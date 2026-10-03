@@ -33,8 +33,10 @@ log = get_logger(__name__)
 API = "https://pixabay.com/api/videos/"
 PEXELS = "https://api.pexels.com/videos/search"
 SEARCH_HOURS = 24
-#: Footage that looks cheap on a phone: an unkeyed green screen, a transparent background.
-CHEAP = ("green screen", "greenscreen", "chroma", "blue screen", "alpha channel", "transparent")
+#: Footage that looks cheap on a phone: an unkeyed green screen, a transparent background, a matte.
+CHEAP = ("green screen", "greenscreen", "chroma", "blue screen", "alpha channel", "transparent",
+         # D110: white-on-black silhouettes (a matte) closed a video once
+         "silhouette", "matte", "luma")
 
 
 def _dir() -> Path:

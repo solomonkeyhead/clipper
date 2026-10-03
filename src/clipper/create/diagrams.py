@@ -147,9 +147,9 @@ def arrow(draw: ImageDraw.ImageDraw, a: tuple[float, float], b: tuple[float, flo
 
 def title(draw: ImageDraw.ImageDraw, v: Visual, p: float) -> None:
     if v.title:
-        text(draw, (W / 2, TOP + 50), v.title, 84, YELLOW, reveal=p)
+        text(draw, (W / 2, TOP + 50), v.title, 96, YELLOW, reveal=p)
         if p > 0.6:
-            span = min(760, draw.textlength(v.title, font=font(84)))
+            span = min(760, draw.textlength(v.title, font=font(96)))
             draw.line([(W / 2 - span / 2, TOP + 105), (W / 2 - span / 2 + span * ease((p - 0.6) / 0.4), TOP + 105)],
                       fill=YELLOW, width=6)
 
@@ -184,10 +184,10 @@ def forces(draw, v: Visual, t: float, d: float) -> None:
         arrow(draw, start, tip, color, width=14, head=48)
         if p > 0.5:
             if dy:  # beside an up or down arrow, never over the title or the captions
-                text(draw, (start[0] + 45, (start[1] + tip[1]) / 2), label, 64, color, anchor="lm",
+                text(draw, (start[0] + 45, (start[1] + tip[1]) / 2), label, 72, color, anchor="lm",
                      max_width=420, reveal=(p - 0.5) * 2)
             else:   # under a sideways one, clear of the box
-                text(draw, ((start[0] + tip[0]) / 2 + dx * 40, cy + 150), label, 60, color,
+                text(draw, ((start[0] + tip[0]) / 2 + dx * 40, cy + 150), label, 68, color,
                      max_width=360, reveal=(p - 0.5) * 2)
 
 
@@ -244,7 +244,7 @@ def equation(draw, v: Visual, t: float, d: float) -> None:
         draw.line([(W / 2 - span / 2, TOP + 245), (W / 2 + span / 2, TOP + 245)], fill=YELLOW, width=6)
     for i, label in enumerate(labels):
         p = stage(t, d, len(tokens) + i, n, label=i)
-        text(draw, (W / 2, TOP + 340 + i * 88), label, 64, YELLOW if i == 0 else CHALK, reveal=p)
+        text(draw, (W / 2, TOP + 340 + i * 90), label, 72, YELLOW if i == 0 else CHALK, reveal=p)
 
 
 def compare(draw, v: Visual, t: float, d: float) -> None:
@@ -260,7 +260,7 @@ def compare(draw, v: Visual, t: float, d: float) -> None:
         color = YELLOW if i == 0 else BLUE
         draw.rectangle((x - 110, base - height, x + 110, base), fill=tuple(int(c * 0.35) + 20 for c in color),
                        outline=color, width=8)
-        text(draw, (x, base + 50), label, 64, color, max_width=380, reveal=p)
+        text(draw, (x, base + 50), label, 74, color, max_width=380, reveal=p)
     draw.line([(150, base), (W - 150, base)], fill=CHALK, width=6)
 
 
@@ -269,7 +269,7 @@ def chain(draw, v: Visual, t: float, d: float) -> None:
     n = len(steps)
     first = TOP + (140 if v.title else 10)
     gap = 55
-    box = min(120, (BOTTOM - first - (n - 1) * gap) / n)
+    box = min(150, (BOTTOM - first - (n - 1) * gap) / n)
     total = n * box + (n - 1) * gap
     y = first + (BOTTOM - first - total) / 2
     title(draw, v, stage(t, d, 0, n + 1)) if v.title else None
@@ -280,7 +280,7 @@ def chain(draw, v: Visual, t: float, d: float) -> None:
             continue
         color = YELLOW if i == n - 1 else CHALK
         draw.rounded_rectangle((150, y, W - 150, y + box), radius=28, outline=color, width=8)
-        text(draw, (W / 2, y + box / 2), step, 64, color, max_width=700, reveal=p)
+        text(draw, (W / 2, y + box / 2), step, 80, color, max_width=720, reveal=p)
         if i < n - 1 and p > 0.7:
             arrow(draw, (W / 2, y + box + 10), (W / 2, y + box + gap - 10), DIM, width=10, head=34)
         y += box + gap
@@ -301,10 +301,10 @@ def graph(draw, v: Visual, t: float, d: float) -> None:
     arrow(draw, (ox, oy), (ox + (x1 - ox) * pa, oy), CHALK, width=8, head=30)
     arrow(draw, (ox, oy), (ox, oy - (oy - y1) * pa), CHALK, width=8, head=30)
     labels = [*v.labels, "", ""][:2]
-    text(draw, ((ox + x1) / 2, oy + 45), labels[0], 58, DIM, reveal=pa)
+    text(draw, ((ox + x1) / 2, oy + 45), labels[0], 68, CHALK, reveal=pa)
     if pa > 0.5 and labels[1]:
         layer = Image.new("RGBA", (700, 120), (0, 0, 0, 0))
-        ImageDraw.Draw(layer).text((350, 60), labels[1], font=font_for(labels[1], 58), fill=DIM, anchor="mm")
+        ImageDraw.Draw(layer).text((350, 60), labels[1], font=font_for(labels[1], 68), fill=CHALK, anchor="mm")
         upright = layer.rotate(90, expand=True)
         draw._image.paste(upright, (ox - 140, int((oy + y1) / 2) - 350), upright)
     pc = stage(t, d, 2, 3)
@@ -347,7 +347,7 @@ def wave(draw, v: Visual, t: float, d: float) -> None:
         cycles = 1.2 + 4.8 * max(0.0, freqs[i]) / top_f
         amp = (lane / 2 - 60) * max(0.15, amps[i] / top_a)
         color = YELLOW if i == 0 else BLUE
-        text(draw, (W / 2, mid - lane / 2 + 15), label, 60, color, max_width=800, reveal=p)
+        text(draw, (W / 2, mid - lane / 2 + 15), label, 70, color, max_width=800, reveal=p)
         end = x0 + (x1 - x0) * p
         phase = 2 * math.pi * 0.8 * t  # every wave moves at the same speed across the board
         pts = [(x, mid + amp * math.sin(2 * math.pi * cycles * (x - x0) / (x1 - x0) - phase * cycles / 3))
@@ -375,7 +375,7 @@ def particles(draw, v: Visual, t: float, d: float) -> None:
         x0, x1 = cx - box_w / 2, cx + box_w / 2
         color = YELLOW if i == 0 else BLUE
         draw.rectangle((x0, y0, x1, y1), outline=CHALK, width=8)
-        text(draw, (cx, y1 + 50), label, 60, color, max_width=box_w + 40, reveal=p)
+        text(draw, (cx, y1 + 50), label, 70, color, max_width=box_w + 40, reveal=p)
         rnd = random.Random(31 + i)  # the same molecules every frame
         many = max(3, round(18 * max(0.0, counts[i]) / top_c))
         speed = 60 + 520 * max(0.0, speeds[i]) / top_s
