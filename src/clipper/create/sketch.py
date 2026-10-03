@@ -91,7 +91,7 @@ class _Review(BaseModel):
 
 
 #: Where a sketch is fitted on the grid: clear of the edges, the title, the button corner.
-FIT_X, FIT_Y = (40, 960), (40, 560)
+FIT_X, FIT_Y = (30, 970), (25, 590)
 TEXT_W, TEXT_H = {1: 22, 2: 28, 3: 40}, {1: 60, 2: 75, 3: 105}
 POINTS = {"line": 4, "arrow": 4, "curve": 4, "loop": 6, "circle": 3, "dot": 2, "box": 4, "text": 2, "wave": 4,
           "mover": 4}
@@ -121,7 +121,7 @@ def fit(sketch: Sketch, title: bool = False) -> Sketch:
     x0, x1 = min(p[0] for p in pts), max(p[0] for p in pts)
     y0, y1 = min(p[1] for p in pts), max(p[1] for p in pts)
     top = 110 if title else FIT_Y[0]
-    room_w, room_h = (FIT_X[1] - FIT_X[0]) * 0.8, (FIT_Y[1] - top) * 0.8  # a margin for the labels
+    room_w, room_h = (FIT_X[1] - FIT_X[0]) * 0.88, (FIT_Y[1] - top) * 0.9  # a margin for the labels
     scale = min(room_w / max(x1 - x0, 1e-6), room_h / max(y1 - y0, 1e-6))
     ox = FIT_X[0] + ((FIT_X[1] - FIT_X[0]) - (x1 - x0) * scale) / 2
     oy = top + ((FIT_Y[1] - top) - (y1 - y0) * scale) / 2

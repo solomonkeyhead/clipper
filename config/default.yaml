@@ -58,6 +58,9 @@ llm:
   # Claude, billed per use (about $0.30-0.60 a video), and only when ANTHROPIC_API_KEY is in
   # .env; Gemini is the fallback. null = Create uses the free models only.
   create_model: claude-opus-5-5
+  # No API key? Then Claude Code (if installed and logged in) runs it on your Claude plan:
+  # free per call, counts toward the plan's usage limits (D113). false = API key only.
+  create_via_claude_plan: true
   # Caption fixes ruled wrong on review ("heard -> replacement"); never applied again.
   # Every applied fix is listed per clip in report.md -- add a bad one here.
   rejected_caption_fixes:

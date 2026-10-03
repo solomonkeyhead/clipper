@@ -2078,3 +2078,21 @@ glossy 3D microphone.
    a sketch. The judge now scores 3D renders, visualiser rings and dark clips as cheap.
 5. The notes under a script name the model that wrote and drew it ("Written and drawn
    by: ..."), since 75 and 76 were judged without knowing whether Claude or Gemini made them.
+
+## D113 — Create: Claude on the user's own plan, through Claude Code (2026-10-03)
+
+The sketches need Claude (Gemini placed them tiny, in corners, off the board), and the
+user asked for a free way. There is no free API tier, but they already have a Claude
+plan running Claude Code, and `claude -p` answers one prompt headless, logged in as them:
+no per-call bill, it counts toward the plan's usage limits.
+1. llm/claude_code.py: a backend that runs `claude -p --output-format json` from an empty
+   temporary folder, with --system-prompt, --json-schema (the answer is read from
+   `structured_output`), --no-session-persistence, no settings files, and only the Read
+   tool when images are handed over as files (the clip judge, the sketch review). A plan
+   limit is "rate limited", so the next model answers.
+2. Create's order: an API key if there is one; else, with `llm.create_via_claude_plan`
+   (on) and Claude Code installed, the plan; then Gemini.
+3. Tried for real from the cloud session: the "sound through the skull" sketch, drawn by
+   Opus this way, took 63 s with one review, which moved a label off the jaw line on its
+   own. A head in profile, the air path round it, the bone path through it: the drawing
+   the template version could not make. Fit margins trimmed so it fills more of the band.

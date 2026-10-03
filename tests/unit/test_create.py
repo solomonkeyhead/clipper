@@ -356,3 +356,44 @@ def test_a_black_shot_is_caught(tmp_path):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"{source}:rate=30", "-t", "1",
                         "-pix_fmt", "yuv420p", str(out)], check=True)
         assert _too_dark(out) is dark
+
+
+def test_claude_through_claude_code_on_the_users_plan(monkeypatch):
+    """No API key, Claude Code installed: Create asks Claude through it (D113); images are
+    handed over as files it may only read, the schema as --json-schema."""
+    import json
+    import subprocess
+
+    from clipper.config import Config
+    from clipper.create import ai
+    from clipper.llm import claude_code
+    from clipper.llm.base import LLMRequest
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "g")
+    monkeypatch.setattr(claude_code, "cli", lambda: "/usr/bin/claude")
+    first = ai.backends(Config.load())[0]
+    assert first.name == "claude_code" and first.model == "claude-opus-5-5"
+
+    seen = {}
+
+    def run(args, input, cwd, **k):
+        from pathlib import Path
+
+        seen.update(args=args, prompt=input, files=sorted(p.name for p in Path(cwd).iterdir()))
+        return subprocess.CompletedProcess(args, 0, json.dumps(
+            {"type": "result", "is_error": False, "result": "", "structured_output": {"pick": 2, "score": 8}}), "")
+    monkeypatch.setattr(claude_code.subprocess, "run", run)
+    reply = first.complete(LLMRequest(system="judge", user="Sentence: x", response_schema=stock._Pick,
+                                      media=[(b"jpg", "image/jpeg"), (b"jpg", "image/jpeg")]))
+    assert json.loads(reply.text) == {"pick": 2, "score": 8}
+    assert seen["files"] == ["1.jpg", "2.jpg"] and "1.jpg, 2.jpg" in seen["prompt"]
+    args = seen["args"]
+    assert args[args.index("--tools") + 1] == "Read" and "--json-schema" in args and "--no-session-persistence" in args
+
+    def limited(args, input, cwd, **k):
+        return subprocess.CompletedProcess(args, 1, json.dumps({"is_error": True, "result": "Usage limit reached"}), "")
+    monkeypatch.setattr(claude_code.subprocess, "run", limited)
+    from clipper.llm.base import LLMError
+    with pytest.raises(LLMError):
+        first.complete(LLMRequest(system="s", user="u"))

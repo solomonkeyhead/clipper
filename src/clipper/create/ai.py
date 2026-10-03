@@ -1,5 +1,6 @@
-"""Asking the model for Create: Claude first when there's a key for it (D109; Gemini's
-diagrams were judged worse in quality and accuracy), then the stronger free model,
+"""Asking the model for Create: Claude first -- with an API key, or else through Claude
+Code on the user's own plan (D109, D113; Gemini's diagrams were judged worse in
+quality and accuracy) -- then the stronger free model,
 then the everyday one when it rests (runner._correction_backends), at the
 temperature the job wants -- some creativity for ideas and scripts, none for
 checking them (Claude takes no temperature; its thinking does the job)."""
@@ -26,6 +27,7 @@ class CreateError(RuntimeError):
 
 def backends(config) -> list:
     from ..llm.base import create as create_backend
+    from ..llm.claude_code import cli
     from ..runner import _correction_backends
 
     chosen = []
@@ -37,6 +39,10 @@ def backends(config) -> list:
                                          timeout=CLAUDE_TIMEOUT))
         except Exception as exc:  # SDK not installed: the free models still answer
             log.warning("create: Claude unavailable (%s); using the free models", exc)
+    elif model and config.llm.create_via_claude_plan and cli():
+        # No key: the user's own Claude plan, through Claude Code (D113).
+        chosen.append(create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60,
+                                     timeout=CLAUDE_TIMEOUT + 60))
     try:
         chosen += _correction_backends(config, None)
     except Exception as exc:
