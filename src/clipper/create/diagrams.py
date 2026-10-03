@@ -80,7 +80,7 @@ def ease(x: float) -> float:
 
 #: When each label's words are spoken, seconds into the shot (None: not said), for the
 #: frame being drawn; set by render().
-CUES: contextvars.ContextVar[list[float | None]] = contextvars.ContextVar("cues", default=[])
+CUES: contextvars.ContextVar[tuple[float | None, ...]] = contextvars.ContextVar("cues", default=())
 
 
 def stage(t: float, d: float, i: int, n: int, label: int | None = None) -> float:
@@ -470,7 +470,7 @@ def frame(v: Visual, t: float, d: float) -> Image.Image:
 def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] | None = None) -> Path:
     """The diagram as a silent 1080x1920 clip of exactly `seconds`; with the shot's spoken
     `words` ((start, text), seconds into the shot), each label arrives as it's said."""
-    CUES.set(cues(v, words or []))
+    CUES.set(tuple(cues(v, words or [])))
     frames = max(1, round(seconds * FPS))
     proc = subprocess.Popen(
         [str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
