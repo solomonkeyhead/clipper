@@ -81,6 +81,9 @@ from .imports import VIDEO_EXTENSIONS
 
 log = get_logger(__name__)
 
+#: Days in the dashboard's views trend line.
+TREND_DAYS = 14
+
 STATIC = Path(__file__).parent / "static"
 HOST, PORT = "127.0.0.1", 8765
 HEARTBEAT_SECONDS = 15
@@ -683,6 +686,22 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 top_mover_gain=top[1] if top and top[1] > 0 else 0)
         pipeline = CampaignCounts(**{s: sum(1 for c in clips if c.status == s)
                                      for s in db.STATUSES})
+        # The trend lines: views, and the money they'd earned, at the end of each day.
+        # Each post is priced by its own campaign's rate, minimum and cap, as est_earnings is.
+        today = datetime.now().date()
+        by_day, earned_by_day = [], []
+        with db.connect() as con:
+            for d in range(TREND_DAYS - 1, -1, -1):
+                then = db.views_at(con, f"{today - timedelta(days=d)} 23:59:59")
+                seen = [(p, then.get(p.url.split("?", 1)[0])) for p in posts]
+                by_day.append(sum(v or 0 for _, v in seen))
+                money = 0.0
+                for p, v in seen:
+                    brief = snap.campaigns.get(p.campaign)
+                    if brief and v is not None:
+                        money += stats.estimate_earnings(v, brief.reward_per_1k_usd, brief.min_payout_usd,
+                                                         brief.max_payout_usd) or 0.0
+                earned_by_day.append(round(money, 2))
         return Home(
             metrics=Metrics(
                 est_earnings=round(sum(earnings), 2) if earnings else None,
@@ -692,7 +711,8 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 ready=pipeline.ready,
                 paid_usd=round(sum(p["amount"] for p in snap.payouts if p["campaign"] in active), 2)
                 if any(p["campaign"] in active for p in snap.payouts) else None,
-                tasks_due=sum(1 for p in posts for t in p.tasks if not t.done)),
+                tasks_due=sum(1 for p in posts for t in p.tasks if not t.done),
+                views_by_day=by_day, earned_by_day=earned_by_day),
             since=since, pipeline=pipeline,
             # The getting-started checklist, in the order a new user does it.
             first_run={"ai": setup.ai_status()["ready"], "campaign": bool(snap.campaigns),

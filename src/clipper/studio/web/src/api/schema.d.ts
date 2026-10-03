@@ -2423,6 +2423,16 @@ export interface components {
              * @default 0
              */
             tasks_due: number;
+            /**
+             * Views By Day
+             * @default []
+             */
+            views_by_day: number[];
+            /**
+             * Earned By Day
+             * @default []
+             */
+            earned_by_day: number[];
         };
         /** Payout */
         Payout: {

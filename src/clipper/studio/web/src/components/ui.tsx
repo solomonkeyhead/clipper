@@ -232,13 +232,29 @@ export function PageHeader({ title, hi, subtitle, actions }: {
   );
 }
 
-export function Metric({ label, value, hint, tone, sub }: {
-  label: string; value: ReactNode; hint?: string; tone?: "money"; sub?: ReactNode;
+/** A small line of how a number moved, lime, no axes: the shape, not the values. */
+export function Sparkline({ values, className }: { values: number[]; className?: string }) {
+  if (values.length < 2) return null;
+  const W = 120, H = 32, lo = Math.min(...values), hi = Math.max(...values);
+  const x = (i: number) => (i / (values.length - 1)) * W;
+  const y = (v: number) => H - 2 - ((v - lo) / Math.max(1, hi - lo)) * (H - 4);
+  const line = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={cn("h-8 w-full overflow-visible", className)} aria-hidden>
+      <path d={`${line}L${W},${H}L0,${H}Z`} fill="var(--accent)" opacity="0.12" />
+      <path d={line} fill="none" stroke="var(--accent)" strokeWidth="1.75" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+export function Metric({ label, value, hint, tone, sub, trend }: {
+  label: string; value: ReactNode; hint?: string; tone?: "money"; sub?: ReactNode; trend?: number[];
 }) {
   const body = (
     <Card className="flex flex-col gap-1 p-4">
       <span className="text-xs font-medium text-muted">{label}</span>
       <span className={cn("num text-[1.9rem] leading-tight", tone === "money" && "text-money")}>{value}</span>
+      {trend && <Sparkline values={trend} className="mt-1" />}
       {sub && <span className="text-xs text-muted">{sub}</span>}
     </Card>
   );

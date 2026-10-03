@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp } from "lucide-react";
 import { useCampaigns, useClips, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
-import { Button, Card, Metric, PageHeader, Skeleton, Tip } from "@/components/ui";
+import { Button, Card, Metric, PageHeader, Skeleton, Sparkline, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
@@ -11,7 +11,10 @@ function greeting() {
 }
 
 /** The money, big and lime: what you've earned, and what's actually been paid (D99, D102). */
-function Earnings({ est, paid, views, posts }: { est: number | null; paid: number | null | undefined; views: number; posts: number }) {
+function Earnings({ est, paid, views, posts, trend }: {
+  est: number | null; paid: number | null | undefined; views: number; posts: number; trend: number[];
+}) {
+  const week = trend.length >= 2 ? trend[trend.length - 1] - trend[Math.max(0, trend.length - 8)] : null;
   return (
     <Tip label="Estimate: views ÷ 1,000 × each campaign's rate. Campaigns verify views themselves.">
       <Card className="flex flex-col gap-3 p-5 sm:col-span-2">
@@ -22,9 +25,11 @@ function Earnings({ est, paid, views, posts }: { est: number | null; paid: numbe
             {est === null ? "Add a campaign's pay rate to see this" : <>from <b className="text-fg">{formatCount(views)}</b> views on <b className="text-fg">{posts}</b> posts</>}
           </span>
         </div>
+        {trend.length >= 2 && <Sparkline values={trend} className="h-10" />}
         <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-dashed border-line-strong pt-3 text-sm text-muted">
-          {paid != null ? <span>Paid so far <b className="text-fg">{formatMoney(paid)}</b></span>
-            : <span>Paid so far: record payouts on each campaign's page</span>}
+          {week !== null && <span><b className="text-money">+{formatMoney(Math.max(0, week))}</b> in the last {Math.min(7, trend.length - 1)} days</span>}
+          {paid != null ? <span>Actually paid <b className="text-fg">{formatMoney(paid)}</b></span>
+            : <span>Actually paid: record payouts on each campaign's page</span>}
         </div>
       </Card>
     </Tip>
@@ -127,6 +132,9 @@ export function DashboardPage() {
     );
   }
   const m = home.metrics;
+  // The trend from the first day the syncs saw any views (earlier days are "no data", not zero).
+  const days = m.views_by_day ?? [];
+  const trend = days.slice(Math.max(0, days.findIndex((v) => v > 0)));
   const since = home.since;
   // The brief's view-milestone tasks reached and not done (D98), oldest post first.
   const due = posts.flatMap((post) => (post.tasks ?? []).filter((t) => !t.done).map((task) => ({ post, task })))
@@ -145,8 +153,11 @@ export function DashboardPage() {
       {home.first_run.clips && <>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Earnings est={m.est_earnings} paid={m.paid_usd} views={m.views} posts={m.posts} />
-        <Metric label="Views" value={formatCount(m.views)} sub="active campaigns" />
+        <Earnings est={m.est_earnings} paid={m.paid_usd} views={m.views} posts={m.posts}
+                  trend={(m.earned_by_day ?? []).slice(Math.max(0, days.findIndex((v) => v > 0)))} />
+        <Metric label="Views" value={formatCount(m.views)} trend={trend.length >= 2 ? trend : undefined}
+                hint="Total views on your posts at the end of each day, from the syncs"
+                sub={trend.length >= 2 ? <><b className="text-money">+{formatCount(Math.max(0, trend[trend.length - 1] - trend[Math.max(0, trend.length - 8)]))}</b> in the last {Math.min(7, trend.length - 1)} days</> : "active campaigns"} />
         <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more" />
       </div>
 

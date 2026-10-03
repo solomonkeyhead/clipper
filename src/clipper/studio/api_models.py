@@ -240,6 +240,8 @@ class Metrics(BaseModel):
     ready: int
     paid_usd: float | None = None   # recorded payouts, active campaigns
     tasks_due: int = 0              # brief tasks reached and not done
+    views_by_day: list[float] = []  # total views at the end of each of the last 14 days, oldest first
+    earned_by_day: list[float] = [] # estimated earnings at the end of each of those days (same rules as est_earnings)
 
 
 class SinceLastVisit(BaseModel):
