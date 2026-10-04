@@ -2307,3 +2307,21 @@ Now:
   captions, and the cover, run again. Shots no longer used go to the Recycle Bin after a build.
 - Footage asked for over a held drawing covers all its sentences. Long sentences get a different
   clip for every 4.5 s part, chosen one after another so the same clip isn't picked twice.
+
+## D127 — The "Change parts" section closed and wouldn't reopen; page changes now tested in a browser (2026-10-04)
+
+Asking for changes closed "Change parts you don't like" and it wouldn't open again. Found by reading
+the code and then confirmed by clicking through the real page in headless Chromium. The causes:
+the section was a native `<details>` whose open state React set once and never managed after that;
+the panel holding it is swapped out while a video builds, so its state started over; a failed
+rebuild left the video "failed", whose view has no finished video and no parts list; and a video
+card was forced shut whenever another video became the "active" one. Now:
+- Sections are a `Fold`: React owns the open state and remembers it per video across remounts.
+- A rebuild that fails leaves the video built before in place ("built", with the reason and Try
+  again), and a "failed" video that has a finished version shows that version.
+- A card opens when it becomes the one to work on and never closes by itself.
+- The parts list sits below the video at full width (it was squeezed beside it).
+From now on, page changes are checked by `scripts/ui/walkthrough.py` (the real server on test data,
+Playwright and the pre-installed Chromium): open the built video, ask for new footage and a new
+drawing, close and reopen the section, undo, rebuild (it fails there, with no stock key), and check
+the section and its 7 parts after every step, with screenshots.

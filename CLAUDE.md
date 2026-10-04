@@ -16,6 +16,9 @@ so a push to master reaches him on his next start.
   Fonts repo on GitHub has both under `ofl/`).
 - Renders need Marc's GPU, ffmpeg and his local `data/`; a cloud session can edit and test
   code but can't build his videos. Ask him for the video file to review a build.
+- Page changes: check them in a real browser, not only by reading code (D127). `scripts/ui/serve.py`
+  runs the real server on test data, `scripts/ui/walkthrough.py` clicks through Create in headless
+  Chromium and saves screenshots to look at. Extend the walkthrough for what you changed.
 - Every real design change gets an entry at the end of `docs/DECISIONS.md` (D-numbers,
   newest last, short: what happened, what was decided, why). It is 2,000+ lines: grep it
   for a D-number or a word, don't read it whole.

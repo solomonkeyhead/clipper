@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
+  AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
   Trash2, Upload, Wand2, X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -241,7 +241,8 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
   const qc = useQueryClient();
   const [open, setOpen] = useState(startOpen);
   const [confirm, setConfirm] = useState(false);
-  useEffect(() => setOpen(startOpen), [startOpen]);
+  // Opens when it becomes the video to work on; never closes on its own (it shut while in use, D127).
+  useEffect(() => { if (startOpen) setOpen(true); }, [startOpen]);
   const s = video.script;
   const building = video.status === "voiced" || video.status === "building";
   /** Delete, from any state, so no video can get stuck on the page (D123). */
@@ -324,9 +325,9 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       </div>
     );
   }
-  if (video.status === "built") {
+  if (video.status === "built" || (video.status === "failed" && video.clip_id)) {
     return <Built video={video} wps={wps} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")}
-                  onRebuild={run("rebuild", () => createApi.build(video.id), "Building again with your clips")} onRemove={remove} />;
+                  onRebuild={run("rebuild", () => createApi.build(video.id), "Rebuilding: only the parts that changed are made again")} onRemove={remove} />;
   }
 
   return (
@@ -614,6 +615,25 @@ const Step = ({ n, children }: { n: number; children: ReactNode }) => (
 
 /* ---------- done ---------- */
 
+/** Which folds are open, per video, kept outside the components: the panel holding them is
+ *  swapped out while a video builds, and a fold must come back as the user left it (D127). */
+const folds = new Map<string, boolean>();
+
+/** A section that opens and closes on a click, and stays as the user left it. */
+function Fold({ id, title, startOpen = false, children }: { id: string; title: string; startOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(() => folds.get(id) ?? startOpen);
+  const toggle = () => setOpen((o) => { folds.set(id, !o); return !o; });
+  return (
+    <section className="mt-1">
+      <button type="button" onClick={toggle} aria-expanded={open}
+              className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">
+        <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} /> {title}
+      </button>
+      {open && <div className="mt-2">{children}</div>}
+    </section>
+  );
+}
+
 function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
   video: CreateVideo; wps: number; busy: string | null; onPictures: () => void; onRebuild: () => void; onRemove: () => void;
 }) {
@@ -627,39 +647,45 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
     void el.play().catch(() => undefined);
   };
   return (
-    <div className="flex flex-wrap gap-4">
-      {clip?.file_exists ? (
-        <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 self-start rounded-xl bg-black" />
-      ) : <div className="grid aspect-[9/16] w-56 place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <p className="text-sm">It's in your library under <b>{video.script.title}</b>, with the title, description and hashtags ready to copy.</p>
-        {/* Who wrote and drew it, and what didn't work, stay visible after the build (D118). */}
-        <CheckNote text={video.check_notes} />
-        <div className="flex flex-wrap gap-2">
-          {clip && <Button variant="primary" onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
-          <Tip label="Same words and voice: footage and diagrams planned again, then built">
-            <Button variant="secondary" disabled={busy !== null} onClick={onPictures}>
-              {busy === "pictures" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "pictures" ? "Planning…" : "New pictures"}
-            </Button>
-          </Tip>
-          <Tip label="Same words, voice and pictures, built again; only parts you asked to change, or that had no footage, are made again">
-            <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
-              {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
-            </Button>
-          </Tip>
-          <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-4">
+        {clip?.file_exists ? (
+          <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 self-start rounded-xl bg-black" />
+        ) : <div className="grid aspect-[9/16] w-56 place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {video.error && (
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-danger/40 p-3 text-sm text-danger">
+              <AlertTriangle className="size-4 shrink-0" />
+              <span className="flex-1">The last rebuild didn't finish: {video.error.replace(/\.?\s*$/, ".")} The video here is the one built before, unchanged.</span>
+              <Button size="sm" variant="secondary" disabled={busy !== null} onClick={onRebuild}>Try again</Button>
+            </div>
+          )}
+          <p className="text-sm">It's in your library under <b>{video.script.title}</b>, with the title, description and hashtags ready to copy.</p>
+          {/* Who wrote and drew it, and what didn't work, stay visible after the build (D118). */}
+          <CheckNote text={video.check_notes} />
+          <div className="flex flex-wrap gap-2">
+            {clip && <Button variant="primary" onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
+            <Tip label="Same words and voice: footage and diagrams planned again, then built">
+              <Button variant="secondary" disabled={busy !== null} onClick={onPictures}>
+                {busy === "pictures" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "pictures" ? "Planning…" : "New pictures"}
+              </Button>
+            </Tip>
+            <Tip label="Same words, voice and pictures, built again; only parts you asked to change, or that had no footage, are made again">
+              <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
+                {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
+              </Button>
+            </Tip>
+            <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
+          </div>
         </div>
-        <details className="mt-1" open>
-          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-fg">Change parts you don't like</summary>
-          <div className="mt-2"><ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} /></div>
-        </details>
-        <details className="mt-1" open={video.mine?.clips.length > 0 || undefined}>
-          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-fg">
-            Your own clips{video.mine?.clips.length ? ` (${video.mine.clips.length})` : ""}
-          </summary>
-          <div className="mt-2"><MyClips video={video} wps={wps} onRebuild={onRebuild} busyRebuild={busy === "rebuild"} /></div>
-        </details>
       </div>
+      <Fold id={`review-${video.id}`} title="Change parts you don't like" startOpen>
+        <ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} />
+      </Fold>
+      <Fold id={`clips-${video.id}`} title={`Your own clips${video.mine?.clips.length ? ` (${video.mine.clips.length})` : ""}`}
+              startOpen={(video.mine?.clips.length ?? 0) > 0}>
+        <MyClips video={video} wps={wps} onRebuild={onRebuild} busyRebuild={busy === "rebuild"} />
+      </Fold>
     </div>
   );
 }

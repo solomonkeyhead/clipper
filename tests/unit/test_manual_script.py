@@ -420,3 +420,23 @@ def test_a_long_sentence_gets_a_different_clip_for_each_part(tmp_path, monkeypat
     build.chosen.clear()
     shots = build._planned(0, beat, v, 12.0, [], Script(title="t", beats=[beat]), tmp_path, set())
     assert len(shots) == 3 and [h["id"] for h in build.chosen[0]["picked"]] == ["a", "b", "c"]
+
+
+def test_a_failed_rebuild_keeps_the_video_built_before(client, monkeypatch):
+    """D127: a rebuild that fails leaves the finished video and its review in place, with the reason."""
+    from clipper.create import build, store
+    from clipper.studio import create_api
+
+    vid = store.add_video(None, Script(title="t", beats=[Beat(text="One two three four.")]).model_dump())
+    store.update_video(vid, status="voiced", voice="v.mp3", clip_id=7,
+                       timings={"words": [], "beats": [(0.0, 2.0)], "duration": 2.0, "matched": 1.0})
+    monkeypatch.setattr(build, "build", lambda video_id, progress=None: (_ for _ in ()).throw(RuntimeError("no stock key")))
+    create_api._work(vid, lambda *a: None)
+    row = store.video(vid)
+    assert row["status"] == "built" and row["error"] == "no stock key" and row["clip_id"] == 7
+    # never built before: it fails as before
+    other = store.add_video(None, Script(title="t", beats=[Beat(text="One two three four.")]).model_dump())
+    store.update_video(other, status="voiced", voice="v.mp3",
+                       timings={"words": [], "beats": [(0.0, 2.0)], "duration": 2.0, "matched": 1.0})
+    create_api._work(other, lambda *a: None)
+    assert store.video(other)["status"] == "failed"

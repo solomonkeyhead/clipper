@@ -153,7 +153,10 @@ def _work(video_id: int, publish) -> None:
                 _stopped(video_id)
             except Exception as exc:  # shown on the page
                 log.warning("create: video %s failed: %s\n%s", video_id, exc, traceback.format_exc())
-                store.update_video(video_id, status="failed", error=str(exc)[:400])
+                before = store.video(video_id)
+                # A rebuild that fails leaves the video built before in place, with the reason (D127).
+                store.update_video(video_id, status="built" if before and before["clip_id"] else "failed",
+                                   error=str(exc)[:400])
             finally:
                 progress.pop(video_id, None)
     finally:
