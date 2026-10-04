@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Film, Loader2, Play, RefreshCw, Search, Shapes, Undo2, Wand2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createApi, type CreateVideo, type CreateVisual, type FootageOffer } from "@/api/client";
 import { Button, Chip, Tip } from "@/components/ui";
@@ -23,6 +23,33 @@ function fit(score: number | null): [string, string] {
   if (score >= 7) return [`good match ${score}/10`, "text-success"];
   if (score >= 4) return [`loose ${score}/10`, "text-warning"];
   return [`poor ${score}/10`, "text-danger"];
+}
+
+/** A candidate's thumbnail that plays the clip while the pointer is over it (D130). The video is
+ *  only loaded on the first hover, small and muted; on a touch screen, a press plays it. */
+function Preview({ thumb, src }: { thumb: string; src: string }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [live, setLive] = useState(false);
+  const start = () => {
+    if (!src) return;
+    setLive(true);
+    requestAnimationFrame(() => void video.current?.play().catch(() => undefined));
+  };
+  const stop = () => {
+    const el = video.current;
+    if (el) { el.pause(); el.currentTime = 0; }
+  };
+  return (
+    <span className="absolute inset-0" onMouseEnter={start} onMouseLeave={stop} onTouchStart={start} onTouchEnd={stop}
+          data-testid="preview">
+      <img src={thumb} alt="" loading="lazy" className="size-full object-cover" />
+      {live && (
+        <video ref={video} src={src} muted loop playsInline preload="auto" poster={thumb}
+               className="absolute inset-0 size-full object-cover" />
+      )}
+      {src && !live && <Play className="absolute inset-0 m-auto size-5 text-white/80 drop-shadow" />}
+    </span>
+  );
 }
 
 /** Choosing a part's footage yourself (D129): searches written for it, both libraries, every clip
@@ -92,7 +119,10 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
                   <button key={c.id} type="button" onClick={() => toggle(c.id)} aria-pressed={n >= 0} title={c.tags}
                           className={cn("flex flex-col gap-1 rounded-md border p-1 text-left", n >= 0 ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong")}>
                     <span className="relative block aspect-[9/16] w-full overflow-hidden rounded-sm bg-black">
-                      <img src={`/api/create/stock-thumb/${encodeURIComponent(c.id)}`} alt="" loading="lazy" className="size-full object-cover" />
+                      <Preview thumb={`/api/create/stock-thumb/${encodeURIComponent(c.id)}`} src={c.preview} />
+                      <span className="absolute bottom-1 left-1 rounded-sm bg-black/70 px-1 text-[10px] text-white/80">
+                        {c.source === "pexels" ? "Pexels" : c.source === "coverr" ? "Coverr" : c.source === "nasa" ? "NASA" : "Pixabay"} · {Math.round(c.duration)}s
+                      </span>
                       {n >= 0 && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-accent-fg">{offer.clips > 1 ? n + 1 : <Check className="size-3" />}</span>}
                     </span>
                     <span className={cn("text-[11px] font-medium", tone)}>{label}</span>

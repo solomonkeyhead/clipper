@@ -26,6 +26,9 @@ log = get_logger(__name__)
 KEYS = {
     "GEMINI_API_KEY": "Google Gemini (free): picks the moments, writes captions",
     "ANTHROPIC_API_KEY": "Anthropic Claude (paid, optional)",
+    "PIXABAY_API_KEY": "Pixabay (free): stock footage for Create",
+    "PEXELS_API_KEY": "Pexels (free): stock footage for Create",
+    "COVERR_API_KEY": "Coverr (free): stock footage for Create",
     "TIKTOK_CLIENT_KEY": "Your TikTok developer app's client key",
     "TIKTOK_CLIENT_SECRET": "Your TikTok developer app's client secret",
     "TAVILY_API_KEY": "Tavily (free): live web search for the Ask chat",

@@ -658,7 +658,9 @@ def routes(app: FastAPI, publish) -> None:
         return {"beat": group[0] + 1, "seconds": round(seconds, 2), "clips": max(1, math.ceil(seconds / 4.5 - 1e-6)),
                 "searches": queries,
                 "candidates": [{"id": str(h["id"]), "tags": h.get("tags", ""), "duration": h.get("duration", 0),
-                                "tall": h["height"] > h["width"], "score": h.get("score"), "query": h.get("query", "")}
+                                "tall": h["height"] > h["width"], "score": h.get("score"), "query": h.get("query", ""),
+                                "preview": h.get("preview") or "",
+                                "source": str(h["id"]).split("-", 1)[0] if "-" in str(h["id"]) else "pixabay"}
                                for h in found]}
 
     @app.post("/api/create/videos/{video_id}/footage/use")

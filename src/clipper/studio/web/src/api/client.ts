@@ -620,7 +620,7 @@ export interface CreateVisual {
 export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
 export interface FootageOffer {
   beat: number; seconds: number; clips: number; searches: string[];
-  candidates: { id: string; tags: string; duration: number; tall: boolean; score: number | null; query: string }[];
+  candidates: { id: string; tags: string; duration: number; tall: boolean; score: number | null; query: string; preview: string; source: string }[];
 }
 export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
 export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }

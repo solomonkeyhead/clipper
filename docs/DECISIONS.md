@@ -2364,3 +2364,23 @@ searches of its own, so it searched the sentence's three longest words.
   `avoid`).
 - The walkthrough's test server has stand-in libraries and scores, and checks the picker: 12 offered,
   the clip in use not among them, pick one, "your footage on the next build".
+
+## D130 — Two more footage libraries; footage previews on hover (2026-10-04)
+
+The user asked for more free footage sources and to see a candidate play before picking it.
+- **Libraries.** Coverr (free; a key from coverr.co/developers in `COVERR_API_KEY`, 50 searches an
+  hour on its free tier) and NASA's image and video library (public, no key; NASA's own footage
+  isn't under copyright, though its logos mustn't suggest endorsement) join Pexels and Pixabay.
+  `stock.search` takes turns across every library it can use. It fails only when all of them fail
+  ("no results" is not a failure), so NASA alone works with no keys at all. NASA lists each video's
+  files in a manifest, read for the first 4 results, in parallel. Search caches moved to "-v2"
+  names, as the older ones have no previews.
+- **Settings** has a "Footage libraries for Create" card: paste Pixabay, Pexels and Coverr keys
+  (written to `.env` like the other keys), with where to get each.
+- **Previews.** Every candidate carries a small preview file (Pixabay "tiny", Pexels' smallest
+  360p+ file, Coverr's preview, NASA's "mobile"). In the picker, a candidate plays muted while the
+  pointer is over it (loaded on first hover only) and stops when it leaves; a press plays it on touch.
+  Each shows its library and length.
+- The walkthrough hovers a candidate and checks it plays, then pauses on leaving. It uses a WebM,
+  since the open-source Chromium it runs can't play H.264 (Chrome and Edge can). It also checks the
+  Settings card.

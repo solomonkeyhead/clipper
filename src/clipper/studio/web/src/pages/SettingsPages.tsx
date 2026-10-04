@@ -507,6 +507,49 @@ function AIKey() {
   );
 }
 
+/** The footage libraries Create searches, and their free keys (D130): typed here, kept in .env. */
+function FootageKeys() {
+  const { data: setup } = useSetup();
+  const save = useSetKeys();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const libraries: [string, string, string, ReactNode][] = [
+    ["PIXABAY_API_KEY", "Pixabay", "https://pixabay.com/api/docs/", "Sign in, and your key is shown in the Parameters section."],
+    ["PEXELS_API_KEY", "Pexels", "https://www.pexels.com/api/", "Free if Pexels is giving out keys; leave empty if not."],
+    ["COVERR_API_KEY", "Coverr", "https://coverr.co/developers", "Make a free account, then create an app: the key is shown at once."],
+  ];
+  const typed = Object.entries(values).filter(([, v]) => v.trim());
+  return (
+    <Card className="flex flex-col gap-4 p-5" id="footage">
+      <div>
+        <h2 className="text-md font-semibold">Footage libraries for Create</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          Create searches every library you have a key for, and NASA's video library, which needs none. All are free; more
+          libraries mean more footage to choose from.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {libraries.map(([name, title, href, how]) => (
+          <Field key={name} label={title}
+                 hint={<>{setup?.keys[name] ? <span className="text-success">Key saved.</span> : <>No key yet. <Ext href={href}>Get one</Ext>: {how}</>}</>}>
+            {(id) => <SecretInput id={id} value={values[name] ?? ""} onChange={(v) => setValues((x) => ({ ...x, [name]: v }))}
+                                  isSet={setup?.keys[name]} placeholder="Paste the key" />}
+          </Field>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-muted">NASA: always on, no key needed.</span>
+        <Button variant="primary" disabled={!typed.length || save.isPending}
+                onClick={() => save.mutate(Object.fromEntries(typed), {
+                  onSuccess: () => { setValues({}); toast.success("Footage keys saved"); },
+                  onError: (e) => toast.error((e as Error).message),
+                })}>
+          <KeyRound className="size-4" /> Save keys
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function SystemCheck() {
   const [results, setResults] = useState<CheckResult[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -568,6 +611,7 @@ export function SettingsPage() {
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
       <AIKey />
+      <FootageKeys />
       <Card className="divide-y divide-line px-5">
         <Row
           title="Sync every"

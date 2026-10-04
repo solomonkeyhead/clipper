@@ -542,3 +542,61 @@ def test_asked_footage_that_doesnt_fit_says_so_on_the_part(tmp_path, monkeypatch
     build.chosen.clear()
     build._planned(0, beat, kept, 3.0, [], s, tmp_path, set())
     assert seen == [] and build.chosen[0]["picked"][0]["id"] == 1
+
+
+# ---------- D130: more footage libraries, previews ----------
+
+class _Reply:
+    def __init__(self, data):
+        self.data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self.data
+
+
+def test_coverr_and_nasa_are_read_into_footage(data_root, monkeypatch):
+    import httpx
+
+    from clipper.create import stock
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        if "coverr" in url:
+            assert headers["Authorization"] == "Bearer ck" and params["urls"] == "true"
+            return _Reply({"hits": [
+                {"id": "abc", "title": "Man with headphones", "tags": ["music", {"name": "studio"}], "duration": 12.5,
+                 "max_width": 3840, "max_height": 2160, "thumbnail": "t.jpg",
+                 "urls": {"mp4": "https://c/v.mp4", "mp4_preview": "https://c/p.mp4"}},
+                {"id": "gs", "title": "green screen dancer", "urls": {"mp4": "https://c/g.mp4"}},     # cheap: left out
+                {"id": "nourl", "title": "no file"}]})
+        if "images-api" in url:
+            return _Reply({"collection": {"items": [{"href": "https://n/manifest.json", "data": [
+                {"nasa_id": "rocket 1", "title": "Rocket launch", "keywords": ["rocket", "launch"]}],
+                "links": [{"href": "https://n/thumb.jpg", "render": "image"}]}]}})
+        if "manifest" in url:
+            return _Reply(["http://n/rocket~orig.mp4", "http://n/rocket~mobile.mp4", "http://n/rocket.srt"])
+        raise AssertionError(url)
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setenv("COVERR_API_KEY", "ck")
+    c = stock.coverr("headphones")
+    assert [h["id"] for h in c] == ["coverr-abc"] and c[0]["preview"] == "https://c/p.mp4" and "studio" in c[0]["tags"]
+    n = stock.nasa("rocket")
+    assert n[0]["id"] == "nasa-rocket1" and n[0]["url"] == "https://n/rocket~orig.mp4" and n[0]["preview"].endswith("~mobile.mp4")
+    assert n[0]["thumb"] == "https://n/thumb.jpg"
+
+
+def test_search_takes_turns_across_libraries_and_needs_no_key_for_nasa(monkeypatch):
+    from clipper.create import stock
+
+    for name in ("PIXABAY_API_KEY", "PEXELS_API_KEY", "COVERR_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(stock, "nasa", lambda q: [{"id": "nasa-1"}])
+    assert stock.search("rocket") == [{"id": "nasa-1"}]                  # works with no keys at all
+    monkeypatch.setenv("PIXABAY_API_KEY", "p")
+    monkeypatch.setenv("COVERR_API_KEY", "c")
+    monkeypatch.setattr(stock, "pixabay", lambda q: [{"id": 1}, {"id": 2}])
+    monkeypatch.setattr(stock, "coverr", lambda q: (_ for _ in ()).throw(CreateError("Coverr didn't answer")))
+    assert [h["id"] for h in stock.search("x")] == [1, "nasa-1", 2]      # one library down: the others still answer

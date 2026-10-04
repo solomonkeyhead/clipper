@@ -22,6 +22,7 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
@@ -36,6 +37,8 @@ log = get_logger(__name__)
 
 API = "https://pixabay.com/api/videos/"
 PEXELS = "https://api.pexels.com/videos/search"
+COVERR = "https://api.coverr.co/videos"
+NASA = "https://images-api.nasa.gov/search"
 SEARCH_HOURS = 24
 #: Footage that looks cheap on a phone: an unkeyed green screen, a transparent background, a matte.
 CHEAP = ("green screen", "greenscreen", "chroma", "blue screen", "alpha channel", "transparent",
@@ -65,20 +68,23 @@ def _rendition(files: list[dict]) -> dict | None:
         max(files, key=lambda f: f["width"])
 
 
+def _coverr_key() -> str:
+    return os.environ.get("COVERR_API_KEY", "").strip()
+
+
 def search(query: str) -> list[dict]:
-    """Both libraries' videos for `query`, alternating, each most relevant first: Pexels
-    leads, as its people shots were the better ones."""
-    if not _key() and not _pexels_key():
-        raise CreateError("no stock footage key: add PEXELS_API_KEY or PIXABAY_API_KEY to Clipper's .env file")
+    """Every library's videos for `query`, taking turns, each most relevant first: Pexels leads,
+    as its people shots were the better ones; NASA's (no key needed: space, rockets, Earth, light)
+    comes last, as it fits only some sentences (D130)."""
     lists, errors = [], []
-    for source, key in ((pexels, _pexels_key()), (pixabay, _key())):
+    for source, key in ((pexels, _pexels_key()), (pixabay, _key()), (coverr, _coverr_key()), (nasa, "free")):
         if not key:
             continue
         try:
             lists.append(source(query))
-        except CreateError as exc:  # one library down: the other still answers
+        except CreateError as exc:  # one library down: the others still answer
             errors.append(str(exc))
-    if errors and not lists:
+    if errors and not lists:  # only when every library failed; "no results" isn't a failure
         raise CreateError("; ".join(errors))
     merged = []
     for k in range(max((len(x) for x in lists), default=0)):
@@ -89,7 +95,7 @@ def search(query: str) -> list[dict]:
 def _cached(source: str, query: str) -> tuple[str, Path, list[dict] | None]:
     q = " ".join(query.lower().split())[:100]
     name = hashlib.sha1(q.encode()).hexdigest()[:16]
-    cached = ensure(_dir() / "search") / (f"{source}-{name}.json" if source != "pixabay" else f"{name}.json")
+    cached = ensure(_dir() / "search") / f"{source}-v2-{name}.json"   # v2: with previews (D130)
     if cached.is_file() and time.time() - cached.stat().st_mtime < SEARCH_HOURS * 3600:
         return q, cached, json.loads(cached.read_text(encoding="utf-8"))
     return q, cached, None
@@ -117,9 +123,11 @@ def pexels(query: str) -> list[dict]:
         tags = " ".join(w for w in slug.split("-") if not w.isdigit())
         if best is None or any(c in tags.lower() for c in CHEAP):
             continue
+        small = min((f for f in files if min(f["width"] or 0, f["height"] or 0) >= 360), default=best,
+                    key=lambda f: f["width"] * f["height"])
         hits.append({"id": f"pexels-{v['id']}", "duration": v.get("duration", 0), "tags": tags,
                      "url": best["url"], "width": best["width"], "height": best["height"],
-                     "thumb": v.get("image", "")})
+                     "thumb": v.get("image", ""), "preview": small["url"]})
     cached.write_text(json.dumps(hits), encoding="utf-8")
     return hits
 
@@ -140,14 +148,86 @@ def pixabay(query: str) -> list[dict]:
         if v is None or h.get("isLowQuality") or any(c in h.get("tags", "").lower() for c in CHEAP):
             continue
         thumb = (h["videos"].get("tiny") or {}).get("thumbnail") or v.get("thumbnail", "")
+        small = (h["videos"].get("tiny") or h["videos"].get("small") or {}).get("url") or v["url"]
         hits.append({"id": h["id"], "duration": h.get("duration", 0), "tags": h.get("tags", ""),
-                     "url": v["url"], "width": v["width"], "height": v["height"], "thumb": thumb})
+                     "url": v["url"], "width": v["width"], "height": v["height"], "thumb": thumb,
+                     "preview": small})
+    cached.write_text(json.dumps(hits), encoding="utf-8")
+    return hits
+
+
+def coverr(query: str) -> list[dict]:
+    """Coverr's videos for `query` (cached a day): free, no credit needed, a free key from
+    coverr.co/developers in COVERR_API_KEY (D130)."""
+    q, cached, hits = _cached("coverr", query)
+    if hits is not None:
+        return hits
+    try:
+        r = httpx.get(COVERR, params={"query": q, "page_size": 12, "urls": "true"},
+                      headers={"Authorization": f"Bearer {_coverr_key()}"}, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise CreateError(f"Coverr didn't answer: {exc}") from exc
+    found = data.get("hits") or data.get("videos") or data.get("data") or [] if isinstance(data, dict) else data
+    hits = []
+    for v in found if isinstance(found, list) else []:
+        url = (v.get("urls") or {}).get("mp4") or (v.get("urls") or {}).get("mp4_download")
+        tags = " ".join([v.get("title") or "", *(t if isinstance(t, str) else t.get("name", "") for t in v.get("tags") or [])])
+        if not url or any(c in tags.lower() for c in CHEAP):
+            continue
+        preview = (v.get("urls") or {}).get("mp4_preview") or url
+        hits.append({"id": f"coverr-{v.get('id')}", "duration": float(v.get("duration") or 0), "tags": tags.strip(),
+                     "url": url, "width": int(v.get("max_width") or 1920), "height": int(v.get("max_height") or 1080),
+                     "thumb": v.get("thumbnail") or v.get("poster") or "", "preview": preview})
+    cached.write_text(json.dumps(hits), encoding="utf-8")
+    return hits
+
+
+def _rendition_named(files: list[str], *names: str) -> str | None:
+    """The first of NASA's files named "~<name>." for the names in order of preference."""
+    return next((f for n in names for f in files if f"~{n}." in f), None)
+
+
+def nasa(query: str) -> list[dict]:
+    """NASA's videos for `query` (cached a day): public, no key; NASA's own footage is not under
+    copyright (its logos must not suggest it endorses the video). Each video's files are listed in a
+    manifest, read for the first few results only (D130)."""
+    q, cached, hits = _cached("nasa", query)
+    if hits is not None:
+        return hits
+    try:
+        r = httpx.get(NASA, params={"q": q, "media_type": "video"}, timeout=20)
+        r.raise_for_status()
+        items = r.json().get("collection", {}).get("items", [])[:4]
+    except (httpx.HTTPError, ValueError) as exc:
+        raise CreateError(f"NASA's library didn't answer: {exc}") from exc
+    def manifest(it: dict) -> list:
+        try:
+            return httpx.get(it["href"], timeout=20).json()
+        except (httpx.HTTPError, ValueError, KeyError):
+            return []
+
+    with ThreadPoolExecutor(max_workers=4) as pool:  # the file lists at once, not one after another
+        manifests = list(pool.map(manifest, items))
+    hits = []
+    for it, files in zip(items, manifests, strict=True):
+        meta = (it.get("data") or [{}])[0]
+        mp4 = [f for f in files if isinstance(f, str) and f.lower().endswith(".mp4")]
+        url, small = _rendition_named(mp4, "orig", "large", "medium"), _rendition_named(mp4, "mobile", "small", "medium")
+        tags = " ".join([meta.get("title", ""), *meta.get("keywords", [])[:8]])
+        if not url:
+            continue
+        hits.append({"id": f"nasa-{re.sub(r'[^A-Za-z0-9_-]', '', meta.get('nasa_id', ''))[:50]}", "duration": 30,
+                     "tags": tags.strip(), "url": url.replace("http://", "https://"), "width": 1920, "height": 1080,
+                     "thumb": next((x.get("href", "") for x in it.get("links", []) if x.get("render") == "image"), ""),
+                     "preview": (small or url).replace("http://", "https://")})
     cached.write_text(json.dumps(hits), encoding="utf-8")
     return hits
 
 
 CANDIDATES = 12
-PER_QUERY = 6
+PER_QUERY = 8
 
 PICK = """You choose stock footage for one sentence of a short educational video, shown on a
 phone. You see numbered thumbnails of candidate clips, each with what its library says it
@@ -389,7 +469,7 @@ def candidates(queries: list[str], seconds: float, exclude: set, sentence: str, 
     for q in queries:
         for h in search(q)[:PER_QUERY]:
             if h["id"] not in exclude and all(h["id"] != p["id"] for p in pool):
-                pool.append({**h, "query": q})
+                pool.append({**h, "query": q})  # preview: a small file to play on hover (D130)
     pool = sorted(pool, key=lambda h: (h["duration"] < min(seconds, 6.0), h["height"] <= h["width"]))[:limit]
     return rank(sentence, pool, context)
 

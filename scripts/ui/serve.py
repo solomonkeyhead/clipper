@@ -34,6 +34,14 @@ if not store.videos():
     store.update_video(vid, status="built", voice=str(data / "v.mp3"), clip_id=clip_id,
                        timings={"words": [], "beats": [(i * 4.0, i * 4.0 + 4.0) for i in range(n)], "duration": n * 4.0, "matched": 1.0})
     c.post("/api/create/ready/voice-on-a-recording")   # a second video, still a draft: the "active" one
+    # A small WebM for the footage previews: the open-source Chromium the walkthrough uses can't play
+    # H.264 (Chrome and Edge can), so the hover test plays this instead (D130).
+    rel2 = "german-professor/preview.webm"
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=270x480:rate=25",
+                    "-t", "6", "-c:v", "libvpx-vp9", "-b:v", "300k", str(library.clip_path(rel2))], check=True)
+    with db.connect() as con:
+        db.upsert_clip(con, {"campaign": "german-professor", "source_id": "test", "clip_id": "preview",
+                             "title": "Preview", "file": rel2, "caption": "c"})
 # Stand-ins for the footage libraries and the footage model (no keys or network here): every search
 # gives 8 clips with thumbnails, and the "model" writes searches and scores clips 9 down to 2 (D129).
 import json as _json
@@ -50,7 +58,7 @@ def _fake_search(query):
         if not (_thumbs / f"{cid}.jpg").exists():
             _Image.new("RGB", (180, 320), ((k * 40) % 255, 90, 200 - k * 20)).save(_thumbs / f"{cid}.jpg")
         hits.append({"id": cid, "duration": 10, "tags": f"{query}, clip {k}", "url": "https://example.invalid/v.mp4",
-                     "width": 1080, "height": 1920, "thumb": "x"})
+                     "width": 1080, "height": 1920, "thumb": "x", "preview": "/media/2"})   # a real, playable video
     return hits
 
 

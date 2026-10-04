@@ -194,11 +194,13 @@ class TestPexels:
         assert [h["id"] for h in hits] == ["pexels-7", 7, 9]  # Pexels first, green screen dropped
         assert hits[0]["url"] == "hd" and hits[0]["tags"] == "woman wearing headphones"
 
-    def test_one_library_is_enough_and_none_says_which_keys(self, monkeypatch):
-        monkeypatch.delenv("PEXELS_API_KEY", raising=False)
-        monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
-        with pytest.raises(CreateError, match="PEXELS_API_KEY"):
+    def test_one_library_is_enough_and_nasa_needs_no_key(self, monkeypatch):
+        for name in ("PEXELS_API_KEY", "PIXABAY_API_KEY", "COVERR_API_KEY"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setattr(stock, "nasa", lambda q: (_ for _ in ()).throw(CreateError("NASA's library didn't answer")))
+        with pytest.raises(CreateError, match="NASA"):          # nothing answered: says which
             stock.search("ear")
+        monkeypatch.setattr(stock, "nasa", lambda q: [])
         monkeypatch.setenv("PEXELS_API_KEY", "p")
         monkeypatch.setattr(stock, "pexels", lambda q: [{"id": "pexels-1"}])
         assert stock.search("ear") == [{"id": "pexels-1"}]
