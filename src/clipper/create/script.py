@@ -61,6 +61,8 @@ class Visual(BaseModel):
     avoid: list[str | int] = Field(default_factory=list)   # stock ids: Pixabay's are numbers (D128)
     redo: bool = False
     previous: dict | None = None
+    wish: str = ""              # what the user said they'd rather see, for the footage searches (D129)
+    notice: str = ""            # what the last build couldn't do for this picture, shown on it (D129)
 
 
 class Beat(BaseModel):
@@ -168,7 +170,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") 
 
 #: The fields of a picture only the app sets: whatever the writer put in them is dropped.
 APP_FIELDS = {"clip": "", "clip_start": None, "fill": "auto", "manual": False, "picked": [], "avoid": [],
-              "redo": False, "previous": None}
+              "redo": False, "previous": None, "wish": "", "notice": ""}
 
 
 def _without_clips(script: Script) -> Script:

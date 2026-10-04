@@ -465,3 +465,80 @@ def test_a_list_that_cant_be_made_says_why(client):
     store.update_video(vid, status="built", clip_id=1, timings={"words": [], "beats": "broken", "duration": 4.0, "matched": 1.0})
     view = next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)
     assert view["shots"] == [] and view["problem"].startswith("The parts can't be listed")
+
+
+# ---------- D129: choosing footage yourself; better searches ----------
+
+def test_searches_are_written_for_the_sentence_and_never_repeat(monkeypatch):
+    from clipper.create import stock
+
+    monkeypatch.setattr(stock, "ask", lambda *a, **k: json.dumps({"searches": [
+        "man looking in mirror", "Man Looking In Mirror", "bathroom mirror", "an extremely long search that goes on and on", ""]}))
+    got = stock.plan_searches("Your skull flatters you.", "script", wish="mirror", tried=["bathroom mirror"])
+    assert got == ["man looking in mirror", "an extremely long search that"]
+    monkeypatch.setattr(stock, "ask", lambda *a, **k: (_ for _ in ()).throw(CreateError("no model")))
+    assert stock.plan_searches("x") == []
+
+
+def test_every_candidate_is_scored_and_the_best_comes_first(monkeypatch):
+    from clipper.create import stock
+
+    hits = [{"id": n, "tags": f"t{n}", "width": 1080, "height": 1920, "thumb": "x", "duration": 9} for n in (1, 2, 3)]
+    monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
+    monkeypatch.setattr(stock, "ask", lambda *a, **k: json.dumps({"scores": [3, 15, 7], "centers": [0.2, 0.5, 2]}))
+    ranked = stock.rank("s", hits)
+    assert [h["id"] for h in ranked] == [2, 3, 1] and ranked[0]["score"] == 10 and ranked[1]["center"] == 1.0
+    monkeypatch.setattr(stock, "ask", lambda *a, **k: (_ for _ in ()).throw(CreateError("no model")))
+    assert [h["score"] for h in stock.rank("s", hits)] == [None, None, None]     # unscored, still offered
+    monkeypatch.setattr(stock, "search", lambda q: hits)
+    monkeypatch.setattr(stock, "ask", lambda *a, **k: json.dumps({"scores": [5, 5], "centers": []}))
+    assert {h["id"] for h in stock.candidates(["q"], 4.0, {2}, "s")} == {1, 3}    # the excluded one isn't offered
+
+
+def test_picking_footage_yourself_from_the_offer(client, monkeypatch):
+    from clipper.create import stock, store
+
+    s = Script(title="t", beats=[
+        Beat(text="Your skull flatters you.", visual=Visual(kind="stock", query="mirror", picked=[{"id": 4000008, "url": "u"}])),
+        Beat(text="Another part goes here.", visual=Visual(kind="stock", query="x", picked=[{"id": 77, "url": "u"}]))])
+    vid = store.add_video(None, s.model_dump())
+    store.update_video(vid, status="built", clip_id=1, timings={"words": [], "beats": [(0.0, 9.5), (9.5, 12.0)], "duration": 12.0, "matched": 1.0})
+    pool = [{"id": n, "tags": "mirror", "width": 1080, "height": 1920, "thumb": "x", "duration": 12, "url": "u"} for n in (4000008, 77, 5, 6)]
+    monkeypatch.setattr(stock, "search", lambda q: pool)
+    monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
+    monkeypatch.setattr(stock, "ask", lambda system, user, schema, **k: json.dumps(
+        {"searches": ["man looking in mirror"]} if schema.__name__ == "_Searches" else {"scores": [4, 8], "centers": [0.5, 0.5]}))
+    offer = client.post(f"/api/create/videos/{vid}/footage", json={"beat": 1, "wish": "a mirror"}).json()
+    assert [c["id"] for c in offer["candidates"]] == ["6", "5"]       # neither the clip in use nor one used elsewhere
+    assert offer["clips"] == 3 and offer["searches"][0] == "a mirror" and offer["candidates"][0]["score"] == 8
+    assert client.post(f"/api/create/videos/{vid}/footage/use", json={"beat": 1, "ids": ["999"]}).status_code == 400
+    assert client.post(f"/api/create/videos/{vid}/footage/use", json={"beat": 1, "ids": []}).status_code == 400
+    assert client.post(f"/api/create/videos/{vid}/footage/use", json={"beat": 1, "ids": ["6", "5"]}).status_code == 200
+    v = Script.model_validate(store.video(vid)["script"]).beats[0].visual
+    assert [h["id"] for h in v.picked] == [6, 5] and v.redo and v.avoid == [4000008] and v.previous
+
+
+def test_asked_footage_that_doesnt_fit_says_so_on_the_part(tmp_path, monkeypatch):
+    from clipper.create import build, diagrams, stock
+
+    before = Visual(kind="stock", query="mirror", picked=[{"id": 1, "url": "u"}])
+    asked = before.model_copy(update={"picked": [], "avoid": [1], "redo": True, "previous": before.model_dump()})
+    beat = Beat(text="Your skull flatters you.", visual=asked)
+    s = Script(title="t", beats=[beat])
+    seen = []
+    monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: [])
+    monkeypatch.setattr(stock, "choose", lambda q, part, used, good_enough=7, **k: seen.append((set(used), good_enough)))
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None: out)
+    monkeypatch.setattr(build, "_too_dark", lambda clip: False)
+    monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
+    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None: out)
+    build.chosen.clear()
+    build._planned(0, beat, asked, 3.0, [], s, tmp_path, set())
+    assert seen[0] == ({1}, 6)                                        # the old clip is never chosen again; 6 to pass
+    kept = build.remember(s).beats[0].visual
+    assert kept.picked[0]["id"] == 1 and "kept what it had" in kept.notice and 1 in kept.avoid
+    # the next rebuild keeps that clip: nothing is chosen again
+    seen.clear()
+    build.chosen.clear()
+    build._planned(0, beat, kept, 3.0, [], s, tmp_path, set())
+    assert seen == [] and build.chosen[0]["picked"][0]["id"] == 1

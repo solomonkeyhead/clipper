@@ -34,5 +34,37 @@ if not store.videos():
     store.update_video(vid, status="built", voice=str(data / "v.mp3"), clip_id=clip_id,
                        timings={"words": [], "beats": [(i * 4.0, i * 4.0 + 4.0) for i in range(n)], "duration": n * 4.0, "matched": 1.0})
     c.post("/api/create/ready/voice-on-a-recording")   # a second video, still a draft: the "active" one
+# Stand-ins for the footage libraries and the footage model (no keys or network here): every search
+# gives 8 clips with thumbnails, and the "model" writes searches and scores clips 9 down to 2 (D129).
+import json as _json
+from PIL import Image as _Image
+from clipper.create import stock as _stock
+_thumbs = _stock._dir() / "thumbs"
+_thumbs.mkdir(parents=True, exist_ok=True)
+
+
+def _fake_search(query):
+    hits = []
+    for k in range(8):
+        cid = f"pexels-{abs(hash(query)) % 1000}{k}" if k % 3 == 0 else 5000000 + (abs(hash(query)) % 1000) * 10 + k
+        if not (_thumbs / f"{cid}.jpg").exists():
+            _Image.new("RGB", (180, 320), ((k * 40) % 255, 90, 200 - k * 20)).save(_thumbs / f"{cid}.jpg")
+        hits.append({"id": cid, "duration": 10, "tags": f"{query}, clip {k}", "url": "https://example.invalid/v.mp4",
+                     "width": 1080, "height": 1920, "thumb": "x"})
+    return hits
+
+
+def _fake_ask(system, user, schema, **kw):
+    if schema.__name__ == "_Searches":
+        return _json.dumps({"searches": ["man looking in mirror", "woman smiling at reflection", "bathroom mirror"]})
+    if schema.__name__ == "_Ranks":
+        n = user.count("\n") + 1
+        return _json.dumps({"scores": [max(2, 9 - k) for k in range(n)], "centers": [0.5] * n})
+    raise _stock.CreateError("no model in the test setup")
+
+
+_stock.search = _fake_search
+_stock.ask = _fake_ask
+
 import uvicorn
 uvicorn.run(app, host="127.0.0.1", port=8799, log_level="warning")

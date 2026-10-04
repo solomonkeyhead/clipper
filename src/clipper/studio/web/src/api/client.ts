@@ -613,10 +613,15 @@ export interface CreateVisual {
   kind: "stock" | "diagram"; query: string; queries?: string[]; card?: string; template: string; title: string; labels: string[];
   clip?: string; clip_start?: number | null; fill?: ClipFill;   // the user's own clip for this sentence (D119)
   manual?: boolean; idea?: string; sketch?: unknown;            // a picture the user chose (D120)
+  wish?: string; notice?: string;                                // D129
   hold?: boolean;                                                // keep the drawing before on screen (D124)
   picked?: Record<string, unknown>[]; avoid?: string[]; redo?: boolean; previous?: Record<string, unknown> | null;   // D125
 }
 export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
+export interface FootageOffer {
+  beat: number; seconds: number; clips: number; searches: string[];
+  candidates: { id: string; tags: string; duration: number; tall: boolean; score: number | null; query: string }[];
+}
 export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
 export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }
 export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number }
@@ -664,6 +669,8 @@ export const createApi = {
   rewrite: (video: number) => send("POST", `/api/create/videos/${video}/rewrite`),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
+  footage: (video: number, body: { beat: number; wish: string }) => send<FootageOffer>("POST", `/api/create/videos/${video}/footage`, body),
+  footageUse: (video: number, body: { beat: number; ids: string[] }) => send("POST", `/api/create/videos/${video}/footage/use`, body),
   redo: (video: number, body: { beat: number; want: "footage" | "drawing" | "undo"; note: string }) =>
     send("POST", `/api/create/videos/${video}/redo`, body),
   cancel: (video: number) => send<{ stopping: boolean }>("POST", `/api/create/videos/${video}/cancel`),

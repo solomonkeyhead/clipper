@@ -26,9 +26,22 @@ with sync_playwright() as p:
     print("parts listed:", footage.count())
     page.screenshot(path=f"{OUT}/1_open.png", full_page=True)
 
-    # ask for footage on the last part, then a drawing on another
+    # choose new footage for the last part in the picker (D129), then a drawing on another
     footage.last.click()
-    expect(page.get_by_text("new footage on the next build")).to_be_visible()
+    picker = page.get_by_test_id("footage-picker")
+    expect(picker).to_be_visible()
+    offered = picker.locator("button[aria-pressed]")
+    expect(offered.first).to_be_visible(timeout=30000)
+    srcs = [offered.nth(k).locator("img").get_attribute("src") for k in range(offered.count())]
+    print("offered:", offered.count(), "| clip in use offered again:", any("4000008" in x for x in srcs))
+    assert offered.count() > 0 and not any("4000008" in x for x in srcs), "the clip in use was offered again"
+    print("first offer says:", offered.first.inner_text().splitlines()[0])
+    picker.scroll_into_view_if_needed()
+    picker.screenshot(path=f"{OUT}/1b_picker.png")
+    offered.first.click()
+    picker.get_by_role("button", name="Use this one").click()
+    expect(page.get_by_text("your footage on the next build")).to_be_visible()
+    expect(picker).to_have_count(0)
     print("after new footage: review", review.get_attribute("aria-expanded"), "parts", footage.count())
     assert footage.count() == 7, "the parts list vanished after asking for new footage"
     page.get_by_role("button", name="New drawing").nth(1).click()
@@ -44,7 +57,7 @@ with sync_playwright() as p:
     page.wait_for_selector("text=Make a Short")
     if cards.nth(1).get_attribute("aria-expanded") == "false":
         cards.nth(1).click()
-    expect(page.get_by_text("new footage on the next build")).to_be_visible()
+    expect(page.get_by_text("your footage on the next build")).to_be_visible()
     print("after reload: review", review.get_attribute("aria-expanded"), "parts", footage.count())
     assert footage.count() == 7, "the parts list is gone after reloading"
 

@@ -302,6 +302,106 @@ def choose(queries: list[str], seconds: float, used: set, sentence: str = "", co
         return hit
 
 
+# ---------- better searches, and every candidate scored, for choosing footage (D129) ----------
+
+SEARCHES = """You write stock-footage searches for one sentence of a short narrated physics video for
+phones. The footage libraries are Pexels and Pixabay: real filmed clips, searched by plain words.
+Write searches for things those libraries really film, that a viewer would connect with what the
+sentence says AT THAT POINT in the script (you get the whole script; a "wall" in a video about
+sound is a wall music comes through). 2 to 4 concrete words each: objects, places, nature, and
+people in ordinary situations ("woman wearing headphones", "subwoofer speaker vibrating", "man
+talking on phone close up"). Mix the literal thing with a person experiencing it. Never abstract
+words ("physics", "energy", "frequency", "concept"), never actions nobody films ("person feeling
+bone vibration"). If the user says what they want to see, follow it. Give 5, best first, none of
+the ones already tried."""
+
+
+class _Searches(BaseModel):
+    searches: list[str] = []
+
+
+def plan_searches(sentence: str, context: str = "", wish: str = "", tried: list[str] | None = None) -> list[str]:
+    """Up to 5 searches written for this sentence by the footage model (Gemini first, free);
+    [] when no model can answer, and the sentence's own searches are used alone."""
+    user = ((f"The whole script:\n{context}\n\n" if context else "") + f"Sentence: {sentence}\n"
+            + (f"The user wants to see: {wish}\n" if wish else "")
+            + (f"Already tried: {', '.join(tried)}\n" if tried else ""))
+    try:
+        answer = ask(SEARCHES, user, _Searches, temperature=0.3, quick=True, footage=True)
+        found = _Searches.model_validate(json.loads(answer)).searches
+    except (CreateError, ValueError, TypeError) as exc:
+        log.info("create: no searches planned (%s)", exc)
+        return []
+    out = []
+    for q in found:
+        q = " ".join(str(q).split()[:5]).strip()
+        if q and q.lower() not in {x.lower() for x in [*out, *(tried or [])]}:
+            out.append(q)
+    return out[:5]
+
+
+RANK = """You score stock footage for one sentence of a short educational video shown on a phone.
+You see numbered thumbnails of candidate clips, each with what its library says it shows, and the
+whole script for context. Score EVERY candidate for how well it shows what the sentence says:
+  9-10 exactly what the sentence says; 7-8 a clear, natural match a viewer gets at once;
+  4-6 related but loose or generic; 0-3 unrelated, confusing or cheap-looking (cartoonish, CGI,
+  neon visualiser rings, green background, burned-in text or logo, too dark to read on a phone).
+Don't round up. Also give center for each: where across its thumbnail the subject is, 0 = left,
+0.5 = middle, 1 = right (the video is cropped to a tall strip around it)."""
+
+
+class _Ranks(BaseModel):
+    scores: list[int] = []
+    centers: list[float] = []
+
+
+def rank(sentence: str, hits: list[dict], context: str = "") -> list[dict]:
+    """`hits` with a model's score (0-10, or None when no model could look) and the subject's place
+    across the frame, best first; candidates without a thumbnail are left out."""
+    shown = [(h, t) for h in hits if (t := _thumb(h))]
+    if not shown:
+        return []
+    listed = "\n".join(f"{i}. {'tall' if h['height'] > h['width'] else 'wide'}, {h.get('tags') or 'no tags'}"
+                       for i, (h, _) in enumerate(shown, start=1))
+    try:
+        answer = ask(RANK, (f"The whole script:\n{context}\n\n" if context else "") + f"Sentence: {sentence}\n"
+                     f"Thumbnails 1 to {len(shown)}, in order:\n{listed}", _Ranks, temperature=0.0,
+                     media=[(t, "image/jpeg") for _, t in shown], quick=True, footage=True)
+        got = _Ranks.model_validate(json.loads(answer))
+    except (CreateError, ValueError, TypeError) as exc:
+        log.info("create: candidates not scored (%s)", exc)
+        got = _Ranks()
+    out = []
+    for k, (h, _) in enumerate(shown):
+        score = got.scores[k] if k < len(got.scores) else None
+        center = got.centers[k] if k < len(got.centers) else 0.5
+        out.append({**h, "score": None if score is None else max(0, min(10, int(score))),
+                    "center": min(1.0, max(0.0, float(center)))})
+    return sorted(out, key=lambda h: -(h["score"] if h["score"] is not None else -1))
+
+
+def candidates(queries: list[str], seconds: float, exclude: set, sentence: str, context: str = "",
+               limit: int = 12) -> list[dict]:
+    """Footage to choose from for a sentence: every search's results from both libraries, minus
+    `exclude` (the clip being replaced, clips used elsewhere in the video), long enough first,
+    then scored, best first (D129)."""
+    pool: list[dict] = []
+    for q in queries:
+        for h in search(q)[:PER_QUERY]:
+            if h["id"] not in exclude and all(h["id"] != p["id"] for p in pool):
+                pool.append({**h, "query": q})
+    pool = sorted(pool, key=lambda h: (h["duration"] < min(seconds, 6.0), h["height"] <= h["width"]))[:limit]
+    return rank(sentence, pool, context)
+
+
+def thumb_file(clip_id: str) -> Path | None:
+    """A candidate's cached thumbnail, for the page."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", clip_id):
+        return None
+    path = _dir() / "thumbs" / f"{clip_id}.jpg"
+    return path if path.is_file() else None
+
+
 def fetch(hit: dict) -> Path:
     """The clip on disk, downloaded once."""
     path = _dir() / f"{hit['id']}_{hit['width']}x{hit['height']}.mp4"

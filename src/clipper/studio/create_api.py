@@ -8,6 +8,7 @@ at a time, telling the page how far along they are ("create.changed").
 from __future__ import annotations
 
 import asyncio
+import math
 import threading
 import traceback
 from pathlib import Path
@@ -589,7 +590,7 @@ def routes(app: FastAPI, publish) -> None:
             if want == "footage":
                 queries = ([note] if note else []) + [q for q in [*v.queries, v.query] if q.strip()]
                 queries = list(dict.fromkeys(queries or [_query_from(b.text)]))[:3]
-                new = v.model_copy(update={**common, "kind": "stock", "queries": queries, "query": queries[0],
+                new = v.model_copy(update={**common, "kind": "stock", "queries": queries, "query": queries[0], "wish": note,
                                            "card": v.card or b.emphasis or _query_from(b.text), "picked": [],
                                            "avoid": list(dict.fromkeys([*v.avoid, *(h.get("id") for h in v.picked)]))})
             else:
@@ -604,6 +605,110 @@ def routes(app: FastAPI, publish) -> None:
         _put_script(row, script.model_copy(update={"beats": beats}))
         publish("create.changed", {"id": video_id})
         return {"ok": True}
+
+    # ---------- choosing footage for one part yourself (D129) ----------
+
+    #: video id -> the candidates last offered for it, by id: only these can be chosen (the page
+    #: sends ids, never addresses to download).
+    offered: dict[int, dict[str, dict]] = {}
+
+    def _part(row: dict, script, beat: int) -> tuple[list[int], float]:
+        """The sentences of the picture that `beat` (from 1) starts or belongs to, and how long it plays."""
+        from ..create.script import spans
+
+        group = next((g for g in spans(script) if beat - 1 in g), [beat - 1])
+        timings = row["timings"] or {}
+        beats = timings.get("beats") or []
+        if beats and group[-1] < len(beats):
+            return group, beats[group[-1]][1] - beats[group[0]][0]
+        return group, 4.0
+
+    @app.post("/api/create/videos/{video_id}/footage")
+    async def create_footage(video_id: int, body: dict) -> dict:
+        """Footage to choose from for one part: searches written for it (and the user's words), both
+        libraries, the clip it has now and clips used elsewhere in the video left out, every one scored."""
+        from ..create import stock
+
+        row = video_or_404(video_id)
+        _editable(row)
+        script = _script(row)
+        try:
+            beat = int(body.get("beat"))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "beat is a sentence number") from exc
+        if not 1 <= beat <= len(script.beats):
+            raise HTTPException(400, "no such sentence")
+        group, seconds = _part(row, script, beat)
+        root = script.beats[group[0]]
+        wish = " ".join(str(body.get("wish") or "").split())[:200]
+        text = " ".join(script.beats[k].text for k in group)
+        exclude = {h.get("id") for k, b in enumerate(script.beats) for h in b.visual.picked} | set(root.visual.avoid)
+        own = [q for q in [*root.visual.queries, root.visual.query] if q.strip()]
+
+        def find() -> tuple[list[str], list[dict]]:
+            planned = stock.plan_searches(text, script.text, wish=wish)
+            queries = list(dict.fromkeys([*([wish] if wish else []), *planned, *own]))[:6] or [text]
+            return queries, stock.candidates(queries, seconds, exclude, text, script.text)
+
+        try:
+            queries, found = await asyncio.to_thread(find)
+        except CreateError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        offered[video_id] = {str(h["id"]): h for h in found}
+        return {"beat": group[0] + 1, "seconds": round(seconds, 2), "clips": max(1, math.ceil(seconds / 4.5 - 1e-6)),
+                "searches": queries,
+                "candidates": [{"id": str(h["id"]), "tags": h.get("tags", ""), "duration": h.get("duration", 0),
+                                "tall": h["height"] > h["width"], "score": h.get("score"), "query": h.get("query", "")}
+                               for h in found]}
+
+    @app.post("/api/create/videos/{video_id}/footage/use")
+    def create_footage_use(video_id: int, body: dict) -> dict:
+        """Use the footage the user picked for a part (in the order picked) on the next build; the
+        clip it had is turned down, and Undo brings it back."""
+        row = video_or_404(video_id)
+        _editable(row)
+        script = _script(row)
+        try:
+            beat = int(body.get("beat"))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "beat is a sentence number") from exc
+        if not 1 <= beat <= len(script.beats):
+            raise HTTPException(400, "no such sentence")
+        ids = [str(x) for x in (body.get("ids") or [])]
+        pool = offered.get(video_id, {})
+        if not ids:
+            raise HTTPException(400, "pick at least one clip")
+        if any(x not in pool for x in ids):
+            raise HTTPException(400, "those clips aren't on offer any more: search again")
+        group, _ = _part(row, script, beat)
+        b = script.beats[group[0]]
+        v = b.visual
+        picks = [{k: pool[x].get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center")}
+                 for x in dict.fromkeys(ids)][:8]
+        new = v.model_copy(update={
+            "kind": "stock", "picked": picks, "redo": True, "manual": True, "hold": False, "clip": "", "notice": "",
+            "previous": v.previous or v.model_dump(exclude={"previous"}),
+            "avoid": list(dict.fromkeys([*v.avoid, *(h.get("id") for h in v.picked)])),
+            "queries": list(dict.fromkeys([q for q in [pool[ids[0]].get("query", ""), *v.queries] if q]))[:3] or v.queries,
+            "card": v.card or b.emphasis})
+        if new.queries:
+            new = new.model_copy(update={"query": new.queries[0]})
+        beats = list(script.beats)
+        beats[group[0]] = b.model_copy(update={"visual": new})
+        _put_script(row, script.model_copy(update={"beats": beats}))
+        publish("create.changed", {"id": video_id})
+        return {"ok": True}
+
+    @app.get("/api/create/stock-thumb/{clip_id}")
+    def create_stock_thumb(clip_id: str):
+        from fastapi.responses import FileResponse
+
+        from ..create import stock
+
+        found = stock.thumb_file(clip_id)
+        if not found:
+            raise HTTPException(404, "no thumbnail")
+        return FileResponse(found, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
 
     @app.get("/api/create/videos/{video_id}/still")
     def create_still(video_id: int, t: float):

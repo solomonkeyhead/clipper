@@ -218,7 +218,7 @@ def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
 
 #: The judge's score footage needs when the user asked for footage on that sentence themselves:
 #: they want footage there, so a looser match beats a drawing they didn't ask for (D126).
-ASKED_GOOD_ENOUGH = 4
+ASKED_GOOD_ENOUGH = 6   # 4 let poor footage through (D129)
 
 
 def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: Script, work: Path, used: set,
@@ -236,24 +236,35 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
 
     def none_fit() -> list[Path]:
         if asked and visual.previous:
-            before = Visual.model_validate({**visual.previous, "redo": False, "previous": None})
-            picture_notes.append(f"Sentence {i + 1}: no footage fit, even loosely, so it kept what it had. "
-                                 "Type a few words saying what to show, then ask again.")
+            # Kept what it had, said on the part itself, and the clip turned down stays turned down (D129).
+            before = Visual.model_validate({**visual.previous, "redo": False, "previous": None,
+                                            "avoid": list(dict.fromkeys([*visual.previous.get("avoid", []), *visual.avoid]))})
+            picture_notes.append(f"Sentence {i + 1}: no new footage fit, so it kept what it had.")
             shot = _planned(i, beat, before, seconds, said, script, work, used, tag)
             rec = chosen.get(i, {})
-            chosen[i] = {"restore": before, **({"picked": rec["picked"]} if "picked" in rec else {})}
+            chosen[i] = {"restore": before, "notice": "No new footage fit well enough, so this part kept what it had. "
+                         "Use New footage to pick one yourself, or say what you'd like to see.",
+                         **({"picked": rec["picked"]} if "picked" in rec else {})}
             return shot
         return [_diagram(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", said)]
 
     count = max(1, math.ceil(seconds / MAX_SHOT - 1e-6))
     parts = [seconds / count] * count
-    queries = visual.queries or [visual.query]
+    queries = [q for q in (visual.queries or [visual.query]) if q.strip()]
     turned_down = set(visual.avoid)
-    kept = [h for h in visual.picked if h.get("id") not in turned_down | used and h.get("url")] if not tag else []
+    # The part's own footage is kept unless another part already uses it; `avoid` only steers new
+    # choices (a part that kept its clip when nothing new fit has that clip in both, D129).
+    kept = [h for h in visual.picked if h.get("id") not in used and h.get("url")] if not tag else []
     if kept and len(kept) == len(visual.picked):  # what was picked before, cut as before
         parts = [seconds / len(kept)] * len(kept)
         hits = kept
     else:
+        # Searches written for this sentence in the script's context come first; the plan's own
+        # were often loose or off the point (D129).
+        group = next((g for g in spans(script) if g[0] == i), [i])
+        planned = stock.plan_searches(" ".join(script.beats[k].text for k in group), script.text,
+                                      wish=visual.wish, tried=queries if asked else None)
+        queries = list(dict.fromkeys([*planned, *queries]))[:6] or [beat.text]
         hits = []
         for part in parts:  # one at a time, so each part of a long sentence gets a different clip
             hit = stock.choose(queries, part, turned_down | used | {h["id"] for h in hits if h},
@@ -288,7 +299,7 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
         hits[k] = holder["hit"]
     if not tag:
         chosen[i] = {"picked": [{k: h.get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center")}
-                                for h in hits]}
+                                for h in hits], "queries": queries}
     return clips
 
 
@@ -297,13 +308,14 @@ def remember(script: Script) -> Script:
     marked done: the next build makes the same pictures unless the user asks for new ones."""
     beats = []
     for i, b in enumerate(script.beats):
-        v = b.visual.model_copy(update={"redo": False, "previous": None})
+        v = b.visual.model_copy(update={"redo": False, "previous": None, "notice": "", "wish": ""})
         got = chosen.get(i)
         if got and "restore" in got:  # asked for footage, none fit: back to what it had (D126)
-            v = got["restore"].model_copy(update={"redo": False, "previous": None,
+            v = got["restore"].model_copy(update={"redo": False, "previous": None, "notice": got.get("notice", ""),
                                                   **({"picked": got["picked"]} if "picked" in got else {})})
         elif got and "picked" in got:
-            v = v.model_copy(update={"picked": got["picked"]})
+            v = v.model_copy(update={"picked": got["picked"], **({"queries": got["queries"][:3], "query": got["queries"][0]}
+                                                                 if got.get("queries") else {})})
         elif got and "drawn" in got:
             d = got["drawn"]
             v = v.model_copy(update={"kind": "diagram", "template": "sketch", "sketch": d.sketch,

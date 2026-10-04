@@ -2342,3 +2342,25 @@ user's step, and passes with the fix.
 - A parts list that can't be made says why on the page (`problem`) instead of vanishing.
 - The walkthrough's test video now carries footage picks as a build leaves them (number ids and
   "pexels-" ids), and it checks the list after a reload too.
+
+## D129 — Choosing footage: a picker, searches written for the part, no silent repeats (2026-10-04)
+
+"New footage" sometimes found nothing, sometimes gave back the same clip, sometimes a poor one, and
+the searches were often loose or off the point. Traced: when nothing scored high enough, the part
+quietly restored its old clip, which is both "nothing" and "the same clip"; asked-for footage
+passed at a score of 4, so poor picks got through; and a drawing switched to footage had no
+searches of its own, so it searched the sentence's three longest words.
+- **Picker.** "New footage" opens a picker on the part (`POST .../footage`). Gemini (free) writes
+  5 searches for that part with the whole script in mind (`stock.plan_searches`), the user's words
+  first. Both libraries are searched, the clip in use, every clip turned down and clips used by
+  other parts are left out, and every candidate is scored in one call (`stock.rank`). They're shown
+  best first with "good match / loose / poor". The user picks one (or up to one per 4.5 s for a long
+  part, in play order), and `POST .../footage/use` takes only ids that were offered. "Let Clipper
+  choose" keeps the automatic way.
+- **Automatic.** Asked-for footage needs 6 (was 4), and the searches written for the part come
+  before the plan's own. Builds use them for every footage part without a saved pick (and keep
+  them). If nothing fits, the part keeps what it had and says so on the part (`Visual.notice`),
+  never silently. The kept clip stays in use on later rebuilds (it was dropped once, being in
+  `avoid`).
+- The walkthrough's test server has stand-in libraries and scores, and checks the picker: 12 offered,
+  the clip in use not among them, pick one, "your footage on the next build".

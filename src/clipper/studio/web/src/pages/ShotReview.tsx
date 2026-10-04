@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Film, Loader2, Play, RefreshCw, Shapes, Undo2 } from "lucide-react";
-import { useState } from "react";
+import { Check, Film, Loader2, Play, RefreshCw, Search, Shapes, Undo2, Wand2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { createApi, type CreateVideo, type CreateVisual } from "@/api/client";
+import { createApi, type CreateVideo, type CreateVisual, type FootageOffer } from "@/api/client";
 import { Button, Chip, Tip } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,105 @@ function describe(v: CreateVisual): string {
   return v.template === "sketch" ? "Drawing" : `Diagram: ${v.title || v.template}`;
 }
 
+/** How well the footage model thinks a clip fits, in words. */
+function fit(score: number | null): [string, string] {
+  if (score === null) return ["not scored", "text-subtle"];
+  if (score >= 7) return [`good match ${score}/10`, "text-success"];
+  if (score >= 4) return [`loose ${score}/10`, "text-warning"];
+  return [`poor ${score}/10`, "text-danger"];
+}
+
+/** Choosing a part's footage yourself (D129): searches written for it, both libraries, every clip
+ *  scored and shown best first; the clip it has now and clips used elsewhere aren't offered. */
+function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
+  video: CreateVideo; beat: number; wish: string; setWish: (w: string) => void; onClose: () => void; onAuto: () => void;
+}) {
+  const qc = useQueryClient();
+  const [offer, setOffer] = useState<FootageOffer | null>(null);
+  const [error, setError] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const find = async () => {
+    setSearching(true);
+    setError("");
+    setChosen([]);
+    try {
+      setOffer(await createApi.footage(video.id, { beat, wish }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSearching(false);
+    }
+  };
+  useEffect(() => { void find(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (id: string) => setChosen((c) => c.includes(id) ? c.filter((x) => x !== id)
+    : c.length >= (offer?.clips ?? 1) ? [...c.slice(1), id] : [...c, id]);
+  const use = async () => {
+    setSaving(true);
+    try {
+      await createApi.footageUse(video.id, { beat, ids: chosen });
+      await qc.invalidateQueries({ queryKey: ["create"] });
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="mt-1 flex flex-col gap-2 rounded-md border border-line bg-surface-1 p-3" data-testid="footage-picker">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input value={wish} onChange={(e) => setWish(e.target.value)} placeholder="What you'd like to see (optional)"
+               onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") void find(); }} aria-label="What you'd like to see"
+               className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
+        <Button size="sm" variant="secondary" disabled={searching} onClick={() => void find()}>
+          {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Search again
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close"><X className="size-3.5" /></Button>
+      </div>
+      {searching && <p className="flex items-center gap-2 text-xs text-muted"><Loader2 className="size-3.5 animate-spin" /> Writing searches, looking in both libraries and scoring what comes back…</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
+      {offer && !searching && (
+        <>
+          <p className="text-xs text-muted">
+            Searched: {offer.searches.join(" · ")}. {offer.clips > 1 ? `This part plays ${offer.seconds.toFixed(0)}s: pick up to ${offer.clips} clips, in the order they should play.` : "Pick one."}
+          </p>
+          {offer.candidates.length === 0 ? (
+            <p className="text-xs text-warning">Nothing new came back. Say what you'd like to see and search again.</p>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
+              {offer.candidates.map((c) => {
+                const n = chosen.indexOf(c.id);
+                const [label, tone] = fit(c.score);
+                return (
+                  <button key={c.id} type="button" onClick={() => toggle(c.id)} aria-pressed={n >= 0} title={c.tags}
+                          className={cn("flex flex-col gap-1 rounded-md border p-1 text-left", n >= 0 ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong")}>
+                    <span className="relative block aspect-[9/16] w-full overflow-hidden rounded-sm bg-black">
+                      <img src={`/api/create/stock-thumb/${encodeURIComponent(c.id)}`} alt="" loading="lazy" className="size-full object-cover" />
+                      {n >= 0 && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-accent-fg">{offer.clips > 1 ? n + 1 : <Check className="size-3" />}</span>}
+                    </span>
+                    <span className={cn("text-[11px] font-medium", tone)}>{label}</span>
+                    <span className="line-clamp-2 text-[11px] text-muted">{c.tags || c.query}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="primary" disabled={!chosen.length || saving} onClick={() => void use()}>
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />} Use {chosen.length > 1 ? `these ${chosen.length}` : "this one"}
+        </Button>
+        <Tip label="Clipper picks the footage itself when you rebuild (only a good match is used)">
+          <Button size="sm" variant="ghost" onClick={onAuto}><Wand2 className="size-3.5" /> Let Clipper choose</Button>
+        </Tip>
+      </div>
+    </div>
+  );
+}
+
 /** A finished video, picture by picture (D125): keep what you like, ask for new footage or a new
  *  drawing where you don't, then rebuild. Only the parts you changed are made again. */
 export function ShotReview({ video, seek, onRebuild, rebuilding }: {
@@ -25,6 +124,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
+  const [picking, setPicking] = useState<number | null>(null);
   const beats = video.script.beats;
   const pending = beats.filter((b) => b.visual.redo).length;
   // Built before Clipper kept its footage (D126): the next build picks every part's footage again.
@@ -82,7 +182,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
           return (
             <li key={first} className="flex gap-3 py-3">
               <button type="button" onClick={() => seek(shot.start)} aria-label="Play from here"
-                      className="group relative aspect-[9/16] w-14 shrink-0 overflow-hidden rounded-md bg-black">
+                      className="group relative aspect-[9/16] w-14 shrink-0 self-start overflow-hidden rounded-md bg-black">
                 <img src={`/api/create/videos/${video.id}/still?t=${mid.toFixed(2)}&v=${video.clip_id}-${video.updated_at ?? ""}`}
                      alt="" loading="lazy" className="size-full object-cover" onError={(e) => { e.currentTarget.style.opacity = "0"; }} />
                 <Play className="absolute inset-0 m-auto size-5 text-white opacity-0 drop-shadow group-hover:opacity-100" />
@@ -93,16 +193,20 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                   <span>{shot.beats.length > 1 ? `Sentences ${first} to ${shot.beats[shot.beats.length - 1]}` : `Sentence ${first}`}</span>
                   <span className="text-fg">{describe(v)}</span>
                   {v.redo && (
-                    <Chip tone="accent">{v.kind === "stock" ? "new footage" : "new drawing"} on the next build</Chip>
+                    <Chip tone="accent">{v.kind !== "stock" ? "new drawing" : v.picked?.length ? "your footage" : "new footage"} on the next build</Chip>
                   )}
                 </div>
+                {v.notice && <p className="text-xs text-warning">{v.notice}</p>}
                 <p className="line-clamp-2 text-sm">{text}</p>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <input value={notes[first] ?? ""} onChange={(e) => setNotes((n) => ({ ...n, [first]: e.target.value }))}
-                         onKeyDown={(e) => e.stopPropagation()} placeholder="What you'd rather see (optional)" aria-label="What you'd rather see"
-                         className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
-                  <Tip label="Another stock clip for this part; the one used now is turned down. Your words, if any, are searched first. If no footage fits at all, the part keeps what it has.">
-                    <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "footage")}>
+                  {picking !== first && (
+                    <input value={notes[first] ?? ""} onChange={(e) => setNotes((n) => ({ ...n, [first]: e.target.value }))}
+                           onKeyDown={(e) => e.stopPropagation()} placeholder="What you'd rather see (optional)" aria-label="What you'd rather see"
+                           className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
+                  )}
+                  <Tip label="See footage for this part, scored, best first, and pick what to use. The clip it has now isn't offered.">
+                    <Button size="sm" variant={picking === first ? "primary" : "secondary"} disabled={busy !== null || rebuilding}
+                            onClick={() => setPicking((p) => (p === first ? null : first))}>
                       {busy === `${first}-footage` ? <Loader2 className="size-3.5 animate-spin" /> : <Film className="size-3.5" />} New footage
                     </Button>
                   </Tip>
@@ -119,6 +223,12 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                     </Tip>
                   )}
                 </div>
+                {picking === first && (
+                  <FootagePicker video={video} beat={first} wish={notes[first] ?? ""}
+                                 setWish={(w) => setNotes((n) => ({ ...n, [first]: w }))}
+                                 onClose={() => setPicking(null)}
+                                 onAuto={() => { setPicking(null); void ask(first, "footage"); }} />
+                )}
               </div>
             </li>
           );
