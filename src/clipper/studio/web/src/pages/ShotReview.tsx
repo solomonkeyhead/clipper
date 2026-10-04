@@ -27,6 +27,11 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
   const [notes, setNotes] = useState<Record<number, string>>({});
   const beats = video.script.beats;
   const pending = beats.filter((b) => b.visual.redo).length;
+  // Built before Clipper kept its footage (D126): the next build picks every part's footage again.
+  const unsaved = (video.shots ?? []).some((shot) => {
+    const v = beats[shot.beats[0] - 1]?.visual;
+    return v && v.kind === "stock" && !v.clip && !v.redo && !(v.picked?.length);
+  });
 
   const ask = async (beat: number, want: "footage" | "drawing" | "undo") => {
     setBusy(`${beat}-${want}`);
@@ -54,6 +59,12 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
           {pending ? `Rebuild with ${pending} change${pending === 1 ? "" : "s"}` : "No changes yet"}
         </Button>
       </div>
+      {unsaved && (
+        <p className="rounded-md border border-warning/40 p-2.5 text-xs text-warning">
+          This video was built before Clipper kept its footage, so the next build picks footage again for every footage
+          part, not just the ones you change. From then on, everything you don't change stays.
+        </p>
+      )}
       <ol className="flex flex-col divide-y divide-line">
         {video.shots.map((shot) => {
           const first = shot.beats[0];
@@ -83,7 +94,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                   <input value={notes[first] ?? ""} onChange={(e) => setNotes((n) => ({ ...n, [first]: e.target.value }))}
                          onKeyDown={(e) => e.stopPropagation()} placeholder="What you'd rather see (optional)" aria-label="What you'd rather see"
                          className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
-                  <Tip label="Another stock clip for this part; the one used now is turned down. Your words, if any, are searched first.">
+                  <Tip label="Another stock clip for this part; the one used now is turned down. Your words, if any, are searched first. If no footage fits at all, the part keeps what it has.">
                     <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "footage")}>
                       {busy === `${first}-footage` ? <Loader2 className="size-3.5 animate-spin" /> : <Film className="size-3.5" />} New footage
                     </Button>

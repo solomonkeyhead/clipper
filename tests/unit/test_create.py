@@ -58,16 +58,16 @@ class TestStock:
         seen = []
         results = {"ear close up": HITS[:2], "headphones": HITS[2:]}
         monkeypatch.setattr(stock, "search", lambda q: results.get(q, []))
-        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="": (seen.append([h["id"] for h in hits]) or hits[1], []))
+        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="", good=7: (seen.append([h["id"] for h in hits]) or hits[1], []))
         assert stock.choose(["ear close up", "headphones"], 6.0, used={4}, sentence="Your middle ear")["id"] == 2
         assert seen[0] == [3, 2, 1]  # long enough and vertical, long enough, too short; 4 already used
 
     def test_nothing_fitting_or_no_judge_means_a_chalk_card(self, monkeypatch):
         monkeypatch.setattr(stock, "search", lambda q: HITS)
-        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="": (None, []))
+        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="", good=7: (None, []))
         assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # a chalk card instead
 
-        def busy(sentence, q, hits, ctx=""):
+        def busy(sentence, q, hits, ctx="", good=7):
             raise stock._NoAnswer
         monkeypatch.setattr(stock, "_judge", busy)
         assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # no judge: a card too

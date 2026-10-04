@@ -206,7 +206,8 @@ class _NoAnswer(Exception):
     """The model couldn't look (busy, offline): not the same as "none of these fit"."""
 
 
-def _judge(sentence: str, query: str, hits: list[dict], context: str = "") -> tuple[dict | None, list[str]]:
+def _judge(sentence: str, query: str, hits: list[dict], context: str = "",
+           good_enough: int = GOOD_ENOUGH) -> tuple[dict | None, list[str]]:
     """The candidate the model says shows the sentence (None if none does), and the better
     searches it suggests when none does."""
     shown = [(h, t) for h in hits if (t := _thumb(h))]
@@ -225,7 +226,7 @@ def _judge(sentence: str, query: str, hits: list[dict], context: str = "") -> tu
         raise _NoAnswer from exc
     n = verdict.pick
     better = [" ".join(q.split()[:5]) for q in verdict.better if q.strip()][:2]
-    if not 1 <= n <= len(shown) or verdict.score < GOOD_ENOUGH:
+    if not 1 <= n <= len(shown) or verdict.score < good_enough:
         log.info("create: no footage good enough for %r (best %s scored %s)", sentence[:60], n, verdict.score)
         return None, better
     return {**shown[n - 1][0], "center": min(1.0, max(0.0, verdict.center))}, []
@@ -272,25 +273,27 @@ def _pool(queries: list[str], used: set, seconds: float) -> list[dict]:
     return sorted(pool, key=lambda h: (h["duration"] < seconds + 0.3, h["height"] <= h["width"]))[:CANDIDATES]
 
 
-def choose(queries: list[str], seconds: float, used: set, sentence: str = "", context: str = "") -> dict | None:
+def choose(queries: list[str], seconds: float, used: set, sentence: str = "", context: str = "",
+           good_enough: int = GOOD_ENOUGH) -> dict | None:
     """The best unused clip for a beat of `seconds`, judged against the sentence (and the whole
     script, `context`) across all its searches at once. When none is good enough the judge's
     own better searches get one more look (D124). None when nothing fits: the beat gets a
-    chalkboard card instead, never a generic stand-in ("science laboratory" opened a video once)."""
+    chalkboard card instead, never a generic stand-in ("science laboratory" opened a video once).
+    `good_enough` is lower when the user asked for footage on that sentence themselves (D126)."""
     ranked = _pool(queries, used, seconds)
     if not ranked:
         return None
     if not sentence:
         return ranked[0]
     try:
-        hit, better = _judge(sentence, " / ".join(queries), ranked, context)
+        hit, better = _judge(sentence, " / ".join(queries), ranked, context, good_enough)
         if hit is None and better:
             tried = {q.lower() for q in queries}
             fresh = [q for q in better if q.lower() not in tried]
             again = _pool(fresh, used, seconds) if fresh else []
             if again:
                 log.info("create: footage searched again for %r: %s", sentence[:60], " / ".join(fresh))
-                hit, _ = _judge(sentence, " / ".join(fresh), again, context)
+                hit, _ = _judge(sentence, " / ".join(fresh), again, context, good_enough)
         return hit
     except _NoAnswer:
         hit = by_words(queries, ranked)

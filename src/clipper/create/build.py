@@ -13,7 +13,9 @@ seconds, the voice evened to the platform loudness; then the cover frame
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import shutil
 from pathlib import Path
 
@@ -163,9 +165,44 @@ def _fallback(beat, script: Script, text: str = "") -> Visual:
     return Visual(kind="diagram", template="card", title=beat.visual.card or beat.emphasis or beat.text)
 
 
-#: What this build chose for each sentence's picture (sentence index -> {"picked": hits} or
-#: {"drawn": Visual}), written back into the script so a rebuild keeps it (D125).
+#: What this build chose for each sentence's picture (sentence index -> {"picked": hits},
+#: {"drawn": Visual} or {"restore": Visual}), written back into the script so a rebuild keeps
+#: it (D125); and notes about it for the page.
 chosen: dict[int, dict] = {}
+picture_notes: list[str] = []
+
+#: Where finished shots are kept between builds, by what went into them (set by build(); None:
+#: not kept). A rebuild that changes one part makes that one part (D126): every shot made
+#: before with the same inputs is reused, not drawn or cut again. Bump RENDER_VERSION when the
+#: drawing or cutting code changes, so no shot made by older code is reused.
+shot_cache: Path | None = None
+RENDER_VERSION = 1
+used_shots: set[Path] = set()
+_RUNTIME = {"picked", "avoid", "redo", "previous", "manual", "hold", "clip", "clip_start", "fill"}
+
+
+class _TooDark(Exception):
+    """A stock shot that came out all but black, even cropped in the middle."""
+
+
+def _kept(kind: str, key: object, out: Path, make) -> Path:
+    """The shot for these inputs: made before and kept, or made now by `make(out)` and kept."""
+    if shot_cache is None:
+        return make(out)
+    digest = hashlib.sha1(json.dumps([RENDER_VERSION, kind, key], sort_keys=True, default=str).encode()).hexdigest()[:24]
+    kept = shot_cache / f"{kind}-{digest}.mp4"
+    used_shots.add(kept)
+    if kept.is_file() and kept.stat().st_size > 0:
+        return kept
+    made = make(out)
+    shot_cache.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(made, kept)
+    return kept
+
+
+def _diagram(visual: Visual, seconds: float, out: Path, said: list) -> Path:
+    key = [visual.model_dump(exclude=_RUNTIME), round(seconds, 3), [(round(t, 3), w) for t, w in said]]
+    return _kept("diagram", key, out, lambda o: diagrams.render(visual, seconds, o, words=said))
 
 
 def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
@@ -179,41 +216,76 @@ def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
     return made
 
 
+#: The judge's score footage needs when the user asked for footage on that sentence themselves:
+#: they want footage there, so a looser match beats a drawing they didn't ask for (D126).
+ASKED_GOOD_ENOUGH = 4
+
+
 def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: Script, work: Path, used: set,
              tag: str = "") -> list[Path]:
-    """The shot(s) of the picture planned for a sentence: a diagram, or stock footage (split
-    in two past MAX_SHOT), or a drawing when no footage fits. `tag` keeps a filler's files
-    apart from the sentence's own clip. Footage a build picked before is used again (D125):
-    the user keeps what they liked; "new footage" clears it and turns those clips down."""
+    """The shot(s) of the picture planned for a sentence: a diagram, or stock footage (a clip per
+    MAX_SHOT seconds, each a different one), or a drawing when no footage fits. `tag` keeps a
+    filler's files apart from the sentence's own clip. Footage a build picked before is used
+    again (D125); "new footage" clears it and turns those clips down. When the user asked for
+    footage and none fits, the sentence keeps what it had, never a new drawing (D126)."""
     if visual.kind == "diagram" and visual.template == "sketch" and not (visual.sketch and visual.sketch.marks):
         visual = _drawn(i, beat, script, tag)  # asked for a new drawing, or its drawing failed
     if visual.kind == "diagram":
-        return [diagrams.render(visual, seconds, work / f"{i:02d}{tag}_diagram.mp4", words=said)]
-    parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
+        return [_diagram(visual, seconds, work / f"{i:02d}{tag}_diagram.mp4", said)]
+    asked = visual.redo and not tag
+
+    def none_fit() -> list[Path]:
+        if asked and visual.previous:
+            before = Visual.model_validate({**visual.previous, "redo": False, "previous": None})
+            picture_notes.append(f"Sentence {i + 1}: no footage fit, even loosely, so it kept what it had. "
+                                 "Type a few words saying what to show, then ask again.")
+            shot = _planned(i, beat, before, seconds, said, script, work, used, tag)
+            rec = chosen.get(i, {})
+            chosen[i] = {"restore": before, **({"picked": rec["picked"]} if "picked" in rec else {})}
+            return shot
+        return [_diagram(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", said)]
+
+    count = max(1, math.ceil(seconds / MAX_SHOT - 1e-6))
+    parts = [seconds / count] * count
     queries = visual.queries or [visual.query]
-    turned_down = used | set(visual.avoid)
-    kept = [h for h in visual.picked if h.get("id") not in turned_down and h.get("url")] if not tag else []
-    if kept and len(kept) == len(parts):
+    turned_down = set(visual.avoid)
+    kept = [h for h in visual.picked if h.get("id") not in turned_down | used and h.get("url")] if not tag else []
+    if kept and len(kept) == len(visual.picked):  # what was picked before, cut as before
+        parts = [seconds / len(kept)] * len(kept)
         hits = kept
     else:
-        hits = [stock.choose(queries, part, turned_down | used, sentence=beat.text, context=script.text) for part in parts]
+        hits = []
+        for part in parts:  # one at a time, so each part of a long sentence gets a different clip
+            hit = stock.choose(queries, part, turned_down | used | {h["id"] for h in hits if h},
+                               sentence=beat.text, context=script.text,
+                               good_enough=ASKED_GOOD_ENOUGH if asked else stock.GOOD_ENOUGH)
+            hits.append(hit)
     for hit in hits:
         if hit:
             used.add(hit["id"])
-    if not hits[0]:  # nothing fits: drawn instead, the whole sentence, never unrelated footage
-        return [diagrams.render(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
-    hits = [h or hits[0] for h in hits]  # half a sentence without its own clip keeps the first
+    if not hits[0]:  # nothing fits: never unrelated footage
+        return none_fit()
+    hits = [h or hits[0] for h in hits]  # a part without its own clip keeps the first
     clips = []
     for k, (part, hit) in enumerate(zip(parts, hits, strict=True)):
-        out = work / f"{i:02d}{tag}_{k}_stock.mp4"
-        clip = _stock_shot(stock.fetch(hit), part, out, hit.get("center"))
-        if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
-            hit = {**hit, "center": 0.5}
-            clip = _stock_shot(stock.fetch(hit), part, out, 0.5)
-        if _too_dark(clip):
-            return [diagrams.render(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
-        clips.append(clip)
-        hits[k] = hit
+        holder = {"hit": hit}
+
+        def make(out: Path, part=part, holder=holder) -> Path:
+            h = holder["hit"]
+            clip = _stock_shot(stock.fetch(h), part, out, h.get("center"))
+            if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
+                holder["hit"] = {**h, "center": 0.5}
+                clip = _stock_shot(stock.fetch(h), part, out, 0.5)
+            if _too_dark(clip):
+                raise _TooDark
+            return clip
+
+        try:
+            clips.append(_kept("stock", [hit.get("id"), hit.get("center"), round(part, 3)],
+                               work / f"{i:02d}{tag}_{k}_stock.mp4", make))
+        except _TooDark:
+            return none_fit()
+        hits[k] = holder["hit"]
     if not tag:
         chosen[i] = {"picked": [{k: h.get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center")}
                                 for h in hits]}
@@ -227,7 +299,10 @@ def remember(script: Script) -> Script:
     for i, b in enumerate(script.beats):
         v = b.visual.model_copy(update={"redo": False, "previous": None})
         got = chosen.get(i)
-        if got and "picked" in got:
+        if got and "restore" in got:  # asked for footage, none fit: back to what it had (D126)
+            v = got["restore"].model_copy(update={"redo": False, "previous": None,
+                                                  **({"picked": got["picked"]} if "picked" in got else {})})
+        elif got and "picked" in got:
             v = v.model_copy(update={"picked": got["picked"]})
         elif got and "drawn" in got:
             d = got["drawn"]
@@ -261,9 +336,12 @@ def _own(i: int, visual: Visual, seconds: float, own: dict, cursor: dict, defaul
     mode, slow, rest = userclips.fill_plan(avail, seconds, fill)
     play = seconds if mode == "cut" else avail
     out = work / f"{i:02d}_own.mp4"
+    total = seconds if mode != "planned" else play
     try:
-        shot = _own_shot(src, start, play, seconds if mode != "planned" else play, out,
-                         slow=slow, loop=mode == "loop")
+        stat = src.stat()
+        shot = _kept("own", [str(src), stat.st_size, stat.st_mtime, round(start, 3), round(play, 3), round(total, 3),
+                             round(slow, 4), mode == "loop"], out,
+                     lambda o: _own_shot(src, start, play, total, o, slow=slow, loop=mode == "loop"))
     except Exception as exc:  # an odd codec or a damaged file: the planned picture instead
         log.warning("create: clip %s couldn't be cut (%s)", name, exc)
         notes.append(f"Sentence {i + 1}: {name} couldn't be read ({str(exc)[:80]}); the planned picture is used.")
@@ -291,8 +369,9 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
     groups = []
     for group in spans(script):
         root = script.beats[group[0]].visual
-        # Only a drawing is held on: a clip or footage first plays its own sentence alone.
-        groups += [group] if root.kind == "diagram" and not root.clip else [[i] for i in group]
+        # A held drawing (or the footage asked for in its place, D126) covers all its sentences;
+        # the user's own clip plays its own sentence alone.
+        groups += [group] if not root.clip else [[i] for i in group]
     for n, group in enumerate(groups):
         i, beat = group[0], script.beats[group[0]]
         if progress:
@@ -375,6 +454,10 @@ def build(video_id: int, progress=None) -> int:
     notes: list[str] = []
     stock.unjudged.clear()
     chosen.clear()
+    picture_notes.clear()
+    used_shots.clear()
+    global shot_cache
+    shot_cache = folder(video_id) / "shots"
     own = userclips.files(video_id)
     if own or userclips.load(video_id)["clips"]:
         # The sentences' real lengths now known: clips placed for the user if they asked (D119).
@@ -413,6 +496,7 @@ def build(video_id: int, progress=None) -> int:
             "scores": json.dumps({"picked_by": "create", "create": video_id, "cover": cover_at,
                                   "text": script.text}),
         })
+    notes += picture_notes
     if stock.unjudged:
         n = len(stock.unjudged)
         notes.append(f"Footage for {n} sentence{'s' if n != 1 else ''} was picked by its search words only, as Claude "
@@ -426,6 +510,10 @@ def build(video_id: int, progress=None) -> int:
                        script={**script.model_dump(), "take": row["script"].get("take", 1)},
                        check_notes=userclips.with_notes(store.video(video_id)["check_notes"], notes))
     recycle(work)
+    for old in (shot_cache.glob("*.mp4") if shot_cache.is_dir() else []):
+        if old not in used_shots:  # shots of pictures no longer in the video
+            recycle(old)
+    shot_cache = None
     log.info("create: video %s built as clip %s (%s)", video_id, clip_id, rel)
     return clip_id
 

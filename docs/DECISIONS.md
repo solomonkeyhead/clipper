@@ -2290,3 +2290,20 @@ was kept. Now:
 - On the finished video, "Change parts you don't like" lists each picture (a still from the video,
   when it plays, the sentences, what it is), with "Rebuild with N changes". Clicking a still plays
   the video from there.
+
+## D126 — A change to one part changed another; rebuilds remade everything (2026-10-04)
+
+Asking for footage on the last drawing changed the first part instead, and the rebuild took long.
+Two causes. The video was built before D125, so no footage picks were kept, and the rebuild
+picked footage again for every part, the first one included. And no footage scored 7 for the
+asked-for sentence, so it silently fell back to a new Claude drawing (slow, and not what was asked).
+Now:
+- Footage the user asked for needs only a score of 4 (`ASKED_GOOD_ENOUGH`). If none fits even so,
+  the part keeps what it had (not a new drawing) and the notes say to add words and ask again.
+- The review warns on videos built before picks were kept that the next build re-picks all footage.
+- **Shot cache** (`create/videos/<id>/shots/`): every finished shot (drawing, stock part, own
+  clip) is kept by a hash of what went into it plus `RENDER_VERSION`. A rebuild reuses each one whose
+  inputs didn't change, so changing one part renders one part. Then only the final join with
+  captions, and the cover, run again. Shots no longer used go to the Recycle Bin after a build.
+- Footage asked for over a held drawing covers all its sentences. Long sentences get a different
+  clip for every 4.5 s part, chosen one after another so the same clip isn't picked twice.

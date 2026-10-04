@@ -296,7 +296,7 @@ def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(t
     picks = iter([{"id": "a", "url": "u", "center": 0.3}, {"id": "b", "url": "u", "center": 0.6}])
     asked = []
 
-    def choose(queries, part, used, sentence="", context=""):
+    def choose(queries, part, used, sentence="", context="", good_enough=7):
         asked.append(set(used))
         return next(picks)
 
@@ -360,3 +360,63 @@ def test_the_page_gets_the_pictures_in_order_and_a_rebuild_reuses_the_timing(cli
     monkeypatch.setattr(build, "build", lambda video_id, progress=None: built.append(video_id))
     create_api._work(vid, lambda *a: None)
     assert built == [vid]
+
+
+# ---------- D126: the wrong part changing, and slow rebuilds ----------
+
+def test_shots_made_before_are_reused_not_made_again(tmp_path, monkeypatch):
+    from clipper.create import build, diagrams
+
+    made = []
+
+    def render(v, seconds, out, words=None):
+        made.append(seconds)
+        out.write_bytes(b"shot")
+        return out
+
+    monkeypatch.setattr(diagrams, "render", render)
+    monkeypatch.setattr(build, "shot_cache", tmp_path / "shots")
+    v = Visual(kind="diagram", template="card", title="Bone")
+    beat = Beat(text="Bone carries the bass.", visual=v)
+    s = Script(title="t", beats=[beat])
+    first = build._planned(0, beat, v, 3.0, [(0.1, "Bone")], s, tmp_path, set())
+    again = build._planned(0, beat, v.model_copy(update={"redo": False, "picked": []}), 3.0, [(0.1, "Bone")], s, tmp_path, set())
+    assert first == again and made == [3.0]                 # the same picture: kept, not drawn again
+    build._planned(0, beat, v, 3.5, [(0.1, "Bone")], s, tmp_path, set())
+    assert made == [3.0, 3.5]                                # a different length: made anew
+
+
+def test_asked_for_footage_and_none_fits_keeps_what_it_had(tmp_path, monkeypatch):
+    from clipper.create import build, diagrams, stock
+
+    drawing = Visual(kind="diagram", template="card", title="Friend")
+    asked = drawing.model_copy(update={"kind": "stock", "queries": ["friend"], "query": "friend", "redo": True,
+                                       "previous": drawing.model_dump()})
+    beat = Beat(text="Everyone else hears the air.", visual=asked)
+    s = Script(title="t", beats=[beat])
+    levels = []
+    monkeypatch.setattr(stock, "choose", lambda *a, good_enough=7, **k: levels.append(good_enough))
+    monkeypatch.setattr(build, "_fallback", lambda *a, **k: (_ for _ in ()).throw(AssertionError("drew instead")))
+    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None: out)
+    build.chosen.clear()
+    build.picture_notes.clear()
+    build._planned(0, beat, asked, 3.0, [], s, tmp_path, set())
+    assert levels == [build.ASKED_GOOD_ENOUGH]               # a looser match is fine when asked for
+    kept = build.remember(s).beats[0].visual
+    assert kept.kind == "diagram" and kept.title == "Friend" and not kept.redo
+    assert "kept what it had" in build.picture_notes[0]
+
+
+def test_a_long_sentence_gets_a_different_clip_for_each_part(tmp_path, monkeypatch):
+    from clipper.create import build, stock
+
+    pool = [{"id": n, "url": "u"} for n in ("a", "b", "c")]
+    monkeypatch.setattr(stock, "choose", lambda q, part, used, **k: next(h for h in pool if h["id"] not in used))
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None: out)
+    monkeypatch.setattr(build, "_too_dark", lambda clip: False)
+    monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
+    v = Visual(kind="stock", query="sound")
+    beat = Beat(text="A long held explanation goes here.", visual=v)
+    build.chosen.clear()
+    shots = build._planned(0, beat, v, 12.0, [], Script(title="t", beats=[beat]), tmp_path, set())
+    assert len(shots) == 3 and [h["id"] for h in build.chosen[0]["picked"]] == ["a", "b", "c"]
