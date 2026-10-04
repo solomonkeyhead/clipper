@@ -94,7 +94,8 @@ def _view() -> dict:
     for v in videos:
         stage = progress.get(v["id"])
         v["stage"], v["pct"] = (stage if stage else (None, None))
-        v.pop("timings", None)
+        timings = v.pop("timings", None)
+        v["shots"] = _shots(v, timings)
         v["cancelling"] = v["id"] in cancelled
         try:  # the user's own clips for this video (D119)
             v["mine"] = userclips.view(v["id"], Script.model_validate(v["script"]))
@@ -103,6 +104,22 @@ def _view() -> dict:
     return {"channel": {"name": ch.name, "handle": ch.handle, "voice": ch.voice, "campaign": ch.campaign,
                         "words_per_second": ch.words_per_second},
             "topics": store.topics(), "videos": videos}
+
+
+def _shots(v: dict, timings: dict | None) -> list[dict]:
+    """The pictures of a built video in order: which sentences each covers and when it plays,
+    for reviewing them one by one (D125). Empty until the video has been timed."""
+    from ..create.script import Script, spans
+
+    if not timings or v["status"] not in ("built", "failed"):
+        return []
+    try:
+        script = Script.model_validate(v["script"])
+        beats = timings["beats"]
+        return [{"beats": [k + 1 for k in g], "start": beats[g[0]][0], "end": beats[g[-1]][1]}
+                for g in spans(script) if g[-1] < len(beats)]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return []
 
 
 def _work(video_id: int, publish) -> None:
@@ -124,9 +141,12 @@ def _work(video_id: int, publish) -> None:
                 row = store.video(video_id)
                 step("Listening to the voice", 3)
                 path = Path(row["voice"])
-                timings = voice.align(Script.model_validate(row["script"]), voice.heard(path), probe(path).duration)
-                _check(video_id)
-                store.update_video(video_id, timings=timings.model_dump(), status="building", error="")
+                if row["timings"]:  # the same words and voice as last time: the same cuts (D125)
+                    store.update_video(video_id, status="building", error="")
+                else:
+                    timings = voice.align(Script.model_validate(row["script"]), voice.heard(path), probe(path).duration)
+                    _check(video_id)
+                    store.update_video(video_id, timings=timings.model_dump(), status="building", error="")
                 build.build(video_id, progress=step)
             except Cancelled:
                 log.info("create: video %s build cancelled", video_id)
@@ -285,7 +305,7 @@ def routes(app: FastAPI, publish) -> None:
             async for chunk in request.stream():
                 out.write(chunk)
         partial.replace(kept)
-        store.update_video(video_id, voice=str(kept), status="voiced", error="")
+        store.update_video(video_id, voice=str(kept), status="voiced", error="", timings="")  # timed afresh
         threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
         return {"queued": True}
 
@@ -520,6 +540,80 @@ def routes(app: FastAPI, publish) -> None:
         who = ai_module.last_used.split(":", 1)[-1] if ai_module.last_used else "unknown"
         store.update_video(video_id, check_notes=f"{notes}\nChecked by: {who}.")
         return {"notes": notes}
+
+    # ---------- reviewing a finished video, picture by picture (D125) ----------
+
+    @app.post("/api/create/videos/{video_id}/redo")
+    def create_redo(video_id: int, body: dict) -> dict:
+        """Ask for a new picture on one sentence of a finished video; everything else stays as
+        it was built. `want`: "footage" (another stock clip; the one used is turned down),
+        "drawing" (a new chalk drawing), or "undo" (back to what it had). `note`: optional words,
+        used as the footage search or as what to draw."""
+        from ..create.script import _query_from
+
+        row = video_or_404(video_id)
+        _editable(row)
+        script = _script(row)
+        try:
+            beat = int(body.get("beat"))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "beat is a sentence number") from exc
+        if not 1 <= beat <= len(script.beats):
+            raise HTTPException(400, "no such sentence")
+        want, note = body.get("want"), " ".join(str(body.get("note") or "").split())[:200]
+        b = script.beats[beat - 1]
+        v = b.visual
+        if want == "undo":
+            if not v.previous:
+                raise HTTPException(400, "nothing to undo on that sentence")
+            new = type(v).model_validate({**v.previous, "previous": None, "redo": False})
+        elif want in ("footage", "drawing"):
+            before = v.model_dump(exclude={"previous"})
+            common = {"hold": False, "manual": True, "redo": True, "previous": v.previous or before, "clip": ""}
+            if want == "footage":
+                queries = ([note] if note else []) + [q for q in [*v.queries, v.query] if q.strip()]
+                queries = list(dict.fromkeys(queries or [_query_from(b.text)]))[:3]
+                new = v.model_copy(update={**common, "kind": "stock", "queries": queries, "query": queries[0],
+                                           "card": v.card or b.emphasis or _query_from(b.text), "picked": [],
+                                           "avoid": list(dict.fromkeys([*v.avoid, *(h.get("id") for h in v.picked)]))})
+            else:
+                idea = note or (v.idea if v.template == "sketch" else "") or \
+                    f"A simple, clear chalk drawing of what this sentence shows: {b.text}"
+                new = v.model_copy(update={**common, "kind": "diagram", "template": "sketch", "idea": idea,
+                                           "sketch": None, "picked": []})
+        else:
+            raise HTTPException(400, "want is footage, drawing or undo")
+        beats = list(script.beats)
+        beats[beat - 1] = b.model_copy(update={"visual": new})
+        _put_script(row, script.model_copy(update={"beats": beats}))
+        publish("create.changed", {"id": video_id})
+        return {"ok": True}
+
+    @app.get("/api/create/videos/{video_id}/still")
+    def create_still(video_id: int, t: float):
+        """One frame of the built video at `t` seconds, small: the review's picture of a shot."""
+        import subprocess
+
+        from fastapi.responses import Response
+
+        from ..render.ffmpeg import ffmpeg_path
+        from . import db, library
+
+        row = video_or_404(video_id)
+        if not row["clip_id"]:
+            raise HTTPException(404, "not built yet")
+        with db.connect() as con:
+            found = con.execute("SELECT file FROM clips WHERE id=?", (row["clip_id"],)).fetchone()
+        path = library.clip_path(found["file"]) if found else None
+        if not path or not path.is_file():
+            raise HTTPException(404, "the video file isn't there")
+        try:
+            jpg = subprocess.run([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{max(0.0, t):.2f}", "-i", str(path),
+                                  "-frames:v", "1", "-vf", "scale=216:-2", "-f", "image2pipe", "-vcodec", "mjpeg", "-"],
+                                 capture_output=True, timeout=30, check=True).stdout
+        except (subprocess.SubprocessError, OSError) as exc:
+            raise HTTPException(500, "couldn't read a frame") from exc
+        return Response(jpg, media_type="image/jpeg", headers={"Cache-Control": "max-age=60"})
 
     # ---------- ready-made scripts that ship with Clipper (D121) ----------
 

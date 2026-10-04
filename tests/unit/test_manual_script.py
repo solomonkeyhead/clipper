@@ -281,3 +281,82 @@ def test_a_part_on_a_late_word_arrives_late_but_is_seen():
     CUES.set((None, 9.0, 11.9))
     assert stage(8.0, 12.0, 1, 3, label=1) == 0.0 and stage(9.6, 12.0, 1, 3, label=1) == 1.0   # on its word
     assert stage(11.5, 12.0, 2, 3, label=2) == 1.0          # said at the very end: still up for the last 1.2 s
+
+
+# ---------- reviewing a built video, picture by picture (D125) ----------
+
+def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(tmp_path, monkeypatch):
+    from clipper.create import build, stock
+
+    beat = Beat(text="Sound goes through bone here.", visual=Visual(kind="stock", query="bone"))
+    s = Script(title="t", beats=[beat])
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None: out)
+    monkeypatch.setattr(build, "_too_dark", lambda clip: False)
+    monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
+    picks = iter([{"id": "a", "url": "u", "center": 0.3}, {"id": "b", "url": "u", "center": 0.6}])
+    asked = []
+
+    def choose(queries, part, used, sentence="", context=""):
+        asked.append(set(used))
+        return next(picks)
+
+    monkeypatch.setattr(stock, "choose", choose)
+    build.chosen.clear()
+    build._planned(0, beat, beat.visual, 3.0, [], s, tmp_path, set())
+    kept = build.remember(s)
+    assert kept.beats[0].visual.picked[0]["id"] == "a"
+    # built again: the same clip, no judging
+    build.chosen.clear()
+    build._planned(0, kept.beats[0], kept.beats[0].visual, 3.0, [], kept, tmp_path, set())
+    assert len(asked) == 1 and build.remember(kept).beats[0].visual.picked[0]["id"] == "a"
+    # "new footage": the old one is turned down and another is chosen
+    v = kept.beats[0].visual.model_copy(update={"picked": [], "avoid": ["a"], "redo": True})
+    build.chosen.clear()
+    build._planned(0, kept.beats[0], v, 3.0, [], kept, tmp_path, set())
+    assert "a" in asked[-1] and build.chosen[0]["picked"][0]["id"] == "b"
+
+
+def test_asking_for_a_new_picture_and_undoing_it(client):
+    from clipper.create import store
+
+    s = Script(title="t", beats=[
+        Beat(text="First sentence of it here.", visual=Visual(kind="stock", query="x", picked=[{"id": "p1", "url": "u"}])),
+        Beat(text="A drawing for this one.", visual=Visual(kind="diagram", template="sketch", idea="a face")),
+        Beat(text="Held on the drawing too.", visual=Visual(kind="stock", query="y", hold=True))])
+    vid = store.add_video(None, s.model_dump())
+    store.update_video(vid, status="built")
+    base = f"/api/create/videos/{vid}/redo"
+    assert client.post(base, json={"beat": 1, "want": "footage", "note": "man with headphones"}).status_code == 200
+    v = Script.model_validate(store.video(vid)["script"]).beats[0].visual
+    assert v.redo and v.avoid == ["p1"] and not v.picked and v.queries[0] == "man with headphones" and v.previous
+    assert client.post(base, json={"beat": 1, "want": "undo"}).status_code == 200
+    v = Script.model_validate(store.video(vid)["script"]).beats[0].visual
+    assert not v.redo and v.picked[0]["id"] == "p1" and v.previous is None
+    assert client.post(base, json={"beat": 1, "want": "undo"}).status_code == 400            # nothing to undo
+    # a held sentence asking for its own drawing stops holding
+    assert client.post(base, json={"beat": 3, "want": "drawing", "note": "an ear"}).status_code == 200
+    v = Script.model_validate(store.video(vid)["script"]).beats[2].visual
+    assert v.kind == "diagram" and v.template == "sketch" and v.idea == "an ear" and not v.hold and v.sketch is None
+    for bad in ({"beat": 9, "want": "footage"}, {"beat": 1, "want": "music"}, {"beat": "x", "want": "footage"}):
+        assert client.post(base, json=bad).status_code == 400
+    store.update_video(vid, status="building")
+    assert client.post(base, json={"beat": 1, "want": "footage"}).status_code == 409
+
+
+def test_the_page_gets_the_pictures_in_order_and_a_rebuild_reuses_the_timing(client, monkeypatch):
+    from clipper.create import build, store, voice
+    from clipper.studio import create_api
+
+    s = scripts.tidy(_held_script())
+    vid = store.add_video(None, s.model_dump())
+    spans_ = [(0.0, 2.0), (2.0, 4.0), (4.0, 7.0), (7.0, 10.0), (10.0, 12.0)]
+    store.update_video(vid, status="built", voice="v.mp3",
+                       timings={"words": [], "beats": spans_, "duration": 12.0, "matched": 1.0})
+    shots = next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)["shots"]
+    assert shots == [{"beats": [1], "start": 0.0, "end": 2.0}, {"beats": [2, 3, 4], "start": 2.0, "end": 10.0},
+                     {"beats": [5], "start": 10.0, "end": 12.0}]
+    built = []
+    monkeypatch.setattr(voice, "heard", lambda path: (_ for _ in ()).throw(AssertionError("timed again")))
+    monkeypatch.setattr(build, "build", lambda video_id, progress=None: built.append(video_id))
+    create_api._work(vid, lambda *a: None)
+    assert built == [vid]

@@ -54,6 +54,13 @@ class Visual(BaseModel):
     # as the explanation goes on ("two routes... route one is air... route two is bone"), its
     # parts arriving on the words of all those sentences, instead of a new shot each sentence.
     hold: bool = False
+    # What the last build used, kept so a rebuild keeps what the user liked (D125): the stock
+    # clip(s) picked, the clips turned down ("new footage"), a change waiting for the next build,
+    # and the picture before that change, for undo. Set by the app, never by the writer.
+    picked: list[dict] = Field(default_factory=list)
+    avoid: list[str] = Field(default_factory=list)
+    redo: bool = False
+    previous: dict | None = None
 
 
 class Beat(BaseModel):
@@ -159,12 +166,16 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") 
     return tidy(_without_clips(script))
 
 
+#: The fields of a picture only the app sets: whatever the writer put in them is dropped.
+APP_FIELDS = {"clip": "", "clip_start": None, "fill": "auto", "manual": False, "picked": [], "avoid": [],
+              "redo": False, "previous": None}
+
+
 def _without_clips(script: Script) -> Script:
-    """A written script has no clips of the user's: the writer sees these fields in its schema
-    and could invent ids."""
+    """A written script has none of the app's own picture fields (the user's clips, what a build
+    picked): the writer sees them in its schema and could invent them."""
     return script.model_copy(update={"beats": [
-        b.model_copy(update={"visual": b.visual.model_copy(update={"clip": "", "clip_start": None, "fill": "auto", "manual": False})})
-        for b in script.beats]})
+        b.model_copy(update={"visual": b.visual.model_copy(update=dict(APP_FIELDS))}) for b in script.beats]})
 
 
 #: Short words that end in a full stop without ending the sentence.
@@ -409,7 +420,7 @@ def replan(script: Script) -> tuple[Script, str]:
         # ...and so do the pictures the user chose themselves (D120).
         fresh = tidy(script.model_copy(update={"beats": [
             b.model_copy(update={"visual": b.visual if b.visual.manual else p.visual.model_copy(update={
-                "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
+                **APP_FIELDS, "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
                 "emphasis": p.emphasis or b.emphasis})
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
         review = check(fresh)

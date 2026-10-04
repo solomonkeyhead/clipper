@@ -12,6 +12,7 @@ import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/c
 import { useUI } from "@/lib/store";
 import { cn, copyText } from "@/lib/utils";
 import { MyClips } from "./MyClips";
+import { ShotReview } from "./ShotReview";
 
 /** Create (D108): original Shorts for your own channel -- idea, script, your voice, built. */
 export function CreatePage() {
@@ -618,10 +619,17 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
 }) {
   const { data: clips = [] } = useClips();
   const clip = clips.find((c) => c.id === video.clip_id);
+  const player = useRef<HTMLVideoElement>(null);
+  const seek = (t: number) => {
+    const el = player.current;
+    if (!el) return;
+    el.currentTime = t;
+    void el.play().catch(() => undefined);
+  };
   return (
     <div className="flex flex-wrap gap-4">
       {clip?.file_exists ? (
-        <video key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 rounded-xl bg-black" />
+        <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 self-start rounded-xl bg-black" />
       ) : <div className="grid aspect-[9/16] w-56 place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <p className="text-sm">It's in your library under <b>{video.script.title}</b>, with the title, description and hashtags ready to copy.</p>
@@ -634,13 +642,17 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
               {busy === "pictures" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "pictures" ? "Planning…" : "New pictures"}
             </Button>
           </Tip>
-          <Tip label="Same words, voice and pictures, built again: footage is picked again (use it once Claude can judge footage again)">
+          <Tip label="Same words, voice and pictures, built again; only parts you asked to change, or that had no footage, are made again">
             <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
               {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
             </Button>
           </Tip>
           <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
         </div>
+        <details className="mt-1" open>
+          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-fg">Change parts you don't like</summary>
+          <div className="mt-2"><ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} /></div>
+        </details>
         <details className="mt-1" open={video.mine?.clips.length > 0 || undefined}>
           <summary className="cursor-pointer text-sm font-medium text-muted hover:text-fg">
             Your own clips{video.mine?.clips.length ? ` (${video.mine.clips.length})` : ""}

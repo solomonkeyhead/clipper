@@ -2271,3 +2271,22 @@ also frees most of a video's Claude usage, as the judge was the biggest part of 
 now sees the whole script (a "wall" in a video about sound), and when nothing scores 7, it
 suggests up to two better searches, which get one more look before the sentence falls back to
 chalk.
+
+## D125 — Change single parts of a finished video, keep the rest exactly (2026-10-04)
+
+The user wants to keep what they like in a built video and ask for footage or a drawing only where
+they don't. Before, every rebuild picked footage afresh and timed the voice again, so nothing
+was kept. Now:
+- A build writes what it chose into the script (`build.remember`): the stock clip(s) picked
+  for each sentence (`Visual.picked`, with the crop) and any drawing it had to make. The next
+  build uses them again with no judging, so it costs no AI, and only parts asked to change are
+  made again. A chalk card is never kept, so footage is tried again next time.
+- "New footage" on a part turns down the clip it used (`Visual.avoid`) and searches again, the
+  user's words first; "New drawing" draws it again (the user's words say what to draw). Both can
+  be undone (`Visual.previous`) until the rebuild. A held sentence asking for its own picture stops
+  holding. These are `POST .../redo`.
+- The voice is timed once: a rebuild with the same words and voice reuses the timing (a new voice,
+  or edited words, clear it), so cuts don't move between builds.
+- On the finished video, "Change parts you don't like" lists each picture (a still from the video,
+  when it plays, the sentences, what it is), with "Rebuild with N changes". Clicking a still plays
+  the video from there.

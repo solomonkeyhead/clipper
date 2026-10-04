@@ -614,6 +614,7 @@ export interface CreateVisual {
   clip?: string; clip_start?: number | null; fill?: ClipFill;   // the user's own clip for this sentence (D119)
   manual?: boolean; idea?: string; sketch?: unknown;            // a picture the user chose (D120)
   hold?: boolean;                                                // keep the drawing before on screen (D124)
+  picked?: Record<string, unknown>[]; avoid?: string[]; redo?: boolean; previous?: Record<string, unknown> | null;   // D125
 }
 export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
 export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
@@ -624,6 +625,7 @@ export interface CreateVideo {
   id: number; topic_id: number | null; status: "draft" | "approved" | "voiced" | "building" | "built" | "failed";
   script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;
   created_at: string; stage: string | null; pct: number | null; mine: Mine; cancelling?: boolean;
+  shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string;
 }
 export interface CreateView {
   channel: { name: string; handle: string; voice: string; campaign: string; words_per_second: number };
@@ -662,6 +664,8 @@ export const createApi = {
   rewrite: (video: number) => send("POST", `/api/create/videos/${video}/rewrite`),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
+  redo: (video: number, body: { beat: number; want: "footage" | "drawing" | "undo"; note: string }) =>
+    send("POST", `/api/create/videos/${video}/redo`, body),
   cancel: (video: number) => send<{ stopping: boolean }>("POST", `/api/create/videos/${video}/cancel`),
   build: (video: number) => send("POST", `/api/create/videos/${video}/build`),
   pictures: (video: number) => send("POST", `/api/create/videos/${video}/pictures`),

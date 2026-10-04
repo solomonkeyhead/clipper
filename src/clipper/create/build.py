@@ -147,7 +147,7 @@ def _too_dark(shot: Path) -> bool:
     return stat.mean[0] < 28 and stat.stddev[0] < 22
 
 
-def _fallback(beat, script: Script) -> Visual:
+def _fallback(beat, script: Script, text: str = "") -> Visual:
     """For a sentence no footage fits: a sketch of it, else its phrase chalked on the board
     (a single word like "stranger" on an empty board opened a video once, D111)."""
     from .sketch import draw
@@ -155,7 +155,7 @@ def _fallback(beat, script: Script) -> Visual:
     try:
         idea = beat.visual.idea.strip() or (f"A simple, striking sketch of what this sentence shows; the key idea: "
                                             f"{beat.visual.card or beat.emphasis}.")  # the user's own idea, if they gave one (D120)
-        drawn = draw(beat.text, idea, script.text)
+        drawn = draw(text or beat.text, idea, script.text)
         if drawn.marks:
             return Visual(kind="diagram", template="sketch", sketch=drawn)
     except CreateError as exc:
@@ -163,34 +163,78 @@ def _fallback(beat, script: Script) -> Visual:
     return Visual(kind="diagram", template="card", title=beat.visual.card or beat.emphasis or beat.text)
 
 
+#: What this build chose for each sentence's picture (sentence index -> {"picked": hits} or
+#: {"drawn": Visual}), written back into the script so a rebuild keeps it (D125).
+chosen: dict[int, dict] = {}
+
+
+def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
+    """A drawing made now for a sentence (its own idea, else what it says), remembered when it is
+    a real drawing; a chalk card isn't kept, so the next build tries footage again."""
+    # A drawing held over the next sentences is drawn for all of them (D124).
+    group = next((g for g in spans(script) if g[0] == i), [i])
+    made = _fallback(beat, script, " ".join(script.beats[k].text for k in group))
+    if not tag and made.template == "sketch" and made.sketch and made.sketch.marks:
+        chosen[i] = {"drawn": made}
+    return made
+
+
 def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: Script, work: Path, used: set,
              tag: str = "") -> list[Path]:
     """The shot(s) of the picture planned for a sentence: a diagram, or stock footage (split
     in two past MAX_SHOT), or a drawing when no footage fits. `tag` keeps a filler's files
-    apart from the sentence's own clip."""
+    apart from the sentence's own clip. Footage a build picked before is used again (D125):
+    the user keeps what they liked; "new footage" clears it and turns those clips down."""
     if visual.kind == "diagram" and visual.template == "sketch" and not (visual.sketch and visual.sketch.marks):
-        visual = _fallback(beat, script)  # planned before sketches existed, or its drawing failed
+        visual = _drawn(i, beat, script, tag)  # asked for a new drawing, or its drawing failed
     if visual.kind == "diagram":
         return [diagrams.render(visual, seconds, work / f"{i:02d}{tag}_diagram.mp4", words=said)]
     parts = [seconds] if seconds <= MAX_SHOT else [seconds / 2, seconds - seconds / 2]
     queries = visual.queries or [visual.query]
-    hits = [stock.choose(queries, part, used, sentence=beat.text, context=script.text) for part in parts]
+    turned_down = used | set(visual.avoid)
+    kept = [h for h in visual.picked if h.get("id") not in turned_down and h.get("url")] if not tag else []
+    if kept and len(kept) == len(parts):
+        hits = kept
+    else:
+        hits = [stock.choose(queries, part, turned_down | used, sentence=beat.text, context=script.text) for part in parts]
     for hit in hits:
         if hit:
             used.add(hit["id"])
     if not hits[0]:  # nothing fits: drawn instead, the whole sentence, never unrelated footage
-        return [diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
+        return [diagrams.render(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
     hits = [h or hits[0] for h in hits]  # half a sentence without its own clip keeps the first
     clips = []
     for k, (part, hit) in enumerate(zip(parts, hits, strict=True)):
         out = work / f"{i:02d}{tag}_{k}_stock.mp4"
         clip = _stock_shot(stock.fetch(hit), part, out, hit.get("center"))
         if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
+            hit = {**hit, "center": 0.5}
             clip = _stock_shot(stock.fetch(hit), part, out, 0.5)
         if _too_dark(clip):
-            return [diagrams.render(_fallback(beat, script), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
+            return [diagrams.render(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", words=said)]
         clips.append(clip)
+        hits[k] = hit
+    if not tag:
+        chosen[i] = {"picked": [{k: h.get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center")}
+                                for h in hits]}
     return clips
+
+
+def remember(script: Script) -> Script:
+    """The script with what this build chose written into it (D125), and its waiting changes
+    marked done: the next build makes the same pictures unless the user asks for new ones."""
+    beats = []
+    for i, b in enumerate(script.beats):
+        v = b.visual.model_copy(update={"redo": False, "previous": None})
+        got = chosen.get(i)
+        if got and "picked" in got:
+            v = v.model_copy(update={"picked": got["picked"]})
+        elif got and "drawn" in got:
+            d = got["drawn"]
+            v = v.model_copy(update={"kind": "diagram", "template": "sketch", "sketch": d.sketch,
+                                     "idea": v.idea or d.idea, "picked": []})
+        beats.append(b.model_copy(update={"visual": v}))
+    return script.model_copy(update={"beats": beats})
 
 
 def _own(i: int, visual: Visual, seconds: float, own: dict, cursor: dict, default_fill: str, work: Path,
@@ -330,6 +374,7 @@ def build(video_id: int, progress=None) -> int:
     channel, config = channels.load(), Config.load()
     notes: list[str] = []
     stock.unjudged.clear()
+    chosen.clear()
     own = userclips.files(video_id)
     if own or userclips.load(video_id)["clips"]:
         # The sentences' real lengths now known: clips placed for the user if they asked (D119).
@@ -376,7 +421,9 @@ def build(video_id: int, progress=None) -> int:
     idle = [name for cid, (_, _, name) in own.items() if cid not in placed]
     if idle:
         notes.append("Not used: " + ", ".join(idle) + ".")
+    script = remember(script)
     store.update_video(video_id, status="built", clip_id=clip_id, error="",
+                       script={**script.model_dump(), "take": row["script"].get("take", 1)},
                        check_notes=userclips.with_notes(store.video(video_id)["check_notes"], notes))
     recycle(work)
     log.info("create: video %s built as clip %s (%s)", video_id, clip_id, rel)

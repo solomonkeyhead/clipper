@@ -20,8 +20,8 @@ is the order I'd build them.
 | Stopping a build | Ran to the end | Cancel while it builds (stops at the next step; a finished version stays); Build again on a finished video | **Done** (D122) | |
 | How long a drawing stays up | One picture per sentence, unless the plan holds a drawing | "Keep the drawing above, building on" on any sentence after a drawing | **Done** (D124) | |
 | Who judges footage | Gemini first (`llm.create_footage_judge`) | Switch in Settings between Gemini and Claude | Gap (config only) | S |
-| Which stock clip | The AI judge picks one of ~6 | Show the candidates per sentence and click to swap, or "search again" with new words | Gap | M |
-| Redo one picture | "New pictures" redoes all of them | A "new picture" button on a single sentence | Gap | S |
+| Which stock clip | The AI judge picks one of ~6 | "New footage" with your own words is **Done** (D125); still to do: show the candidates and click one | Partly | M |
+| Redo one picture | "New pictures" redoes all of them | On a built video: per part, "New footage" or "New drawing" (with optional words), undo, and a rebuild that keeps every other part as it was | **Done** (D125) | |
 | Diagram contents | Templates and sketches are generated | Edit labels, numbers, arrows and colours of a diagram; move or delete a sketch's words | Gap | L |
 | Framing of footage | Faces, else the judge's guess | A slider per shot for where the crop sits; push-in on or off | Gap | M |
 | Shot lengths and cuts | Cuts land where each sentence starts; footage over 4.5s is split | Nudge a cut earlier or later; set the longest a shot may last | Gap | M |
