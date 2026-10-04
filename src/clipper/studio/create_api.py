@@ -118,7 +118,10 @@ def _shots(v: dict, timings: dict | None) -> list[dict]:
         beats = timings["beats"]
         return [{"beats": [k + 1 for k in g], "start": beats[g[0]][0], "end": beats[g[-1]][1]}
                 for g in spans(script) if g[-1] < len(beats)]
-    except (ValueError, KeyError, IndexError, TypeError):
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        # Said on the page, never a list that quietly vanishes (D128).
+        log.warning("create: video %s: parts can't be listed: %s", v.get("id"), exc)
+        v["problem"] = f"The parts can't be listed: {str(exc).splitlines()[0][:200]}"
         return []
 
 
@@ -348,7 +351,17 @@ def routes(app: FastAPI, publish) -> None:
         return Script.model_validate(row["script"])
 
     def _put_script(row: dict, script) -> None:
-        store.update_video(row["id"], script={**script.model_dump(), "take": row["script"].get("take", 1)})
+        """Saved only if it reads back: a change that would leave the script unreadable is refused
+        with the reason, never saved to break the video (D128)."""
+        from ..create.script import Script
+
+        data = script.model_dump()
+        try:
+            Script.model_validate(data)
+        except ValueError as exc:
+            log.warning("create: refused to save video %s's script: %s", row["id"], exc)
+            raise HTTPException(500, f"that change couldn't be saved: {str(exc).splitlines()[0][:200]}") from exc
+        store.update_video(row["id"], script={**data, "take": row["script"].get("take", 1)})
 
     @app.put("/api/create/videos/{video_id}/clips/{filename}")
     async def create_clip_add(video_id: int, filename: str, request: Request) -> dict:

@@ -58,7 +58,7 @@ class Visual(BaseModel):
     # clip(s) picked, the clips turned down ("new footage"), a change waiting for the next build,
     # and the picture before that change, for undo. Set by the app, never by the writer.
     picked: list[dict] = Field(default_factory=list)
-    avoid: list[str] = Field(default_factory=list)
+    avoid: list[str | int] = Field(default_factory=list)   # stock ids: Pixabay's are numbers (D128)
     redo: bool = False
     previous: dict | None = None
 

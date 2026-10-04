@@ -46,7 +46,14 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
     }
   };
 
-  if (!video.shots?.length) return null;
+  // Never an empty space where the list was (D128): say why there is no list.
+  if (!video.shots?.length) {
+    return (
+      <p className={cn("text-xs", video.problem ? "rounded-md border border-danger/40 p-2.5 text-danger" : "text-muted")}>
+        {video.problem ?? "The parts are listed here once the video has been built with its voice."}
+      </p>
+    );
+  }
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">

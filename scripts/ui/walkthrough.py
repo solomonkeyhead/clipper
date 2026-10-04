@@ -30,12 +30,23 @@ with sync_playwright() as p:
     footage.last.click()
     expect(page.get_by_text("new footage on the next build")).to_be_visible()
     print("after new footage: review", review.get_attribute("aria-expanded"), "parts", footage.count())
+    assert footage.count() == 7, "the parts list vanished after asking for new footage"
     page.get_by_role("button", name="New drawing").nth(1).click()
     expect(page.get_by_text("new drawing on the next build")).to_be_visible()
     print("after new drawing: review", review.get_attribute("aria-expanded"), "parts", footage.count())
+    assert footage.count() == 7, "the parts list vanished after asking for a new drawing"
     rebuild = page.get_by_role("button", name="Rebuild with 2 changes")
     expect(rebuild).to_be_visible()
     page.screenshot(path=f"{OUT}/2_changes.png", full_page=True)
+
+    # the page reloaded: the changes are saved and the list still reads
+    page.reload()
+    page.wait_for_selector("text=Make a Short")
+    if cards.nth(1).get_attribute("aria-expanded") == "false":
+        cards.nth(1).click()
+    expect(page.get_by_text("new footage on the next build")).to_be_visible()
+    print("after reload: review", review.get_attribute("aria-expanded"), "parts", footage.count())
+    assert footage.count() == 7, "the parts list is gone after reloading"
 
     # close and open the section again
     review.click(); time.sleep(0.3)

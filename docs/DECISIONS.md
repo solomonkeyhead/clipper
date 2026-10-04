@@ -2325,3 +2325,20 @@ From now on, page changes are checked by `scripts/ui/walkthrough.py` (the real s
 Playwright and the pre-installed Chromium): open the built video, ask for new footage and a new
 drawing, close and reopen the section, undo, rebuild (it fails there, with no stock key), and check
 the section and its 7 parts after every step, with screenshots.
+
+## D128 — The real cause: a number where text was expected (2026-10-04)
+
+D127 fixed real problems, but not the one the user hit, which came back with the same steps. The
+cause, reproduced on data like theirs: Pixabay's footage ids are numbers. "New footage" put the
+turned-down id into `Visual.avoid`, declared `list[str]`. The change was saved without checking,
+and from then on the saved script failed to read. The parts list then came back empty: the section
+looked shut and opening it showed nothing (a rebuild would have failed too). D127's walkthrough
+missed it because its test video had no footage picks, and the first fix of the test data still
+put a text id on the part it clicked. A run with the old line put back now fails at exactly the
+user's step, and passes with the fix.
+- `avoid` takes text or numbers; the user's already-saved script reads again as it is.
+- Every saved change is checked to read back first (`_put_script`), and refused with the reason
+  instead of being saved broken.
+- A parts list that can't be made says why on the page (`problem`) instead of vanishing.
+- The walkthrough's test video now carries footage picks as a build leaves them (number ids and
+  "pexels-" ids), and it checks the list after a reload too.

@@ -625,7 +625,7 @@ export interface CreateVideo {
   id: number; topic_id: number | null; status: "draft" | "approved" | "voiced" | "building" | "built" | "failed";
   script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;
   created_at: string; stage: string | null; pct: number | null; mine: Mine; cancelling?: boolean;
-  shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string;
+  shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string; problem?: string;
 }
 export interface CreateView {
   channel: { name: string; handle: string; voice: string; campaign: string; words_per_second: number };

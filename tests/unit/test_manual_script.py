@@ -440,3 +440,28 @@ def test_a_failed_rebuild_keeps_the_video_built_before(client, monkeypatch):
                        timings={"words": [], "beats": [(0.0, 2.0)], "duration": 2.0, "matched": 1.0})
     create_api._work(other, lambda *a: None)
     assert store.video(other)["status"] == "failed"
+
+
+def test_new_footage_on_a_part_with_a_number_id_keeps_the_script_readable(client):
+    """D128: Pixabay's ids are numbers. Turning one down made the saved script unreadable, so the
+    parts list came back empty (the section "closed and wouldn't open") and a rebuild would fail."""
+    from clipper.create import store
+
+    s = Script(title="t", beats=[Beat(text="Your skull has been flattering you.", visual=Visual(
+        kind="stock", query="mirror", picked=[{"id": 4000008, "url": "u", "center": 0.5}]))])
+    vid = store.add_video(None, s.model_dump())
+    store.update_video(vid, status="built", clip_id=1, timings={"words": [], "beats": [(0.0, 4.0)], "duration": 4.0, "matched": 1.0})
+    assert client.post(f"/api/create/videos/{vid}/redo", json={"beat": 1, "want": "footage"}).status_code == 200
+    saved = Script.model_validate(store.video(vid)["script"])             # reads again
+    assert saved.beats[0].visual.avoid == [4000008]                       # kept as the number the build compares
+    view = next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)
+    assert len(view["shots"]) == 1 and "problem" not in view
+
+
+def test_a_list_that_cant_be_made_says_why(client):
+    from clipper.create import store
+
+    vid = store.add_video(None, Script(title="t", beats=[Beat(text="One two three four.")]).model_dump())
+    store.update_video(vid, status="built", clip_id=1, timings={"words": [], "beats": "broken", "duration": 4.0, "matched": 1.0})
+    view = next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)
+    assert view["shots"] == [] and view["problem"].startswith("The parts can't be listed")
