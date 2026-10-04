@@ -2384,3 +2384,22 @@ The user asked for more free footage sources and to see a candidate play before 
 - The walkthrough hovers a candidate and checks it plays, then pauses on leaving. It uses a WebM,
   since the open-source Chromium it runs can't play H.264 (Chrome and Edge can). It also checks the
   Settings card.
+
+## D131 — Create's archive (2026-10-04)
+
+The user asked for posted Create videos, the ready-made ones too, to go into an archive.
+- **Automatic.** A finished video whose clip is posted (a post found by the syncs, or the clip marked
+  posted or submitted in Clips) moves to the archive by itself, once, dated by its first post
+  (`create_videos.archived_at`). Never mid-build.
+- **Manual.** Any video can be archived by hand (the box icon on its card) and brought back ("Back to
+  Create"). One brought back stays out, however often it's seen posted (`archive_hold`), until it's
+  archived again.
+- **The page.** The list shows only what's being worked on; "Archive" folds below it, closed by
+  default. An archived video opens as before (watch, copy, change parts, rebuild, delete), with
+  where it's posted, its views and a link to each post. Cards remember whether they're open, so one
+  moving in or out of the archive stays as it was.
+- **Ready-made scripts.** Each video records the ready-made script it came from (`create_videos.ready`;
+  older ones are matched by title once). The list says "in the Archive" or "made, below", and its
+  button reads "Make again" once one has been made.
+- The walkthrough's test server has a posted video; it checks it's archived by itself, comes back and
+  stays back after a reload, and goes in again by hand.

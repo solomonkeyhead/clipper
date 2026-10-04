@@ -1,4 +1,4 @@
-"""Clipper's real server on test data: one finished video from the ready-made script, plus a draft."""
+"""Clipper's real server on test data: one finished video from the ready-made script, a draft, and a posted one."""
 import os, subprocess, sys
 from pathlib import Path
 data = Path(sys.argv[1]); data.mkdir(parents=True, exist_ok=True)
@@ -42,6 +42,14 @@ if not store.videos():
     with db.connect() as con:
         db.upsert_clip(con, {"campaign": "german-professor", "source_id": "test", "clip_id": "preview",
                              "title": "Preview", "file": rel2, "caption": "c"})
+    # A third, posted: marked posted in Clips, so it moves to the Archive by itself (D131).
+    posted = c.post("/api/create/ready/voice-on-a-recording").json()["id"]
+    with db.connect() as con:
+        pclip = db.upsert_clip(con, {"campaign": "german-professor", "source_id": "create", "clip_id": f"create-{posted}",
+                                     "title": "Voice (posted)", "file": rel, "caption": "c"})
+        db.update_clip(con, pclip, status="posted")
+    store.update_video(posted, status="built", voice=str(data / "v.mp3"), clip_id=pclip,
+                       timings={"words": [], "beats": [(i * 4.0, i * 4.0 + 4.0) for i in range(n)], "duration": n * 4.0, "matched": 1.0})
 # Stand-ins for the footage libraries and the footage model (no keys or network here): every search
 # gives 8 clips with thumbnails, and the "model" writes searches and scores clips 9 down to 2 (D129).
 import json as _json

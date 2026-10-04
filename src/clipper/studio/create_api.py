@@ -82,12 +82,60 @@ def _stopped(video_id: int) -> None:
         store.update_video(video_id, status="failed", error="Build cancelled. Press Try again to build it.")
 
 
+def _posts(videos: list[dict]) -> dict[int, dict]:
+    """video id -> {"posts": [...], "marked": bool} for each finished video that's posted: a post
+    found by the syncs, or its clip marked posted in Clips (D131)."""
+    from ..learn import log as perf
+    from . import db, stats
+
+    with_clip = [v for v in videos if v.get("clip_id")]
+    if not with_clip:
+        return {}
+    try:
+        found = stats.posts_by_clip(perf.read())
+    except Exception as exc:  # an unreadable log: marked-posted still counts
+        log.warning("create: couldn't read the post log (%s)", exc)
+        found = {}
+    out = {}
+    with db.connect() as con:
+        for v in with_clip:
+            clip = db.clip(con, v["clip_id"])
+            if not clip:
+                continue
+            posts = [{"platform": p["platform"], "url": p["url"], "posted_at": p.get("posted_at"),
+                      "views": p.get("views_latest")}
+                     for p in found.get((clip["campaign"], clip["source_id"], clip["clip_id"]), [])]
+            marked = clip["status"] in ("posted", "submitted")
+            if posts or marked:
+                out[v["id"]] = {"posts": posts, "marked": marked}
+    return out
+
+
+def _archive_posted(videos: list[dict], posted: dict[int, dict]) -> None:
+    """Posted videos move to the archive by themselves, once; one the user brought back stays (D131)."""
+    from ..create import store
+    from . import db
+
+    for v in videos:
+        if v["id"] in posted and not v.get("archived_at") and not v.get("archive_hold") \
+                and v["status"] not in ("voiced", "building"):
+            dates = sorted(str(p["posted_at"]) for p in posted[v["id"]]["posts"] if p.get("posted_at"))
+            v["archived_at"] = dates[0][:16] if dates else db.now()
+            store.update_video(v["id"], archived_at=v["archived_at"])
+
+
 def _view() -> dict:
     from ..create import channel as channels
     from ..create import store
 
     ch = channels.load()
     videos = store.videos()
+    try:
+        posted = _posts(videos)
+        _archive_posted(videos, posted)
+    except Exception as exc:  # never stop the page over the archive
+        log.warning("create: couldn't check what's posted (%s)", exc)
+        posted = {}
     from ..create import userclips
     from ..create.script import Script
 
@@ -98,6 +146,9 @@ def _view() -> dict:
         timings = v.pop("timings", None)
         v["shots"] = _shots(v, timings)
         v["cancelling"] = v["id"] in cancelled
+        v["archived"] = bool(v.get("archived_at"))
+        v["posts"] = posted.get(v["id"], {}).get("posts", [])
+        v["posted"] = v["id"] in posted
         try:  # the user's own clips for this video (D119)
             v["mine"] = userclips.view(v["id"], Script.model_validate(v["script"]))
         except ValueError:
@@ -758,8 +809,21 @@ def routes(app: FastAPI, publish) -> None:
     @app.get("/api/create/ready")
     def create_ready() -> list[dict]:
         """Scripts that come with Clipper, written and drawn already: nothing to wait for."""
-        return [{"name": name, "title": r["script"].title, "about": r["about"], "words": r["script"].words}
-                for name, r in _ready().items()]
+        found = _ready()
+        made: dict[str, list[dict]] = {}
+        for v in store.videos():
+            name = v.get("ready") or ""
+            if not name and v["topic_id"] is None and v["check_notes"].startswith("A ready-made script"):
+                # Made before videos named their ready-made script (D131): known by its title.
+                name = next((n for n, r in found.items() if r["script"].title == v["script"].get("title")), "")
+                if name:
+                    store.update_video(v["id"], ready=name)
+            if name:
+                made.setdefault(name, []).append({"id": v["id"], "archived": bool(v.get("archived_at")),
+                                                  "status": v["status"]})
+        return [{"name": name, "title": r["script"].title, "about": r["about"], "words": r["script"].words,
+                 "made": made.get(name, [])}
+                for name, r in found.items()]
 
     @app.post("/api/create/ready/{name}")
     def create_from_ready(name: str) -> dict:
@@ -768,7 +832,23 @@ def routes(app: FastAPI, publish) -> None:
             raise HTTPException(404, "no such ready-made script")
         return {"id": store.add_video(None, found["script"].model_dump(),
                                       "A ready-made script: the words and the pictures are already done. "
-                                      "Footage is searched for when you build; edit anything you like.")}
+                                      "Footage is searched for when you build; edit anything you like.", ready=name)}
+
+    @app.post("/api/create/videos/{video_id}/archive")
+    def create_archive(video_id: int, body: dict) -> dict:
+        """Into the archive or back out, by hand (D131). Posted videos go in by themselves; one
+        brought back stays out, whatever is posted later, until it's archived again."""
+        from . import db
+
+        row = video_or_404(video_id)
+        if body.get("archived", True):
+            if row["status"] in ("voiced", "building"):
+                raise HTTPException(409, "it's being built: archive it when the build is done")
+            store.update_video(video_id, archived_at=db.now(), archive_hold=0)
+        else:
+            store.update_video(video_id, archived_at=None, archive_hold=1)
+        publish("create.changed", {"id": video_id})
+        return {"ok": True}
 
     @app.post("/api/create/videos/{video_id}/cancel")
     def create_cancel(video_id: int) -> dict:

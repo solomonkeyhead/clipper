@@ -10,6 +10,8 @@ Marc starts it from a desktop icon (`clipper studio`, the Control Center at
 so a push to master reaches him on his next start.
 
 ## Working here
+- Start with `docs/HANDOFF.md`: what to check on the real machine, and the plan to make Create a
+  full video editor for anybody.
 - Commit and push straight to `master` (Marc's choice). No pull requests unless asked.
 - Tests: `python -m pytest tests/unit -q`. Lint: `ruff check src tests/unit`.
   The diagram tests need `assets/fonts/Caveat.ttf` and `Inter.ttf` (git-ignored; the Google

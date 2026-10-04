@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
-  Trash2, Upload, Wand2, X,
+  AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
+  ExternalLink, Trash2, Upload, Wand2, X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  createApi, useClips, useCreate, useCreateAI, type CreateScript, type CreateTopic, type CreateVideo, type CreateVisual,
+  createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateVisual,
 } from "@/api/client";
 import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
@@ -18,7 +18,10 @@ import { ShotReview } from "./ShotReview";
 export function CreatePage() {
   const { data, isLoading } = useCreate();
   if (isLoading || !data) return <div className="flex flex-col gap-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-96" /></div>;
-  const active = data.videos.find((v) => v.status !== "built")?.id ?? data.videos[0]?.id ?? null;
+  // Posted videos move to the archive (D131): the list above it is what's still being worked on.
+  const work = data.videos.filter((v) => !v.archived);
+  const archived = data.videos.filter((v) => v.archived);
+  const active = work.find((v) => v.status !== "built")?.id ?? work[0]?.id ?? null;
   return (
     <div className="fade-in flex flex-col gap-6">
       <div>
@@ -34,12 +37,56 @@ export function CreatePage() {
         <div className="order-2 lg:order-1"><Ideas topics={data.topics} /></div>
         <div className="order-1 flex flex-col gap-4 lg:order-2">
           <YourOwn />
-          {data.videos.length === 0 && (
-            <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (about 20 seconds), or write your own script." />
+          {work.length === 0 && (
+            archived.length ? <p className="text-sm text-muted">Nothing in progress: everything you've made is in the Archive below.</p>
+              : <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (about 20 seconds), or write your own script." />
           )}
-          {data.videos.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} wps={data.channel.words_per_second} />)}
+          {work.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} wps={data.channel.words_per_second} />)}
+          {archived.length > 0 && <ArchiveList videos={archived} wps={data.channel.words_per_second} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The archive (D131): posted videos, out of the way but whole. Each opens as it always did, to
+ *  watch, copy, change or rebuild, and "Back to Create" returns it to the list above. */
+function ArchiveList({ videos, wps }: { videos: CreateVideo[]; wps: number }) {
+  const [open, setOpen] = useState(() => folds.get("archive") ?? false);
+  const toggle = () => setOpen((o) => { folds.set("archive", !o); return !o; });
+  return (
+    <section className="flex flex-col gap-3">
+      <button type="button" onClick={toggle} aria-expanded={open}
+              className="flex items-center gap-2 self-start text-sm font-semibold text-muted hover:text-fg">
+        <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
+        <Archive className="size-4" /> Archive <span className="font-normal text-subtle">{videos.length}</span>
+      </button>
+      {open && (
+        <>
+          <p className="-mt-1 text-xs text-muted">Videos move here once they're posted (found on your channel, or marked posted in Clips). You can also archive any video yourself.</p>
+          {videos.map((v) => <VideoCard key={v.id} video={v} open={false} wps={wps} />)}
+        </>
+      )}
+    </section>
+  );
+}
+
+const PLATFORMS: Record<string, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", x: "X" };
+
+/** Where a video is posted, with its views and a link to each post (D131). */
+function PostedLine({ video }: { video: CreateVideo }) {
+  if (!video.posted) return null;
+  const posts = video.posts ?? [];
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      <CheckCircle2 className="size-4 text-success" />
+      {posts.length === 0 ? <span>Marked posted in Clips.</span> : posts.map((p: CreatePost) => (
+        <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-accent hover:underline">
+          {PLATFORMS[p.platform] ?? p.platform}{p.views != null ? ` · ${p.views.toLocaleString()} views` : ""}
+          <ExternalLink className="size-3.5" />
+        </a>
+      ))}
+      {!video.archived && <span className="text-xs text-muted">You brought it back from the Archive, so it stays here until you archive it.</span>}
     </div>
   );
 }
@@ -108,15 +155,26 @@ function YourOwn() {
         {ready.length > 0 && (
           <Card className="flex flex-col gap-1 p-3">
             <span className="text-xs font-medium text-muted">Ready-made: written and drawn already</span>
-            {ready.map((r) => (
-              <div key={r.name} className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{r.title}</div>
-                  <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
+            {ready.map((r) => {
+              // What's been made from it already (D131): posted ones are in the Archive.
+              const posted = r.made.filter((m) => m.archived).length;
+              const going = r.made.length - posted;
+              return (
+                <div key={r.name} className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{r.title}</span>
+                      {posted > 0 && <Chip tone="success" className="h-5 shrink-0 text-[11px]">in the Archive</Chip>}
+                      {going > 0 && <Chip className="h-5 shrink-0 text-[11px]">{going === 1 ? "made, below" : `${going} made, below`}</Chip>}
+                    </div>
+                    <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
+                  </div>
+                  <Button size="sm" variant={r.made.length ? "secondary" : "primary"} disabled={busy} onClick={() => void start(r.name)}>
+                    {r.made.length ? "Make again" : "Use it"}
+                  </Button>
                 </div>
-                <Button size="sm" variant="primary" disabled={busy} onClick={() => void start(r.name)}>Use it</Button>
-              </div>
-            ))}
+              );
+            })}
           </Card>
         )}
       </div>
@@ -239,13 +297,25 @@ function Steps({ status }: { status: CreateVideo["status"] }) {
 
 function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: boolean; wps: number }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(startOpen);
+  // Remembered per video, so a card moving into or out of the Archive stays as it was (D131).
+  const [open, setOpenState] = useState(() => folds.get(`card-${video.id}`) ?? startOpen);
+  const setOpen = (next: boolean | ((o: boolean) => boolean)) =>
+    setOpenState((o) => { const v = typeof next === "function" ? next(o) : next; folds.set(`card-${video.id}`, v); return v; });
   const [confirm, setConfirm] = useState(false);
   // Opens when it becomes the video to work on; never closes on its own (it shut while in use, D127).
   useEffect(() => { if (startOpen) setOpen(true); }, [startOpen]);
   const s = video.script;
   const building = video.status === "voiced" || video.status === "building";
   /** Delete, from any state, so no video can get stuck on the page (D123). */
+  const archive = async (on: boolean) => {
+    try {
+      await createApi.archive(video.id, on);
+      toast.success(on ? "Moved to the Archive" : "Back in Create", { description: on ? "Open the Archive at the bottom of the list to find it." : undefined });
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const remove = async () => {
     try {
       const res = await createApi.remove(video.id) as { after_stop?: boolean };
@@ -264,7 +334,10 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
         <button className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span className="min-w-0">
             <span className="block truncate font-semibold">{s.title || "Untitled"}</span>
-            <span className="text-xs text-muted">{s.beats?.length ?? 0} beats · ~{Math.round(words(s) / wps)}s</span>
+            <span className="text-xs text-muted">
+              {s.beats?.length ?? 0} beats · ~{Math.round(words(s) / wps)}s
+              {video.archived && video.archived_at ? ` · archived ${video.archived_at.slice(0, 10)}` : ""}
+            </span>
           </span>
           <Steps status={video.status} />
         </button>
@@ -275,11 +348,21 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
             <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>Keep</Button>
           </span>
         ) : (
+          <>
+          {!building && (
+            <Tip label={video.archived ? "Back to Create: out of the Archive, into the list above" : "Move to the Archive (posted videos go there by themselves)"}>
+              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={video.archived ? "Back to Create" : "Move to the Archive"}
+                      onClick={() => void archive(!video.archived)}>
+                {video.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
+              </Button>
+            </Tip>
+          )}
           <Tip label={building ? "Stop the build and delete this video" : "Delete this video"}>
             <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Delete this video" onClick={() => setConfirm(true)}>
               <Trash2 className="size-4" />
             </Button>
           </Tip>
+          </>
         )}
       </div>
       {open && <div className="border-t border-line p-4"><Body video={video} wps={wps} /></div>}
@@ -660,6 +743,7 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
               <Button size="sm" variant="secondary" disabled={busy !== null} onClick={onRebuild}>Try again</Button>
             </div>
           )}
+          <PostedLine video={video} />
           <p className="text-sm">It's in your library under <b>{video.script.title}</b>, with the title, description and hashtags ready to copy.</p>
           {/* Who wrote and drew it, and what didn't work, stay visible after the build (D118). */}
           <CheckNote text={video.check_notes} />

@@ -600,3 +600,75 @@ def test_search_takes_turns_across_libraries_and_needs_no_key_for_nasa(monkeypat
     monkeypatch.setattr(stock, "pixabay", lambda q: [{"id": 1}, {"id": 2}])
     monkeypatch.setattr(stock, "coverr", lambda q: (_ for _ in ()).throw(CreateError("Coverr didn't answer")))
     assert [h["id"] for h in stock.search("x")] == [1, "nasa-1", 2]      # one library down: the others still answer
+
+
+def _finished(store, db, vid: int, status: str = "ready") -> int:
+    with db.connect() as con:
+        clip_id = db.upsert_clip(con, {"campaign": "german-professor", "source_id": "create", "clip_id": f"create-{vid}",
+                                       "title": "t", "file": f"german-professor/{vid}.mp4", "caption": "c"})
+        db.update_clip(con, clip_id, status=status)
+    store.update_video(vid, status="built", clip_id=clip_id)
+    return clip_id
+
+
+def test_posted_videos_move_to_the_archive_and_can_come_back(client, monkeypatch):
+    """D131: a posted video (found by the syncs or marked in Clips) goes to the archive once;
+    brought back by hand it stays out; archived by hand works for any finished or unfinished video."""
+    from clipper.create import store
+    from clipper.learn import log as perf
+    from clipper.studio import db
+
+    found = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
+    marked = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
+    draft = client.post("/api/create/videos", json={"text": "Sound goes through bone. It sounds deeper to you."}).json()["id"]
+    _finished(store, db, found)
+    _finished(store, db, marked, status="posted")
+    monkeypatch.setattr(perf, "read", lambda *a: [{"campaign": "german-professor", "source_id": "create",
+                                                   "clip_id": f"create-{found}", "platform": "youtube",
+                                                   "url": "https://youtube.com/shorts/abc?x=1",
+                                                   "posted_at": "2026-10-03 18:20:00", "views_latest": "1234"}])
+    videos = {v["id"]: v for v in client.get("/api/create").json()["videos"]}
+    assert videos[found]["archived"] and videos[found]["archived_at"] == "2026-10-03 18:20"
+    assert videos[found]["posts"][0]["url"] == "https://youtube.com/shorts/abc" and videos[found]["posts"][0]["views"] == 1234
+    assert videos[marked]["archived"] and videos[marked]["posted"] and videos[marked]["posts"] == []
+    assert not videos[draft]["archived"] and not videos[draft]["posted"]
+
+    # Brought back: stays out on every later look, though it's still posted.
+    assert client.post(f"/api/create/videos/{found}/archive", json={"archived": False}).status_code == 200
+    for _ in range(2):
+        v = next(v for v in client.get("/api/create").json()["videos"] if v["id"] == found)
+        assert not v["archived"] and v["posted"]
+    # Archived by hand, a draft too; and back.
+    assert client.post(f"/api/create/videos/{draft}/archive", json={"archived": True}).status_code == 200
+    assert next(v for v in client.get("/api/create").json()["videos"] if v["id"] == draft)["archived"]
+    client.post(f"/api/create/videos/{draft}/archive", json={"archived": False})
+    assert not next(v for v in client.get("/api/create").json()["videos"] if v["id"] == draft)["archived"]
+    # Not while it builds.
+    store.update_video(draft, status="building")
+    assert client.post(f"/api/create/videos/{draft}/archive", json={"archived": True}).status_code == 409
+    assert client.post("/api/create/videos/9999/archive", json={"archived": True}).status_code == 404
+
+    # The ready-made list says what was made from it and what's archived.
+    ready = next(r for r in client.get("/api/create/ready").json() if r["name"] == "voice-on-a-recording")
+    assert {m["id"]: m["archived"] for m in ready["made"]} == {found: False, marked: True}
+
+
+def test_a_build_in_progress_isnt_archived_until_it_finishes(client, monkeypatch):
+    from clipper.create import store
+    from clipper.studio import db
+
+    vid = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
+    _finished(store, db, vid, status="posted")
+    store.update_video(vid, status="building")
+    assert not next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)["archived"]
+    store.update_video(vid, status="built")
+    assert next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)["archived"]
+
+
+def test_videos_made_before_d131_find_their_ready_made_script(client):
+    from clipper.create import store
+
+    made = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
+    store.update_video(made, ready="")            # as an older version saved it
+    ready = next(r for r in client.get("/api/create/ready").json() if r["name"] == "voice-on-a-recording")
+    assert [m["id"] for m in ready["made"]] == [made] and store.video(made)["ready"] == "voice-on-a-recording"

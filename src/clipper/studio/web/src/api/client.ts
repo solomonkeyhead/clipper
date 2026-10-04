@@ -631,6 +631,13 @@ export interface CreateVideo {
   script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;
   created_at: string; stage: string | null; pct: number | null; mine: Mine; cancelling?: boolean;
   shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string; problem?: string;
+  /** The archive (D131): posted videos move there by themselves; any can be moved in or out by hand. */
+  archived?: boolean; archived_at?: string | null; posted?: boolean; posts?: CreatePost[];
+}
+export interface CreatePost { platform: string; url: string; posted_at: string | null; views: number | null }
+export interface ReadyScript {
+  name: string; title: string; about: string; words: number;
+  made: { id: number; archived: boolean; status: CreateVideo["status"] }[];
 }
 export interface CreateView {
   channel: { name: string; handle: string; voice: string; campaign: string; words_per_second: number };
@@ -679,7 +686,8 @@ export const createApi = {
   remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),
   own: (body: { title: string; text: string; description: string; hashtags: string; plan: boolean }) =>
     send<{ id: number }>("POST", "/api/create/videos", body),
-  ready: () => fetch("/api/create/ready").then((r) => r.json() as Promise<{ name: string; title: string; about: string; words: number }[]>),
+  ready: () => fetch("/api/create/ready").then((r) => r.json() as Promise<ReadyScript[]>),
+  archive: (video: number, archived: boolean) => send("POST", `/api/create/videos/${video}/archive`, { archived }),
   useReady: (name: string) => send<{ id: number }>("POST", `/api/create/ready/${encodeURIComponent(name)}`),
   plan: (video: number) => send("POST", `/api/create/videos/${video}/plan`),
   check: (video: number) => send<{ notes: string }>("POST", `/api/create/videos/${video}/check`),

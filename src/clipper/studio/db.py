@@ -244,6 +244,11 @@ MIGRATIONS = [
     ("found_campaigns", "via", "ALTER TABLE found_campaigns ADD COLUMN via TEXT NOT NULL DEFAULT 'email'"),
     # What gets clipped, filed under one of watch.judge.NICHES (D106); "" until sorted.
     ("found_campaigns", "niche", "ALTER TABLE found_campaigns ADD COLUMN niche TEXT NOT NULL DEFAULT ''"),
+    # Create's archive (D131): when a video moved there (posted, or by hand), whether the user
+    # brought it back (then posting doesn't move it again), and the ready-made script it came from.
+    ("create_videos", "archived_at", "ALTER TABLE create_videos ADD COLUMN archived_at TEXT"),
+    ("create_videos", "archive_hold", "ALTER TABLE create_videos ADD COLUMN archive_hold INTEGER NOT NULL DEFAULT 0"),
+    ("create_videos", "ready", "ALTER TABLE create_videos ADD COLUMN ready TEXT NOT NULL DEFAULT ''"),
 ]
 TRASH_DAYS = 30
 

@@ -63,16 +63,19 @@ def _video(row) -> dict:
     return out
 
 
-def add_video(topic_id: int | None, script: dict, check_notes: str = "") -> int:
+def add_video(topic_id: int | None, script: dict, check_notes: str = "", ready: str = "") -> int:
+    """`ready` names the ready-made script it was made from, if any (D131)."""
     with db.connect() as con:
         cur = con.execute(
-            "INSERT INTO create_videos (topic_id, script, check_notes, created_at, updated_at) VALUES (?,?,?,?,?)",
-            (topic_id, json.dumps(script), check_notes, db.now(), db.now()))
+            "INSERT INTO create_videos (topic_id, script, check_notes, ready, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (topic_id, json.dumps(script), check_notes, ready, db.now(), db.now()))
         return int(cur.lastrowid)
 
 
 def update_video(video_id: int, **changes) -> None:
-    allowed = {"status", "script", "check_notes", "voice", "timings", "clip_id", "error"}
+    allowed = {"status", "script", "check_notes", "voice", "timings", "clip_id", "error",
+               "archived_at", "archive_hold", "ready"}
     sets = {k: (json.dumps(v) if k in ("script", "timings") and not isinstance(v, str) else v)
             for k, v in changes.items() if k in allowed}
     if "status" in sets and sets["status"] not in VIDEO_STATUSES:
