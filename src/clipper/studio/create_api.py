@@ -817,6 +817,13 @@ def routes(app: FastAPI, publish) -> None:
     def create_ready() -> list[dict]:
         """Scripts that come with Clipper, written and drawn already: nothing to wait for."""
         found = _ready()
+        # An idea that is a ready-made script's question, reworded, isn't offered twice (D133).
+        from difflib import SequenceMatcher
+
+        titles = [r["script"].title.lower() for r in found.values()]
+        for t in store.topics():
+            if any(SequenceMatcher(None, t["question"].lower(), x).ratio() >= 0.75 for x in titles):
+                store.set_topic(t["id"], "used")
         made: dict[str, list[dict]] = {}
         for v in store.videos():
             name = v.get("ready") or ""
@@ -874,10 +881,17 @@ def routes(app: FastAPI, publish) -> None:
         return {"stopping": False}
 
     @app.delete("/api/create/videos/{video_id}")
-    def create_delete(video_id: int) -> dict:
-        """Remove a video from Create (its files to the Recycle Bin; a finished clip stays in Clips),
-        whatever state it is in: nothing can leave a video stuck on the page (D123)."""
+    def create_delete(video_id: int, clip: bool = False) -> dict:
+        """Remove a video from Create (its files to the Recycle Bin; a finished clip stays in Clips
+        unless `clip` asks for it to go to Clips' trash too, D133), whatever state it is in: nothing
+        can leave a video stuck on the page (D123)."""
+        from . import db
+
         row = video_or_404(video_id)
+        if clip and row.get("clip_id"):
+            with db.connect() as con:
+                db.trash(con, row["clip_id"], True)
+            publish("clips.changed", {"id": row["clip_id"]})
         if video_id in _running:
             # Mid-build: stop it, and delete once it has let go of its files (D123).
             cancelled.add(video_id)

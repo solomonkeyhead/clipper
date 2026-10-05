@@ -141,14 +141,14 @@ short), 5 to 14 words. For every beat plan ONE picture:
 For each beat also give emphasis: the single most important word in it, copied exactly.
 
 Also write: title (the question, at most 60 characters), description (the script's idea in
-3-5 short lines, in the same voice, ending on its punchline), hashtags (3: #physics,
+3-5 short lines, in the same voice, ending on its punchline), hashtags (3: #{subject},
 #science and one specific)."""
 
 
 def _system(channel: channels.Channel) -> str:
     rules = "\n".join(f"- {r}" for r in channel.rules)
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
-            f"{channel.name} ({channel.niche}). Rules:\n{rules}\n\n{VISUALS}\n\n"
+            f"{channel.name} ({channel.niche}). Rules:\n{rules}\n\n{channels.fill(VISUALS, channel)}\n\n"
             "The examples are the channel's own scripts: match their voice, rhythm and humour, "
             "never reuse their jokes or lines.")
 
@@ -157,7 +157,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") 
     """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes."""
     channel = channels.load()
     user = (f"The channel's best scripts:\n\n{channels.examples_block(channel)}\n\n"
-            f"Write a new script answering: {question}\n" + (f"(The physics: {angle})\n" if angle else "")
+            f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
             + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
     answer = ask(_system(channel), user, Script, temperature=0.85)
@@ -324,15 +324,15 @@ class Review(BaseModel):
     problems: list[str] = Field(default_factory=list)
 
 
-CHECK = """You are a physics professor checking a 45-second educational script for a general
+CHECK = """You are {expert} checking a 45-second educational script for a general
 audience. Simplifying is fine; stating something false is not. Flag only real errors: wrong
 mechanisms, wrong formulas, wrong numbers, misleading claims, or a myth stated as fact. Jokes
 and analogies are fine unless they teach something false. Check the diagrams too: a curve,
-arrow, bar or equation that disagrees with its sentence or with the physics is an error
+arrow, bar or equation that disagrees with its sentence or with the {subject} is an error
 (graph shape says how the y axis changes as the x axis grows; wave values are frequencies and
 amounts amplitudes; particles values are speeds and amounts how many; ray values are refractive
-indices; forces values are relative sizes); so is an "equation" that is not a real physics
-formula, or a "number" that is not the true figure. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct physics."""
+indices; forces values are relative sizes); so is an "equation" that is not a real {subject}
+formula, or a "number" that is not the true figure. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct {subject}."""
 
 
 def _diagrams(script: Script) -> str:
@@ -357,7 +357,7 @@ def _diagrams(script: Script) -> str:
 def check(script: Script) -> Review:
     diagrams = _diagrams(script)
     user = f"Title: {script.title}\nScript:\n{script.text}" + (f"\n\nDiagrams shown:\n{diagrams}" if diagrams else "")
-    answer = ask(CHECK, user, Review, temperature=0.0)
+    answer = ask(channels.fill(CHECK), user, Review, temperature=0.0)
     try:
         return Review.model_validate(json.loads(answer))
     except (ValueError, TypeError):

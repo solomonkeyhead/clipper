@@ -2419,3 +2419,22 @@ The first session on the user's own machine went through the cloud session's Cre
   shots, both started at the same second, so the same footage played twice. The second now starts
   where the first stopped (`_stock_shot(skip=)`); the shot cache key includes the skip only when it
   isn't zero, so shots made before are still reused.
+
+## D133 - Open concerns from the local review
+
+- **Removing a video asks about its clip.** Delete on a built video offers "Delete and its clip"
+  (to Clips' trash, kept 30 days) or "Keep the clip" (`DELETE /api/create/videos/{id}?clip=true`).
+  Marc also had the 8 old test-build clips (73-80) trashed; video 12's clip stays.
+- **Scratch is deleted, not recycled.** `work/` and unused cached shots are removed outright at
+  build time (Marc's call: they are rebuilt, and the Recycle Bin filled with 500 MB of them). A
+  replaced final video still goes to the Recycle Bin. Marc plans cloud storage for users later.
+- **NASA only for space searches.** It cost about 5 requests on every search; `stock._SPACE`
+  decides by the search words. Coverr's `is_ai_generated` clips are skipped.
+- **A reworded copy of a ready-made script's question isn't offered as an idea** (similarity
+  >= 0.75 marks the topic used when the ready-made list is read).
+- **The channel names its subject.** `Channel.subject`, `expert`, `areas` (defaults: physics, a
+  physics professor, the physics areas) fill `{subject}`/`{expert}`/`{areas}` in the checker, topic
+  planner, footage searches, clip placer, sketcher and script writer prompts (`channel.fill`). The
+  German Professor's prompts read exactly as before; another channel gets its own field checked
+  (a chemistry channel, a history channel). Still physics-flavoured: the diagram templates, the
+  "Check physics" button labels. A channel settings page is the next step.

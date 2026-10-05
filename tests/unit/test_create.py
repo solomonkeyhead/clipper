@@ -199,11 +199,11 @@ class TestPexels:
             monkeypatch.delenv(name, raising=False)
         monkeypatch.setattr(stock, "nasa", lambda q: (_ for _ in ()).throw(CreateError("NASA's library didn't answer")))
         with pytest.raises(CreateError, match="NASA"):          # nothing answered: says which
-            stock.search("ear")
+            stock.search("rocket launch")
         monkeypatch.setattr(stock, "nasa", lambda q: [])
         monkeypatch.setenv("PEXELS_API_KEY", "p")
         monkeypatch.setattr(stock, "pexels", lambda q: [{"id": "pexels-1"}])
-        assert stock.search("ear") == [{"id": "pexels-1"}]
+        assert stock.search("rocket launch") == [{"id": "pexels-1"}]
 
 
 def test_claude_goes_first_only_with_a_key(monkeypatch):

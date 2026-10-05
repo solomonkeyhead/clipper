@@ -599,7 +599,8 @@ def test_search_takes_turns_across_libraries_and_needs_no_key_for_nasa(monkeypat
     monkeypatch.setenv("COVERR_API_KEY", "c")
     monkeypatch.setattr(stock, "pixabay", lambda q: [{"id": 1}, {"id": 2}])
     monkeypatch.setattr(stock, "coverr", lambda q: (_ for _ in ()).throw(CreateError("Coverr didn't answer")))
-    assert [h["id"] for h in stock.search("x")] == [1, "nasa-1", 2]      # one library down: the others still answer
+    assert [h["id"] for h in stock.search("rocket x")] == [1, "nasa-1", 2]      # one library down: the others still answer
+    assert [h["id"] for h in stock.search("boiling pot")] == [1, 2]     # NASA only for space-sounding searches (D133)
 
 
 def _finished(store, db, vid: int, status: str = "ready") -> int:

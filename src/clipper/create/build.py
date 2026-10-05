@@ -483,7 +483,7 @@ def build(video_id: int, progress=None) -> int:
         store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     work = folder(video_id) / "work"
     if work.exists():
-        recycle(work)  # a previous build's working files, to the Recycle Bin like all Clipper's
+        shutil.rmtree(work, ignore_errors=True)  # scratch, deleted outright: it's rebuilt each time (D133)
     work.mkdir(parents=True, exist_ok=True)
     parts = shots(script, timings, work, progress, own=own, notes=notes,
                   default_fill=userclips.load(video_id)["fill"])
@@ -525,10 +525,10 @@ def build(video_id: int, progress=None) -> int:
     store.update_video(video_id, status="built", clip_id=clip_id, error="",
                        script={**script.model_dump(), "take": row["script"].get("take", 1)},
                        check_notes=userclips.with_notes(store.video(video_id)["check_notes"], notes))
-    recycle(work)
+    shutil.rmtree(work, ignore_errors=True)
     for old in (shot_cache.glob("*.mp4") if shot_cache.is_dir() else []):
         if old not in used_shots:  # shots of pictures no longer in the video
-            recycle(old)
+            old.unlink(missing_ok=True)
     shot_cache = None
     log.info("create: video %s built as clip %s (%s)", video_id, clip_id, rel)
     return clip_id

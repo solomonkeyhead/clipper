@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from ..ingest.probe import probe
 from ..render.ffmpeg import FFmpegError, ffmpeg_path
 from ..utils.logging import get_logger
+from . import channel as channels
 from .ai import CreateError, ask
 from .script import Script
 from .voice import folder
@@ -301,7 +302,7 @@ class _Plan(BaseModel):
     note: str = ""
 
 
-PLACE = """You are the editor of a 45-second narrated physics Short for phones. The user filmed or
+PLACE = """You are the editor of a 45-second narrated {subject} Short for phones. The user filmed or
 picked their own clips and wants them on the sentences they fit. You see one filmstrip image per
 clip (four frames, left to right, in time order) and the sentences with how long each is spoken.
 
@@ -313,7 +314,7 @@ the second of the clip to start from. Rules:
   belongs to. The first sentence is the hook: put the clip most striking to watch there.
 - Prefer a clip about as long as the sentences it covers; a clip shorter than its sentence is
   filled out by the app, so it is acceptable but not ideal.
-- Sentences marked [diagram] carry the physics explanation: leave them alone unless a clip
+- Sentences marked [diagram] carry the {subject} explanation: leave them alone unless a clip
   clearly shows the same thing.
 - Use each clip's id exactly as given. Sentences are numbered from 1. Start is in seconds, inside the clip."""
 
@@ -390,7 +391,7 @@ def place(video_id: int, script: Script, seconds: list[float], *, use_ai: bool =
                     if strict else
                     "The user chose every one of these clips and wants all of them used: place each where it "
                     "fits best, even loosely, and leave the other sentences without one.")
-            answer = ask(PLACE, f"Video title: {script.title}\n\nSentences:\n{sentences}\n\nClips:\n{listing}\n\n{rule}",
+            answer = ask(channels.fill(PLACE), f"Video title: {script.title}\n\nSentences:\n{sentences}\n\nClips:\n{listing}\n\n{rule}",
                          _Plan, temperature=0.0, media=strips)
             layout = normalize(_Plan.model_validate(json.loads(answer)), count, lengths)
             if layout:

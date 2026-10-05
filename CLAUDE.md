@@ -34,7 +34,8 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 ## Standing rules
 - Never send Marc's email address anywhere.
 - Secrets only in `.env` (git-ignored), never in the repo or in logs.
-- Deletions go to the Recycle Bin (`utils/recycle.py`), never a hard delete.
+- Deletions go to the Recycle Bin (`utils/recycle.py`), never a hard delete. Exception (Marc, D133):
+  Create's build scratch (`work/`, unused cached shots) is deleted outright; it is rebuilt every time.
 - No scraping of Whop, Vyro or TikTok Studio; official APIs only.
 - Don't clone the ElevenLabs Marshal voice; Marc makes the voiceover by hand.
 - Ask before anything that spends Marc's money or Claude usage (test runs through

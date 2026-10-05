@@ -16,19 +16,18 @@ from . import channel as channels
 from . import store
 from .ai import CreateError, ask
 
-SYSTEM = """You plan topics for a short-form video channel that explains everyday physics.
+SYSTEM = """You plan topics for a short-form video channel that explains everyday {subject}.
 Each idea is ONE question a curious stranger would stop scrolling for, about something
 they have personally felt, heard or seen. Most (about 7 in 10) should be about the
 viewer's own body or senses in an everyday moment: driving, flying, cooking, showering,
 sports, weather, sleep, phones, music, the gym. The rest: striking everyday objects or
-events with a surprising mechanism. Spread them across mechanics, heat, sound, light,
-electricity, fluids and pressure, materials. Concrete and specific ("Why does your
+events with a surprising mechanism. Spread them across {areas}. Concrete and specific ("Why does your
 voice sound weird on a recording?"), never abstract ("What is entropy?"), never a
 comparison of specs ("torque vs horsepower"). Each must have a real, explainable
-physics mechanism. Do not repeat or rephrase any question already listed.
+{subject} mechanism. Do not repeat or rephrase any question already listed.
 
 For each: question (at most 14 words, phrased to the viewer: "Why do you..." / "Why does
-your..."), angle (the physics behind it in a few words), felt (true if it's about the
+your..."), angle (the {subject} behind it in a few words), felt (true if it's about the
 viewer's own body or senses)."""
 
 
@@ -45,7 +44,7 @@ def generate(count: int = 30) -> int:
     user = (f"Channel: {channel.name} ({channel.niche}).\n"
             f"Already made or planned, don't repeat:\n" + "\n".join(f"- {q}" for q in done) +
             f"\n\nGive {count} new ideas.")
-    answer = ask(SYSTEM, user, list[_Idea], temperature=0.9)
+    answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9)
     try:
         ideas = [_Idea.model_validate(i).model_dump() for i in json.loads(answer)]
     except (ValueError, TypeError) as exc:

@@ -95,7 +95,10 @@ a full build of the ready-made script, the footage picker, the hover preview, Ne
 Video 12 is the earlier build of that script, already in the Archive (never posted: it was archived at
 20:14 on Oct 3, the minute the archive code arrived; ask Marc whether he marked it posted).
 
-**Open concerns, waiting for Marc's call:**
+**Resolved in D133 (Marc's calls, same day): 1, 4, 5, 6, 8.** 2 and 7 were explained to Marc and await his answer;
+3: Pexels isn't giving out keys right now. Marc's own list of Create issues: asked for, see below.
+
+**Open concerns, as first written:**
 1. 9 Create clips sit in Clips as "ready" (8 are old test builds of two questions). Propose: Recycle
    Bin the 8, keep video 12's, and ask "also remove the clip?" when a video is removed from Create.
 2. An automatic archive never undoes itself when the post goes away.

@@ -20,6 +20,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from ..utils.logging import get_logger
+from . import channel as channels
 from .ai import CreateError, ask
 
 log = get_logger(__name__)
@@ -43,7 +44,7 @@ class Sketch(BaseModel):
 
 GRID_W, GRID_H = 1000, 600
 
-DRAW = """You draw quick, clear chalkboard sketches for a 45-second physics video on a phone, in
+DRAW = """You draw quick, clear chalkboard sketches for a 45-second {subject} video on a phone, in
 the style of a good lecturer: the real thing, simply drawn, a few labels, motion where things
 move. One sketch shows what its sentence says, so a viewer gets it in two seconds. When it
 stays up for several sentences, it builds as they go: the object first, then each part on the
@@ -84,7 +85,7 @@ REVIEW = """You see your chalk sketch rendered as it will appear on the phone (t
 only). Judge it as a viewer seeing it for two seconds, against what it must show. Problems
 to fix: words overlapping lines or other words, or cut off; a shape nobody would recognise
 (fix the outline points); things crowded into one corner or too small; empty or cluttered;
-anything in the bottom-right corner (x > 740 and y > 400 on the grid); physics the picture
+anything in the bottom-right corner (x > 740 and y > 400 on the grid); {subject} the picture
 gets wrong. If it already works, answer ok = true and return it unchanged. Otherwise ok =
 false, list the problems, and return the whole corrected sketch."""
 
@@ -162,13 +163,13 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
     user = (f"The video's script, for context:\n{script_text}\n\n" if script_text else "") + \
         f"Sentence: {sentence}\nWhat to draw: {idea}\n" + (f"Title over it: {title}\n" if title else "")
     try:
-        sketch = Sketch.model_validate(json.loads(ask(DRAW, user, Sketch, temperature=0.4)))
+        sketch = Sketch.model_validate(json.loads(ask(channels.fill(DRAW), user, Sketch, temperature=0.4)))
     except (ValueError, TypeError) as exc:
         raise CreateError("the sketch came back unreadable") from exc
     sketch = fit(sketch, bool(title or sketch.title))
     for _ in range(rounds):
         try:
-            answer = ask(DRAW + "\n\n" + REVIEW, user + "\nYour sketch:\n" + sketch.model_dump_json(),
+            answer = ask(channels.fill(DRAW + "\n\n" + REVIEW), user + "\nYour sketch:\n" + sketch.model_dump_json(),
                          _Review, temperature=0.0, media=[(_png(sketch, title), "image/png")])
             review = _Review.model_validate(json.loads(answer))
         except (CreateError, ValueError, TypeError) as exc:  # no one to look: keep what we have

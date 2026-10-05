@@ -50,6 +50,12 @@ class Channel(BaseModel):
     niche: str = "everyday physics: why the physical world does what it does to you"
     persona: str = PROFESSOR_PERSONA
     rules: list[str] = Field(default_factory=lambda: list(PROFESSOR_RULES))
+    # What the channel teaches, so the checker, topic planner, footage and sketch prompts speak its
+    # field, not just physics (D133). The defaults are the German Professor's: its prompts read
+    # exactly as before.
+    subject: str = "physics"
+    expert: str = "a physics professor"
+    areas: str = "mechanics, heat, sound, light, electricity, fluids and pressure, materials"
     voice: str = "ElevenLabs, voice \"Marshal - friendly, funny professor\""
     words_per_second: float = 2.3
     # Real scripts of the channel's own, imitated for voice and rhythm, never copied.
@@ -58,6 +64,12 @@ class Channel(BaseModel):
     watermark: str = ""
     # The campaign the finished videos are filed under (studio library).
     campaign: str = "german-professor"
+
+
+def fill(text: str, channel: Channel | None = None) -> str:
+    """A prompt with the channel's {subject}, {expert} and {areas} filled in (D133)."""
+    ch = channel or load()
+    return text.replace("{subject}", ch.subject).replace("{expert}", ch.expert).replace("{areas}", ch.areas)
 
 
 def path() -> Path:

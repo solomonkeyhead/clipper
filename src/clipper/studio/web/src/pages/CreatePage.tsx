@@ -316,11 +316,11 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
       toast.error((e as Error).message);
     }
   };
-  const remove = async () => {
+  const remove = async (withClip = false) => {
     try {
-      const res = await createApi.remove(video.id) as { after_stop?: boolean };
+      const res = await createApi.remove(video.id, withClip) as { after_stop?: boolean };
       toast.success(res.after_stop ? "Stopping the build, then deleting it" : "Deleted",
-                    { description: "Its files are in the Recycle Bin; a finished video stays in Clips." });
+                    { description: withClip ? "Its files are in the Recycle Bin and its clip is in Clips' trash." : "Its files are in the Recycle Bin; a finished video stays in Clips." });
       await qc.invalidateQueries({ queryKey: ["create"] });
     } catch (e) {
       toast.error((e as Error).message);
@@ -344,7 +344,14 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
         {confirm ? (
           <span className="flex shrink-0 items-center gap-1 text-xs">
             <span className="text-muted">{building ? "Stop and delete?" : "Delete?"}</span>
-            <Button size="sm" variant="danger" onClick={() => void remove()}>Delete</Button>
+            {video.clip_id ? (
+              <>
+                <Button size="sm" variant="danger" onClick={() => void remove(true)}>Delete and its clip</Button>
+                <Button size="sm" variant="secondary" onClick={() => void remove(false)}>Keep the clip</Button>
+              </>
+            ) : (
+              <Button size="sm" variant="danger" onClick={() => void remove()}>Delete</Button>
+            )}
             <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>Keep</Button>
           </span>
         ) : (

@@ -683,7 +683,7 @@ export const createApi = {
   cancel: (video: number) => send<{ stopping: boolean }>("POST", `/api/create/videos/${video}/cancel`),
   build: (video: number) => send("POST", `/api/create/videos/${video}/build`),
   pictures: (video: number) => send("POST", `/api/create/videos/${video}/pictures`),
-  remove: (video: number) => send("DELETE", `/api/create/videos/${video}`),
+  remove: (video: number, clip = false) => send("DELETE", `/api/create/videos/${video}${clip ? "?clip=true" : ""}`),
   own: (body: { title: string; text: string; description: string; hashtags: string; plan: boolean }) =>
     send<{ id: number }>("POST", "/api/create/videos", body),
   ready: () => fetch("/api/create/ready").then((r) => r.json() as Promise<ReadyScript[]>),

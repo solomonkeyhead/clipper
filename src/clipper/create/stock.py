@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 from ..paths import data_root, ensure
 from ..utils.logging import get_logger
+from . import channel as channels
 from .ai import CreateError, ask
 
 log = get_logger(__name__)
@@ -72,12 +73,19 @@ def _coverr_key() -> str:
     return os.environ.get("COVERR_API_KEY", "").strip()
 
 
+_SPACE = re.compile(r"\b(space|rocket|launch|orbit\w*|astronaut|satellite|moon|lunar|mars|planet\w*|sun|solar|"
+                    r"star|stars|galaxy|nebula|comet|asteroid|eclipse|aurora|earth from|iss|nasa|telescope|"
+                    r"zero gravity|weightless\w*|shuttle|apollo|black hole|cosmic|universe)\b", re.I)
+
+
 def search(query: str) -> list[dict]:
     """Every library's videos for `query`, taking turns, each most relevant first: Pexels leads,
     as its people shots were the better ones; NASA's (no key needed: space, rockets, Earth, light)
     comes last, as it fits only some sentences (D130)."""
     lists, errors = [], []
-    for source, key in ((pexels, _pexels_key()), (pixabay, _key()), (coverr, _coverr_key()), (nasa, "free")):
+    # NASA costs about 5 requests a search, so only for searches that sound like space (D133).
+    space = "free" if _SPACE.search(query) else ""
+    for source, key in ((pexels, _pexels_key()), (pixabay, _key()), (coverr, _coverr_key()), (nasa, space)):
         if not key:
             continue
         try:
@@ -174,7 +182,7 @@ def coverr(query: str) -> list[dict]:
     for v in found if isinstance(found, list) else []:
         url = (v.get("urls") or {}).get("mp4") or (v.get("urls") or {}).get("mp4_download")
         tags = " ".join([v.get("title") or "", *(t if isinstance(t, str) else t.get("name", "") for t in v.get("tags") or [])])
-        if not url or any(c in tags.lower() for c in CHEAP):
+        if not url or v.get("is_ai_generated") or any(c in tags.lower() for c in CHEAP):  # D133: no AI footage
             continue
         preview = (v.get("urls") or {}).get("mp4_preview") or url
         hits.append({"id": f"coverr-{v.get('id')}", "duration": float(v.get("duration") or 0), "tags": tags.strip(),
@@ -386,7 +394,7 @@ def choose(queries: list[str], seconds: float, used: set, sentence: str = "", co
 
 # ---------- better searches, and every candidate scored, for choosing footage (D129) ----------
 
-SEARCHES = """You write stock-footage searches for one sentence of a short narrated physics video for
+SEARCHES = """You write stock-footage searches for one sentence of a short narrated {subject} video for
 phones. The footage libraries are Pexels and Pixabay: real filmed clips, searched by plain words.
 Write searches for things those libraries really film, that a viewer would connect with what the
 sentence says AT THAT POINT in the script (you get the whole script; a "wall" in a video about
@@ -409,7 +417,7 @@ def plan_searches(sentence: str, context: str = "", wish: str = "", tried: list[
             + (f"The user wants to see: {wish}\n" if wish else "")
             + (f"Already tried: {', '.join(tried)}\n" if tried else ""))
     try:
-        answer = ask(SEARCHES, user, _Searches, temperature=0.3, quick=True, footage=True)
+        answer = ask(channels.fill(SEARCHES), user, _Searches, temperature=0.3, quick=True, footage=True)
         found = _Searches.model_validate(json.loads(answer)).searches
     except (CreateError, ValueError, TypeError) as exc:
         log.info("create: no searches planned (%s)", exc)
