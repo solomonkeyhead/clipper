@@ -11,7 +11,7 @@ from clipper.llm.prompts import PROMPT_A, with_focus
 from clipper.models import Word
 from clipper.runner import campaign_config, manual_plan, parse_range
 
-CHAD_POWERS = Path(__file__).parents[2] / "campaigns" / "chad-powers-s2.yaml"
+CHAD_POWERS = Path(__file__).parents[1] / "fixtures" / "chad-powers-s2.yaml"
 
 
 class TestParseRange:

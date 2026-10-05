@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Film, Loader2, Play, RefreshCw, Search, Shapes, Undo2, Wand2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { createApi, type CreateVideo, type CreateVisual, type FootageOffer } from "@/api/client";
+import { createApi, useCreate, type CreateVideo, type CreateVisual, type FootageOffer } from "@/api/client";
 import { Button, Chip, Tip } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -152,6 +152,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
   video: CreateVideo; seek: (t: number) => void; onRebuild: () => void; rebuilding: boolean;
 }) {
   const qc = useQueryClient();
+  const drawings = useCreate().data?.channel.drawings !== false;   // a footage-only channel draws nothing (D146)
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [picking, setPicking] = useState<number | null>(null);
@@ -240,11 +241,11 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                       {busy === `${first}-footage` ? <Loader2 className="size-3.5 animate-spin" /> : <Film className="size-3.5" />} New footage
                     </Button>
                   </Tip>
-                  <Tip label="A new chalk drawing for this part. Your words, if any, say what to draw.">
+                  {drawings && <Tip label="A new chalk drawing for this part. Your words, if any, say what to draw.">
                     <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "drawing")}>
                       {busy === `${first}-drawing` ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} New drawing
                     </Button>
-                  </Tip>
+                  </Tip>}
                   {v.previous && (
                     <Tip label="Keep what this part had">
                       <Button size="sm" variant="ghost" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "undo")}>

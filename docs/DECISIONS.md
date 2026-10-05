@@ -2600,3 +2600,29 @@ caption in step with the script); `stats.adopt_uploads` files the Shorts already
 account (matched by its handle against the channel profile) as clips without a video file, "Already on
 your channel", so older videos count too. The channel's posts no longer count as "links to submit".
 Result for Marc: 9 Shorts, 5,111 views, the newest one found and archived.
+
+## D145: Nothing of Marc's ships in the code
+A copy of Clipper carried the owner: his campaigns (campaigns/*.yaml, brand briefs included), his
+account in the alert profile, his rejected caption fixes, a disclosure date, German Professor as the
+only Create channel. Now:
+- **Campaigns** live in `<data>/campaigns` (`paths.campaigns_dir`, moved there once from the repo's
+  `campaigns/`, history included). The repo keeps `campaigns/example.yaml`; `.gitignore` keeps the rest out.
+  The test fixture that used his Chad Powers brief is `tests/fixtures/chad-powers-s2.yaml`.
+- **Settings** of the owner go in `<data>/config.yaml`, laid over `config/default.yaml` key by key
+  (`Config.load`, `_merged`); the shipped file is generic. `tiktok_disclosed_since` defaults empty.
+  Marc's three rejected fixes, his alert profile and his date moved into his own file and database.
+- **First run** asks once what you use Clipper for (campaigns, original videos, finding campaigns); parts
+  you leave out are hidden (`use_campaigns`, `use_create`, `use_finder`, `onboarded`; Settings changes
+  them). The getting-started steps follow.
+
+## D146: Create for any channel
+`create/packs.py`: niche packs (physics, explainer, history and true stories, footage only) hold the
+persona, rules, subject, expert, topic areas, which chalkboard diagrams make sense, or none. The writer's
+picture instructions are composed per channel (`script.visuals`); for the physics pack the composed
+prompts are byte-identical to the old ones (tests/fixtures/*_physics.txt). "Physics check" is "Fact
+check" on other channels. Channels are files (`data/create/channels/<slug>.json`), any number, with
+their own ideas and videos (a `channel` column; `channel.use` / `set_current` pick one per request or
+thread); Marc's channel.json became one such file with his videos and ideas attached. Ready-made scripts
+are offered to physics channels only. A first-time user makes a channel before anything else.
+The voice: upload any audio (as before), record in the page (webm), or none (the words timed at the
+channel's pace over a silent track).

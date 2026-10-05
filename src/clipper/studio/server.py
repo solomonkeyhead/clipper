@@ -102,7 +102,9 @@ FAST_SYNC_SECONDS = 120
 # --------------------------------------------------------------------------
 
 def campaigns_dir() -> Path:
-    return REPO_ROOT / "campaigns"
+    from ..paths import campaigns_dir as user_campaigns
+
+    return user_campaigns()
 
 
 #: Each campaign file as last parsed, by its modification time (they're read on

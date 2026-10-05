@@ -207,7 +207,14 @@ DEFAULT_SETTINGS = {
     # Claude judges the moments and picks the opening lines when it's set up (D139).
     "claude_judge": "1",
     # TikTok's "Disclose commercial content -> Branded content" switch, on from this date (D105).
-    "tiktok_disclosed_since": "2026-10-02 00:00",
+    "tiktok_disclosed_since": "",
+    # How the user uses Clipper, asked once on the dashboard (D145): which parts show.
+    "onboarded": "0",
+    "use_campaigns": "1",
+    "use_create": "1",
+    "use_finder": "1",
+    # The channel Create is working on (create/channel.py); "" = the first.
+    "create_channel": "",
     # Which plan's features are on (studio/plans.py). A local install is the
     # owner's, so everything; a hosted version would set this per account.
     "plan": "pro",
@@ -251,6 +258,9 @@ MIGRATIONS = [
     ("create_videos", "archived_at", "ALTER TABLE create_videos ADD COLUMN archived_at TEXT"),
     ("create_videos", "archive_hold", "ALTER TABLE create_videos ADD COLUMN archive_hold INTEGER NOT NULL DEFAULT 0"),
     ("create_videos", "ready", "ALTER TABLE create_videos ADD COLUMN ready TEXT NOT NULL DEFAULT ''"),
+    # Which channel (create/channel.py) a video and an idea belong to (D146); '' = made before channels.
+    ("create_videos", "channel", "ALTER TABLE create_videos ADD COLUMN channel TEXT NOT NULL DEFAULT ''"),
+    ("create_topics", "channel", "ALTER TABLE create_topics ADD COLUMN channel TEXT NOT NULL DEFAULT ''"),
 ]
 TRASH_DAYS = 30
 

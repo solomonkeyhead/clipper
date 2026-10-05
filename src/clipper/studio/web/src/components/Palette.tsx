@@ -6,7 +6,7 @@ import {
   Settings, Sun, UserCircle2, Wand2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCampaigns, useClips, useSyncNow } from "@/api/client";
+import { useCampaigns, useClips, useSyncNow, useUses } from "@/api/client";
 import { useUI } from "@/lib/store";
 import { Kbd } from "./ui";
 
@@ -67,6 +67,7 @@ export function CommandPalette() {
   const sync = useSyncNow();
   const { data: campaigns = [] } = useCampaigns();
   const { data: clips = [] } = useClips();
+  const uses = useUses();
 
   const run = (fn: () => void) => () => { setOpen(false); fn(); };
   const go = (to: string, search?: Record<string, string>) => run(() => void navigate({ to, search }));
@@ -89,7 +90,7 @@ export function CommandPalette() {
         <Command.Empty className="px-4 py-8 text-center text-sm text-muted">No results.</Command.Empty>
         <Group heading="Go to">
           <Item icon={<LayoutDashboard />} label="Dashboard" keys="G D" onSelect={go("/")} />
-          <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />
+          {uses.create && <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />}
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
@@ -103,7 +104,7 @@ export function CommandPalette() {
         </Group>
         <Group heading="Actions">
           <Item icon={<Sparkles />} label="Ask Clipper a question" keys="I" onSelect={run(() => setAsk(true))} />
-          <Item icon={<Search />} label="Find campaigns" onSelect={go("/campaigns", { find: "1" })} />
+          {uses.finder && <Item icon={<Search />} label="Find campaigns" onSelect={go("/campaigns", { find: "1" })} />}
           <Item icon={<RefreshCw />} label="Sync stats now" onSelect={run(() => sync.mutate())} />
           <Item icon={theme === "light" ? <Moon /> : <Sun />} label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
                 onSelect={run(() => setTheme(theme === "light" ? "dark" : "light"))} />

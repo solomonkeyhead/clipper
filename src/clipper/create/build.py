@@ -508,7 +508,7 @@ def _campaign(channel: channels.Channel) -> None:
         return
     path.write_text(
         f"# The user's own channel ({channel.handle}): original videos made in Create (D108).\n"
-        f"name: {channel.campaign}\ntitle: {channel.name}\n"
+        f"name: {channel.campaign}\ntitle: {channel.name}\nown_channel: true\n"
         "source_authorization: Original videos made by the channel owner for their own account.\n"
         "platform_targets: [youtube_shorts, tiktok, instagram_reels]\n"
         "duration:\n  min_seconds: 15\n  max_seconds: 60\n", encoding="utf-8")

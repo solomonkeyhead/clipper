@@ -358,11 +358,11 @@ def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[
     from ..learn import log as perf
     from ..llm.cache import LLMCache
     from ..models import SourceInfo, Transcript
-    from ..paths import REPO_ROOT, work_dir
+    from ..paths import campaigns_dir, work_dir
     from ..runner import with_range_transcript
     from .stats import posts_by_clip
 
-    campaign = CampaignConfig.load(REPO_ROOT / "campaigns" / f"{campaign_name}.yaml")
+    campaign = CampaignConfig.load(campaigns_dir() / f"{campaign_name}.yaml")
     if not campaign.long_description:
         raise ValueError(f"{campaign_name}: set long_description: true in its yaml first")
     config = Config.load()

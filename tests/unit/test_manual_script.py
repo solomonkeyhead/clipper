@@ -11,6 +11,14 @@ from clipper.create.ai import CreateError
 from clipper.create.script import Beat, Script, Visual
 
 
+@pytest.fixture(autouse=True)
+def _physics_channel(data_root):
+    """These tests are about the physics channel's ready-made script and archive (D146)."""
+    from clipper.create import channel
+
+    channel.save(channel.make("physics", "German Professor", "@German.Professor"))
+
+
 def test_sentences_are_split_the_way_a_speaker_would():
     text = ("Why does your voice sound odd? It travels through bone, e.g. your skull. Dr. Lee measured 3.5 times "
             "faster speed in bone! So it sounds deeper to you.")

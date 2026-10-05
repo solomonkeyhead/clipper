@@ -3,7 +3,7 @@ import { AlertTriangle, Archive, ArchiveRestore, BarChart3, CalendarClock, Exter
 import { toast } from "sonner";
 import { useState } from "react";
 import {
-  useAddPayout, useCampaign, useCampaigns, useDeletePayout, useFound, usePayouts, useSetCampaign, type Brief, type Campaign,
+  useAddPayout, useCampaign, useCampaigns, useDeletePayout, useFound, usePayouts, useSetCampaign, useUses, type Brief, type Campaign,
 } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
 import { PlatformIcon } from "@/components/PlatformIcon";
@@ -73,7 +73,8 @@ export function CampaignsPage() {
   const { data: found = [] } = useFound();
   const search = useSearch({ from: "/campaigns" });
   const navigate = useNavigate({ from: "/campaigns" });
-  const finding = search.find === "1";
+  const uses = useUses();
+  const finding = search.find === "1" && uses.finder;
   const [showArchived, setShowArchived] = useState(false);
   // The user's own channel (German Professor) isn't a paid campaign: listed on its own (D140).
   const list = (data ?? []).filter((c) => c.archived === showArchived && !c.own_channel);
@@ -89,11 +90,13 @@ export function CampaignsPage() {
               {showArchived ? "Active campaigns" : `Archived (${archivedCount})`}
             </Button>
           )}
-          <Button variant={finding ? "secondary" : "ghost"}
-                  onClick={() => void navigate({ search: { find: finding ? undefined : "1" } })}>
-            <Search className="size-4" /> Find campaigns
-            {found.length > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent">{found.length}</span>}
-          </Button>
+          {uses.finder && (
+            <Button variant={finding ? "secondary" : "ghost"}
+                    onClick={() => void navigate({ search: { find: finding ? undefined : "1" } })}>
+              <Search className="size-4" /> Find campaigns
+              {found.length > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent">{found.length}</span>}
+            </Button>
+          )}
           <NewCampaignButton />
         </>} />
       {finding && <FindCampaigns />}

@@ -74,11 +74,8 @@ llm:
   # even with a key set. Add names (judge, script, check, review, footage, place, topics) to allow more.
   paid_api_jobs: [sketch]
   # Caption fixes ruled wrong on review ("heard -> replacement"); never applied again.
-  # Every applied fix is listed per clip in report.md -- add a bad one here.
-  rejected_caption_fixes:
-    - bot -> bite          # "leishmaniasis from the bot": said, even if "bite" is what's true
-    - pickies -> piques    # "pickies" is the speaker's word
-    - cup -> cope          # "Cup? Cup?" at a sperm bank
+  # Every applied fix is listed per clip in report.md -- add a bad one in your own data/config.yaml.
+  rejected_caption_fixes: []
   # Who judges the moments and picks each clip's opening line (D139). Flash-lite judged Love and
   # Justice EP1 and all 9 clips were rated 1 star (weak hook, boring). Claude, by API key or on
   # your Claude plan (counts toward its usage, about 10 calls a video); Gemini still watches the
@@ -158,12 +155,11 @@ watch:
   imap_host: imap.gmail.com
   folders: ["INBOX", "[Gmail]/Spam"]
   lookback_days: 14
+  # Who the campaigns are for; the judge reads it. Set yours in Settings (or data/config.yaml).
   profile: >-
-    TikTok clips account (@solomonkeyclips) for TV and movie comedy: sitcom and
-    film scenes. Also open to creators clipping their own long-form videos
-    (podcasts, streams, YouTube) where the funny or dramatic moments stand
-    alone. Not interested in product ads, supplements, AI tools, crypto or
-    gambling.
+    A social-media clipping account that cuts short vertical clips from footage it
+    is authorized to use. Not interested in product ads, supplements, AI tools,
+    crypto or gambling.
   platforms: ["tiktok"]
   min_rate_per_1k: 1.0       # skip campaigns paying less per 1,000 views
   notify_maybe: true         # also push "maybe" fits, marked with a ?

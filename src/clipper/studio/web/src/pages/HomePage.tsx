@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp, Wand2 } from "lucide-react";
-import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
+import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetSettings, useSetTask, useSettings, useUses, type Clip } from "@/api/client";
 import { Button, Card, Metric, PageHeader, Skeleton, Sparkline, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatCount, formatMoney } from "@/lib/utils";
@@ -99,6 +99,53 @@ function PipelineColumn({ title, status, clips, tone }: {
   );
 }
 
+const USES: { key: string; title: string; body: string }[] = [
+  { key: "use_campaigns", title: "Clip footage for campaigns", body: "Brands or creators pay clippers per view (Whop, Vyro, Content Rewards...), or you clip for a client or for your own long videos." },
+  { key: "use_create", title: "Make original videos", body: "Create writes a short script, you add the voice, and Clipper builds the video for your own channel." },
+  { key: "use_finder", title: "Find campaigns for me", body: "Watch your inbox, Discord or Whop for new campaigns that fit what you clip." },
+];
+
+/** The one question asked once: what do you use Clipper for? Parts you don't use stay out of the way (D145). */
+function Welcome() {
+  const { data: settings } = useSettings();
+  const save = useSetSettings();
+  const [picked, setPicked] = useState<Record<string, boolean>>({ use_campaigns: true, use_create: false, use_finder: false });
+  const [about, setAbout] = useState("");
+  const done = () => save.mutate({
+    onboarded: "1", alert_profile: about.trim(),
+    ...Object.fromEntries(USES.map((u) => [u.key, picked[u.key] ? "1" : "0"])),
+  });
+  if (!settings) return null;
+  return (
+    <Card className="flex flex-col gap-4 p-5">
+      <div>
+        <h2 className="text-md font-semibold">Welcome. What will you use Clipper for?</h2>
+        <p className="mt-1 text-sm text-muted">Pick what applies. Anything you leave out stays hidden, and you can change it later in Settings.</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {USES.map((u) => (
+          <label key={u.key} className={cn("flex cursor-pointer flex-col gap-1.5 rounded-md border p-4", picked[u.key] ? "border-accent bg-accent-soft/50" : "border-line")}>
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <input type="checkbox" className="accent-[var(--color-accent)]" checked={picked[u.key]}
+                     onChange={(e) => setPicked({ ...picked, [u.key]: e.target.checked })} /> {u.title}
+            </span>
+            <span className="text-xs text-muted">{u.body}</span>
+          </label>
+        ))}
+      </div>
+      {picked.use_finder && (
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium">What do you clip? (so only campaigns that fit are shown)</span>
+          <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={2}
+                    placeholder="e.g. A TikTok account for TV comedy clips. Not interested in crypto or supplements."
+                    className="rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-accent" />
+        </label>
+      )}
+      <div><Button variant="primary" disabled={save.isPending || !Object.values(picked).some(Boolean)} onClick={done}>Continue <ArrowRight className="size-4" /></Button></div>
+    </Card>
+  );
+}
+
 /** Where today's Short stands and the one thing to do next, with a button to it (D118). */
 function ChannelCard() {
   const { data } = useCreate();
@@ -137,16 +184,19 @@ const STEPS: { key: string; title: string; body: string; to: string; action: str
 ];
 
 function GetStarted({ done }: { done: Record<string, boolean> }) {
-  const next = STEPS.find((s) => !done[s.key]);
-  const count = STEPS.filter((s) => done[s.key]).length;
+  const uses = useUses();
+  // Only the steps that match what you said you'd use (D145).
+  const STEPS_SHOWN = STEPS.filter((s) => s.key === "ai" || s.key === "accounts" || uses.campaigns);
+  const next = STEPS_SHOWN.find((s) => !done[s.key]);
+  const count = STEPS_SHOWN.filter((s) => done[s.key]).length;
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-md font-semibold">Get started</h2>
-        <span className="tabular text-xs text-muted">{count} of {STEPS.length} done</span>
+        <span className="tabular text-xs text-muted">{count} of {STEPS_SHOWN.length} done</span>
       </div>
       <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {STEPS.map((step, i) => {
+        {STEPS_SHOWN.map((step, i) => {
           const isDone = Boolean(done[step.key]);
           const isNext = step === next;
           return (
@@ -184,6 +234,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { data: campaigns = [] } = useCampaigns();
   const { data: create } = useCreate();
+  const uses = useUses();
   const archived = new Set(campaigns.filter((c) => c.archived).map((c) => c.name));
 
   if (!home) {
@@ -217,13 +268,14 @@ export function DashboardPage() {
   // The one thing to do next (D143): the first clip to post, else the first link to submit, else a
   // brief task, else the channel's next step, else more clips. One button, so opening the app has a next move.
   const openFirst = (list: Clip[]) => { setListIds(list.map((c) => c.id)); open(list[0].id); };
-  const channelBusy = create?.videos.find((v) => v.status !== "built");
+  const channelBusy = uses.create ? create?.videos.find((v) => v.status !== "built") : undefined;
   const next: { label: string; run: () => void } | null = firstRun ? null
     : by("ready").length ? { label: `Post the next clip (${by("ready").length})`, run: () => openFirst(by("ready")) }
     : by("posted").length ? { label: `Submit the next link (${by("posted").length})`, run: () => openFirst(by("posted")) }
     : due.length ? { label: "Do the next brief task", run: () => open(due[0].post.clip) }
     : channelBusy ? { label: `Your Short: ${channelBusy.status === "draft" ? "approve the script" : channelBusy.status === "approved" ? "add the voice" : "see it"}`, run: () => void navigate({ to: "/create" }) }
-    : { label: "Make more clips", run: () => void navigate({ to: "/new" }) };
+    : uses.campaigns ? { label: "Make more clips", run: () => void navigate({ to: "/new" }) }
+    : { label: "Make a Short", run: () => void navigate({ to: "/create" }) };
   // This week, in a line: what you posted and what it brought.
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
   const weekPosts = posts.filter((p) => (p.posted_at ?? "") >= weekAgo).length;
@@ -238,8 +290,9 @@ export function DashboardPage() {
         hi={`${by("ready").length} clip`}
         subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : `${week ? `${week} ` : ""}Here's where your clips stand.`}
         actions={next && <Button variant="primary" size="md" onClick={next.run}>{next.label} <ArrowRight className="size-4" /></Button>} />
-      <ChannelCard />
-      {firstRun && <GetStarted done={home.first_run} />}
+      {uses.loaded && !uses.onboarded && <Welcome />}
+      {uses.create && <ChannelCard />}
+      {firstRun && uses.onboarded && <GetStarted done={home.first_run} />}
       {home.first_run.clips && <>
 
       <RangeToggle value={range} onChange={setRange} />

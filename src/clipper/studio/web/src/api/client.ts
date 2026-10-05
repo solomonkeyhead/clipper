@@ -72,6 +72,14 @@ export const useAccounts = () =>
 export const useSettings = () =>
   useQuery({ queryKey: keys.settings, queryFn: () => unwrap(api.GET("/api/settings")) });
 
+/** Which parts of Clipper this user turned on in the first-run question (D145). Until settings load, everything. */
+export function useUses() {
+  const { data } = useSettings();
+  const on = (key: string) => (data as Record<string, string> | undefined)?.[key] !== "0";
+  return { loaded: Boolean(data), campaigns: on("use_campaigns"), create: on("use_create"), finder: on("use_finder"),
+           onboarded: (data as Record<string, string> | undefined)?.onboarded === "1" };
+}
+
 /** The reasons a rating can give, grouped (one list, on the server). */
 export const useReasons = () =>
   useQuery({ queryKey: ["reasons"], queryFn: () => unwrap(api.GET("/api/reasons")), staleTime: Infinity });
@@ -640,7 +648,10 @@ export interface ReadyScript {
   made: { id: number; archived: boolean; status: CreateVideo["status"] }[];
 }
 export interface CreateView {
-  channel: { name: string; handle: string; voice: string; campaign: string; words_per_second: number };
+  channel: { slug: string; name: string; handle: string; voice: string; campaign: string; words_per_second: number;
+             pack: string; drawings: boolean; check_name: string; niche: string; subject: string };
+  channels: { slug: string; name: string; handle: string; pack: string }[];
+  packs: { key: string; label: string; about: string; drawings: boolean }[];
   topics: CreateTopic[]; videos: CreateVideo[];
 }
 
@@ -669,7 +680,16 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
   return data as T;
 }
 
+export interface ChannelEdit {
+  name?: string; handle?: string; niche?: string; persona?: string; voice?: string; subject?: string; expert?: string;
+  areas?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
+}
 export const createApi = {
+  channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>
+    send<{ slug: string }>("POST", "/api/create/channels", body),
+  channelEdit: (slug: string, body: ChannelEdit) => send("PUT", `/api/create/channels/${slug}`, body),
+  channelActive: (slug: string) => send("PUT", "/api/create/channel/active", { slug }),
+  channelDelete: (slug: string) => send("DELETE", `/api/create/channels/${slug}`),
   ideas: (count = 20) => send<{ added: number }>("POST", "/api/create/ideas", { count }),
   skip: (topic: number) => send("POST", `/api/create/topics/${topic}/skip`),
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
@@ -702,6 +722,7 @@ export const createApi = {
   place: (video: number, how: "ai" | "order" | "clear", strict = false) => send<{ note: string }>("POST", `/api/create/videos/${video}/place`, { how, strict }),
   placement: (video: number, body: { beat: number; clip: string; start: number | null; fill: ClipFill }) =>
     send("PUT", `/api/create/videos/${video}/placement`, body),
+  noVoice: (video: number) => send("POST", `/api/create/videos/${video}/voice-none`),
   voice: async (video: number, file: File) => {
     const res = await fetch(`/api/create/videos/${video}/voice/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
     const data = await res.json().catch(() => ({}));

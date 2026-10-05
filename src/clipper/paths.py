@@ -96,3 +96,29 @@ def ensure(path: Path) -> Path:
     """mkdir -p, returning the path so it composes in expressions."""
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+@cache
+def campaigns_dir() -> Path:
+    """Where the user's campaign files live: ``<data>/campaigns`` (D145). They used to sit in the repo's
+    own ``campaigns/`` folder, which meant a copy of Clipper carried the owner's campaigns (and a push
+    published them). The repo keeps only ``campaigns/example.yaml``, the template; anything else found
+    there is moved here once, history included."""
+    import shutil
+
+    target = data_root() / "campaigns"
+    target.mkdir(parents=True, exist_ok=True)
+    legacy = REPO_ROOT / "campaigns"
+    if legacy.is_dir() and target.resolve() != legacy.resolve():
+        for path in legacy.iterdir():
+            if path.name == "example.yaml" or path.name.startswith("."):
+                continue
+            if path.suffix == ".yaml" and not (target / path.name).exists():
+                shutil.move(str(path), str(target / path.name))
+        old = legacy / ".history"
+        if old.is_dir():
+            (target / ".history").mkdir(exist_ok=True)
+            for path in old.iterdir():
+                if not (target / ".history" / path.name).exists():
+                    shutil.move(str(path), str(target / ".history" / path.name))
+    return target

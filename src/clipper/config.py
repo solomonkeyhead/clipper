@@ -404,16 +404,22 @@ class WatchConfig(StrictModel):
     lookback_days: int = Field(default=14, ge=1, le=90)
     # Who the campaigns are for; the judge reads this verbatim.
     profile: str = (
-        "TikTok clips account (@solomonkeyclips) for TV and movie comedy: sitcom "
-        "and film scenes. Also open to creators clipping their own long-form "
-        "videos (podcasts, streams, YouTube) where the funny or dramatic moments "
-        "stand alone. Not interested in product ads, supplements, AI tools, "
-        "crypto or gambling.")
+        "A social-media clipping account that cuts short vertical clips from footage "
+        "it is authorized to use. Not interested in product ads, supplements, AI "
+        "tools, crypto or gambling.")
     platforms: list[str] = ["tiktok"]
     # Skip campaigns paying less than this per 1,000 views (when a rate is stated).
     min_rate_per_1k: float = Field(default=1.0, ge=0)
     notify_maybe: bool = True
     ntfy_server: str = "https://ntfy.sh"
+
+
+def _merged(base: dict, over: dict) -> dict:
+    """`over` laid on `base`: mappings merge key by key, anything else is replaced."""
+    out = dict(base)
+    for key, value in over.items():
+        out[key] = _merged(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict) else value
+    return out
 
 
 class Config(StrictModel):
@@ -431,11 +437,18 @@ class Config(StrictModel):
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:
-        """Load from YAML, falling back to all-defaults if the file is absent."""
+        """Load from YAML, falling back to all-defaults if the file is absent. The shipped
+        `config/default.yaml` is generic; the user's own choices go in `<data>/config.yaml`, laid
+        over it key by key (D145), so a copy of Clipper never carries the owner's settings."""
+        own = path is None
         path = path or DEFAULT_CONFIG_PATH
-        if not path.exists():
-            return cls()
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        data = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) if path.exists() else {}
+        if own:
+            from .paths import data_root
+
+            local = data_root() / "config.yaml"
+            if local.is_file():
+                data = _merged(data, yaml.safe_load(local.read_text(encoding="utf-8")) or {})
         return cls.model_validate(data)
 
 

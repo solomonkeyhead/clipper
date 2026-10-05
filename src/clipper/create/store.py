@@ -5,28 +5,32 @@ from __future__ import annotations
 import json
 
 from ..studio import db
+from . import channel as channels
 
 TOPIC_STATUSES = ("new", "used", "skipped")
 VIDEO_STATUSES = ("draft", "approved", "voiced", "building", "built", "failed")
 
 
 def topics(status: str | None = "new") -> list[dict]:
+    """The ideas of the channel being worked on (create/channel.py)."""
     with db.connect() as con:
-        sql = "SELECT * FROM create_topics" + (" WHERE status=?" if status else "") + " ORDER BY felt DESC, id"
-        return [dict(r) for r in con.execute(sql, (status,) if status else ())]
+        sql = "SELECT * FROM create_topics WHERE channel=?" + (" AND status=?" if status else "") + " ORDER BY felt DESC, id"
+        return [dict(r) for r in con.execute(sql, (channels.active_slug(), *((status,) if status else ())))]
 
 
 def add_topics(found: list[dict]) -> int:
     """Add new ideas, skipping any already on the list (same question, ignoring case)."""
+    channel = channels.active_slug()
     with db.connect() as con:
-        seen = {r["question"].strip().lower() for r in con.execute("SELECT question FROM create_topics")}
+        seen = {r["question"].strip().lower() for r in con.execute(
+            "SELECT question FROM create_topics WHERE channel=?", (channel,))}
         added = 0
         for t in found:
             q = " ".join(str(t.get("question", "")).split())
             if not q or q.lower() in seen:
                 continue
-            con.execute("INSERT INTO create_topics (question, angle, felt, created_at) VALUES (?,?,?,?)",
-                        (q, str(t.get("angle", "")).strip(), int(bool(t.get("felt"))), db.now()))
+            con.execute("INSERT INTO create_topics (question, angle, felt, created_at, channel) VALUES (?,?,?,?,?)",
+                        (q, str(t.get("angle", "")).strip(), int(bool(t.get("felt"))), db.now(), channel))
             seen.add(q.lower())
             added += 1
         return added
@@ -45,9 +49,13 @@ def topic(topic_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def videos() -> list[dict]:
+def videos(every: bool = False) -> list[dict]:
+    """The videos of the channel being worked on, or (`every`) of all of them."""
     with db.connect() as con:
-        return [_video(r) for r in con.execute("SELECT * FROM create_videos ORDER BY id DESC")]
+        if every:
+            return [_video(r) for r in con.execute("SELECT * FROM create_videos ORDER BY id DESC")]
+        return [_video(r) for r in con.execute("SELECT * FROM create_videos WHERE channel=? ORDER BY id DESC",
+                                               (channels.active_slug(),))]
 
 
 def video(video_id: int) -> dict | None:
@@ -67,9 +75,9 @@ def add_video(topic_id: int | None, script: dict, check_notes: str = "", ready: 
     """`ready` names the ready-made script it was made from, if any (D131)."""
     with db.connect() as con:
         cur = con.execute(
-            "INSERT INTO create_videos (topic_id, script, check_notes, ready, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (topic_id, json.dumps(script), check_notes, ready, db.now(), db.now()))
+            "INSERT INTO create_videos (topic_id, script, check_notes, ready, created_at, updated_at, channel) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (topic_id, json.dumps(script), check_notes, ready, db.now(), db.now(), channels.active_slug()))
         return int(cur.lastrowid)
 
 

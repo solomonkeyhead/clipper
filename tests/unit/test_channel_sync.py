@@ -36,5 +36,8 @@ def test_shorts_already_on_your_channel_are_adopted_once(data_root):
 
 
 def test_only_your_own_channels_handle_adopts(data_root):
+    from clipper.create import channel
+
+    channel.save(channel.make("physics", "German Professor", "@German.Professor", campaign="german-professor"))
     assert stats.own_campaign("German.Professor") == "german-professor"
     assert stats.own_campaign("solomonkey_clips") == ""

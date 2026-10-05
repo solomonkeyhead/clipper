@@ -12,7 +12,7 @@ from clipper.llm.base import create
 from clipper.models import ClipPlan
 from clipper.studio.library import split_caption, with_description
 
-CHAD = CampaignConfig.load(Path(__file__).parents[2] / "campaigns" / "chad-powers-s2.yaml")
+CHAD = CampaignConfig.load(Path(__file__).parents[1] / "fixtures" / "chad-powers-s2.yaml")
 GOOD = ("On Chad Powers season 2, Ricky confronts Russ on the bench before the last game, and "
         "he admits he stayed for her. A quiet Ricky and Russ moment from Hulu's football comedy.")
 

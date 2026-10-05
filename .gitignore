@@ -44,3 +44,7 @@ desktop.ini
 # Base Python for .venv, kept outside AppData so Task Scheduler can run it
 .python/
 campaigns/.history/
+
+# Your campaigns live in data/campaigns (D145); only the template is part of the repo.
+/campaigns/*
+!/campaigns/example.yaml

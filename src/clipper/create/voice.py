@@ -19,7 +19,7 @@ from ..paths import data_root, ensure
 from .ai import CreateError
 from .script import Script
 
-AUDIO = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"}
+AUDIO = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".webm", ".opus"}   # webm: recorded in the page (D146)
 TAIL = 0.6    # a breath after the last word, then it ends (and loops)
 
 
@@ -34,6 +34,31 @@ class Timings(BaseModel):
     beats: list[tuple[float, float]]
     duration: float           # the whole video: the voice plus a breath
     matched: float            # share of script words heard, a sanity check
+
+
+def silent(script: Script, words_per_second: float) -> tuple[list[TimedWord], float]:
+    """No voice (D146): the script's words spread over the time they'd take to say at
+    `words_per_second`, longer words a little longer, as what "was heard"; and how long that is.
+    The video is then captions over the pictures, with a silent track."""
+    words = [w for b in script.beats for w in b.text.split()]
+    weights = [len(w) + 2 for w in words]
+    unit = (len(words) / max(0.5, words_per_second)) / max(1, sum(weights))
+    at, heard_words = 0.0, []
+    for w, weight in zip(words, weights, strict=True):
+        heard_words.append(TimedWord(text=w, start=round(at, 3), end=round(at + weight * unit * 0.9, 3)))
+        at += weight * unit
+    return heard_words, round(at, 3)
+
+
+def write_silence(path: Path, seconds: float) -> Path:
+    """A silent audio file `seconds` long, for a video with no voice."""
+    import subprocess
+
+    from ..render.ffmpeg import ffmpeg_path
+
+    subprocess.run([str(ffmpeg_path()), "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-t", f"{seconds + TAIL:.3f}",
+                    str(path)], check=True, capture_output=True)
+    return path
 
 
 def folder(video_id: int) -> Path:

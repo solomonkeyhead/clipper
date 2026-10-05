@@ -21,8 +21,10 @@ def data_root(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch)
     root.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("CLIPPER_DATA_DIR", str(root))
     paths.data_root.cache_clear()
+    paths.campaigns_dir.cache_clear()
     yield root
     paths.data_root.cache_clear()
+    paths.campaigns_dir.cache_clear()
 
 
 @pytest.fixture(autouse=True)

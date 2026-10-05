@@ -16,6 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 
+from ..create import channel as channels
 from ..utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -58,7 +59,7 @@ def unstick() -> int:
     built again or deleted, never stuck (D123). Run when the server starts; returns how many."""
     from ..create import store
 
-    stuck = [v for v in store.videos() if v["status"] in ("voiced", "building") and v["id"] not in _running]
+    stuck = [v for v in store.videos(every=True) if v["status"] in ("voiced", "building") and v["id"] not in _running]
     for v in stuck:
         _stopped(v["id"])
         if not v["clip_id"]:
@@ -126,8 +127,7 @@ def _archive_posted(videos: list[dict], posted: dict[int, dict]) -> None:
 
 
 def _view() -> dict:
-    from ..create import channel as channels
-    from ..create import store
+    from ..create import packs, store
 
     ch = channels.load()
     videos = store.videos()
@@ -154,8 +154,12 @@ def _view() -> dict:
             v["mine"] = userclips.view(v["id"], Script.model_validate(v["script"]))
         except ValueError:
             v["mine"] = {"auto": True, "fill": "auto", "clips": []}
-    return {"channel": {"name": ch.name, "handle": ch.handle, "voice": ch.voice, "campaign": ch.campaign,
-                        "words_per_second": ch.words_per_second},
+    return {"channel": {"slug": ch.slug, "name": ch.name, "handle": ch.handle, "voice": ch.voice, "campaign": ch.campaign,
+                        "words_per_second": ch.words_per_second, "pack": ch.pack, "drawings": ch.drawings,
+                        "check_name": channels.check_name(ch),
+                        "niche": ch.niche, "subject": ch.subject},
+            "channels": [{"slug": c.slug, "name": c.name, "handle": c.handle, "pack": c.pack} for c in channels.all_channels()],
+            "packs": [{"key": p.key, "label": p.label, "about": p.about, "drawings": p.drawings} for p in packs.PACKS.values()],
             "topics": store.topics(), "videos": videos}
 
 
@@ -195,6 +199,7 @@ def _work(video_id: int, publish) -> None:
             try:
                 _check(video_id)  # cancelled while it waited for another build to finish
                 row = store.video(video_id)
+                channels.set_current(row["channel"])  # this video's channel, in this thread (D146)
                 step("Listening to the voice", 3)
                 path = Path(row["voice"])
                 if row["timings"]:  # the same words and voice as last time: the same cuts (D125)
@@ -265,6 +270,7 @@ def routes(app: FastAPI, publish) -> None:
         found = store.video(video_id)
         if found is None:
             raise HTTPException(404, "no such video")
+        channels.set_current(found["channel"])  # whatever it asks of the AI is in this video's channel's voice (D146)
         return found
 
     def ai(fn, *args, **kwargs):
@@ -276,6 +282,70 @@ def routes(app: FastAPI, publish) -> None:
     @app.get("/api/create")
     def create_view() -> dict:
         return _view()
+
+    # ---- channels (D146): any number, each made from a niche pack and then its own
+
+    def _activate(slug: str) -> None:
+        from . import db
+
+        with db.connect() as con:
+            db.set_setting(con, "create_channel", slug)
+
+    @app.post("/api/create/channels")
+    def channel_new(body: dict) -> dict:
+        from ..create import packs
+
+        name = " ".join(str(body.get("name") or "").split())
+        if not name:
+            raise HTTPException(400, "give the channel a name")
+        slug = channels.slugify(name)
+        if any(c.slug == slug for c in channels.all_channels()):
+            raise HTTPException(409, "you already have a channel with that name")
+        extra = {k: str(body[k]).strip() for k in ("voice",) if str(body.get(k) or "").strip()}
+        channel = channels.make(str(body.get("pack") or packs.DEFAULT), name, handle=str(body.get("handle") or "").strip(),
+                                niche=str(body.get("niche") or "").strip(), **extra)
+        channels.save(channel)
+        _activate(channel.slug)
+        return {"slug": channel.slug}
+
+    @app.get("/api/create/channels/{slug}")
+    def channel_get(slug: str) -> dict:
+        found = next((c for c in channels.all_channels() if c.slug == slug), None)
+        if found is None:
+            raise HTTPException(404, "no such channel")
+        return found.model_dump(exclude={"examples"}) | {"examples": len(found.examples)}
+
+    @app.put("/api/create/channels/{slug}")
+    def channel_edit(slug: str, body: dict) -> dict:
+        found = next((c for c in channels.all_channels() if c.slug == slug), None)
+        if found is None:
+            raise HTTPException(404, "no such channel")
+        texts = ("name", "handle", "niche", "persona", "voice", "subject", "expert", "areas", "watermark")
+        updates = {k: str(body[k]).strip() for k in texts if k in body}
+        if "rules" in body:
+            updates["rules"] = [str(r).strip() for r in body["rules"] if str(r).strip()]
+        if "drawings" in body:
+            updates["drawings"] = bool(body["drawings"])
+        if "words_per_second" in body:
+            updates["words_per_second"] = max(1.2, min(4.0, float(body["words_per_second"])))
+        channels.save(found.model_copy(update=updates))
+        return {"slug": slug}
+
+    @app.put("/api/create/channel/active")
+    def channel_active(body: dict) -> dict:
+        slug = str(body.get("slug") or "")
+        if not any(c.slug == slug for c in channels.all_channels()):
+            raise HTTPException(404, "no such channel")
+        _activate(slug)
+        return {"slug": slug}
+
+    @app.delete("/api/create/channels/{slug}")
+    def channel_delete(slug: str) -> dict:
+        everything = store.videos(every=True)
+        if any(v["channel"] == slug for v in everything):
+            raise HTTPException(409, "this channel has videos: remove them from Create first")
+        channels.delete(slug)
+        return {"deleted": slug}
 
     @app.get("/api/create/ai")
     def create_ai() -> dict:
@@ -388,6 +458,28 @@ def routes(app: FastAPI, publish) -> None:
                 out.write(chunk)
         partial.replace(kept)
         store.update_video(video_id, voice=str(kept), status="voiced", error="", timings="")  # timed afresh
+        _start(video_id, publish)
+        return {"queued": True}
+
+    @app.post("/api/create/videos/{video_id}/voice-none")
+    def create_no_voice(video_id: int) -> dict:
+        """No voiceover (D146): the words are timed at the channel's speaking pace, over a silent
+        track, so the video is captions over its pictures."""
+        from ..create import voice
+        from ..create.script import Script
+        from ..utils.recycle import recycle
+
+        row = video_or_404(video_id)
+        _editable(row)
+        if row["status"] not in ("approved", "built", "failed"):
+            raise HTTPException(400, "approve the script first")
+        script = Script.model_validate(row["script"])
+        words, seconds = voice.silent(script, channels.load().words_per_second)
+        for old in voice.folder(video_id).glob("voice.*"):
+            recycle(old)
+        kept = voice.write_silence(voice.folder(video_id) / "voice.wav", seconds)
+        timings = voice.align(script, words, seconds)
+        store.update_video(video_id, voice=str(kept), status="voiced", error="", timings=timings.model_dump())
         _start(video_id, publish)
         return {"queued": True}
 
@@ -625,8 +717,9 @@ def routes(app: FastAPI, publish) -> None:
         row = video_or_404(video_id)
         ai_module.misses.clear()
         review = await asyncio.to_thread(ai, scripts.check, _script(row))
-        notes = ("Physics check: no problems found." if review.ok or not review.problems
-                 else "Physics check:\n" + "\n".join(f"- {p}" for p in review.problems))
+        name = channels.check_name()
+        notes = (f"{name}: no problems found." if review.ok or not review.problems
+                 else f"{name}:\n" + "\n".join(f"- {p}" for p in review.problems))
         who = ai_module.last_used.split(":", 1)[-1] if ai_module.last_used else "unknown"
         store.update_video(video_id, check_notes=f"{notes}\nChecked by: {who}.")
         return {"notes": notes}
@@ -816,8 +909,9 @@ def routes(app: FastAPI, publish) -> None:
 
     @app.get("/api/create/ready")
     def create_ready() -> list[dict]:
-        """Scripts that come with Clipper, written and drawn already: nothing to wait for."""
-        found = _ready()
+        """Scripts that come with Clipper, written and drawn already: nothing to wait for. They are
+        physics, so only a physics channel is offered them (D146)."""
+        found = _ready() if channels.load().pack == "physics" else {}
         # An idea that is a ready-made script's question, reworded, isn't offered twice (D133).
         from difflib import SequenceMatcher
 

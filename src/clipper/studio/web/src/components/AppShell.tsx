@@ -4,7 +4,7 @@ import {
   Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useCampaigns, useClips, useCreate, useCreateAI, useJobs, useSetup, useStatus, useSyncNow } from "@/api/client";
+import { useCampaigns, useClips, useCreate, useCreateAI, useJobs, useSetup, useStatus, useSyncNow, useUses } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
@@ -29,14 +29,15 @@ function useNav(): NavItem[] {
   const { data: campaigns = [] } = useCampaigns();
   const { data: clips = [] } = useClips();
   const { data: jobs = [] } = useJobs();
+  const uses = useUses();
   const working = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const active = new Set(campaigns.filter((c) => !c.archived).map((c) => c.name));
   // Clips waiting on you: ready to post, or posted and not yet submitted.
   const waiting = clips.filter((c) => (c.status === "ready" || c.status === "posted") && active.has(c.campaign)).length;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
-    // Create is the daily job, so it sits right under the Dashboard (D118).
-    { to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" },
+    // Create is the daily job, so it sits right under the Dashboard (D118); hidden when you don't use it (D145).
+    ...(uses.create ? [{ to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" }] : []),
     { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C",
       badge: campaigns.filter((c) => !c.archived && !c.own_channel).length },
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
@@ -324,7 +325,7 @@ export function AppShell() {
 
         {/* Bottom tabs (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
-          {[nav[0], nav[1], nav[2], nav[3], nav[4]].map((item) => (
+          {nav.slice(0, 5).map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
                   className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted data-[status=active]:text-accent [&_svg]:size-5">

@@ -478,6 +478,30 @@ function NotifySwitch() {
   );
 }
 
+const USES_ROWS: [string, string, string][] = [
+  ["use_campaigns", "Clip footage for campaigns", "New clips, campaign pages and the post and submit steps."],
+  ["use_create", "Make original videos", "Create, for your own channel."],
+  ["use_finder", "Find campaigns for me", "Campaign alerts and search on the Campaigns page."],
+];
+
+/** What you use Clipper for: the parts you don't use are hidden (D145). */
+function Uses() {
+  const { data: settings } = useSettings();
+  const save = useSetSettings();
+  if (!settings) return <Skeleton className="h-20" />;
+  const values = settings as Record<string, string>;
+  return (
+    <div className="flex flex-col gap-2.5">
+      {USES_ROWS.map(([key, title, body]) => (
+        <label key={key} className="flex items-start gap-3">
+          <Switch label={title} checked={values[key] !== "0"} onChange={(v) => save.mutate({ [key]: v ? "1" : "0" })} />
+          <span><span className="text-sm font-medium">{title}</span><span className="block text-xs text-muted">{body}</span></span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function AIKey() {
   const { data: setup } = useSetup();
   const save = useSetKeys();
@@ -633,6 +657,7 @@ export function SettingsPage() {
       <AIKey />
       <FootageKeys />
       <Card className="divide-y divide-line px-5">
+        <Row title="What you use Clipper for" body="Parts you turn off are hidden everywhere, so the app only shows what you do." control={<Uses />} />
         <Row
           title="Sync every"
           body="How often Clipper fetches views and stats from your connected accounts while it's open. X is read at most hourly, since it charges per read."

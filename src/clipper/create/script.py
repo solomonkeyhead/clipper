@@ -101,14 +101,13 @@ def _parse(answer: str) -> Script:
     return Script.model_validate(_WriterScript.model_validate(json.loads(answer)).model_dump())
 
 
-VISUALS = """Split the script into beats: one spoken sentence each (two only if both are very
+VISUALS_HEAD = """Split the script into beats: one spoken sentence each (two only if both are very
 short), 5 to 14 words. For every beat plan ONE picture:
 - kind "stock": real footage that literally shows what is said. Give queries: three searches
   of a free stock-footage library, most specific first, then broader, 1-3 words each, naming
   subjects such libraries really have: objects, places, nature, everyday scenes, and people
   only in common situations ("woman wearing headphones", "man talking on phone", "boiling
-  pot", "airplane window", "elevator doors"). Never abstract words ("pressure", "physics",
-  "energy"), never a specific person's action that nobody films ("person touching side of
+  pot", "airplane window", "elevator doors"). Never abstract words ({abstract}), never a specific person's action that nobody films ("person touching side of
   head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
   no footage fits ("bone conduction", "100 degrees").
 - kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
@@ -119,51 +118,88 @@ short), 5 to 14 words. For every beat plan ONE picture:
   of a new picture each sentence. Plan the drawing on the first of them, with its idea covering
   all they say. Only after a diagram; a held sentence needs no picture of its own. Prefer a
   diagram to footage that would only loosely match. Templates:
-  * sketch (the default for HOW something works): a chalk drawing of the real thing, made
+"""
+
+#: The diagram templates, by name; a channel's pack lists the ones it uses (create/packs.py).
+TEMPLATES = {
+    "sketch": """  * sketch (the default for HOW something works): a chalk drawing of the real thing, made
     by an illustrator after you. idea = one or two sentences saying exactly what to draw:
     the objects, where things go, the 2-4 labels ("A head in profile. Sound leaves the mouth
     and curves round through the air to the ear, dashed blue, labelled 'air'. A second
     yellow path goes from the throat straight through the skull to the inner ear,
     labelled 'bone'."). Concrete and physical, never a flow chart. Leave sketch empty.
-  * forces: an object with labelled arrows. subject = the object, 1-2 words ("you",
+""",
+    "forces": """  * forces: an object with labelled arrows. subject = the object, 1-2 words ("you",
     "car"), labels = the forces ("gravity", "floor pushes up"), directions =
-    "up"/"down"/"left"/"right" for each, values = their relative sizes, true to the physics
+    "up"/"down"/"left"/"right" for each, values = their relative sizes, true to the {subject}
     (an elevator speeding up going up: floor pushes harder than gravity).
-  * circle: something moving on a circle, with its velocity and the inward pull. labels =
+""",
+    "circle": """  * circle: something moving on a circle, with its velocity and the inward pull. labels =
     [what moves, the inward force].
-  * wave: one or two waves travelling. labels = what each is ("low note", "high note"),
+""",
+    "wave": """  * wave: one or two waves travelling. labels = what each is ("low note", "high note"),
     values = relative frequency, amounts = relative amplitude (loudness, brightness).
-  * particles: molecules bouncing in one or two boxes. labels = what each box is ("cold
+""",
+    "particles": """  * particles: molecules bouncing in one or two boxes. labels = what each box is ("cold
     air", "hot air"), values = relative speed (temperature), amounts = relative number
     (density, pressure). For heat, pressure, evaporation, smell, sound travelling.
-  * ray: a light ray meeting a surface. labels = [medium above, medium below], values = their
+""",
+    "ray": """  * ray: a light ray meeting a surface. labels = [medium above, medium below], values = their
     refractive indices (air 1.0, water 1.33, glass 1.5), shape = "refract" or "reflect".
     The bend is computed, so the indices must be right.
-  * number: one striking real figure. title = the number with its unit ("343 m/s",
+""",
+    "number": """  * number: one striking real figure. title = the number with its unit ("343 m/s",
     "37 °C", "1,000x"), labels = [what it is, 2-5 words]. Only a figure you are sure of.
-  * equation: a REAL physics formula, built up piece by piece. equation = the formula
+""",
+    "equation": """  * equation: a REAL {subject} formula, built up piece by piece. equation = the formula
     ("F = m x a", "a = v² / r"), labels = what each symbol means ("F: force", "m: mass").
-    Only a formula a physics textbook would print; never a made-up word equation
+    Only a formula a {subject} textbook would print; never a made-up word equation
     ("sound = air + bone") -- use chain for that.
-  * compare: two things side by side as bars. labels = [thing A, thing B], values = their
+""",
+    "compare": """  * compare: two things side by side as bars. labels = [thing A, thing B], values = their
     sizes, title = the quantity compared, always ("Heat flow", "Bass reaching your ear").
-  * chain: causes leading to an effect, 2-4 short steps. labels = the steps.
-  * graph: a curve. title = what it shows, labels = [x axis, y axis], shape = how the y
+""",
+    "chain": """  * chain: causes leading to an effect, 2-4 short steps. labels = the steps.
+""",
+    "graph": """  * graph: a curve. title = what it shows, labels = [x axis, y axis], shape = how the y
     quantity changes as the x quantity grows: "rising" (y goes up), "falling" (y goes down),
     "peak" (up then down), "wave". It must agree with the sentence: "bone absorbs high
     frequencies" with x = frequency and y = loudness is "falling".
-  Keep every label under 4 words.
+""",
+}
+
+VISUALS_TAIL = """  Keep every label under 4 words.
 For each beat also give emphasis: the single most important word in it, copied exactly.
 
 Also write: title (the question, at most 60 characters), description (the script's idea in
-3-5 short lines, in the same voice, ending on its punchline), hashtags (3: #{subject},
-#science and one specific)."""
+3-5 short lines, in the same voice, ending on its punchline), hashtags (3: {hashtags})."""
+
+
+def channel_visuals_head(channel: channels.Channel) -> str:
+    """The stock rules, and (when the channel draws) the diagram intro; footage-only channels get
+    footage only."""
+    if channel.drawings:
+        return VISUALS_HEAD
+    stock = VISUALS_HEAD[:VISUALS_HEAD.index('- kind "diagram"')]
+    return stock + ('- kind "diagram" is never used on this channel: every beat is kind "stock", with its\n'
+                    '  queries and card.\n')
+
+
+def visuals(channel: channels.Channel) -> str:
+    """The picture-planning instructions for `channel` (D146): the stock rules, then the diagram
+    templates its pack uses (none: every picture is footage), then the closing rules."""
+    head = channel_visuals_head(channel)
+    if not channel.drawings:
+        return head + VISUALS_TAIL
+    used = [TEMPLATES[n] for n in channel.templates if n in TEMPLATES] or list(TEMPLATES.values())
+    return head + "".join(used) + VISUALS_TAIL
+
 
 
 def _system(channel: channels.Channel) -> str:
     rules = "\n".join(f"- {r}" for r in channel.rules)
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
-            f"{channel.name} ({channel.niche}). Rules:\n{rules}\n\n{channels.fill(VISUALS, channel)}\n\n"
+            f"{channel.name} ({channel.niche}). Rules:\n{rules}\n\n{channels.fill(visuals(channel), channel)}\n\n"
             "The examples are the channel's own scripts: match their voice, rhythm and humour, "
             "never reuse their jokes or lines.")
 
@@ -363,7 +399,7 @@ def check(script: Script) -> Review:
     try:
         return Review.model_validate(json.loads(answer))
     except (ValueError, TypeError):
-        return Review(ok=False, problems=["The physics check came back unreadable; read it carefully yourself."])
+        return Review(ok=False, problems=[f"The {channels.check_name().lower()} came back unreadable; read it carefully yourself."])
 
 
 def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Script, str]:
@@ -378,12 +414,12 @@ def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Scr
         script = write(question, angle, take=take, feedback="\n".join(f"- {p}" for p in review.problems))
         second = check(script)
         if not second.ok and second.problems:
-            note = "Physics check, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems)
+            note = f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems)
         else:
-            note = "Physics check: fixed after a first draft got this wrong:\n" + \
+            note = f"{channels.check_name()}: fixed after a first draft got this wrong:\n" + \
                 "\n".join(f"- {p}" for p in review.problems)
     else:
-        note = "Physics check: no problems found."
+        note = f"{channels.check_name()}: no problems found."
     return _signed(script, note)
 
 
@@ -428,6 +464,6 @@ def replan(script: Script) -> tuple[Script, str]:
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
         review = check(fresh)
         if review.ok or not review.problems:
-            return _signed(fresh, "Pictures planned again. Physics check: no problems found.")
+            return _signed(fresh, f"Pictures planned again. {channels.check_name()}: no problems found.")
         feedback = "\n".join(f"- {p}" for p in review.problems)
-    return _signed(fresh, "Pictures planned again. Physics check, still unsure:\n" + feedback)
+    return _signed(fresh, f"Pictures planned again. {channels.check_name()}, still unsure:\n" + feedback)

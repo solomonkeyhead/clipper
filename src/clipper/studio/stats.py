@@ -78,8 +78,8 @@ def own_campaign(account: str) -> str:
     """The campaign of the own channel whose handle is `account` ("" when it's a clipping account)."""
     from ..create import channel
 
-    ch = channel.load()
-    return ch.campaign if account.lstrip("@").lower() == ch.handle.lstrip("@").lower() else ""
+    handle = account.lstrip("@").lower()
+    return next((c.campaign for c in channel.all_channels() if c.handle and c.handle.lstrip("@").lower() == handle), "")
 
 
 def ensure_create_rows(rows: list[dict[str, str]]) -> None:

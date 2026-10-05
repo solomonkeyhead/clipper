@@ -1,0 +1,57 @@
+Split the script into beats: one spoken sentence each (two only if both are very
+short), 5 to 14 words. For every beat plan ONE picture:
+- kind "stock": real footage that literally shows what is said. Give queries: three searches
+  of a free stock-footage library, most specific first, then broader, 1-3 words each, naming
+  subjects such libraries really have: objects, places, nature, everyday scenes, and people
+  only in common situations ("woman wearing headphones", "man talking on phone", "boiling
+  pot", "airplane window", "elevator doors"). Never abstract words ("pressure", "physics",
+  "energy"), never a specific person's action that nobody films ("person touching side of
+  head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
+  no footage fits ("bone conduction", "100 degrees").
+- kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
+  About half the beats; never the first beat; never three diagrams in a row.
+  hold: when the next sentence (up to 3 of them) goes on explaining the same picture ("two
+  routes... route one is air... route two is bone"), set hold = true on those sentences: the
+  drawing from the beat before stays up and builds as the voice explains each part, instead
+  of a new picture each sentence. Plan the drawing on the first of them, with its idea covering
+  all they say. Only after a diagram; a held sentence needs no picture of its own. Prefer a
+  diagram to footage that would only loosely match. Templates:
+  * sketch (the default for HOW something works): a chalk drawing of the real thing, made
+    by an illustrator after you. idea = one or two sentences saying exactly what to draw:
+    the objects, where things go, the 2-4 labels ("A head in profile. Sound leaves the mouth
+    and curves round through the air to the ear, dashed blue, labelled 'air'. A second
+    yellow path goes from the throat straight through the skull to the inner ear,
+    labelled 'bone'."). Concrete and physical, never a flow chart. Leave sketch empty.
+  * forces: an object with labelled arrows. subject = the object, 1-2 words ("you",
+    "car"), labels = the forces ("gravity", "floor pushes up"), directions =
+    "up"/"down"/"left"/"right" for each, values = their relative sizes, true to the physics
+    (an elevator speeding up going up: floor pushes harder than gravity).
+  * circle: something moving on a circle, with its velocity and the inward pull. labels =
+    [what moves, the inward force].
+  * wave: one or two waves travelling. labels = what each is ("low note", "high note"),
+    values = relative frequency, amounts = relative amplitude (loudness, brightness).
+  * particles: molecules bouncing in one or two boxes. labels = what each box is ("cold
+    air", "hot air"), values = relative speed (temperature), amounts = relative number
+    (density, pressure). For heat, pressure, evaporation, smell, sound travelling.
+  * ray: a light ray meeting a surface. labels = [medium above, medium below], values = their
+    refractive indices (air 1.0, water 1.33, glass 1.5), shape = "refract" or "reflect".
+    The bend is computed, so the indices must be right.
+  * number: one striking real figure. title = the number with its unit ("343 m/s",
+    "37 °C", "1,000x"), labels = [what it is, 2-5 words]. Only a figure you are sure of.
+  * equation: a REAL physics formula, built up piece by piece. equation = the formula
+    ("F = m x a", "a = v² / r"), labels = what each symbol means ("F: force", "m: mass").
+    Only a formula a physics textbook would print; never a made-up word equation
+    ("sound = air + bone") -- use chain for that.
+  * compare: two things side by side as bars. labels = [thing A, thing B], values = their
+    sizes, title = the quantity compared, always ("Heat flow", "Bass reaching your ear").
+  * chain: causes leading to an effect, 2-4 short steps. labels = the steps.
+  * graph: a curve. title = what it shows, labels = [x axis, y axis], shape = how the y
+    quantity changes as the x quantity grows: "rising" (y goes up), "falling" (y goes down),
+    "peak" (up then down), "wave". It must agree with the sentence: "bone absorbs high
+    frequencies" with x = frequency and y = loudness is "falling".
+  Keep every label under 4 words.
+For each beat also give emphasis: the single most important word in it, copied exactly.
+
+Also write: title (the question, at most 60 characters), description (the script's idea in
+3-5 short lines, in the same voice, ending on its punchline), hashtags (3: #physics,
+#science and one specific).

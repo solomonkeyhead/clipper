@@ -12,13 +12,29 @@ import {
 import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { cn, copyText } from "@/lib/utils";
+import { ChannelBar, NewChannel } from "./ChannelPanel";
 import { MyClips } from "./MyClips";
 import { ShotReview } from "./ShotReview";
 
 /** Create (D108): original Shorts for your own channel -- idea, script, your voice, built. */
+/** "physics" on a physics channel, "facts" on any other: what the fact check is called in the buttons (D146). */
+function useFactWord() {
+  const { data } = useCreate();
+  return data?.channel.check_name === "Physics check" ? "physics" : "facts";
+}
+
 export function CreatePage() {
   const { data, isLoading } = useCreate();
   if (isLoading || !data) return <div className="flex flex-col gap-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-96" /></div>;
+  // The first time: make a channel before anything else (D146).
+  if (data.channels.length === 0) {
+    return (
+      <div className="fade-in flex max-w-3xl flex-col gap-6">
+        <CaptionTitle text="Make a Short" hi="Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+        <NewChannel data={data} onDone={() => undefined} first />
+      </div>
+    );
+  }
   // Posted videos move to the archive (D131): the list above it is what's still being worked on.
   const work = data.videos.filter((v) => !v.archived);
   const archived = data.videos.filter((v) => v.archived);
@@ -28,10 +44,11 @@ export function CreatePage() {
       <div>
         <CaptionTitle text="Make a Short" hi="Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
         <p className="mt-2 text-sm text-muted">
-          For <b className="text-fg">{data.channel.name}</b> ({data.channel.handle}). Pick an idea or write your own script, approve it, make the voice on
-          ElevenLabs, drop it in: Clipper builds the rest. Every step has a manual option.
+          For <b className="text-fg">{data.channel.name}</b>{data.channel.handle && ` (${data.channel.handle})`}. Pick an idea or write your own script, approve it,
+          add your voice: Clipper builds the rest. Every step has a manual option.
         </p>
         <AIStrip />
+        <div className="mt-3"><ChannelBar data={data} /></div>
       </div>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
         {/* The video in progress comes first on a phone-width window; the ideas wait below it. */}
@@ -122,13 +139,14 @@ function YourOwn() {
   const [description, setDescription] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [plan, setPlan] = useState(false);
+  const fact = useFactWord();
   const [busy, setBusy] = useState(false);
   const count = text.split(/\s+/).filter(Boolean).length;
   const create = async () => {
     setBusy(true);
     try {
       await createApi.own({ title, text, description, hashtags, plan });
-      toast.success("Script created", { description: plan ? "Pictures planned and physics checked." : "Choose the pictures yourself, or press Plan pictures." });
+      toast.success("Script created", { description: plan ? `Pictures planned and ${fact} checked.` : "Choose the pictures yourself, or press Plan pictures." });
       setTitle(""); setText(""); setDescription(""); setHashtags(""); setOpen(false);
       await qc.invalidateQueries({ queryKey: ["create"] });
     } catch (e) {
@@ -198,7 +216,7 @@ function YourOwn() {
       </div>
       <label className="flex items-start gap-2 text-sm text-muted">
         <input type="checkbox" className="mt-1" checked={plan} onChange={(e) => setPlan(e.target.checked)} />
-        <span>Plan the pictures and check the physics for me. Your words are never changed. Leave it off to choose every picture yourself.</span>
+        <span>Plan the pictures and check the {fact} for me. Your words are never changed. Leave it off to choose every picture yourself.</span>
       </label>
       <div className="flex items-center gap-2">
         <Button variant="primary" disabled={busy || !text.trim()} onClick={() => void create()}>
@@ -383,6 +401,7 @@ const words = (s: CreateScript) => (s.beats ?? []).reduce((n, b) => n + b.text.s
 function Body({ video, wps }: { video: CreateVideo; wps: number }) {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["create"] });
+  const fact = useFactWord();
   const [busy, setBusy] = useState<string | null>(null);
   const run = (label: string, fn: () => Promise<unknown>, done?: string) => async () => {
     setBusy(label);
@@ -445,14 +464,14 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
               </Button>
             </Tip>
           )}
-          <Tip label="Claude plans a picture for each sentence you haven't chosen one for, and checks the physics. Your words stay as written.">
+          <Tip label={`Claude plans a picture for each sentence you haven't chosen one for, and checks the ${fact}. Your words stay as written.`}>
             <Button variant="secondary" disabled={busy !== null} onClick={run("plan", () => createApi.plan(video.id), "Pictures planned")}>
               {busy === "plan" ? <Loader2 className="size-4 animate-spin" /> : <Shapes className="size-4" />} {busy === "plan" ? "Planning…" : "Plan pictures"}
             </Button>
           </Tip>
-          <Tip label="Claude reads the script for physics mistakes and tells you; it changes nothing.">
-            <Button variant="secondary" disabled={busy !== null} onClick={run("check", () => createApi.check(video.id), "Physics checked")}>
-              {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : "Check physics"}
+          <Tip label={`Claude reads the script for ${fact === "physics" ? "physics mistakes" : "factual mistakes"} and tells you; it changes nothing.`}>
+            <Button variant="secondary" disabled={busy !== null} onClick={run("check", () => createApi.check(video.id), "Checked")}>
+              {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : `Check ${fact}`}
             </Button>
           </Tip>
           <Button variant="ghost" className="ml-auto" disabled={busy !== null} onClick={remove}><Trash2 className="size-4" /> Delete</Button>
@@ -473,7 +492,7 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
 
 function CheckNote({ text }: { text: string }) {
   if (!text) return null;
-  const clean = text.startsWith("Physics check: no problems");
+  const clean = /check: no problems/.test(text.split("\n")[0]);
   return (
     <div className={cn("rounded-md border p-3 text-xs whitespace-pre-line",
       clean ? "border-success/40 text-success" : "border-warning/40 text-warning")}>
@@ -493,6 +512,7 @@ function PictureChoice({ visual, emphasis, onChange, canHold }: {
   visual: CreateVisual; emphasis: string; onChange: (v: CreateVisual, emphasis?: string) => void; canHold: boolean;
 }) {
   const kind = kindOf(visual);
+  const drawings = useCreate().data?.channel.drawings !== false;   // a footage-only channel draws nothing (D146)
   const value = kind === "stock" ? (visual.queries?.length ? visual.queries : [visual.query]).filter(Boolean).join(", ")
     : kind === "card" ? visual.title : kind === "sketch" ? visual.idea ?? "" : "";
   const placeholder = kind === "stock" ? "search words, e.g. skull, sound waves" : kind === "card" ? "the phrase to chalk on the board" : "what to draw";
@@ -521,8 +541,8 @@ function PictureChoice({ visual, emphasis, onChange, canHold }: {
         <option value="auto">Picture: automatic</option>
         <option value="stock">Footage I search for</option>
         <option value="card">Chalk phrase</option>
-        <option value="sketch">Drawing I describe</option>
-        {(canHold || kind === "hold") && <option value="hold">Keep the drawing above, building on</option>}
+        {(drawings || kind === "sketch") && <option value="sketch">Drawing I describe</option>}
+        {drawings && (canHold || kind === "hold") && <option value="hold">Keep the drawing above, building on</option>}
       </select>
       {kind !== "auto" && kind !== "hold" && (
         <input key={`${kind}-${value}`} defaultValue={value} placeholder={placeholder} aria-label={placeholder}
@@ -649,20 +669,22 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
   );
 }
 
-/* ---------- the voice, by hand on ElevenLabs ---------- */
+/* ---------- the voice: a file, recorded here, or none (D146) ---------- */
 
 function VoiceStep({ video }: { video: CreateVideo }) {
   const qc = useQueryClient();
+  const { data: create } = useCreate();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [way, setWay] = useState<"file" | "record" | "none">("file");
   const text = video.script.beats.map((b) => b.text.trim()).join(" ");
-  const upload = async (file: File | undefined) => {
-    if (!file) return;
+  const how = create?.channel.voice ?? "";
+  const gotIt = async (work: () => Promise<unknown>, done: string) => {
     setBusy(true);
     try {
-      await createApi.voice(video.id, file);
-      toast.success("Got the voice", { description: "Building your Short now: about a minute." });
+      await work();
+      toast.success(done, { description: "Building your Short now: about a minute." });
       await qc.invalidateQueries({ queryKey: ["create"] });
     } catch (e) {
       toast.error((e as Error).message);
@@ -670,29 +692,94 @@ function VoiceStep({ video }: { video: CreateVideo }) {
       setBusy(false);
     }
   };
+  const upload = (file: File | undefined) => file && gotIt(() => createApi.voice(video.id, file), "Got the voice");
+  const ways: [typeof way, string][] = [["file", "I have the audio"], ["record", "Record it here"], ["none", "No voice"]];
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-accent/30 bg-accent-soft/40 p-4">
-      <h3 className="flex items-center gap-2 text-sm font-semibold"><Mic className="size-4 text-accent" /> Make the voice</h3>
-      <Step n={1}>
-        <span className="flex-1">Copy the script.</span>
-        <Button size="sm" variant="primary" onClick={() => void copyText(text, "Script")}><ClipboardCopy className="size-3.5" /> Copy script</Button>
-      </Step>
-      <Step n={2}>
-        <span className="flex-1">On <a href="https://elevenlabs.io/app/speech-synthesis/text-to-speech" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">ElevenLabs</a>, choose <b>Marshal</b>, paste, generate, download.</span>
-      </Step>
-      <Step n={3}>
-        <div
-          onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-          onDrop={(e) => { e.preventDefault(); setOver(false); void upload(e.dataTransfer.files[0]); }}
-          onClick={() => input.current?.click()} role="button" tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && input.current?.click()}
-          className={cn("flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-6 text-sm",
-            over ? "border-accent bg-accent-soft text-fg" : "border-line-strong text-muted hover:border-accent hover:text-fg")}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          {busy ? "Uploading…" : "Drop the MP3 here, or click to choose it"}
-          <input ref={input} type="file" accept="audio/*" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+      <h3 className="flex items-center gap-2 text-sm font-semibold"><Mic className="size-4 text-accent" /> Add the voice</h3>
+      <div className="flex flex-wrap gap-1.5" role="tablist">
+        {ways.map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={way === key} onClick={() => setWay(key)}
+                  className={cn("h-8 rounded-full border px-3 text-sm font-medium", way === key ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {way === "file" && <>
+        <Step n={1}>
+          <span className="flex-1">Copy the script.</span>
+          <Button size="sm" variant="primary" onClick={() => void copyText(text, "Script")}><ClipboardCopy className="size-3.5" /> Copy script</Button>
+        </Step>
+        <Step n={2}>
+          <span className="flex-1">Make the voice your way{how ? <>: <b>{how}</b></> : ""}. Any audio file works (MP3, WAV, M4A...).</span>
+        </Step>
+        <Step n={3}>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+            onDrop={(e) => { e.preventDefault(); setOver(false); void upload(e.dataTransfer.files[0]); }}
+            onClick={() => input.current?.click()} role="button" tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && input.current?.click()}
+            className={cn("flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-6 text-sm",
+              over ? "border-accent bg-accent-soft text-fg" : "border-line-strong text-muted hover:border-accent hover:text-fg")}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            {busy ? "Uploading…" : "Drop the audio here, or click to choose it"}
+            <input ref={input} type="file" accept="audio/*" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+          </div>
+        </Step>
+      </>}
+      {way === "record" && <Recorder text={text} busy={busy} onUse={(file) => void upload(file)} />}
+      {way === "none" && (
+        <div className="flex flex-col gap-2 text-sm">
+          <p className="text-muted">The video is the pictures with the words as captions, timed at about {create?.channel.words_per_second ?? 2.3} words a second, over a silent track. Add music or a voice-over in the app you post from.</p>
+          <Button variant="primary" className="self-start" disabled={busy}
+                  onClick={() => void gotIt(() => createApi.noVoice(video.id), "Building without a voice")}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />} Build it with no voice
+          </Button>
         </div>
-      </Step>
+      )}
+    </div>
+  );
+}
+
+/** Record the voice in the page (D146): the script to read, a record button, and a play-back before it's used. */
+function Recorder({ text, busy, onUse }: { text: string; busy: boolean; onUse: (file: File) => void }) {
+  const [recording, setRecording] = useState(false);
+  const [take, setTake] = useState<Blob | null>(null);
+  const [error, setError] = useState("");
+  const recorder = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const start = async () => {
+    setError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const r = new MediaRecorder(stream);
+      chunks.current = [];
+      r.ondataavailable = (e) => chunks.current.push(e.data);
+      r.onstop = () => { stream.getTracks().forEach((t) => t.stop()); setTake(new Blob(chunks.current, { type: r.mimeType || "audio/webm" })); };
+      r.start();
+      recorder.current = r;
+      setTake(null);
+      setRecording(true);
+    } catch {
+      setError("Clipper can't use the microphone. Allow it for this page in your browser, or upload an audio file instead.");
+    }
+  };
+  const stop = () => { recorder.current?.stop(); setRecording(false); };
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <p className="max-h-40 overflow-auto rounded-md border border-line bg-surface-1 p-3 whitespace-pre-wrap">{text}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        {!recording
+          ? <Button variant="primary" onClick={() => void start()}><Mic className="size-4" /> {take ? "Record again" : "Start recording"}</Button>
+          : <Button variant="danger" onClick={stop}><span className="size-2.5 animate-pulse rounded-full bg-danger" /> Stop</Button>}
+        {take && !recording && <audio controls src={URL.createObjectURL(take)} className="h-9" />}
+        {take && !recording && (
+          <Button variant="primary" disabled={busy} onClick={() => onUse(new File([take], "recording.webm", { type: take.type }))}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : null} Use this recording
+          </Button>
+        )}
+      </div>
+      {error && <p className="text-warning">{error}</p>}
     </div>
   );
 }
