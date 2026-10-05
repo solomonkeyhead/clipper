@@ -2509,7 +2509,8 @@ earnings priced by each campaign's rules at the window's two ends); "Actually pa
 time, since payouts are recorded without a date range that fits.
 
 
-## D138: Stats and the dashboard agree on money and views
+## D138: Stats and the dashboard agree: archived campaigns count
 Stats showed $3.49 and 2.5K views, the dashboard $1.50 and 1.5K: Stats counted archived
-campaigns (Chad Powers), the dashboard left them out. "All campaigns" on Stats now leaves
-archived ones out too; picking an archived campaign in the dropdown still shows it.
+campaigns, the dashboard left them out. Marc wants all-time earnings, so the dashboard's money,
+views, paid and trend now include archived campaigns too. Pipeline, to-submit and tasks stay
+active-only (they are work still to do).

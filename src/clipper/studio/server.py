@@ -693,8 +693,12 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         snap = Snapshot()
         active = {n for n in snap.campaign_names()
                   if not snap.state.get(n, {}).get("archived")}
-        clips = [c for c in scoped(snap, scope) if c.campaign in active]
-        posts = [p for c in clips for p in c.posts]
+        # Money and views cover every campaign, archived ones too: all-time totals (D138).
+        # Work still to do (pipeline, to submit, tasks) is only the active campaigns'.
+        every = scoped(snap, scope)
+        clips = [c for c in every if c.campaign in active]
+        posts = [p for c in every for p in c.posts]
+        todo = [p for c in clips for p in c.posts]
         earnings = [p.est_earnings for p in posts if p.est_earnings is not None]
         views = [p.views for p in posts if p.views is not None]
         since = None
@@ -736,11 +740,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 est_earnings=round(sum(earnings), 2) if earnings else None,
                 views=sum(views), posts=len(posts),
                 median_views=statistics.median(views) if views else None,
-                to_submit=sum(1 for p in posts if not p.submitted_at),
+                to_submit=sum(1 for p in todo if not p.submitted_at),
                 ready=pipeline.ready,
-                paid_usd=round(sum(p["amount"] for p in snap.payouts if p["campaign"] in active), 2)
-                if any(p["campaign"] in active for p in snap.payouts) else None,
-                tasks_due=sum(1 for p in posts for t in p.tasks if not t.done),
+                paid_usd=round(sum(p["amount"] for p in snap.payouts), 2) if snap.payouts else None,
+                tasks_due=sum(1 for p in todo for t in p.tasks if not t.done),
                 views_by_day=by_day, earned_by_day=earned_by_day),
             since=since, pipeline=pipeline,
             # The getting-started checklist, in the order a new user does it.
