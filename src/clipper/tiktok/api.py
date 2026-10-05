@@ -124,8 +124,31 @@ def authorize_url(client_key: str, state: str, challenge: str) -> str:
     return f"{AUTH_URL}?{query}"
 
 
+def has_app() -> bool:
+    return bool(os.environ.get(ENV_KEY, "").strip() and os.environ.get(ENV_SECRET, "").strip())
+
+
+def finish_login(token: dict) -> dict:
+    """Name the account and keep its tokens (from our own app's login, or from the connect service's)."""
+    token.setdefault("obtained_at", time.time())
+    try:
+        user = (_send(urllib.request.Request(
+            USER_INFO_URL, headers={"Authorization": f"Bearer {token['access_token']}"}))
+            .get("data") or {}).get("user") or {}
+        token["display_name"] = user.get("display_name", "")
+    except TikTokError as exc:  # the name is a nicety; the login still worked
+        log.info("no TikTok display name: %s", exc)
+    _save(token, token_path(token.get("open_id") or "account"))
+    return token
+
+
 def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
-    """Open TikTok's consent page, wait for the redirect, store the tokens."""
+    """Open TikTok's consent page, wait for the redirect, store the tokens. With no app of the user's
+    own, the connect service does it (D151)."""
+    from .. import connect
+
+    if not has_app() and connect.enabled():
+        return finish_login(connect.login("tiktok", timeout=timeout, open_browser=open_browser))
     key, secret = client()
     verifier, challenge = pkce_pair()
     state = secrets.token_urlsafe(16)
@@ -166,15 +189,7 @@ def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
     token = _token_request({"client_key": key, "client_secret": secret,
                             "code": got["code"], "grant_type": "authorization_code",
                             "redirect_uri": REDIRECT_URI, "code_verifier": verifier})
-    try:
-        user = (_send(urllib.request.Request(
-            USER_INFO_URL, headers={"Authorization": f"Bearer {token['access_token']}"}))
-            .get("data") or {}).get("user") or {}
-        token["display_name"] = user.get("display_name", "")
-    except TikTokError as exc:  # the name is a nicety; the login still worked
-        log.info("no TikTok display name: %s", exc)
-    _save(token, token_path(token.get("open_id") or "account"))
-    return token
+    return finish_login(token)
 
 
 def _serve_until(server: http.server.HTTPServer, got: dict, timeout: float) -> None:
@@ -211,10 +226,15 @@ def access_token(path: Path | None = None) -> str:
         return token["access_token"]
     if age > float(token.get("refresh_expires_in", 0)):
         raise TikTokError("the TikTok login has expired: reconnect it on the Accounts page")
-    key, secret = client()
-    fresh = _token_request({"client_key": key, "client_secret": secret,
-                            "grant_type": "refresh_token",
-                            "refresh_token": token["refresh_token"]})
+    from .. import connect
+
+    if not has_app() and connect.enabled():
+        fresh = {**connect.refresh("tiktok", token["refresh_token"]), "obtained_at": time.time()}
+    else:
+        key, secret = client()
+        fresh = _token_request({"client_key": key, "client_secret": secret,
+                                "grant_type": "refresh_token",
+                                "refresh_token": token["refresh_token"]})
     for kept in ("display_name", "handle"):  # ours, not TikTok's
         if token.get(kept):
             fresh[kept] = token[kept]

@@ -151,6 +151,11 @@ def login_browser(*, timeout: float = 300.0, open_browser=webbrowser.open) -> di
     """One-click sign-in (D150): Instagram's own consent page, the code comes back to a local
     redirect, becomes a 60-day token, and goes through `login` like a pasted one. Needs the Meta
     app's ID and secret (INSTAGRAM_APP_ID / _SECRET) with `REDIRECT_URI` listed in the app."""
+    from .. import connect
+
+    if not has_app() and connect.enabled():
+        tokens = connect.login("instagram", timeout=timeout, open_browser=open_browser)
+        return {"display_name": login(tokens["access_token"])}
     app_id, secret = os.environ.get(ENV_ID, "").strip(), os.environ.get(ENV_SECRET, "").strip()
     if not app_id or not secret:
         raise InstagramError("add your Meta app's ID and secret on the Accounts page first")

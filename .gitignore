@@ -48,3 +48,4 @@ campaigns/.history/
 # Your campaigns live in data/campaigns (D145); only the template is part of the repo.
 /campaigns/*
 !/campaigns/example.yaml
+src/clipper/broker.url

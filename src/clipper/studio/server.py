@@ -21,15 +21,17 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from .. import connect
 from ..campaign import editor
 from ..campaign.editor import CampaignError, CampaignForm
 from ..config import PLATFORM_NAMES, CampaignConfig
@@ -398,7 +400,7 @@ def yt_has_app() -> bool:
     """A Google app to sign in with: the user's own, or one built into Clipper (D84)."""
     from ..youtube import api as yt_api
 
-    return yt_api.has_app()
+    return yt_api.has_app() or connect.enabled()
 
 
 def scoped(snap: Snapshot, scope: str | None) -> list[Clip]:
@@ -1733,7 +1735,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.post("/api/accounts/youtube/connect")
     def youtube_connect() -> dict[str, str]:
         """Start Google's sign-in; the page opens the returned consent link."""
-        if not yt_has_app():
+        if not yt_has_app() and not connect.enabled():
             raise HTTPException(400, "Save your Google app's client ID and secret first")
         return youtube.start()
 
@@ -1741,12 +1743,25 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def youtube_connect_state() -> dict[str, str]:
         return youtube.view()
 
+    @app.post("/api/accounts/broker/return")
+    async def broker_return(request: Request) -> HTMLResponse:
+        """Where the connect service's page posts a finished login (D151). Only a login this Clipper started
+        is accepted: its nonce is checked."""
+        try:    # a plain form post; read by hand so Clipper needs no multipart package
+            body = json.loads(urllib.parse.parse_qs((await request.body()).decode()).get("payload", ["{}"])[0])
+        except ValueError:
+            body = {}
+        ok = connect.deliver(str(body.get("nonce", "")), {"error": body.get("error")} if body.get("error") else body.get("tokens") or {})
+        return HTMLResponse("<p style='font-family:sans-serif;padding:2em'>"
+                            + ("Connected. You can close this tab and go back to Clipper." if ok else "This login wasn't started here. Try again from Clipper.")
+                            + "</p>")
+
     @app.post("/api/accounts/instagram/connect")
     def instagram_connect_start() -> dict[str, str]:
         """Start Instagram's login; the page opens the returned consent link (D150)."""
         from ..instagram import api as ig_api
 
-        if not ig_api.has_app():
+        if not ig_api.has_app() and not connect.enabled():
             raise HTTPException(400, "Save your Meta app's ID and secret first")
         return instagram.start()
 
@@ -1790,11 +1805,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         ai = setup.ai_status()
         return Setup(ai_ready=ai["ready"], ai_backend=ai["backend"], ai_detail=ai["detail"],
                      keys={k: setup.key_set(k) for k in setup.KEYS},
-                     tiktok_app=setup.key_set("TIKTOK_CLIENT_KEY")
-                     and setup.key_set("TIKTOK_CLIENT_SECRET"),
+                     tiktok_app=connect.enabled() or (setup.key_set("TIKTOK_CLIENT_KEY")
+                                                     and setup.key_set("TIKTOK_CLIENT_SECRET")),
                      tiktok_connect=tiktok.view(),
                      youtube_app=yt_has_app(),
-                     instagram_app=setup.key_set("INSTAGRAM_APP_ID") and setup.key_set("INSTAGRAM_APP_SECRET"))
+                     instagram_app=connect.enabled() or (setup.key_set("INSTAGRAM_APP_ID") and setup.key_set("INSTAGRAM_APP_SECRET")))
 
     @app.put("/api/setup/keys")
     def put_keys(values: dict[str, str]) -> Setup:

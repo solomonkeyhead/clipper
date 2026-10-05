@@ -137,6 +137,9 @@ def has_app() -> bool:
     return True
 
 
+_own_app = has_app     # the connect service (D151) is for those with no app of their own
+
+
 def bundle(path: Path = BUNDLED) -> Path:
     """Build this copy's Google app (from .env) into it, for packaging Clipper for others."""
     cid, secret = os.environ.get(ENV_ID, "").strip(), os.environ.get(ENV_SECRET, "").strip()
@@ -148,6 +151,10 @@ def bundle(path: Path = BUNDLED) -> Path:
 
 def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
     """Open Google's consent page, wait for the redirect, keep the channel's tokens."""
+    from .. import connect
+
+    if not _own_app() and connect.enabled():
+        return _finish_login(connect.login("youtube", timeout=timeout, open_browser=open_browser))
     cid, secret = client()
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -195,8 +202,13 @@ def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
         raise YouTubeError("the sign-in didn't come back (timed out, or the state didn't match)")
     if "code" not in got:
         raise YouTubeError(f"Google refused the sign-in: {got.get('error_description') or got.get('error')}")
-    token = _token({"grant_type": "authorization_code", "code": got["code"], "redirect_uri": REDIRECT_URI,
-                    "client_id": cid, "client_secret": secret, "code_verifier": verifier})
+    return _finish_login(_token({"grant_type": "authorization_code", "code": got["code"], "redirect_uri": REDIRECT_URI,
+                                 "client_id": cid, "client_secret": secret, "code_verifier": verifier}))
+
+
+def _finish_login(token: dict) -> dict:
+    """Find the channel the tokens belong to and keep them (our own app's login, or the connect service's)."""
+    token.setdefault("obtained_at", time.time())
     if "refresh_token" not in token:
         raise YouTubeError("Google gave no refresh token; remove Clipper's access at "
                            "myaccount.google.com/permissions and connect again")
@@ -233,9 +245,14 @@ def access_token(path: Path) -> str:
     token = read_token(path)
     if time.time() - float(token.get("obtained_at", 0)) < float(token.get("expires_in", 3600)) - 300:
         return token["access_token"]
-    cid, secret = client()
-    fresh = _token({"grant_type": "refresh_token", "refresh_token": token["refresh_token"],
-                    "client_id": cid, "client_secret": secret})
+    from .. import connect
+
+    if not _own_app() and connect.enabled():
+        fresh = {**connect.refresh("youtube", token["refresh_token"]), "obtained_at": time.time()}
+    else:
+        cid, secret = client()
+        fresh = _token({"grant_type": "refresh_token", "refresh_token": token["refresh_token"],
+                        "client_id": cid, "client_secret": secret})
     token.update(access_token=fresh["access_token"], expires_in=fresh.get("expires_in", 3600),
                  obtained_at=fresh["obtained_at"])
     _save(token, path)

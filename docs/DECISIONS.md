@@ -2694,3 +2694,17 @@ no way around it for TikTok, Meta or Google), and once saved every account is on
 **Not verified:** Instagram's login against Meta's real servers (whether Meta accepts an `http://localhost`
 redirect for an Instagram Login app varies by app mode; the test covers our side with fakes). If Meta refuses,
 the token paste still works.
+
+## D151: Sign in with nothing but a login
+
+**What happened.** After D150 each user still had to register their own TikTok, Meta and Google app (D150 made
+that a one-time step). Marc: users should only log into their account, nothing else.
+
+**Decided.** One registered app per platform, held by a small stateless service (`clipper.broker`) that Marc
+hosts. Clipper sends the browser to it (`connect.py`); it redirects to the platform, swaps the code for tokens
+with the secret, and the browser posts them to the user's own Clipper on 127.0.0.1, checked by a nonce Clipper
+handed out. Refresh goes through it too (TikTok and Google want the secret). A user with their own app keys
+keeps using them. The state is HMAC-signed and a login may only be handed back to 127.0.0.1 / localhost.
+Steps Marc must do, and why X is left out: `docs/CONNECT_SERVICE.md`.
+**Not verified:** against any real platform or a deployed service; nothing works for strangers until the
+apps pass each platform's review. The tests walk the whole loop with the platforms faked.
