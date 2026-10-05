@@ -249,10 +249,7 @@ class Snapshot:
                     avg_watch_s=p.get("avg_watch_s"), watched_full_pct=p.get("watched_full_pct"),
                     skip_rate_pct=p.get("skip_rate_pct"),
                     x_median=round(views / median, 1) if median and views is not None else None,
-                    est_earnings=stats.estimate_earnings(
-                        views, brief.reward_per_1k_usd if brief else None,
-                        brief.min_payout_usd if brief else None,
-                        brief.max_payout_usd if brief else None),
+                    est_earnings=stats.post_earnings(views, brief),
                     submitted_at=self.submitted.get(p["url"]),
                     tasks=[PostTask(views=m.views, task=m.task, done=(p["url"], m.views) in self.tasks_done)
                            for m in self.milestones(brief) if (views or 0) >= m.views]))
@@ -279,7 +276,8 @@ class Snapshot:
                 proof=Proof(**evidence.summary(json.loads(c.get("evidence") or "null"),
                                                [m.model_dump() for m in models])),
                 watching=bool(c.get("watch_until") and c["watch_until"] > now.strftime("%Y-%m-%d %H:%M")),
-                id=c["id"], campaign=c["campaign"], title=c["title"] or c["clip_id"],
+                id=c["id"], campaign=c["campaign"], submits=brief.submits if brief else True,
+                title=c["title"] or c["clip_id"],
                 hook=c["hook"], caption=c["caption"], duration_s=c["duration_s"],
                 source_title=display_source(c["source_title"]), status=status,
                 marked=c["status"], notes=c["notes"], created_at=c["created_at"],
@@ -350,8 +348,9 @@ class Snapshot:
             clips=len(mine), counts=counts,
             views=sum(p.views or 0 for p in posts),
             est_earnings=round(sum(earnings), 2) if earnings else None,
-            # Your own channel has no campaign to submit links to (D144).
-            to_submit=0 if brief and brief.own_channel else sum(1 for p in posts if not p.submitted_at),
+            # Your own channel, or a campaign that takes no links, has nothing to submit (D144, D147).
+            to_submit=0 if brief and not brief.submits else sum(1 for p in posts if not p.submitted_at),
+            submits=brief.submits if brief else True, pay_model=brief.pay_model if brief else "per_view",
             last_post=max((p.posted_at for p in posts if p.posted_at), default=None),
             min_payout_usd=brief.min_payout_usd if brief else None,
             locked_usd=locked[0], locked_posts=locked[1], own_channel=bool(brief and brief.own_channel),
@@ -701,7 +700,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         every = scoped(snap, scope)
         clips = [c for c in every if c.campaign in active]
         posts = [p for c in every for p in c.posts]
-        todo = [p for c in clips if not (snap.campaigns.get(c.campaign) and snap.campaigns[c.campaign].own_channel)
+        todo = [p for c in clips if not (snap.campaigns.get(c.campaign) and not snap.campaigns[c.campaign].submits)
                 for p in c.posts]
         earnings = [p.est_earnings for p in posts if p.est_earnings is not None]
         views = [p.views for p in posts if p.views is not None]
@@ -734,8 +733,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 for p, v in seen:
                     brief = snap.campaigns.get(p.campaign)
                     if brief and v is not None:
-                        money += stats.estimate_earnings(v, brief.reward_per_1k_usd, brief.min_payout_usd,
-                                                         brief.max_payout_usd) or 0.0
+                        money += stats.post_earnings(v, brief) or 0.0
                 earned_by_day.append(round(money, 2))
         locked_usd, locked_posts = stats.locked_earnings(posts, lambda p: snap.campaigns.get(p.campaign))
         return Home(

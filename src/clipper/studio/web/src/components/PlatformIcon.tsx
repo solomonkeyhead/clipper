@@ -27,7 +27,7 @@ export function PlatformIcon({ platform, className }: { platform: string; classN
       </svg>
     );
   }
-  if (platform === "facebook") {
+  if (platform.startsWith("facebook")) {
     return (
       <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8" aria-label="Facebook" role="img">
         <circle cx="12" cy="12" r="9.5" />
@@ -35,14 +35,14 @@ export function PlatformIcon({ platform, className }: { platform: string; classN
       </svg>
     );
   }
-  if (platform === "snapchat") {
+  if (platform.startsWith("snapchat")) {
     return (
       <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-label="Snapchat" role="img">
         <path d="M12 3c3 0 5 2.2 5 5v2.6l1.8-.6.6 1.2-2.3 1.3c.6 1.9 2 3.3 3.9 3.8l-.3 1.1-2 .4-.5 1.6-2.2-.3c-1.2.8-2.4 1.9-4 1.9s-2.8-1.1-4-1.9l-2.2.3-.5-1.6-2-.4-.3-1.1c1.9-.5 3.3-1.9 3.9-3.8L4.6 12.2l.6-1.2 1.8.6V8c0-2.8 2-5 5-5z" />
       </svg>
     );
   }
-  if (platform === "threads") {
+  if (platform.startsWith("threads")) {
     return (
       <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.8" aria-label="Threads" role="img">
         <path d="M16.5 11.2c-.3-2.4-1.9-3.7-4.3-3.7-1.6 0-2.9.7-3.6 1.9M15.9 11c-3.4-.6-6.4.2-6.4 2.5 0 1.3 1.2 2.2 2.8 2.1 2.4-.1 3.8-1.8 3.6-5.6M18.6 6.2A8 8 0 1 0 19 17.6" />

@@ -107,7 +107,15 @@ def build_user(transcript: str, campaign: CampaignConfig, caption_line: str, *,
             f"Keywords: {keywords}\n\n"
             f"Caption line above it: {caption_line.strip()}\n"
             f"On-screen hook: {hook.strip() or '(none)'}\n\n"
-            f"Transcript of the clip:\n{transcript.strip()}")
+            f"Transcript of the clip:\n{transcript.strip()}" + _language_note(campaign))
+
+
+def _language_note(campaign: CampaignConfig) -> str:
+    """Nothing for English; for another language, the instruction to write the description in it (D147)."""
+    from ..config import LANGUAGES
+
+    name = LANGUAGES.get(campaign.language)
+    return f"\n\nThe footage is in {name}: write the description in {name}." if name and campaign.language != "en" else ""
 
 
 def clean(text: str) -> str | None:

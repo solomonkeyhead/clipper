@@ -9,12 +9,14 @@ import {
 import {
   Field, LinesInput, NumberInput, Section, Segmented, SwitchRow, TextArea, TextInput,
 } from "@/components/form";
+import { TARGETS } from "@/api/platforms.gen";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, PageHeader, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const BLANK: CampaignForm = {
-  title: "", name: "", marketplace: "", campaign_url: "", reward_per_1k_usd: null,
+  title: "", name: "", marketplace: "", campaign_url: "", pay_model: "per_view", flat_fee_usd: null, submit_links: true,
+  language: "en", reward_per_1k_usd: null,
   min_payout_usd: null, max_payout_usd: null, deadline: "", source_authorization: "",
   platform_targets: ["tiktok", "instagram_reels"], content_type: "scripted",
   min_seconds: 15, max_seconds: 60, selection_focus: "", required_caption_text: "",
@@ -26,9 +28,7 @@ const BLANK: CampaignForm = {
 };
 
 const MARKETS = ["Content Rewards", "Vyro"];
-const PLATFORMS: [string, string][] = [
-  ["tiktok", "TikTok"], ["instagram_reels", "Instagram Reels"], ["youtube_shorts", "YouTube Shorts"], ["x", "X"],
-];
+const PLATFORMS: [string, string][] = TARGETS;   // clipper/platforms.py
 
 const RULE_SELECT = "h-9 rounded-md border border-line bg-surface-1 px-2 text-sm";
 
@@ -271,20 +271,41 @@ export function CampaignEditorPage() {
             {(id) => <TextInput id={id} type="url" value={form.campaign_url} placeholder="https://whop.com/…"
                                 onChange={(e) => set("campaign_url", e.target.value)} />}
           </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Pay per 1,000 views" optional>
-              {(id) => <NumberInput id={id} prefix="$" step="0.01" min="0" value={form.reward_per_1k_usd}
-                                    onChange={(v) => set("reward_per_1k_usd", v)} placeholder="2.50" />}
+          <Field label="How it pays">
+            {() => (
+              <Segmented label="How it pays" value={form.pay_model} onChange={(v) => set("pay_model", v)}
+                options={[["per_view", "Per 1,000 views", "Whop, Vyro, Content Rewards..."],
+                          ["per_clip", "A flat fee per post", "Paid for each clip posted"],
+                          ["none", "Not through Clipper", "A client, your own content, or just practice"]]} />
+            )}
+          </Field>
+          {form.pay_model === "per_view" && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Pay per 1,000 views" optional>
+                {(id) => <NumberInput id={id} prefix="$" step="0.01" min="0" value={form.reward_per_1k_usd}
+                                      onChange={(v) => set("reward_per_1k_usd", v)} placeholder="2.50" />}
+              </Field>
+              <Field label="Minimum payout" optional>
+                {(id) => <NumberInput id={id} prefix="$" step="0.01" min="0" value={form.min_payout_usd}
+                                      onChange={(v) => set("min_payout_usd", v)} />}
+              </Field>
+              <Field label="Most per post" optional>
+                {(id) => <NumberInput id={id} prefix="$" step="1" min="0" value={form.max_payout_usd}
+                                      onChange={(v) => set("max_payout_usd", v)} />}
+              </Field>
+            </div>
+          )}
+          {form.pay_model === "per_clip" && (
+            <Field label="Fee per post" className="sm:w-1/3">
+              {(id) => <NumberInput id={id} prefix="$" step="0.5" min="0" value={form.flat_fee_usd}
+                                    onChange={(v) => set("flat_fee_usd", v)} placeholder="5" />}
             </Field>
-            <Field label="Minimum payout" optional>
-              {(id) => <NumberInput id={id} prefix="$" step="0.01" min="0" value={form.min_payout_usd}
-                                    onChange={(v) => set("min_payout_usd", v)} />}
-            </Field>
-            <Field label="Most per post" optional>
-              {(id) => <NumberInput id={id} prefix="$" step="1" min="0" value={form.max_payout_usd}
-                                    onChange={(v) => set("max_payout_usd", v)} />}
-            </Field>
-          </div>
+          )}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1 accent-[var(--color-accent)]" checked={form.submit_links}
+                   onChange={(e) => set("submit_links", e.target.checked)} />
+            <span>Each post's link is submitted to the campaign<span className="block text-xs text-muted">Adds the "To submit" step. Leave it off if nobody asks you for links.</span></span>
+          </label>
           <Field label="Ends on" optional className="sm:w-1/3">
             {(id) => <TextInput id={id} type="date" value={form.deadline} onChange={(e) => set("deadline", e.target.value)} />}
           </Field>
@@ -342,6 +363,17 @@ export function CampaignEditorPage() {
                 options={[["scripted", "TV show or film", "Scenes kept as they are"],
                           ["podcast", "Podcast or talk", "Pauses and filler words trimmed"],
                           ["other", "Something else", "Light editing"]]} />
+            )}
+          </Field>
+          <Field label="Language of the footage" hint="Captions, hooks and descriptions are written in it. Auto detects it.">
+            {(id) => (
+              <select id={id} value={form.language} onChange={(e) => set("language", e.target.value)}
+                      className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm sm:w-1/3">
+                <option value="en">English</option><option value="auto">Detect it</option>
+                {[["es", "Spanish"], ["fr", "French"], ["de", "German"], ["pt", "Portuguese"], ["it", "Italian"], ["nl", "Dutch"], ["pl", "Polish"],
+                  ["tr", "Turkish"], ["ru", "Russian"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"], ["ar", "Arabic"], ["hi", "Hindi"], ["id", "Indonesian"]]
+                  .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
             )}
           </Field>
           <div className="grid gap-4 sm:grid-cols-3">

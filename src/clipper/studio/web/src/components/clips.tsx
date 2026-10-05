@@ -13,6 +13,7 @@ import {
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
+import { NO_STATS } from "@/api/platforms.gen";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney, openTab } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
 import { CaptionChoice, HookControl, usePaid } from "./lines";
@@ -63,7 +64,7 @@ export function useNotGood() {
 /** Whether a campaign is your own channel (no submitting links there: its clips are just "Posted"). */
 function useIsOwn() {
   const { data: campaigns = [] } = useCampaigns();
-  const own = new Set(campaigns.filter((c) => c.own_channel).map((c) => c.name));
+  const own = new Set(campaigns.filter((c) => c.submits === false).map((c) => c.name));
   return (name: string) => own.has(name);
 }
 
@@ -596,7 +597,8 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
 /* ---------- Detail sheet ---------- */
 
 /** Platforms a link is filed for without numbers (studio/posts.py). */
-const NO_STATS = ["facebook", "snapchat", "threads"];
+// Platforms with no official way to read a post's numbers (clipper/platforms.py).
+
 
 function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
   const na = (why: string) => (

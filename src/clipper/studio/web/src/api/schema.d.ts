@@ -2534,6 +2534,16 @@ export interface components {
              * @default false
              */
             own_channel: boolean;
+            /**
+             * Submits
+             * @default true
+             */
+            submits: boolean;
+            /**
+             * Pay Model
+             * @default per_view
+             */
+            pay_model: string;
         };
         /** CampaignCheck */
         CampaignCheck: {
@@ -2592,6 +2602,24 @@ export interface components {
              * @default
              */
             campaign_url: string;
+            /**
+             * Pay Model
+             * @default per_view
+             * @enum {string}
+             */
+            pay_model: "per_view" | "per_clip" | "none";
+            /** Flat Fee Usd */
+            flat_fee_usd?: number | null;
+            /**
+             * Submit Links
+             * @default true
+             */
+            submit_links: boolean;
+            /**
+             * Language
+             * @default en
+             */
+            language: string;
             /** Reward Per 1K Usd */
             reward_per_1k_usd?: number | null;
             /** Min Payout Usd */
@@ -2739,6 +2767,11 @@ export interface components {
             id: number;
             /** Campaign */
             campaign: string;
+            /**
+             * Submits
+             * @default true
+             */
+            submits: boolean;
             /** Title */
             title: string;
             /** Hook */

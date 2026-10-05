@@ -158,6 +158,20 @@ not a list of topics to require or avoid:
 {taste}""")
 
 
+def with_language(variant: PromptVariant, language: str) -> PromptVariant:
+    """`variant` told to write its text in the footage's language (D147), keyed apart in the cache.
+    English and "auto" leave the prompt exactly as it was."""
+    from ..config import LANGUAGES
+
+    if language in ("", "en", "auto") or language not in LANGUAGES:
+        return variant
+    name = LANGUAGES[language]
+    return PromptVariant(f"{variant.key}:lang-{language}", variant.system + f"""
+
+The footage is in {name}. Write every piece of text you produce (hook_text, suggested_caption,
+reasons) in {name}, in the way a native speaker posting on social media would.""")
+
+
 PROMPT_A = PromptVariant("a", PROMPT_A_SYSTEM)
 PROMPT_B = PromptVariant("b", PROMPT_B_SYSTEM)
 

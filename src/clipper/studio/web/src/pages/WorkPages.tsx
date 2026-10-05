@@ -14,7 +14,8 @@ const HINTS: Partial<Record<ClipFilter, React.ReactNode>> = {
 };
 export type ClipFilter = (typeof FILTERS)[number][0];
 
-export const inFilter = (c: Clip, f: ClipFilter) => f === "all" || c.status === f;
+// A campaign that takes no links (your own channel) has nothing "to submit": its posted clips are under All.
+export const inFilter = (c: Clip, f: ClipFilter) => f === "all" || (c.status === f && !(f === "posted" && c.submits === false));
 
 /** The first filter with anything in it, in the order a clip moves through them. */
 export const firstFilter = (clips: Clip[]): ClipFilter =>

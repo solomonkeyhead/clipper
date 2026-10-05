@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import json
 
+from .. import platforms
 from ..utils.logging import get_logger
 from . import db
 
 log = get_logger(__name__)
 
 #: A post's platform -> the campaign platform it posts for (config.PLATFORMS).
-CAMPAIGN_PLATFORM = {"tiktok": "tiktok", "instagram": "instagram_reels", "youtube": "youtube_shorts", "x": "x"}
+CAMPAIGN_PLATFORM = {p: t for p, t in platforms.TARGET_OF.items() if p in ("tiktok", "instagram", "youtube", "x")}
 
 
 def key(platform: str, handle: str) -> str:

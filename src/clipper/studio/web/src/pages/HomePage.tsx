@@ -263,7 +263,7 @@ export function DashboardPage() {
     .sort((a, b) => (a.post.posted_at ?? "").localeCompare(b.post.posted_at ?? ""));
   const firstRun = Object.values(home.first_run).some((done) => !done);
   const active = clips.filter((c) => c.status !== "skipped" && !archived.has(c.campaign));
-  const by = (s: string) => active.filter((c) => c.status === s);
+  const by = (s: string) => active.filter((c) => c.status === s && !(s === "posted" && c.submits === false));
 
   // The one thing to do next (D143): the first clip to post, else the first link to submit, else a
   // brief task, else the channel's next step, else more clips. One button, so opening the app has a next move.

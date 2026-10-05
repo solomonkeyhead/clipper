@@ -588,14 +588,20 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
     weights, taste = _learning(config, campaign)
     llm = config.llm.model_copy(update={
         "campaign_focus": campaign.selection_focus,
+        "language": campaign.language,
+        # The sound-alike caption fixes are English homophones (D147).
+        **({"correct_captions": False} if campaign.language not in ("en", "auto") else {}),
         "user_taste": taste,
         **({"rubric_weights": config.llm.rubric_weights.model_copy(update=weights)}
            if weights else {}),
         "drop_needs_prior_context":
             config.llm.drop_needs_prior_context and not campaign.scripted,
     })
+    # The footage's language, for the speech recognition too (English and "auto" leave it to detect).
+    transcription = (config.transcription.model_copy(update={"language": campaign.language})
+                     if campaign.language not in ("en", "auto") else config.transcription)
     return config.model_copy(update={"candidates": candidates, "render": render, "llm": llm,
-                                     "refine": refine})
+                                     "refine": refine, "transcription": transcription})
 
 
 def _learning(config: Config, campaign: CampaignConfig) -> tuple[dict[str, float] | None, str]:

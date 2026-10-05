@@ -131,6 +131,7 @@ class Proof(BaseModel):
 class Clip(BaseModel):
     id: int
     campaign: str
+    submits: bool = True   # its posts' links are submitted to the campaign (False: your own channel, D147)
     title: str
     hook: str
     caption: str
@@ -207,6 +208,8 @@ class Campaign(BaseModel):
     locked_usd: float = 0              # earned on paper by posts still under that minimum
     locked_posts: int = 0
     own_channel: bool = False          # the user's own channel, not a paid campaign (D140)
+    submits: bool = True               # its posts' links are submitted to the campaign (D147)
+    pay_model: str = "per_view"        # per_view | per_clip | none
 
 
 class Brief(BaseModel):

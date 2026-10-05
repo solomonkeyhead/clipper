@@ -15,6 +15,7 @@ from typing import Annotated, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from . import platforms as _platforms
 from .paths import REPO_ROOT
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "default.yaml"
@@ -215,6 +216,8 @@ class LLMConfig(StrictModel):
     drop_needs_prior_context: bool = True
     # A campaign's `selection_focus`, set per run (runner.campaign_config).
     campaign_focus: str = ""
+    # The language captions, hooks and descriptions are written in, set per run from the campaign (D147).
+    language: str = "en"
     # What the user's own ratings say they like and dislike (learn/feedback.py),
     # set per run; guidance for the scorer, weaker than the campaign focus.
     user_taste: str = ""
@@ -496,12 +499,10 @@ class EditPermissions(StrictModel):
 
 
 #: Where a campaign's clips can be posted (CampaignConfig.platform_targets).
-PLATFORMS = ("tiktok", "instagram_reels", "youtube_shorts", "x")
+PLATFORMS = _platforms.TARGETS
 #: Every platform's name as shown, under both its account key ("instagram") and
 #: its campaign target ("instagram_reels"), plus the ones a post link can be from.
-PLATFORM_NAMES = {"tiktok": "TikTok", "instagram": "Instagram", "instagram_reels": "Instagram",
-                  "youtube": "YouTube", "youtube_shorts": "YouTube", "x": "X",
-                  "facebook": "Facebook", "snapchat": "Snapchat", "threads": "Threads"}
+PLATFORM_NAMES = _platforms.NAMES
 
 
 class CaptionRule(StrictModel):
@@ -532,6 +533,12 @@ class CaptionRule(StrictModel):
         return v
 
 
+#: Languages the clipping prompts can be told to write in (campaign `language`; "auto" and "en" leave them as they were).
+LANGUAGES = {"en": "English", "es": "Spanish", "fr": "French", "de": "German", "pt": "Portuguese", "it": "Italian",
+             "nl": "Dutch", "pl": "Polish", "tr": "Turkish", "ru": "Russian", "ja": "Japanese", "ko": "Korean",
+             "zh": "Chinese", "ar": "Arabic", "hi": "Hindi", "id": "Indonesian"}
+
+
 class CampaignConfig(StrictModel):
     """Per-campaign rules. `source_authorization` is the gate on the whole tool."""
 
@@ -559,6 +566,12 @@ class CampaignConfig(StrictModel):
     # The user's own channel (German Professor, made in Create), not a paid campaign (D140):
     # listed apart from the campaigns, never offered for clipping.
     own_channel: bool = False
+    # How the campaign pays (D147): per 1,000 views at `reward_per_1k_usd` (Whop, Vyro...), a flat fee
+    # for each post, or nothing (your own channel, a client who pays outside Clipper).
+    pay_model: Literal["per_view", "per_clip", "none"] = "per_view"
+    flat_fee_usd: float | None = Field(default=None, ge=0)
+    # Whether a post's link has to be submitted to the campaign: the "To submit" step.
+    submit_links: bool = True
     credit_position: CreditPosition = "top_left"
     forbidden_terms: tuple[str, ...] = ()
     mask_profanity_in_captions: bool = True
@@ -566,7 +579,7 @@ class CampaignConfig(StrictModel):
     # self-harm, hard drugs) in its caption, title and hook; swearing stays (D82).
     censor_flagged_words: bool = True
     brand_mentions: BrandMentions = BrandMentions()
-    language: str = "en"
+    language: str = "en"   # of the footage and the text to write: "auto" detects it, "en", "es"... (D147)
     # Most clips from one video when Clipper decides how many; None = every
     # moment that clears the quality bar (D71).
     max_clips_per_source: int | None = Field(default=None, ge=1)
@@ -660,6 +673,15 @@ class CampaignConfig(StrictModel):
                 "there is nothing to burn in"
             )
         return self
+
+    @property
+    def submits(self) -> bool:
+        """Whether its posts' links are submitted to someone (not your own channel)."""
+        return self.submit_links and not self.own_channel
+
+    @property
+    def pays(self) -> bool:
+        return self.pay_model != "none" and not self.own_channel
 
     @classmethod
     def load(cls, path: Path) -> CampaignConfig:

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 
+from .. import platforms
 from ..learn import log as perf
 
 CARRIED = ["caption", "duration_s", "opening", "lead_in_s", "hook", "campaign",
@@ -24,9 +25,7 @@ class PostLinkError(ValueError):
 #: Platforms a link can be filed for. TikTok, Instagram, YouTube and X sync
 #: their numbers (X once an account is connected); the rest are filed for
 #: submitting, without numbers -- they have no official API that gives them.
-HOSTS = {"tiktok.com": "tiktok", "instagram.com": "instagram", "youtube.com": "youtube", "youtu.be": "youtube",
-         "x.com": "x", "twitter.com": "x", "facebook.com": "facebook", "fb.watch": "facebook",
-         "snapchat.com": "snapchat", "threads.net": "threads", "threads.com": "threads"}
+HOSTS = platforms.HOSTS
 
 
 def platform_of(url: str) -> str:

@@ -204,6 +204,16 @@ def estimate_earnings(views: float | None, rate: float | None, minimum: float | 
     return round(amount, 2)
 
 
+def post_earnings(views: float | None, brief) -> float | None:
+    """One post's estimate under its campaign's pay model (D147): per 1,000 views as before, the flat fee
+    for a post, or nothing where the campaign doesn't pay through Clipper (your own channel)."""
+    if brief is None or not brief.pays:
+        return None
+    if brief.pay_model == "per_clip":
+        return None if brief.flat_fee_usd is None else round(brief.flat_fee_usd, 2)
+    return estimate_earnings(views, brief.reward_per_1k_usd, brief.min_payout_usd, brief.max_payout_usd)
+
+
 def locked_earnings(posts, brief_of) -> tuple[float, int]:
     """What posts have earned on paper but that sits under their campaign's minimum payout, so
     pays nothing yet (D118): (dollars, how many posts). `brief_of(post)` gives the campaign
@@ -211,7 +221,7 @@ def locked_earnings(posts, brief_of) -> tuple[float, int]:
     dollars, count = 0.0, 0
     for p in posts:
         brief = brief_of(p)
-        if brief is None or p.est_earnings != 0 or not p.views:
+        if brief is None or brief.pay_model != "per_view" or p.est_earnings != 0 or not p.views:
             continue
         paper = estimate_earnings(p.views, brief.reward_per_1k_usd, None, brief.max_payout_usd) or 0.0
         if paper > 0:

@@ -2626,3 +2626,17 @@ thread); Marc's channel.json became one such file with his videos and ideas atta
 are offered to physics channels only. A first-time user makes a channel before anything else.
 The voice: upload any audio (as before), record in the page (webm), or none (the words timed at the
 channel's pace over a silent track).
+
+## D147: Campaigns that aren't Whop campaigns, other languages, one list of platforms
+- **How a campaign pays** (`pay_model`): per 1,000 views (as before), a flat fee per post (`flat_fee_usd`),
+  or not through Clipper. `stats.post_earnings` is the one estimate; the money cards, trend and Stats use it.
+  `submit_links` says whether a post's link is submitted: off, the clip has no "To submit" step and its
+  chip reads "Posted" (your own channel is that case, `CampaignConfig.submits`/`pays`). The editor has
+  both, and the authorization line it writes follows the pay model.
+- **Language** (`language`, "en" default): another language sets the speech recognition to it, tells the
+  scorer and the description writer to write in it, and skips the English sound-alike caption fixes. English
+  and "auto" leave every prompt exactly as it was.
+- **Platforms**: `clipper/platforms.py` is the one list (names, campaign targets, link domains, whether
+  there are numbers or the link is only filed, whether an account can be connected). The config, link parser,
+  accounts and finder derive from it; `npm run gen:api` writes the page's `platforms.gen.ts` from it (a test
+  fails if they differ). Facebook Reels, Snapchat Spotlight and Threads are now campaign targets (link-only).

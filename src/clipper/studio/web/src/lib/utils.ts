@@ -39,11 +39,8 @@ export function ago(stamp: string | null | undefined, now = Date.now()): string 
   return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export const PLATFORM_NAME: Record<string, string> = {
-  tiktok: "TikTok", instagram: "Instagram", instagram_reels: "Instagram",
-  youtube: "YouTube", youtube_shorts: "YouTube Shorts", x: "X",
-  facebook: "Facebook", snapchat: "Snapchat", threads: "Threads",
-};
+// Generated from clipper/platforms.py (npm run gen:api): add a platform there, not here.
+export { PLATFORM_NAME } from "@/api/platforms.gen";
 
 export async function copyText(text: string, what: string): Promise<boolean> {
   try {

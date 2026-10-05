@@ -18,12 +18,12 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from .. import platforms
 from ..campaign.editor import CampaignForm
 from . import db
 
-PLATFORM_OF = {"tiktok": "tiktok", "instagram_reels": "instagram", "youtube_shorts": "youtube"}
-PLATFORM_NAME = {"tiktok": "TikTok", "instagram_reels": "Instagram Reels",
-                 "youtube_shorts": "YouTube Shorts"}
+PLATFORM_OF = {t: p for t, p in platforms.PLATFORM_OF.items() if t in ("tiktok", "instagram_reels", "youtube_shorts")}
+PLATFORM_NAME = {p.target: p.target_name for p in platforms.REGISTRY}
 
 
 def record_found(verdict, brief: str, *, via: str = "email") -> bool:

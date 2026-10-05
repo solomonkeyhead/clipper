@@ -40,6 +40,11 @@ class CampaignForm(BaseModel):
     name: str = ""                     # the id; made from the title when empty
     marketplace: str = ""
     campaign_url: str = ""
+    # How it pays (D147): per 1,000 views, a flat fee per post, or not through Clipper at all.
+    pay_model: Literal["per_view", "per_clip", "none"] = "per_view"
+    flat_fee_usd: float | None = None
+    submit_links: bool = True          # the posts' links are submitted to the campaign
+    language: str = "en"               # of the footage, and the captions written for it
     reward_per_1k_usd: float | None = None
     min_payout_usd: float | None = None
     max_payout_usd: float | None = None
@@ -92,6 +97,8 @@ def title_of(campaign: CampaignConfig) -> str:
 def default_authorization(form: CampaignForm) -> str:
     where = f" on {form.marketplace}" if form.marketplace else ""
     link = f" ({form.campaign_url})" if form.campaign_url else ""
+    if form.pay_model == "none":
+        return f"Footage the account owner is authorized to use for \"{form.title.strip()}\"{link}. Only that footage is used."
     return (f"Official footage supplied by the campaign \"{form.title.strip()}\"{where}{link}, "
             "which pays clippers to post it. Only that footage is used.")
 
@@ -100,7 +107,8 @@ def to_form(campaign: CampaignConfig) -> CampaignForm:
     content = campaign.content_type or ("scripted" if campaign.scripted else "podcast")
     return CampaignForm(
         title=title_of(campaign), name=campaign.name, marketplace=campaign.marketplace,
-        campaign_url=campaign.campaign_url, reward_per_1k_usd=campaign.reward_per_1k_usd,
+        campaign_url=campaign.campaign_url, pay_model=campaign.pay_model, flat_fee_usd=campaign.flat_fee_usd,
+        submit_links=campaign.submit_links, language=campaign.language, reward_per_1k_usd=campaign.reward_per_1k_usd,
         min_payout_usd=campaign.min_payout_usd, max_payout_usd=campaign.max_payout_usd,
         deadline=campaign.deadline, source_authorization=campaign.source_authorization,
         platform_targets=list(campaign.platform_targets), content_type=content,
@@ -163,9 +171,13 @@ def merged(form: CampaignForm, existing: dict | None) -> dict:
         "title": title,
         "marketplace": form.marketplace.strip(),
         "campaign_url": form.campaign_url.strip(),
-        "reward_per_1k_usd": form.reward_per_1k_usd,
-        "min_payout_usd": form.min_payout_usd,
-        "max_payout_usd": form.max_payout_usd,
+        "pay_model": form.pay_model,
+        "flat_fee_usd": form.flat_fee_usd if form.pay_model == "per_clip" else None,
+        "submit_links": form.submit_links,
+        "language": form.language.strip() or "en",
+        "reward_per_1k_usd": form.reward_per_1k_usd if form.pay_model == "per_view" else None,
+        "min_payout_usd": form.min_payout_usd if form.pay_model == "per_view" else None,
+        "max_payout_usd": form.max_payout_usd if form.pay_model == "per_view" else None,
         "deadline": form.deadline.strip(),
         "source_authorization": auth,
         "platform_targets": platforms,
