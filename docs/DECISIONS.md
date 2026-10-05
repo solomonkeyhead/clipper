@@ -2508,3 +2508,8 @@ All time toggle, All time by default. A window shows what was gained in it (view
 earnings priced by each campaign's rules at the window's two ends); "Actually paid" stays all
 time, since payouts are recorded without a date range that fits.
 
+
+## D138: Stats and the dashboard agree on money and views
+Stats showed $3.49 and 2.5K views, the dashboard $1.50 and 1.5K: Stats counted archived
+campaigns (Chad Powers), the dashboard left them out. "All campaigns" on Stats now leaves
+archived ones out too; picking an archived campaign in the dropdown still shows it.

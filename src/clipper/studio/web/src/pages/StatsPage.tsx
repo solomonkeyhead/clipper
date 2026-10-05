@@ -142,7 +142,9 @@ export function StatsPage() {
   const { data: posts, isLoading } = usePosts();
   const { data: campaigns = [] } = useCampaigns();
   const [campaign, setCampaign] = useState("all");
-  const list = (posts ?? []).filter((p) => campaign === "all" || p.campaign === campaign);
+  // "All campaigns" leaves archived ones out, as the dashboard does, so the two money figures agree.
+  const archived = new Set(campaigns.filter((c) => c.archived).map((c) => c.name));
+  const list = (posts ?? []).filter((p) => campaign === "all" ? !archived.has(p.campaign) : p.campaign === campaign);
   const sum = (f: (p: Post) => number | null | undefined) => list.reduce((s, p) => s + (f(p) ?? 0), 0);
   const withWatch = list.filter((p) => p.avg_watch_s != null);
   const withSkip = list.filter((p) => p.skip_rate_pct != null);
