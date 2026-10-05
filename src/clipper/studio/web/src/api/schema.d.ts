@@ -2454,6 +2454,11 @@ export interface components {
              * @default 0
              */
             locked_posts: number;
+            /**
+             * Own Channel
+             * @default false
+             */
+            own_channel: boolean;
         };
         /** CampaignCheck */
         CampaignCheck: {

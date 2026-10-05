@@ -1,5 +1,6 @@
 # The user's own channel (@German.Professor): original videos made in Create (D108).
 name: german-professor
+own_channel: true
 title: German Professor
 source_authorization: Original videos made by the channel owner for their own account.
 platform_targets: [youtube_shorts, tiktok, instagram_reels]

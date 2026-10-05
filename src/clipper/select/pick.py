@@ -149,7 +149,10 @@ def select(
 def _quality_gate(entry: ScoredCandidate, cfg: SelectionConfig) -> str:
     """Why this candidate is not good enough, or "" if it is."""
     if cfg.use_absolute_gate:
-        llm_total = entry.raw.get("llm")
+        # The bar is on what was read (D141): the watch pass (flash-lite) gave 54 of 55 Love and
+        # Justice moments 7.6 to 9.5, and averaged in, it lifted a 3.1 over the 5.5 bar. The
+        # watched score still ranks the moments that clear it.
+        llm_total = entry.raw.get("llm_read", entry.raw.get("llm"))
         if llm_total is not None and llm_total < cfg.min_llm_total:
             return (
                 f"LLM rubric total {llm_total:.2f}/10 is below the absolute "

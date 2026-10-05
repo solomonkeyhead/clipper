@@ -351,7 +351,7 @@ class Snapshot:
             to_submit=sum(1 for p in posts if not p.submitted_at),
             last_post=max((p.posted_at for p in posts if p.posted_at), default=None),
             min_payout_usd=brief.min_payout_usd if brief else None,
-            locked_usd=locked[0], locked_posts=locked[1],
+            locked_usd=locked[0], locked_posts=locked[1], own_channel=bool(brief and brief.own_channel),
             **self.money(name, brief, posts))
 
     def money(self, name: str, brief: CampaignConfig | None, posts: list[Post]) -> dict:

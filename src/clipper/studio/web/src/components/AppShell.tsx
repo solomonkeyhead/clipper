@@ -36,7 +36,8 @@ function useNav(): NavItem[] {
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
     // Create is the daily job, so it sits right under the Dashboard (D118).
     { to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" },
-    { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C", badge: active.size },
+    { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C",
+      badge: campaigns.filter((c) => !c.archived && !c.own_channel).length },
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
     { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
     { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },

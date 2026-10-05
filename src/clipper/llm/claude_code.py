@@ -62,9 +62,10 @@ def _shim(command: str) -> bool:
     return command.lower().endswith((".cmd", ".bat"))
 
 
-def _json_in(text: str) -> str:
-    """The JSON object in an answer that may wrap it in words or a ``` fence."""
-    start, end = text.find("{"), text.rfind("}")
+def _json_in(text: str, opener: str = "{") -> str:
+    """The JSON object (or, with opener "[", list) in an answer that may wrap it in words or a
+    ``` fence."""
+    start, end = text.find(opener), text.rfind("}" if opener == "{" else "]")
     if start < 0 or end < start:
         raise LLMError(f"Claude Code's answer had no JSON in it: {text[:200]}")
     return text[start:end + 1]
@@ -109,6 +110,9 @@ class ClaudeCodeBackend(LLMBackend):
                 # No JSON on a .cmd command line either (cmd.exe and quotes): asked for in words.
                 prompt += ("\n\nAnswer with only a JSON object matching this JSON Schema, nothing else:\n"
                            + json.dumps(wanted.model_json_schema()))
+            elif schema is not None and not wanted:
+                # A list (the clip judge's scores, D139): no --json-schema for those, so in words.
+                prompt += "\n\nAnswer with only the JSON array, nothing else."
             elif wanted:
                 args += ["--json-schema", json.dumps(wanted.model_json_schema(), separators=(",", ":"))]
             try:
@@ -133,6 +137,8 @@ class ClaudeCodeBackend(LLMBackend):
             text = json.dumps(reply["structured_output"])
         elif wanted:
             text = _json_in(text)
+        elif schema is not None:
+            text = _json_in(text, "[")
         if not text.strip():
             raise LLMError("Claude Code returned nothing")
         global spent_usd

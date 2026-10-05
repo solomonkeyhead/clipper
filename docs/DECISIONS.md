@@ -2514,3 +2514,50 @@ Stats showed $3.49 and 2.5K views, the dashboard $1.50 and 1.5K: Stats counted a
 campaigns, the dashboard left them out. Marc wants all-time earnings, so the dashboard's money,
 views, paid and trend now include archived campaigns too. Pipeline, to-submit and tasks stay
 active-only (they are work still to do).
+
+## D139: Why Love and Justice EP1 made 9 bad clips, and Claude as the clip judge
+All 9 clips from the first run were rated 1 star (weak hook 8 of 9, boring 8, needs context 6,
+bad ending 6). Marc then switched the campaign from "other" to "scripted" and ran it again, and
+got the same 9 clips. Three causes, from the logs:
+1. **Cached stages ignored the settings.** `StageCache.is_fresh` only checked that a file existed,
+   so the rerun logged "reusing 60 cached candidates" and "reusing cached signals": the scripted
+   profile (scene-aware windows, no "needs earlier scenes" drop, 20-45 s timing) never ran, nor
+   would a new focus, new learnt taste or another campaign on the same video. Each stage now
+   writes `<artifact>.key`, a hash of the settings that shaped it (`pipeline.stage_keys`:
+   candidates <- `config.candidates`; signals <- that + `config.llm`; scored <- that +
+   `config.weights`) and is redone when it differs. The LLM cache still answers unchanged
+   questions, so a rescore after a small change costs only what changed.
+2. **The weakest model judged.** `gemini:auto` resolves to `gemini-flash-lite-latest` (chosen in
+   Phase 0 on podcasts), and the stronger `gemini-3-flash-preview` was returning 504s and resting.
+   Picking the funniest 30 s of a comedy is taste, where a small model is weakest; the Learning
+   page agreed: score vs Marc's ratings rho = 0.14, "weak opening" his top complaint (11).
+   New `llm.judge_model` (default claude-opus-5-5): Claude, by API key or on Marc's plan via
+   Claude Code, scores the moments and picks the opening lines (`pipeline.judge_backend`,
+   `_judged`). Gemini still watches the video (Claude can't) and scores whatever Claude leaves
+   unscored, or everything if Claude isn't set up. Settings has a "Claude judges the moments"
+   switch (`claude_judge`, on). About 10 Opus requests a video, on the plan.
+3. **The "needs earlier scenes" drop** removed 25 of 60 moments under "other"; scripted turns it
+   off (D52's note), which is what Marc's switch was meant to do, and now does.
+Also: Claude Code answers with a JSON list are now pulled out of words or fences
+(`_json_in(text, "[")`), since the scorer and openings ask for lists, not objects.
+
+## D140: Your channel apart from campaigns
+German Professor is Marc's own channel, not a paid campaign. `own_channel: true` in its yaml
+(`CampaignConfig.own_channel`); the Campaigns page lists it under "Your channel", the Campaigns
+badge doesn't count it, and New clips never offers it. Its clips still show in Clips and Stats.
+Also on New clips: a failed run that a later run of the same video and campaign replaced is
+hidden (13 "Failed" rows sat above the 9 clips after one bad minute).
+
+## D141: The quality bar is on what was read; a rerun skips moments rated not good
+Rescoring Love and Justice EP1 with Claude as judge (D139): Claude's median 4.0, best 6.6, against
+flash-lite's 5.7 and 8.1 on the run Marc rated all 1 star. But 10 clips still came out, some
+read at 3.1, because the gate used the blend of read and watched (D67), and the watch pass
+(flash-lite) gave 54 of 55 moments 7.6 to 9.5 and "the picture adds" 6+ to 48 of 55: on this
+model it doesn't tell moments apart, it only lifts them all ~2 points. `_quality_gate` now uses
+the read total (`raw["llm_read"]`) when there is one; the blend still ranks, and a moment with
+no dialogue still passes on the watch alone. This undoes D67's "watching can lift a look-joke
+over the bar"; revisit if a stronger watch model answers reliably.
+Also, a rerun of a video leaves out moments that lie >= 50% inside a clip of the same video
+rated 1 or 2 stars (`runner._skip_rejected`): the rescore offered 3 of the 4 moments Marc had
+already rated 1 star. Result: 3 clips (the guilty verdict into Supa Hot Fire's entrance, the
+cousin joke, Brody thrown out), 40 below the bar.

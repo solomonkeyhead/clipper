@@ -206,6 +206,7 @@ class Campaign(BaseModel):
     min_payout_usd: float | None = None  # its minimum payout, from the brief (D118)
     locked_usd: float = 0              # earned on paper by posts still under that minimum
     locked_posts: int = 0
+    own_channel: bool = False          # the user's own channel, not a paid campaign (D140)
 
 
 class Brief(BaseModel):

@@ -75,6 +75,11 @@ llm:
     - bot -> bite          # "leishmaniasis from the bot": said, even if "bite" is what's true
     - pickies -> piques    # "pickies" is the speaker's word
     - cup -> cope          # "Cup? Cup?" at a sperm bank
+  # Who judges the moments and picks each clip's opening line (D139). Flash-lite judged Love and
+  # Justice EP1 and all 9 clips were rated 1 star (weak hook, boring). Claude, by API key or on
+  # your Claude plan (counts toward its usage, about 10 calls a video); Gemini still watches the
+  # video and is the fallback. null = the free Gemini models judge.
+  judge_model: claude-opus-5-5
   use_few_shot_examples: false
   few_shot_count: 3
   rubric_weights:

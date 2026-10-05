@@ -351,7 +351,7 @@ export function NewClipsPage() {
   const { data: setup } = useSetup();
   const { data: settings } = useSettings();
   const qc = useQueryClient();
-  const active = campaigns.filter((c) => c.has_brief && !c.archived);
+  const active = campaigns.filter((c) => c.has_brief && !c.archived && !c.own_channel);  // never clip for your own channel (D140)
   const [campaign, setCampaign] = useState(search.campaign ?? "");
   // The videos to clip, in the order picked; one job each (D72).
   const [picked, setPicked] = useState<string[]>([]);
@@ -390,7 +390,11 @@ export function NewClipsPage() {
   // The queue reads top to bottom in the order it runs; finished jobs, newest first, below (D74).
   const queue = jobs.filter((j) => j.status === "running" || j.status === "queued")
     .sort((a, b) => (a.status === "running" ? -1 : b.status === "running" ? 1 : a.id - b.id));
-  const finished = jobs.filter((j) => j.status !== "running" && j.status !== "queued");
+  // A failed run that a later run of the same video for the same campaign replaced is noise:
+  // one bad minute (a setting changed mid-update) once left 13 "Failed" rows above the 9 clips.
+  const finished = jobs.filter((j) => j.status !== "running" && j.status !== "queued"
+    && !(j.status === "failed" && jobs.some((k) => k.id > j.id && k.status === "done"
+      && k.campaign === j.campaign && k.source.split(/[\\/]/).pop() === j.source.split(/[\\/]/).pop())));
   // Videos already clipped, and how many clips each gave, so none is clipped twice by mistake.
   const clipped = new Map<string, number>();
   for (const j of jobs) {

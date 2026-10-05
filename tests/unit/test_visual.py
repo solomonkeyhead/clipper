@@ -111,7 +111,7 @@ class TestWatch:
 
 
 class TestUse:
-    def test_ranking_and_the_gate_use_the_blended_total(self):
+    def test_ranking_uses_the_blended_total_and_the_gate_the_read_one(self):
         cfg = Config()
         values = [value(1, 5.0, watched=8.0), value(2, 6.0)]
         scored = combine(Signals(source_id="s", available=["llm"], values=values), cfg)
@@ -119,8 +119,11 @@ class TestUse:
         assert first.candidate_id == "c1" and first.raw["llm"] == 6.5
         assert first.raw["llm_read"] == 5.0 and first.raw["watched"] == 8.0
         assert "llm_read" not in second.raw
-        # 5.0 read alone is under the 5.5 bar; watched, it clears it.
-        assert _quality_gate(first, cfg.selection) == ""
+        # Ranked first on the blend, but 5.0 read is under the 5.5 bar: watching can't lift it (D141).
+        assert "below the absolute" in _quality_gate(first, cfg.selection)
+        quiet = combine(Signals(source_id="s", available=["llm"],
+                                values=[value(3, None, watched=8.0)]), cfg).scored[0]
+        assert _quality_gate(quiet, cfg.selection) == ""  # nothing to read: the watch decides
 
     def test_the_watched_hook_wins_when_the_picture_carries_it(self):
         scores = RubricScores(hook_strength=5, standalone_clarity=5, payoff=5, emotional_intensity=5,

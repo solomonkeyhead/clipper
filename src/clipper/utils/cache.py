@@ -92,9 +92,22 @@ class StageCache:
     def path(self, artifact: str) -> Path:
         return self.work_dir / artifact
 
-    def is_fresh(self, stage: str, artifact: str) -> bool:
-        """True when `stage` can be skipped and `artifact` reused."""
+    def is_fresh(self, stage: str, artifact: str, key: str = "") -> bool:
+        """True when `stage` can be skipped and `artifact` reused. With a `key` (a hash of
+        the settings that shaped it), only when it was made under that same key: before
+        D139 a changed campaign (scripted, focus, lengths, learnt taste) reused the old
+        moments and scores, so a new profile made the same clips."""
         if stage in self.forced:
             return False
         path = self.path(artifact)
-        return path.is_file() and path.stat().st_size > 0
+        if not (path.is_file() and path.stat().st_size > 0):
+            return False
+        return not key or (self._key_path(artifact).is_file() and \
+            self._key_path(artifact).read_text(encoding="utf-8") == key)
+
+    def keep(self, artifact: str, key: str) -> None:
+        """Record the settings key `artifact` was just made under."""
+        self._key_path(artifact).write_text(key, encoding="utf-8")
+
+    def _key_path(self, artifact: str) -> Path:
+        return self.path(artifact + ".key")

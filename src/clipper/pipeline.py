@@ -39,7 +39,7 @@ from .signals.combine import combine
 from .transcribe.segment import segment as run_segment
 from .transcribe.whisper import TranscribeStats
 from .transcribe.whisper import transcribe as run_transcribe
-from .utils.cache import StageCache
+from .utils.cache import StageCache, content_hash
 from .utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -90,7 +90,8 @@ def prepare(
         scenes = _scenes(info, sentences, config, cache, backend_override)
 
     candidates_path = work / "candidates.json"
-    if cache.is_fresh("candidates", "candidates.json"):
+    keys = stage_keys(config, backend_override)
+    if cache.is_fresh("candidates", "candidates.json", keys["candidates"]):
         candidates = Candidates.load(candidates_path)
         log.info("reusing %d cached candidates", len(candidates.candidates))
     else:
@@ -99,6 +100,7 @@ def prepare(
             scenes=scenes,
         )
         candidates.save(candidates_path)
+        cache.keep("candidates.json", keys["candidates"])
 
     return info, transcript, sentences, candidates, stats
 
@@ -120,6 +122,48 @@ def _scenes(info: SourceInfo, sentences: Sentences, config: Config, cache: Stage
     return scenes
 
 
+def stage_keys(config: Config, backend_override: str | None) -> dict[str, str]:
+    """What each cached stage was made under (D139): its own settings and every earlier
+    stage's. A change redoes the stage; the LLM cache still answers unchanged questions,
+    so a rescore after a small change costs only the questions that changed."""
+    candidates = content_hash(config.candidates.model_dump(mode="json"))
+    signals = content_hash(candidates, config.llm.model_dump(mode="json"), backend_override)
+    scored = content_hash(signals, config.weights.model_dump(mode="json"))
+    return {"candidates": candidates, "signals": signals, "combine": scored}
+
+
+def judge_backend(config: Config, backend_override: str | None = None) -> LLMBackend | None:
+    """Claude, when the user set `llm.judge_model` and has Claude (D139): by API key, else on
+    their plan through Claude Code. None: the scoring model judges, as before."""
+    import os
+
+    from .llm.claude_code import cli
+
+    model = config.llm.judge_model
+    if not model or backend_override or not _claude_judge_on():
+        return None
+    try:
+        if os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            return create_backend("anthropic", model=model, max_retries=1, requests_per_minute=50, timeout=300)
+        if config.llm.create_via_claude_plan and cli():
+            return create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=420)
+    except Exception as exc:  # the free models still judge
+        log.warning("Claude can't judge the moments (%s); Gemini will", exc)
+    return None
+
+
+def _claude_judge_on() -> bool:
+    """The Control Center's "Claude judges the moments" setting (on unless turned off, D139)."""
+    from .studio import db
+
+    try:
+        with db.connect() as con:
+            return db.settings(con).get("claude_judge", "1") == "1"
+    except Exception as exc:  # no library: the default
+        log.debug("judge setting unread: %s", exc)
+        return True
+
+
 def build_backend(config: Config, *, override: str | None = None) -> LLMBackend:
     """Instantiate the configured LLM backend, or the override."""
     name = override or config.llm.backend
@@ -139,6 +183,7 @@ def compute_signals(
     *,
     backend: LLMBackend,
     llm_cache: LLMCache | None = None,
+    judge: LLMBackend | None = None,
 ) -> Signals:
     """Compute all four signal families for every candidate.
 
@@ -179,10 +224,7 @@ def compute_signals(
     # The LLM last: it is the slowest and the only one that can cost money, so
     # a failure in a cheap signal surfaces before any quota is spent.
     # Moments with no dialogue have nothing to read; only watching judges them.
-    llm_result = llm_signal.score_candidates(
-        [c for c in items if not c.quiet], backend, config.llm, cache=llm_cache,
-        examples=_few_shot_examples(config),
-    )
+    llm_result = _judged([c for c in items if not c.quiet], config, backend, judge, llm_cache)
     if llm_result.totals or llm_result.drops:
         available.append("llm")
 
@@ -217,6 +259,34 @@ def compute_signals(
         ", ".join(available), len(values), len(llm_result.drops),
     )
     return Signals(source_id=info.source_id, available=available, values=values)
+
+
+def _judged(items, config: Config, backend: LLMBackend, judge: LLMBackend | None,
+            llm_cache: LLMCache | None) -> llm_signal.LLMSignalResult:
+    """The rubric scores: from the judge (Claude) when there is one, and from `backend` for
+    any moment the judge couldn't score, or for all of them if it can't run at all."""
+    examples = _few_shot_examples(config)
+    if judge is None:
+        return llm_signal.score_candidates(items, backend, config.llm, cache=llm_cache, examples=examples)
+    try:
+        result = llm_signal.score_candidates(items, judge, config.llm, cache=llm_cache, examples=examples)
+    except LLMConfigError as exc:
+        log.warning("%s can't judge (%s); %s will", judge.describe(), exc, backend.describe())
+        return llm_signal.score_candidates(items, backend, config.llm, cache=llm_cache, examples=examples)
+    log.info("moments judged by %s", judge.describe())
+    if result.unscored:
+        missed = set(result.unscored)
+        rest = llm_signal.score_candidates([c for c in items if c.candidate_id in missed], backend,
+                                           config.llm, cache=llm_cache, examples=examples)
+        result.unscored = rest.unscored
+        for cid in missed:
+            if cid in rest.scores:
+                result.scores[cid] = rest.scores[cid]
+            if cid in rest.totals:
+                result.totals[cid] = rest.totals[cid]
+            if cid in rest.drops:
+                result.drops[cid] = rest.drops[cid]
+    return result
 
 
 def _watch(info: SourceInfo, items, values: list[SignalValues], config: Config,
@@ -265,23 +335,27 @@ def score(
     backend: LLMBackend | None = None
     llm_cache = LLMCache()
 
-    if cache.is_fresh("signals", "signals.json"):
+    keys = stage_keys(config, backend_override)
+    if cache.is_fresh("signals", "signals.json", keys["signals"]):
         signals = Signals.load(signals_path)
         log.info("reusing cached signals (%s)", ", ".join(signals.available))
     else:
         backend = build_backend(config, override=backend_override)
         log.info("scoring %d candidates with %s", len(candidates.candidates), backend.describe())
+        judge = judge_backend(config, backend_override)
         signals = compute_signals(
-            info, transcript, candidates, config, backend=backend, llm_cache=llm_cache
+            info, transcript, candidates, config, backend=backend, llm_cache=llm_cache, judge=judge
         )
         signals.save(signals_path)
+        cache.keep("signals.json", keys["signals"])
 
-    if cache.is_fresh("combine", "scored.json") and cache.is_fresh("signals", "signals.json"):
+    if cache.is_fresh("combine", "scored.json", keys["combine"]) and cache.is_fresh("signals", "signals.json", keys["signals"]):
         scored = Scored.load(scored_path)
     else:
         scored = combine(signals, config, durations={
             c.candidate_id: c.duration for c in candidates.candidates})
         scored.save(scored_path)
+        cache.keep("scored.json", keys["combine"])
 
     return ScoreOutcome(
         info=info,

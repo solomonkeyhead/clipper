@@ -58,6 +58,13 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 - Settings: `config/default.yaml` -> `llm.create_model`, `create_quick_model`,
   `create_via_claude_plan`, `create_claude_only`, `create_gemini_jobs`.
 
+## Clipping AI
+- Moments are judged (rubric scores, opening lines) by Claude when `llm.judge_model` is set and
+  Claude is reachable (API key, else Claude Code on Marc's plan), Gemini otherwise; Gemini always
+  watches the video (D139). Settings switch: `claude_judge`.
+- Cached stages in `data/work/<source>/` carry a `.key` of the settings that made them
+  (`pipeline.stage_keys`); a changed campaign redoes them (D139).
+
 ## Where things are
 - `src/clipper/cli.py` commands; `studio/server.py` + `studio/create_api.py` the web API;
   `studio/web/src/` the page source (built into `studio/static/`, don't read the build).

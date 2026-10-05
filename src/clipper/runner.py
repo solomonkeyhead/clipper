@@ -33,7 +33,7 @@ from .llm.base import create as create_backend
 from .llm.cache import LLMCache
 from .models import ClipPlan, Sentences, SourceInfo, Transcript, Word
 from .paths import ensure
-from .pipeline import ScoreOutcome, build_backend, choose, score
+from .pipeline import ScoreOutcome, build_backend, choose, judge_backend, score
 from .qa.checks import QAContext, check_clip, summarize
 from .render.clip import render_clip
 from .render.faces import plan_layout_for
@@ -105,6 +105,7 @@ def run(
         weights_used=outcome.scored.weights_used,
     )
 
+    _skip_rejected(outcome)
     selection = choose(outcome, config, limit=limit)
     result.selection_note = selection.stopped_because
     _choose_openings(selection.picks + selection.reserves, outcome, config, backend_override, campaign)
@@ -168,6 +169,8 @@ def _choose_openings(picks: list[Pick], outcome: ScoreOutcome, config: Config,
     # answers (on flash-lite, "It's definitely true" was picked as a payoff).
     try:
         backends = _correction_backends(config, backend_override)
+        judge = judge_backend(config, backend_override)  # Claude first when set (D139)
+        backends = [judge, *backends] if judge else backends
     except Exception as exc:  # the code rule alone still runs
         log.warning("opening lines not chosen by AI: %s", exc)
         backends = []
@@ -175,6 +178,38 @@ def _choose_openings(picks: list[Pick], outcome: ScoreOutcome, config: Config,
                   min_seconds=config.candidates.min_seconds,
                   max_seconds=config.candidates.max_seconds, cache=LLMCache(),
                   payoff=payoff_first() and cold_open_allowed(campaign))
+
+
+#: A moment counts as one the user already threw out when this much of it lies in a clip of
+#: the same video they rated 1 or 2 stars.
+REJECTED_OVERLAP = 0.5
+
+
+def _skip_rejected(outcome: ScoreOutcome) -> None:
+    """Leave out moments the user already rated not good on this video (D141). Rerunning Love
+    and Justice EP1 with a new profile offered 3 of the 4 moments they had rated 1 star."""
+    from .studio import db
+
+    try:
+        with db.connect() as con:
+            bad = con.execute("SELECT start_s, end_s FROM clips WHERE source_id=? AND rating <= 2",
+                              (outcome.info.source_id,)).fetchall()
+    except Exception as exc:  # no library: nothing rated
+        log.debug("ratings unread: %s", exc)
+        return
+    if not bad:
+        return
+    spans = {c.candidate_id: (c.start, c.end) for c in outcome.candidates.candidates}
+
+    def rejected(cid: str) -> bool:
+        start, end = spans.get(cid, (0.0, 0.0))
+        inside = sum(max(0.0, min(end, b) - max(start, a)) for a, b in bad)
+        return end > start and inside / (end - start) >= REJECTED_OVERLAP
+
+    kept = [s for s in outcome.scored.scored if not rejected(s.candidate_id)]
+    if len(kept) < len(outcome.scored.scored):
+        log.info("left out %d moment(s) you rated not good before", len(outcome.scored.scored) - len(kept))
+        outcome.scored.scored = kept
 
 
 def payoff_first() -> bool:

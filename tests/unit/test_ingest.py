@@ -143,6 +143,24 @@ class TestStageCache:
         assert "ingest" not in cache.forced
         assert "transcribe" not in cache.forced
 
+    def test_a_stage_made_under_other_settings_is_redone(self, tmp_path):
+        """D139: a campaign switched to scripted reused the old scores and made the same clips."""
+        from clipper.config import Config
+        from clipper.pipeline import stage_keys
+
+        (tmp_path / "signals.json").write_text("{}")
+        cache = StageCache(tmp_path)
+        assert not cache.is_fresh("signals", "signals.json", "k1")   # made before keys: redo once
+        cache.keep("signals.json", "k1")
+        assert cache.is_fresh("signals", "signals.json", "k1")
+        assert not cache.is_fresh("signals", "signals.json", "k2")
+        plain = Config()
+        scripted = plain.model_copy(update={"llm": plain.llm.model_copy(update={"drop_needs_prior_context": False}),
+                                            "candidates": plain.candidates.model_copy(update={"scene_aware": True})})
+        a, b = stage_keys(plain, None), stage_keys(scripted, None)
+        assert a["candidates"] != b["candidates"] and a["signals"] != b["signals"]
+        assert stage_keys(plain, None) == a
+
     def test_force_all(self, tmp_path):
         assert StageCache(tmp_path, forced=["all"]).forced == set(StageCache.ORDER)
 

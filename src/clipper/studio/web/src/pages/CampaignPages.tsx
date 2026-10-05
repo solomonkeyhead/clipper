@@ -75,7 +75,9 @@ export function CampaignsPage() {
   const navigate = useNavigate({ from: "/campaigns" });
   const finding = search.find === "1";
   const [showArchived, setShowArchived] = useState(false);
-  const list = (data ?? []).filter((c) => c.archived === showArchived);
+  // The user's own channel (German Professor) isn't a paid campaign: listed on its own (D140).
+  const list = (data ?? []).filter((c) => c.archived === showArchived && !c.own_channel);
+  const channels = (data ?? []).filter((c) => c.own_channel && !c.archived);
   const archivedCount = (data ?? []).filter((c) => c.archived).length;
   return (
     <div className="fade-in">
@@ -103,6 +105,15 @@ export function CampaignsPage() {
         <EmptyState icon={<Megaphone className="size-5" />} title={showArchived ? "Nothing archived" : "No campaigns yet"}
           body={showArchived ? undefined : "Joined a campaign on Content Rewards or Vyro? Add it here: paste its brief and Clipper fills in the rules."}
           action={showArchived ? undefined : <NewCampaignButton />} />
+      )}
+      {!showArchived && !isLoading && channels.length > 0 && (
+        <section className="mt-8 flex flex-col gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Your channel</h2>
+            <p className="text-sm text-muted">Your own videos, made in Create. Not a paid campaign, so no pay or rules.</p>
+          </div>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">{channels.map((c) => <CampaignCard key={c.name} c={c} />)}</div>
+        </section>
       )}
     </div>
   );

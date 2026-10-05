@@ -226,7 +226,7 @@ export function DashboardPage() {
         <Metric label={range === "all" ? "Views" : `Views, last ${range} days`} value={formatCount(viewsShown)}
                 trend={trend.length >= 2 ? trend : undefined}
                 hint="Total views on your posts at the end of each day, from the syncs"
-                sub={range === "all" ? "active campaigns, since the first sync" : "gained, active campaigns"} />
+                sub={range === "all" ? "every campaign, archived too, since the first sync" : "gained, every campaign"} />
         <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more" />
       </div>
 

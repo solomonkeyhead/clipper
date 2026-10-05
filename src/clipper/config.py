@@ -220,6 +220,10 @@ class LLMConfig(StrictModel):
     watch_video: bool = True
     watch_shortlist: int = Field(default=12, ge=1, le=40)
     watch_model: str | None = None  # null = the scoring model
+    # Claude judges the moments and picks each clip's opening line (D139): API key first, else
+    # Claude Code on the user's plan (create_via_claude_plan). Gemini still watches the video
+    # (Claude can't) and answers whatever Claude doesn't. null = the free models judge.
+    judge_model: str | None = None
 
     @field_validator("rejected_caption_fixes")
     @classmethod
@@ -533,6 +537,9 @@ class CampaignConfig(StrictModel):
     required_hashtags: tuple[str, ...] = ()
     required_credit_text: str = ""
     burn_credit_in_video: bool = False
+    # The user's own channel (German Professor, made in Create), not a paid campaign (D140):
+    # listed apart from the campaigns, never offered for clipping.
+    own_channel: bool = False
     credit_position: CreditPosition = "top_left"
     forbidden_terms: tuple[str, ...] = ()
     mask_profanity_in_captions: bool = True

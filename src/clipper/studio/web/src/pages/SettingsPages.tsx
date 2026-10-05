@@ -477,8 +477,9 @@ function AIKey() {
         <div>
           <h2 className="text-md font-semibold">AI model for clipping</h2>
           <p className="mt-0.5 text-sm text-muted">
-            Clipping uses Google's Gemini to find the best moments, write captions and read campaign briefs. (Create, for your own
-            channel, uses your Claude plan; the Create page shows which AI is answering.) Gemini is free:
+            Clipping uses Google's Gemini to watch the video, write captions and read campaign briefs, and Claude on your plan
+            to judge the moments (switch below). Create, for your own channel, uses both; its page shows which AI is answering.
+            Gemini is free:
             get a key at <Ext href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</Ext> (sign in, <b className="text-fg">Create API key</b>, copy).
           </p>
         </div>
@@ -623,6 +624,16 @@ export function SettingsPage() {
               {["5", "15", "30", "60"].map((m) => <option key={m} value={m}>{m} minutes</option>)}
             </select>
           ) : <Skeleton className="h-9 w-32" />}
+        />
+        <Row
+          title="Claude judges the moments"
+          body={<>Claude reads every moment in a video, scores it and picks each clip's opening line, on your Claude plan
+            (about 10 requests a video, counted toward its usage limit). Gemini still watches the video and takes over if
+            Claude can't answer. Off: Gemini's free models judge, as before.</>}
+          control={settings ? (
+            <Switch label="Claude judges the moments" checked={settings.claude_judge !== "0"}
+                    onChange={(v) => save.mutate({ claude_judge: v ? "1" : "0" })} />
+          ) : <Skeleton className="h-5 w-9" />}
         />
         <Row
           title="Open on the payoff"

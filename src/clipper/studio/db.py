@@ -204,6 +204,8 @@ DEFAULT_SETTINGS = {
     # Open each new clip on a preview of its payoff line (render/teaser.py, D97).
     "payoff_first": "1",
     "auto_cover": "1",
+    # Claude judges the moments and picks the opening lines when it's set up (D139).
+    "claude_judge": "1",
     # TikTok's "Disclose commercial content -> Branded content" switch, on from this date (D105).
     "tiktok_disclosed_since": "2026-10-02 00:00",
     # Which plan's features are on (studio/plans.py). A local install is the
