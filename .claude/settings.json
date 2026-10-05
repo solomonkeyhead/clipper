@@ -1,17 +1,6 @@
 {
   "permissions": {
     "deny": [
-      "Read(./data/**)",
-      "Read(./assets/models/**)",
-      "Read(./assets/fonts/**)",
-      "Read(./src/clipper/studio/static/**)",
-      "Read(./src/clipper/studio/web/node_modules/**)",
-      "Read(./src/clipper/studio/web/package-lock.json)",
-      "Read(./uv.lock)",
-      "Read(./**/*.mp4)",
-      "Read(./**/*.mp3)",
-      "Read(./**/*.wav)",
-      "Read(./**/__pycache__/**)",
       "Read(./.env)"
     ]
   }
