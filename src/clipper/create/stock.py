@@ -169,7 +169,7 @@ def coverr(query: str) -> list[dict]:
         data = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         raise CreateError(f"Coverr didn't answer: {exc}") from exc
-    found = data.get("hits") or data.get("videos") or data.get("data") or [] if isinstance(data, dict) else data
+    found = (data.get("hits") or data.get("videos") or data.get("data") or []) if isinstance(data, dict) else data
     hits = []
     for v in found if isinstance(found, list) else []:
         url = (v.get("urls") or {}).get("mp4") or (v.get("urls") or {}).get("mp4_download")
@@ -214,7 +214,9 @@ def nasa(query: str) -> list[dict]:
     for it, files in zip(items, manifests, strict=True):
         meta = (it.get("data") or [{}])[0]
         mp4 = [f for f in files if isinstance(f, str) and f.lower().endswith(".mp4")]
-        url, small = _rendition_named(mp4, "orig", "large", "medium"), _rendition_named(mp4, "mobile", "small", "medium")
+        # "large" first: "orig" was 106 MB against large's 21 MB for one launch, and a 9:16 crop of
+        # either is upscaled anyway (D132).
+        url, small = _rendition_named(mp4, "large", "orig", "medium"), _rendition_named(mp4, "mobile", "small", "medium")
         tags = " ".join([meta.get("title", ""), *meta.get("keywords", [])[:8]])
         if not url:
             continue

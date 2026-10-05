@@ -290,7 +290,7 @@ def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(t
 
     beat = Beat(text="Sound goes through bone here.", visual=Visual(kind="stock", query="bone"))
     s = Script(title="t", beats=[beat])
-    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None: out)
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None, skip=0.0: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
     picks = iter([{"id": "a", "url": "u", "center": 0.3}, {"id": "b", "url": "u", "center": 0.6}])
@@ -412,7 +412,7 @@ def test_a_long_sentence_gets_a_different_clip_for_each_part(tmp_path, monkeypat
 
     pool = [{"id": n, "url": "u"} for n in ("a", "b", "c")]
     monkeypatch.setattr(stock, "choose", lambda q, part, used, **k: next(h for h in pool if h["id"] not in used))
-    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None: out)
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None, skip=0.0: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
     v = Visual(kind="stock", query="sound")
@@ -528,7 +528,7 @@ def test_asked_footage_that_doesnt_fit_says_so_on_the_part(tmp_path, monkeypatch
     seen = []
     monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: [])
     monkeypatch.setattr(stock, "choose", lambda q, part, used, good_enough=7, **k: seen.append((set(used), good_enough)))
-    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None: out)
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None, skip=0.0: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
     monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None: out)
@@ -672,3 +672,47 @@ def test_videos_made_before_d131_find_their_ready_made_script(client):
     store.update_video(made, ready="")            # as an older version saved it
     ready = next(r for r in client.get("/api/create/ready").json() if r["name"] == "voice-on-a-recording")
     assert [m["id"] for m in ready["made"]] == [made] and store.video(made)["ready"] == "voice-on-a-recording"
+
+
+def test_nothing_changes_a_video_under_a_running_build(client, tmp_path):
+    """D132: a script edit, another take, approve, new pictures or a new voice mid-build cleared
+    the voice and timings under the build, or set a built video back to "approved"."""
+    from clipper.create import store
+
+    vid = client.post("/api/create/videos", json={"title": "Bone", "text": "Sound goes through bone. It sounds deeper to you."}).json()["id"]
+    store.update_video(vid, status="building", voice=str(tmp_path / "voice.mp3"))
+    base = f"/api/create/videos/{vid}"
+    assert client.put(f"{base}/script", json={"script": {"title": "Other"}}).status_code == 409
+    assert client.post(f"{base}/rewrite").status_code == 409
+    assert client.post(f"{base}/pictures").status_code == 409
+    assert client.put(f"{base}/voice/take2.mp3", content=b"x").status_code == 409
+    row = store.video(vid)
+    assert row["status"] == "building" and row["voice"] and row["script"]["title"] == "Bone"
+
+    store.update_video(vid, status="built")
+    assert client.post(f"{base}/approve").status_code == 400
+    assert store.video(vid)["status"] == "built"
+    store.update_video(vid, status="draft")
+    assert client.post(f"{base}/approve").status_code == 200
+
+
+def test_nasa_footage_downloads_the_large_file_not_the_original():
+    """D132: NASA's "orig" was 106 MB against "large" at 21 MB for the same launch."""
+    from clipper.create import stock
+
+    files = ["a~orig.mp4", "a~large.mp4", "a~medium.mp4", "a~mobile.mp4"]
+    assert stock._rendition_named(files, "large", "orig", "medium") == "a~large.mp4"
+    assert stock._rendition_named(["a~orig.mp4"], "large", "orig", "medium") == "a~orig.mp4"
+
+
+def test_a_clip_used_twice_in_a_row_carries_on(tmp_path, monkeypatch):
+    """D132: a long sentence with one fitting clip played the same seconds twice."""
+    from clipper.create import build
+
+    starts = []
+    monkeypatch.setattr(build, "probe", lambda p: type("I", (), {"duration": 20.0})())
+    monkeypatch.setattr(build, "_subject_x", lambda *a: 0.5)
+    monkeypatch.setattr(build, "run", lambda args: starts.append(float(args[args.index("-ss") + 1])))
+    build._stock_shot(tmp_path / "c.mp4", 4.0, tmp_path / "a.mp4", 0.5)
+    build._stock_shot(tmp_path / "c.mp4", 4.0, tmp_path / "b.mp4", 0.5, skip=4.0)
+    assert starts == [3.0, 7.0]

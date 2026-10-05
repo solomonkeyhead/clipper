@@ -78,14 +78,15 @@ def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> f
     return hint if hint is not None else 0.5
 
 
-def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None) -> Path:
+def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None, skip: float = 0.0) -> Path:
     """`seconds` of a stock clip filling the 9:16 frame, pushing in slowly, the crop placed on
     its subject (D111): a wide shot cut to its middle lost the speaker cone to one side and
     the skull to the other; shown whole over a blur it looked small. The window keeps the
-    subject's spot across the push-in and never leaves the picture."""
+    subject's spot across the push-in and never leaves the picture. `skip`: seconds already
+    shown of this clip in the shot before, so a clip used twice in a row carries on (D132)."""
     info = probe(src)
     length = info.duration or seconds
-    offset = min(length * 0.15, max(0.0, length - seconds - 0.1))
+    offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
     x = min(1.0, max(0.0, _subject_x(src, offset, seconds, center)))
     push = f"(1+{PUSH_IN}*t/{seconds:.3f})"
     # Cover the frame, then push in; the crop's left edge sits so the subject lands as near
@@ -280,20 +281,23 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
     clips = []
     for k, (part, hit) in enumerate(zip(parts, hits, strict=True)):
         holder = {"hit": hit}
+        # A part with no clip of its own repeats the one before: from where it stopped, not from
+        # the same frame, which played the same seconds twice in a row (D132).
+        skip = sum(p for p, h in zip(parts[:k], hits[:k], strict=True) if h.get("id") == hit.get("id"))
 
-        def make(out: Path, part=part, holder=holder) -> Path:
+        def make(out: Path, part=part, holder=holder, skip=skip) -> Path:
             h = holder["hit"]
-            clip = _stock_shot(stock.fetch(h), part, out, h.get("center"))
+            clip = _stock_shot(stock.fetch(h), part, out, h.get("center"), skip)
             if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
                 holder["hit"] = {**h, "center": 0.5}
-                clip = _stock_shot(stock.fetch(h), part, out, 0.5)
+                clip = _stock_shot(stock.fetch(h), part, out, 0.5, skip)
             if _too_dark(clip):
                 raise _TooDark
             return clip
 
         try:
-            clips.append(_kept("stock", [hit.get("id"), hit.get("center"), round(part, 3)],
-                               work / f"{i:02d}{tag}_{k}_stock.mp4", make))
+            key = [hit.get("id"), hit.get("center"), round(part, 3)] + ([round(skip, 3)] if skip else [])
+            clips.append(_kept("stock", key, work / f"{i:02d}{tag}_{k}_stock.mp4", make))
         except _TooDark:
             return none_fit()
         hits[k] = holder["hit"]

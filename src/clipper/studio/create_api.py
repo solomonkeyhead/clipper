@@ -229,9 +229,10 @@ def _work(video_id: int, publish) -> None:
 
 
 def _editable(row: dict) -> None:
-    """The video's clips and placements can change unless it is being timed or built right now."""
+    """The video can change unless it is being timed or built right now: a script edit or a new
+    voice mid-build cleared the voice and timings under the running build (D132)."""
     if row["status"] in ("voiced", "building"):
-        raise HTTPException(409, "it's being built: wait until it finishes, then change the clips")
+        raise HTTPException(409, "it's being built: wait until it finishes (or press Cancel), then change it")
 
 
 def routes(app: FastAPI, publish) -> None:
@@ -307,6 +308,7 @@ def routes(app: FastAPI, publish) -> None:
         from ..create import script
 
         row = video_or_404(video_id)
+        _editable(row)
         if not row["topic_id"]:  # the user's own script: no one to rewrite it from (D120)
             raise HTTPException(400, "this is your own script, so there's no other take to write; "
                                      "edit it, or use Plan pictures and Check physics")
@@ -325,6 +327,7 @@ def routes(app: FastAPI, publish) -> None:
         from ..create.script import Script, tidy
 
         row = video_or_404(video_id)
+        _editable(row)
         try:
             edited = tidy(Script.model_validate({**row["script"], **(body.get("script") or {})}))
         except ValueError as exc:
@@ -338,7 +341,9 @@ def routes(app: FastAPI, publish) -> None:
 
     @app.post("/api/create/videos/{video_id}/approve")
     def create_approve(video_id: int) -> dict:
-        video_or_404(video_id)
+        row = video_or_404(video_id)
+        if row["status"] not in ("draft", "approved"):  # a built video set back to "approved" lost its place
+            raise HTTPException(400, "only a draft script is approved")
         store.update_video(video_id, status="approved")
         return {"ok": True}
 
@@ -348,7 +353,8 @@ def routes(app: FastAPI, publish) -> None:
         from ..create import voice
 
         row = video_or_404(video_id)
-        if row["status"] not in ("approved", "voiced", "built", "failed"):
+        _editable(row)  # a new take mid-build went to the Recycle Bin under the running build
+        if row["status"] not in ("approved", "built", "failed"):
             raise HTTPException(400, "approve the script first: the voice is made from it")
         suffix = Path(filename).suffix.lower()
         if suffix not in voice.AUDIO:
@@ -374,6 +380,7 @@ def routes(app: FastAPI, publish) -> None:
         from ..create.script import Script
 
         row = video_or_404(video_id)
+        _editable(row)
         if not row["voice"]:
             raise HTTPException(400, "drop the voiceover in first")
         planned, notes = await asyncio.to_thread(ai, script.replan, Script.model_validate(row["script"]))

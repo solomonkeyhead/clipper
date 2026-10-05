@@ -2403,3 +2403,19 @@ The user asked for posted Create videos, the ready-made ones too, to go into an 
   button reads "Make again" once one has been made.
 - The walkthrough's test server has a posted video; it checks it's archived by itself, comes back and
   stays back after a reload, and goes in again by hand.
+
+## D132 — First local review of D118 to D131 (2026-10-04)
+
+The first session on the user's own machine went through the cloud session's Create work.
+- **Nothing changes under a running build.** Editing the script, another take, New pictures and a
+  new voice were allowed mid-build: the edit cleared the voice and timings the build was using, and a
+  new take sent the old voice to the Recycle Bin under it. They now answer 409, like the clip and
+  part controls already did. Approve only takes a draft: on a built video it set the status back to
+  "approved" and the page lost the video.
+- **NASA footage downloads "large", not "orig".** For one launch the original was 106 MB against
+  21 MB; the 9:16 crop is upscaled either way. Coverr's and NASA's real answers were checked and
+  match `stock.coverr()` and `stock.nasa()`.
+- **A clip used twice in a row carries on.** When a long sentence found one fitting clip for two
+  shots, both started at the same second, so the same footage played twice. The second now starts
+  where the first stopped (`_stock_shot(skip=)`); the shot cache key includes the skip only when it
+  isn't zero, so shots made before are still reused.
