@@ -1,7 +1,13 @@
 {
   "permissions": {
     "deny": [
-      "Read(./.env)"
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./data/*/accounts/**)",
+      "Read(./src/clipper/youtube/app.json)",
+      "Read(./**/*.key)",
+      "Read(./**/*.pem)",
+      "Read(./**/token*.json)"
     ]
   }
 }
