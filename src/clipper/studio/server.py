@@ -556,6 +556,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     jobs = JobRunner(broker.publish)
     tiktok = setup.tiktok_connect(broker.publish)
     youtube = setup.youtube_connect(broker.publish)
+    instagram = setup.instagram_connect(broker.publish)
     whop_login = setup.whop_connect(lambda *a: broker.publish("alerts.changed"))
     from .imports import ImportRunner
 
@@ -1740,6 +1741,19 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def youtube_connect_state() -> dict[str, str]:
         return youtube.view()
 
+    @app.post("/api/accounts/instagram/connect")
+    def instagram_connect_start() -> dict[str, str]:
+        """Start Instagram's login; the page opens the returned consent link (D150)."""
+        from ..instagram import api as ig_api
+
+        if not ig_api.has_app():
+            raise HTTPException(400, "Save your Meta app's ID and secret first")
+        return instagram.start()
+
+    @app.get("/api/accounts/instagram/connect")
+    def instagram_connect_state() -> dict[str, str]:
+        return instagram.view()
+
     @app.post("/api/accounts/x")
     def x_connect(body: dict) -> dict:
         """An X account by its username, read with the app's Bearer Token (D83)."""
@@ -1779,7 +1793,8 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                      tiktok_app=setup.key_set("TIKTOK_CLIENT_KEY")
                      and setup.key_set("TIKTOK_CLIENT_SECRET"),
                      tiktok_connect=tiktok.view(),
-                     youtube_app=yt_has_app())
+                     youtube_app=yt_has_app(),
+                     instagram_app=setup.key_set("INSTAGRAM_APP_ID") and setup.key_set("INSTAGRAM_APP_SECRET"))
 
     @app.put("/api/setup/keys")
     def put_keys(values: dict[str, str]) -> Setup:

@@ -230,7 +230,6 @@ export function DashboardPage() {
   const setTask = useSetTask();
   const [range, setRange] = useState<Range>("all");
   const open = useUI((s) => s.setOpenClip);
-  const setListIds = useUI((s) => s.setListIds);
   const navigate = useNavigate();
   const { data: campaigns = [] } = useCampaigns();
   const { data: create } = useCreate();
@@ -267,11 +266,10 @@ export function DashboardPage() {
 
   // The one thing to do next (D143): the first clip to post, else the first link to submit, else a
   // brief task, else the channel's next step, else more clips. One button, so opening the app has a next move.
-  const openFirst = (list: Clip[]) => { setListIds(list.map((c) => c.id)); open(list[0].id); };
   const channelBusy = uses.create ? create?.videos.find((v) => v.status !== "built") : undefined;
   const next: { label: string; run: () => void } | null = firstRun ? null
-    : by("ready").length ? { label: `Post the next clip (${by("ready").length})`, run: () => openFirst(by("ready")) }
-    : by("posted").length ? { label: `Submit the next link (${by("posted").length})`, run: () => openFirst(by("posted")) }
+    : by("ready").length ? { label: `Post the next clip (${by("ready").length})`, run: () => void navigate({ to: "/post", search: { step: "post" } }) }
+    : by("posted").length ? { label: `Submit the next link (${by("posted").length})`, run: () => void navigate({ to: "/post", search: { step: "submit" } }) }
     : due.length ? { label: "Do the next brief task", run: () => open(due[0].post.clip) }
     : channelBusy ? { label: `Your Short: ${channelBusy.status === "draft" ? "approve the script" : channelBusy.status === "approved" ? "add the voice" : "see it"}`, run: () => void navigate({ to: "/create" }) }
     : uses.campaigns ? { label: "Make more clips", run: () => void navigate({ to: "/new" }) }

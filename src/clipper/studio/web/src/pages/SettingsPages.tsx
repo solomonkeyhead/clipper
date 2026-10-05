@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  connectInstagram, connectX, runSystemCheck, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
+  connectInstagram, connectX, instagramConnectState, runSystemCheck, startInstagramConnect, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
   useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
@@ -90,6 +90,9 @@ function AccountRow({ account }: { account: Account }) {
           {account.groups.map((g) => <span key={g} className="rounded-full border border-line px-2 py-0.5 text-subtle">{g}</span>)}
         </div>
       </div>
+      {account.health !== "ok" && account.platform === "tiktok" && <AddTikTok label="Reconnect" />}
+      {account.health !== "ok" && account.platform === "instagram" && <AddInstagram label="Reconnect" />}
+      {account.health !== "ok" && account.platform === "youtube" && <AddYouTube label="Reconnect" />}
       <Tip label="Show only this account across Clipper">
         <Button size="icon" variant="ghost" aria-label="View this account" onClick={() => {
           setScope(`account:${account.key}`);
@@ -149,14 +152,16 @@ function TikTokAppKeys({ onSaved }: { onSaved?: () => void }) {
 
 type ConnectState = { state: string; message: string; url: string };
 
-/** Connect one more account through a platform's own consent page, opened in a new tab. */
-function AddAccount({ platform, name, label, ready, appKeys, start, state, intro, waitingHint }: {
+/** Connect one more account through a platform's own consent page, opened in a new tab. One click
+ *  once the platform's app keys are saved (D150): the button itself starts the sign-in. */
+function AddAccount({ platform, name, label, ready, appKeys, start, state, waitingHint, trouble }: {
   platform: string; name: string; label: string; ready: boolean; appKeys: ReactNode;
-  start: () => Promise<ConnectState>; state: () => Promise<ConnectState>; intro: string; waitingHint: string;
+  start: () => Promise<ConnectState>; state: () => Promise<ConnectState>; waitingHint: string; trouble?: string;
 }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [waiting, setWaiting] = useState<{ url: string } | null>(null);
+  const [needKeys, setNeedKeys] = useState(false);
+  const [waiting, setWaiting] = useState<{ url: string; since: number } | null>(null);
+  const [, tick] = useState(0);
   const poll = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearInterval(poll.current), []);
 
@@ -164,15 +169,15 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, intro
     try {
       const res = await start();
       if (res.state === "failed") throw new Error(res.message);
-      setWaiting({ url: res.url });
+      setWaiting({ url: res.url, since: Date.now() });
       openTab(res.url);
       window.clearInterval(poll.current);
       poll.current = window.setInterval(async () => {
+        tick((n) => n + 1);
         const now = await state();
         if (now.state === "done" || now.state === "failed") {
           window.clearInterval(poll.current);
           setWaiting(null);
-          setOpen(false);
           void qc.invalidateQueries({ queryKey: ["accounts"] });
           if (now.state === "done") toast.success(`Connected ${now.message}`, { description: "Its posts' stats arrive on the next sync." });
           else toast.error(now.message);
@@ -183,44 +188,37 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, intro
     }
   };
 
-  if (!open) {
-    return <Button variant="secondary" onClick={() => setOpen(true)}><Plus className="size-4" /> {label}</Button>;
+  if (waiting) {
+    return (
+      <div className="flex flex-col gap-3 rounded-md border border-dashed border-line p-4">
+        <div className="flex items-center gap-2 text-sm font-medium"><Loader2 className="size-4 animate-spin text-accent" /> Waiting for you to approve in the {name} tab…</div>
+        <p className="text-sm text-muted">{waitingHint}</p>
+        {trouble && Date.now() - waiting.since > 25_000 && <p className="rounded-md bg-warning/10 p-2.5 text-sm text-warning">{trouble}</p>}
+        <div className="flex gap-2">
+          <a href={waiting.url} target="_blank" rel="noopener noreferrer"
+             className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
+            <ExternalLink className="size-3.5" /> Open {name} again
+          </a>
+          <CopyButton text={waiting.url} what="Link" label="Copy link" />
+        </div>
+      </div>
+    );
   }
-  if (!ready) return <>{appKeys}</>;
+  if (needKeys && !ready) return <>{appKeys}</>;
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-dashed border-line p-4">
-      {waiting ? (
-        <>
-          <div className="flex items-center gap-2 text-sm font-medium"><Loader2 className="size-4 animate-spin text-accent" /> Waiting for you to approve in the {name} tab…</div>
-          <p className="text-sm text-muted">{waitingHint}</p>
-          <div className="flex gap-2">
-            <a href={waiting.url} target="_blank" rel="noopener noreferrer"
-               className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
-              <ExternalLink className="size-3.5" /> Open {name} again
-            </a>
-            <CopyButton text={waiting.url} what="Link" label="Copy link" />
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="text-sm text-muted">{intro}</p>
-          <div className="flex items-center gap-2">
-            <Button variant="primary" onClick={() => void connect()}><PlatformIcon platform={platform} className="size-4" /> Connect with {name}</Button>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          </div>
-        </>
-      )}
-    </div>
+    <Button variant={ready ? "primary" : "secondary"} onClick={() => (ready ? void connect() : setNeedKeys(true))}>
+      <PlatformIcon platform={platform} className="size-4" /> {ready ? label : `${label} (one-time setup)`}
+    </Button>
   );
 }
 
-function AddTikTok() {
+function AddTikTok({ label = "Add a TikTok account" }: { label?: string }) {
   const { data: setup } = useSetup();
   return (
-    <AddAccount platform="tiktok" name="TikTok" label="Add a TikTok account" ready={!!setup?.tiktok_app}
+    <AddAccount platform="tiktok" name="TikTok" label={label} ready={!!setup?.tiktok_app}
       appKeys={<TikTokAppKeys />} start={startTikTokConnect} state={tiktokConnectState}
-      intro="TikTok opens in a new tab. Approve access for the account you want, then come back here."
-      waitingHint="TikTok connects whichever account is logged in on tiktok.com in that browser. For a different account, log into it there first, or copy this link into another browser." />
+      waitingHint="TikTok connects whichever account is logged in on tiktok.com in that browser. For a different account, log into it there first, or copy this link into another browser."
+      trouble={`Seeing "non_sandbox_target" or "We couldn't log in with TikTok"? Your TikTok app is still in Sandbox: open it at developers.tiktok.com, go to Sandbox → Target users, add this TikTok account, then try again.`} />
   );
 }
 
@@ -298,19 +296,65 @@ function YouTubeAppKeys() {
   );
 }
 
-function AddYouTube() {
+function AddYouTube({ label = "Add a YouTube channel" }: { label?: string }) {
   const { data: setup } = useSetup();
   return (
-    <AddAccount platform="youtube" name="YouTube" label="Add a YouTube channel" ready={!!setup?.youtube_app}
+    <AddAccount platform="youtube" name="YouTube" label={label} ready={!!setup?.youtube_app}
       appKeys={<YouTubeAppKeys />} start={startYouTubeConnect} state={youtubeConnectState}
-      intro="Google opens in a new tab. Pick the channel you post Shorts on (a Brand Account channel is listed on its own), approve, then come back here."
       waitingHint="Choose the channel itself, not only your Google account. To add another channel later, connect again and pick that one." />
   );
 }
 
-function AddInstagram() {
+/** One-time: the Meta app's ID and secret, after which "Add an Instagram account" is one click (D150). */
+function InstagramAppKeys({ onToken }: { onToken: () => void }) {
+  const { data: setup } = useSetup();
+  const save = useSetKeys();
+  const [id, setId] = useState("");
+  const [secret, setSecret] = useState("");
+  const redirect = "http://localhost:3458/callback/";
+  return (
+    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+      <div>
+        <div className="text-sm font-semibold">One-time setup: a free Meta app</div>
+        <p className="mt-0.5 text-sm text-muted">Instagram only shares Reel stats with an app you register. Do this once and every account after is one click.</p>
+      </div>
+      <Steps>
+        <li>At <Ext href="https://developers.facebook.com/apps">developers.facebook.com</Ext>, create an app (type <b>Business</b>) and add the <b>Instagram</b> product.</li>
+        <li>Under <b>Instagram → API setup with Instagram business login</b>, add this to <b>Valid OAuth redirect URIs</b>: <code className="rounded bg-surface-3 px-1">{redirect}</code> <CopyButton text={redirect} what="Redirect URI" variant="ghost" /></li>
+        <li>Copy the <b>Instagram app ID</b> and <b>Instagram app secret</b> here. Other accounts than your own need <b>App roles → Instagram Tester</b>, accepted in Instagram.</li>
+      </Steps>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Instagram app ID">{(fid) => <SecretInput id={fid} value={id} onChange={setId} isSet={setup?.keys.INSTAGRAM_APP_ID} />}</Field>
+        <Field label="Instagram app secret">{(fid) => <SecretInput id={fid} value={secret} onChange={setSecret} isSet={setup?.keys.INSTAGRAM_APP_SECRET} />}</Field>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" onClick={onToken}>Paste a token instead</Button>
+        <Button variant="primary" disabled={!id.trim() || !secret.trim() || save.isPending}
+          onClick={() => save.mutate({ INSTAGRAM_APP_ID: id, INSTAGRAM_APP_SECRET: secret }, {
+            onSuccess: () => { setId(""); setSecret(""); toast.success("Meta app saved", { description: "Now \"Add an Instagram account\" is one click." }); },
+            onError: (e) => toast.error((e as Error).message),
+          })}>
+          <KeyRound className="size-4" /> Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AddInstagram({ label = "Add an Instagram account" }: { label?: string }) {
+  const { data: setup } = useSetup();
+  const [manual, setManual] = useState(false);
+  if (manual) return <InstagramToken onBack={() => setManual(false)} />;
+  return (
+    <AddAccount platform="instagram" name="Instagram" label={label} ready={!!setup?.instagram_app}
+      appKeys={<InstagramAppKeys onToken={() => setManual(true)} />} start={startInstagramConnect} state={instagramConnectState}
+      waitingHint="Instagram connects the account you log in as. It must be a professional (Creator or Business) account." />
+  );
+}
+
+function InstagramToken({ onBack }: { onBack: () => void }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const connect = async () => {
@@ -341,7 +385,7 @@ function AddInstagram() {
       </Steps>
       <Field label="Access token">{(id) => <SecretInput id={id} value={token} onChange={setToken} placeholder="IGAA…" />}</Field>
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+        <Button variant="ghost" onClick={onBack}>Back</Button>
         <Button variant="primary" disabled={token.trim().length < 20 || busy} onClick={() => void connect()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="instagram" className="size-4" />} Connect
         </Button>
@@ -357,16 +401,19 @@ function AddX() {
   const setKeys = useSetKeys();
   const [open, setOpen] = useState(false);
   const [token, setToken] = useState("");
-  const [username, setUsername] = useState("");
+  const { data: known } = useAccounts();
+  const [typed, setUsername] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const haveToken = Boolean(setup?.keys.X_BEARER_TOKEN);
+  // Most people post under one name everywhere: start from a handle already connected (D150).
+  const username = typed ?? known?.find((a) => a.platform !== "x" && a.handle)?.handle ?? "";
   const connect = async () => {
     setBusy(true);
     try {
       if (token.trim()) await setKeys.mutateAsync({ X_BEARER_TOKEN: token.trim() });
       const res = await connectX(username);
       setToken("");
-      setUsername("");
+      setUsername(null);
       setOpen(false);
       await qc.invalidateQueries({ queryKey: ["accounts"] });
       toast.success(`Connected @${res.username}`, { description: "Its posts and their views arrive within the hour." });
@@ -378,6 +425,22 @@ function AddX() {
   };
   if (!open) {
     return <Button variant="secondary" onClick={() => setOpen(true)}><Plus className="size-4" /> Add an X account</Button>;
+  }
+  if (haveToken) {   // the app is set up: the username is the whole sign-in
+    return (
+      <div className="flex flex-wrap items-end gap-2 rounded-md border border-dashed border-line p-4">
+        <div className="min-w-48 flex-1">
+          <Field label="Your X username">
+            {(id) => <TextInput id={id} value={username} placeholder="@solomonkeyclips" onChange={(e) => setUsername(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter" && username.trim() && !busy) void connect(); }} />}
+          </Field>
+        </div>
+        <Button variant="primary" disabled={busy || !username.trim()} onClick={() => void connect()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="x" className="size-4" />} Connect
+        </Button>
+        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+      </div>
+    );
   }
   return (
     <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">

@@ -94,7 +94,11 @@ export function ClipsPage() {
   return (
     <div className="fade-in">
       <PageHeader title="Clips" subtitle={<>Every clip you've made. <Kbd>J</Kbd> <Kbd>K</Kbd> to move, <Kbd>Enter</Kbd> to open.</>}
-        actions={
+        actions={<>
+          {(status === "ready" || status === "posted") && list.length > 0 && (
+            <Link to="/post" search={{ step: status === "ready" ? "post" : "submit", campaign: campaign !== "active" && campaign !== "all" ? campaign : undefined }}
+                  className={linkClass}>Post one by one</Link>
+          )}
           <select value={campaign} aria-label="Campaign"
                   onChange={(e) => void navigate({ search: (s) => ({ ...s, campaign: e.target.value }) })}
                   className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
@@ -102,7 +106,7 @@ export function ClipsPage() {
             <option value="all">All, including archived</option>
             {campaigns.filter((c) => c.clips > 0).map((c) => <option key={c.name} value={c.name}>{c.title}</option>)}
           </select>
-        } />
+        </>} />
       <ClipFilters clips={mine} value={status} hints
                    onChange={(key) => void navigate({ search: (s) => ({ ...s, status: key }) })} />
       {isLoading ? (

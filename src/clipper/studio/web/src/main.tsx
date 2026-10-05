@@ -11,6 +11,7 @@ import { useUI } from "./lib/store";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
 import { NewClipsPage } from "./pages/NewClipsPage";
+import { PostQueuePage } from "./pages/PostQueue";
 import { ClipsPage, type ClipFilter } from "./pages/WorkPages";
 import "./styles.css";
 
@@ -54,6 +55,14 @@ const routes = [
     validateSearch: (s: Record<string, unknown>): { campaign?: string; source?: string } => ({
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
       source: typeof s.source === "string" ? s.source : undefined,
+    }),
+  }),
+  // One clip at a time: post it, then submit its link (D149).
+  createRoute({
+    getParentRoute: () => root, path: "/post", component: PostQueuePage,
+    validateSearch: (s: Record<string, unknown>): { step?: "post" | "submit"; campaign?: string } => ({
+      step: s.step === "post" || s.step === "submit" ? s.step : undefined,
+      campaign: typeof s.campaign === "string" ? s.campaign : undefined,
     }),
   }),
   // Create (D108): original Shorts for the user's own channel.

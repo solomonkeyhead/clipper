@@ -94,6 +94,7 @@ export function CommandPalette() {
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
+          <Item icon={<Send />} label="Post queue: one clip at a time" onSelect={go("/post")} />
           <Item icon={<Send />} label="Clips ready to post" onSelect={go("/clips", { status: "ready" })} />
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />

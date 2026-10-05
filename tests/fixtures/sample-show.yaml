@@ -1,0 +1,66 @@
+# A made-up campaign for tests: a streaming show's romance edits, paid per view. Nothing here is a real brief.
+name: sample-show
+title: Sample Show
+marketplace: Content Rewards
+reward_per_1k_usd: 2.50
+
+source_authorization: >-
+  The Sample Show campaign brief, which supplies an official footage folder;
+  clips may be posted to TikTok and Instagram Reels. Only footage from that
+  folder may be used.
+
+platform_targets: [tiktok, instagram_reels]
+
+duration:
+  min_seconds: 12
+  max_seconds: 75
+
+scripted: true
+keep_original_audio: true
+brief_rules: >-
+  Use only footage from the official folder; no ripped or outside clips.
+  Original dialogue or a trending sound.
+
+selection_focus: >-
+  Clips should sell the romance in Sample Show. Select ONLY moments between the
+  two leads: chemistry, tension, banter, tenderness, lingering looks. Reject
+  action scenes, comedy-only scenes, and anything without both leads.
+
+fixed_captions: true
+fallback_captions:
+  - "nobody told me Sample Show was THIS good @sampleshow"
+  - "I started Sample Show for the plot and somehow ended up here @sampleshow"
+  - "oh they knew EXACTLY what they were doing here #sampleshow @sampleshow"
+required_caption_text: "#ad"
+required_hashtags: ["#sampleshow", "#streaming", "#tvedits"]
+only_required_hashtags: true
+
+hook_overlay: true
+hook_texts:
+  - "wait… do I need to watch Sample Show?"
+  - "the looks. the tension. the yearning."
+  - "this scene lives in my head rent free"
+
+long_description: true
+description_context: >-
+  Sample Show, a streaming romance. The two leads are falling for each other.
+description_keywords:
+  - Sample Show
+  - streaming
+  - romance
+
+required_credit_text: ""
+burn_credit_in_video: false
+
+forbidden_terms: []
+mask_profanity_in_captions: true
+
+brand_mentions:
+  required: false
+  terms: []
+
+language: en
+
+posting_rules:
+  - "Turn on TikTok's content disclosure toggle (paid partnership)."
+  - "Keep each post up for at least 30 days."

@@ -422,6 +422,7 @@ class Setup(BaseModel):
     tiktok_app: bool               # TikTok developer app keys present
     tiktok_connect: dict[str, str]
     youtube_app: bool = False      # Google app client ID and secret present
+    instagram_app: bool = False    # Meta app ID and secret present (one-click sign-in)
 
 
 class Status(BaseModel):

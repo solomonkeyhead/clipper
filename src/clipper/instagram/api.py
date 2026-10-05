@@ -10,11 +10,16 @@ for a fresh 60-day one, which `access_token()` does once it is 30 days old.
 
 from __future__ import annotations
 
+import http.server
 import json
+import os
+import secrets
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import webbrowser
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +38,13 @@ MEDIA_FIELDS = ("id,caption,media_type,media_product_type,permalink,timestamp,"
 REEL_METRICS = ("views", "reach", "saved", "shares", "ig_reels_avg_watch_time",
                 "reels_skip_rate")
 DAY = 86400.0
+AUTH_URL = "https://www.instagram.com/oauth/authorize"
+CODE_URL = "https://api.instagram.com/oauth/access_token"
+EXCHANGE_URL = "https://graph.instagram.com/access_token"
+SCOPES = "instagram_business_basic,instagram_business_manage_insights"
+PORT = 3458
+REDIRECT_URI = f"http://localhost:{PORT}/callback/"
+ENV_ID, ENV_SECRET = "INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET"
 TOKEN_LIFETIME = 60 * DAY
 REFRESH_AFTER = 30 * DAY
 
@@ -129,6 +141,77 @@ def login(token: str) -> str:
         stored["unrefreshed"] = True
     _save(stored, token_path(me.get("username") or "account"))
     return me.get("username", "")
+
+
+def has_app() -> bool:
+    return bool(os.environ.get(ENV_ID, "").strip() and os.environ.get(ENV_SECRET, "").strip())
+
+
+def login_browser(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
+    """One-click sign-in (D150): Instagram's own consent page, the code comes back to a local
+    redirect, becomes a 60-day token, and goes through `login` like a pasted one. Needs the Meta
+    app's ID and secret (INSTAGRAM_APP_ID / _SECRET) with `REDIRECT_URI` listed in the app."""
+    app_id, secret = os.environ.get(ENV_ID, "").strip(), os.environ.get(ENV_SECRET, "").strip()
+    if not app_id or not secret:
+        raise InstagramError("add your Meta app's ID and secret on the Accounts page first")
+    state = secrets.token_urlsafe(16)
+    got: dict[str, str] = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            url = urllib.parse.urlparse(self.path)
+            if url.path.rstrip("/") != "/callback":
+                self.send_response(404)
+                self.end_headers()
+                return
+            got.update(dict(urllib.parse.parse_qsl(url.query)))
+            ok = got.get("state") == state and "code" in got
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(("<p style='font-family:sans-serif;padding:2em'>"
+                              + ("Connected. You can close this tab and go back to Clipper."
+                                 if ok else "Login did not complete. Go back to Clipper and try again.")
+                              + "</p>").encode())
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)
+    server.timeout = 1.0
+
+    def serve():
+        deadline = time.monotonic() + timeout
+        while "code" not in got and "error" not in got and time.monotonic() < deadline:
+            server.handle_request()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    open_browser(AUTH_URL + "?" + urllib.parse.urlencode({
+        "client_id": app_id, "redirect_uri": REDIRECT_URI, "response_type": "code", "scope": SCOPES,
+        "state": state, "force_reauth": "true"}))     # force_reauth: the account picker, for a second account
+    thread.join(timeout + 5)
+    server.server_close()
+    if got.get("state") != state:
+        raise InstagramError("the login did not come back (timed out, or the state did not match)")
+    if "code" not in got:
+        raise InstagramError(f"Instagram refused the login: {got.get('error_description') or got.get('error')}")
+    body = urllib.parse.urlencode({"client_id": app_id, "client_secret": secret, "grant_type": "authorization_code",
+                                   "redirect_uri": REDIRECT_URI, "code": got["code"].split("#")[0]}).encode()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(CODE_URL, data=body), timeout=30) as response:
+            reply = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise InstagramError(f"Instagram refused the code (HTTP {exc.code})") from None
+    except (urllib.error.URLError, OSError) as exc:
+        raise InstagramError(f"cannot reach Instagram: {type(exc).__name__}") from None
+    reply = (reply.get("data") or [reply])[0]       # the answer has come flat, and inside "data"
+    short = reply.get("access_token")
+    if not short:
+        raise InstagramError("Instagram gave no token")
+    long_lived = _get(EXCHANGE_URL, {"grant_type": "ig_exchange_token", "client_secret": secret,
+                                     "access_token": short}).get("access_token") or short
+    return {"display_name": login(long_lived)}
 
 
 def username(path: Path | None = None) -> str:

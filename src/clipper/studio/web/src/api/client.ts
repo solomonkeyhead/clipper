@@ -369,6 +369,10 @@ export const startYouTubeConnect = () =>
   unwrap(api.POST("/api/accounts/youtube/connect")) as Promise<{ state: string; message: string; url: string }>;
 export const youtubeConnectState = () =>
   unwrap(api.GET("/api/accounts/youtube/connect")) as Promise<{ state: string; message: string; url: string }>;
+export const startInstagramConnect = () =>
+  unwrap(api.POST("/api/accounts/instagram/connect")) as Promise<{ state: string; message: string; url: string }>;
+export const instagramConnectState = () =>
+  unwrap(api.GET("/api/accounts/instagram/connect")) as Promise<{ state: string; message: string; url: string }>;
 /** An X account by username, read with the app's Bearer Token (D83). */
 export const connectX = (username: string) =>
   unwrap(api.POST("/api/accounts/x", { body: { username } })) as Promise<{ username: string }>;

@@ -1846,6 +1846,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/instagram/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instagram Connect State */
+        get: operations["instagram_connect_state_api_accounts_instagram_connect_get"];
+        put?: never;
+        /**
+         * Instagram Connect Start
+         * @description Start Instagram's login; the page opens the returned consent link (D150).
+         */
+        post: operations["instagram_connect_start_api_accounts_instagram_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/x": {
         parameters: {
             query?: never;
@@ -3548,6 +3569,11 @@ export interface components {
              * @default false
              */
             youtube_app: boolean;
+            /**
+             * Instagram App
+             * @default false
+             */
+            instagram_app: boolean;
         };
         /** SinceLastVisit */
         SinceLastVisit: {
@@ -7130,6 +7156,50 @@ export interface operations {
         };
     };
     youtube_connect_api_accounts_youtube_connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    instagram_connect_state_api_accounts_instagram_connect_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    instagram_connect_start_api_accounts_instagram_connect_post: {
         parameters: {
             query?: never;
             header?: never;

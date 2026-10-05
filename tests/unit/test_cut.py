@@ -11,7 +11,7 @@ from clipper.llm.prompts import PROMPT_A, with_focus
 from clipper.models import Word
 from clipper.runner import campaign_config, manual_plan, parse_range
 
-CHAD_POWERS = Path(__file__).parents[1] / "fixtures" / "chad-powers-s2.yaml"
+SAMPLE_SHOW = Path(__file__).parents[1] / "fixtures" / "sample-show.yaml"
 
 
 class TestParseRange:
@@ -32,7 +32,7 @@ class TestParseRange:
 
 class TestManualPlan:
     def test_cut_as_given_with_the_campaigns_hooks_and_captions(self, data_root):  # an empty library
-        campaign = CampaignConfig.load(CHAD_POWERS)
+        campaign = CampaignConfig.load(SAMPLE_SHOW)
         config = campaign_config(Config(), campaign)
         # A long wordless stretch after the last line: the Ep 4 field scene.
         words = [Word(start=10.3, end=10.8, text="Tell"), Word(start=10.8, end=11.0, text="me.")]
@@ -78,23 +78,23 @@ class TestCampaignLinks:
         from clipper.learn.log import campaign_links
 
         rows = [
-            {"campaign": "chad-powers-s2", "caption": "b",
+            {"campaign": "sample-show", "caption": "b",
              "url": "https://t/2?utm_campaign=tt4d_open_api&utm_source=abc",
              "posted_at": "2026-09-29 10:00"},
-            {"campaign": "chad-powers-s2", "caption": "a", "url": "https://t/1",
+            {"campaign": "sample-show", "caption": "a", "url": "https://t/1",
              "posted_at": "2026-09-28 18:00"},
-            {"campaign": "chad-powers-s2", "caption": "unposted", "url": ""},
+            {"campaign": "sample-show", "caption": "unposted", "url": ""},
             {"campaign": "fx-adults-s2", "caption": "c", "url": "https://t/3",
              "posted_at": "2026-09-22 12:00"},
         ]
-        rows.append({"campaign": "chad-powers-s2", "caption": "a", "platform": "instagram",
+        rows.append({"campaign": "sample-show", "caption": "a", "platform": "instagram",
                      "url": "https://www.instagram.com/reel/X/",
                      "posted_at": "2026-09-28 19:00"})
-        assert [u for *_, u in campaign_links(rows, "chad-powers-s2")] == [
+        assert [u for *_, u in campaign_links(rows, "sample-show")] == [
             "https://t/1", "https://www.instagram.com/reel/X/", "https://t/2"]
-        assert [u for *_, u in campaign_links(rows, "chad-powers-s2",
+        assert [u for *_, u in campaign_links(rows, "sample-show",
                                               since="2026-09-29")] == ["https://t/2"]
-        assert [u for *_, u in campaign_links(rows, "chad-powers-s2", platform="instagram")] == [
+        assert [u for *_, u in campaign_links(rows, "sample-show", platform="instagram")] == [
             "https://www.instagram.com/reel/X/"]
 
 
