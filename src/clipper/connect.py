@@ -80,7 +80,7 @@ def deliver(nonce: str, payload: dict) -> bool:
 def refresh(platform: str, refresh_token: str) -> dict:
     """New tokens for a refresh token, from the service (it holds the app secret)."""
     try:
-        r = httpx.post(f"{url()}/refresh/{platform}", data={"refresh_token": refresh_token}, timeout=30)
+        r = httpx.post(f"{url()}/refresh/{platform}", data={"refresh_token": refresh_token}, timeout=90)   # a free host may be waking up
     except httpx.HTTPError as exc:
         raise ConnectError(f"couldn't reach the connect service: {exc}") from exc
     if r.status_code >= 400:

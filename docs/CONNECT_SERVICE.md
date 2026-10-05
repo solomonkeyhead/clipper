@@ -16,7 +16,7 @@ Where it is set, every "Add an account" button is one click; a user's own app ke
 
 ## What Marc has to do (nothing here can be done from code)
 
-1. **Host it.** Anywhere with HTTPS (a small VM, Fly.io, Railway, Render): `python -m clipper.broker`, port 8080.
+1. **Host it.** Anywhere with HTTPS; Render's free plan works (it sleeps when idle, so the first login after a quiet spell is slow). Others: Cloud Run free tier, Railway, Fly.io: `python -m clipper.broker`, port 8080.
    Set `PUBLIC_URL` (its address), `BROKER_SIGNING_KEY` (a long random string) and the keys below.
 2. **Register one app per platform**, each with the redirect `PUBLIC_URL/callback/<platform>`:
    - TikTok: a *Login Kit for web* app with the Display API, scopes `user.info.basic`, `video.list`.
