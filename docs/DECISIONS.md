@@ -2498,3 +2498,13 @@ the physics check to be done by Gemini. A typical 10-sentence Short made 25 to 3
   shared by all threads) still spaces the calls, so the gain is overlapping the waiting, not more speed
   than the limit allows.
 
+## D137 - Dashboard money and views by time range
+
+The dashboard's money and views cards looked like they covered only the last five days: the trend
+lines ran a fixed 14 days and the page cut off the days before the first sync (the syncs began on
+2026-09-28, so that really was about six days). `Metrics.views_by_day` / `earned_by_day` now run
+from the first snapshot (at least 14 days, at most 400), and the dashboard has a 7 days / 30 days /
+All time toggle, All time by default. A window shows what was gained in it (views, and estimated
+earnings priced by each campaign's rules at the window's two ends); "Actually paid" stays all
+time, since payouts are recorded without a date range that fits.
+

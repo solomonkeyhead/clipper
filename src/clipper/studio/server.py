@@ -83,8 +83,9 @@ from .imports import VIDEO_EXTENSIONS
 
 log = get_logger(__name__)
 
-#: Days in the dashboard's views trend line.
+#: Days in the dashboard's trend lines: from the first snapshot, at least this many, at most MAX.
 TREND_DAYS = 14
+MAX_TREND_DAYS = 400
 
 STATIC = Path(__file__).parent / "static"
 HOST, PORT = "127.0.0.1", 8765
@@ -715,7 +716,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         today = datetime.now().date()
         by_day, earned_by_day = [], []
         with db.connect() as con:
-            for d in range(TREND_DAYS - 1, -1, -1):
+            first = con.execute("SELECT MIN(at) FROM snapshots").fetchone()[0]
+            span = (today - datetime.fromisoformat(first[:10]).date()).days + 1 if first else 0
+            for d in range(min(MAX_TREND_DAYS, max(TREND_DAYS, span)) - 1, -1, -1):
                 then = db.views_at(con, f"{today - timedelta(days=d)} 23:59:59")
                 seen = [(p, then.get(p.url.split("?", 1)[0])) for p in posts]
                 by_day.append(sum(v or 0 for _, v in seen))

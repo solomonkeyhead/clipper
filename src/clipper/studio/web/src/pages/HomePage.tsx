@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp, Wand2 } from "lucide-react";
 import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
 import { Button, Card, Metric, PageHeader, Skeleton, Sparkline, Tip } from "@/components/ui";
@@ -12,24 +13,24 @@ function greeting() {
 
 /** The money, tidy: the estimate (with its trend) beside what has actually been paid, and what
  *  is earned on paper but under a campaign's minimum payout (D99, D102, D118). */
-function Earnings({ est, paid, views, posts, trend, locked, lockedPosts }: {
+function Earnings({ est, paid, views, posts, trend, locked, lockedPosts, window }: {
   est: number | null; paid: number | null | undefined; views: number; posts: number; trend: number[];
-  locked: number; lockedPosts: number;
+  locked: number; lockedPosts: number; window: Range;
 }) {
-  const week = trend.length >= 2 ? trend[trend.length - 1] - trend[Math.max(0, trend.length - 8)] : null;
-  const waiting = est !== null ? Math.max(0, est - (paid ?? 0)) : 0;
+  const all = window === "all";
+  const waiting = all && est !== null ? Math.max(0, est - (paid ?? 0)) : 0;
   return (
     <Card className="flex flex-col gap-3 p-5 sm:col-span-2">
       <div className="grid grid-cols-2 gap-4">
         <Tip label="Views ÷ 1,000 × each campaign's rate, for posts that have reached their campaign's minimum payout. Campaigns verify views themselves.">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted">Estimated earnings</span>
+            <span className="text-xs font-medium text-muted">Estimated earnings{all ? "" : `, last ${window} days`}</span>
             <span className="num text-[clamp(2.2rem,4vw,3.4rem)] leading-none text-fg">{est === null ? "–" : formatMoney(est)}</span>
           </div>
         </Tip>
         <Tip label="The payouts you've recorded on each campaign's page. Only this is money received.">
           <div className="flex flex-col gap-1 border-l border-dashed border-line-strong pl-4">
-            <span className="text-xs font-medium text-muted">Actually paid</span>
+            <span className="text-xs font-medium text-muted">Actually paid (all time)</span>
             <span className="num text-[clamp(2.2rem,4vw,3.4rem)] leading-none text-money">{formatMoney(paid ?? 0)}</span>
           </div>
         </Tip>
@@ -38,15 +39,32 @@ function Earnings({ est, paid, views, posts, trend, locked, lockedPosts }: {
       <div className="flex flex-col gap-1 border-t border-dashed border-line-strong pt-3 text-sm text-muted">
         <span>
           {est === null ? "Add a campaign's pay rate to see an estimate"
-            : <>From <b className="text-fg">{formatCount(views)}</b> views on <b className="text-fg">{posts}</b> posts
-                {week !== null && <> · <b className="text-money">+{formatMoney(Math.max(0, week))}</b> in the last {Math.min(7, trend.length - 1)} days</>}</>}
+            : <>From <b className="text-fg">{formatCount(views)}</b> views{all ? <> on <b className="text-fg">{posts}</b> posts</> : <> gained in the last {window} days</>}</>}
         </span>
         {waiting > 0 && <span><b className="text-fg">{formatMoney(waiting)}</b> earned, not paid yet{paid == null && ": record payouts on each campaign's page"}</span>}
-        {locked > 0 && (
+        {all && locked > 0 && (
           <span><b className="text-warning">{formatMoney(locked)}</b> more on {lockedPosts} post{lockedPosts === 1 ? "" : "s"} still under the campaign's minimum payout (pays nothing until it's reached)</span>
         )}
       </div>
     </Card>
+  );
+}
+
+type Range = "7" | "30" | "all";
+const RANGES: [Range, string][] = [["7", "7 days"], ["30", "30 days"], ["all", "All time"]];
+
+/** Which stretch of time the money and views cover; all time unless chosen. */
+function RangeToggle({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {
+  return (
+    <div className="flex items-center justify-end gap-1" role="radiogroup" aria-label="Time range">
+      {RANGES.map(([key, label]) => (
+        <button key={key} type="button" role="radio" aria-checked={value === key} onClick={() => onChange(key)}
+          className={cn("rounded-sm px-2.5 py-1 text-xs font-medium transition-colors",
+            value === key ? "bg-accent-soft text-fg" : "text-muted hover:bg-surface-2 hover:text-fg")}>
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -158,6 +176,7 @@ export function DashboardPage() {
   const { data: clips = [] } = useClips();
   const { data: posts = [] } = usePosts();
   const setTask = useSetTask();
+  const [range, setRange] = useState<Range>("all");
   const open = useUI((s) => s.setOpenClip);
   const { data: campaigns = [] } = useCampaigns();
   const archived = new Set(campaigns.filter((c) => c.archived).map((c) => c.name));
@@ -172,9 +191,16 @@ export function DashboardPage() {
     );
   }
   const m = home.metrics;
-  // The trend from the first day the syncs saw any views (earlier days are "no data", not zero).
+  // All time starts at the first day the syncs saw any views (earlier days are "no data", not zero);
+  // 7 or 30 days start that many days back, and show what was gained since.
   const days = m.views_by_day ?? [];
-  const trend = days.slice(Math.max(0, days.findIndex((v) => v > 0)));
+  const earnedDays = m.earned_by_day ?? [];
+  const from = range === "all" ? Math.max(0, days.findIndex((v) => v > 0)) : Math.max(0, days.length - 1 - Number(range));
+  const trend = days.slice(from);
+  const earnedTrend = earnedDays.slice(from);
+  const gained = (xs: number[]) => (xs.length ? Math.max(0, xs[xs.length - 1] - xs[0]) : 0);
+  const viewsShown = range === "all" ? m.views : gained(trend);
+  const earnedShown = range === "all" ? m.est_earnings : m.est_earnings === null ? null : gained(earnedTrend);
   const since = home.since;
   // The brief's view-milestone tasks reached and not done (D98), oldest post first.
   const due = posts.flatMap((post) => (post.tasks ?? []).filter((t) => !t.done).map((task) => ({ post, task })))
@@ -193,13 +219,14 @@ export function DashboardPage() {
       {firstRun && <GetStarted done={home.first_run} />}
       {home.first_run.clips && <>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Earnings est={m.est_earnings} paid={m.paid_usd} views={m.views} posts={m.posts}
-                  locked={m.locked_usd ?? 0} lockedPosts={m.locked_posts ?? 0}
-                  trend={(m.earned_by_day ?? []).slice(Math.max(0, days.findIndex((v) => v > 0)))} />
-        <Metric label="Views" value={formatCount(m.views)} trend={trend.length >= 2 ? trend : undefined}
+      <RangeToggle value={range} onChange={setRange} />
+      <div className="-mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Earnings est={earnedShown} paid={m.paid_usd} views={viewsShown} posts={m.posts} window={range}
+                  locked={m.locked_usd ?? 0} lockedPosts={m.locked_posts ?? 0} trend={earnedTrend} />
+        <Metric label={range === "all" ? "Views" : `Views, last ${range} days`} value={formatCount(viewsShown)}
+                trend={trend.length >= 2 ? trend : undefined}
                 hint="Total views on your posts at the end of each day, from the syncs"
-                sub={trend.length >= 2 ? <><b className="text-money">+{formatCount(Math.max(0, trend[trend.length - 1] - trend[Math.max(0, trend.length - 8)]))}</b> in the last {Math.min(7, trend.length - 1)} days</> : "active campaigns"} />
+                sub={range === "all" ? "active campaigns, since the first sync" : "gained, active campaigns"} />
         <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more" />
       </div>
 

@@ -266,3 +266,20 @@ class TestApi:
         part = client.get(f"/media/{clip_id}", headers={"Range": "bytes=0-99"})
         assert part.status_code == 206 and len(part.content) == 100
         assert client.get("/media/999").status_code == 404
+
+
+def test_the_dashboard_trend_reaches_back_to_the_first_snapshot(data_root, campaigns):
+    """The money and views trend ran a fixed 14 days; the dashboard's 7 days, 30 days and all time
+    toggles need the whole history."""
+    from datetime import datetime, timedelta
+
+    from fastapi.testclient import TestClient
+
+    from clipper.studio import db
+    from clipper.studio.server import create_app
+
+    old = (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d 10:00")
+    with db.connect() as con:
+        db.add_snapshots(con, old, [{"url": "https://x/1", "views_latest": 100, "likes": 1}])
+    metrics = TestClient(create_app()).get("/api/home").json()["metrics"]
+    assert len(metrics["views_by_day"]) == 41 and metrics["views_by_day"][0] == 0 and metrics["views_by_day"][-1] == 0
