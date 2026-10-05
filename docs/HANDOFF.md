@@ -81,3 +81,42 @@ timeline over the existing build, then live preview, then the multi-user work.
 All of `CLAUDE.md`'s standing rules, especially: commit straight to master; ask before spending
 Marc's money or Claude usage; deletions to the Recycle Bin; check page changes in a real browser and
 extend the walkthrough (D127); every design change gets a D-number at the end of `docs/DECISIONS.md`.
+
+## Local review, 2026-10-04 (first session on Marc's machine; read this before the list above)
+
+Done and pushed (D132, `8359cbf`; settings `0f1f389`): tests (all pass) and ruff clean; `clipper doctor` 16/16
+(NVENC, RTX 2070 SUPER); nothing changes under a running build; NASA downloads "large" not "orig";
+a clip used twice in a row carries on. Coverr and NASA real replies match `stock.coverr()` / `stock.nasa()`.
+`.claude/settings.json` now denies only secrets (`.env`, `.env.*`, `data/*/accounts/**`, `youtube/app.json`,
+`*.key`, `*.pem`, `token*.json`); it only limits the Read tool, not Bash.
+
+**Not run yet (each calls the AI, ask Marc first; footage judging is Gemini first, so it costs little Claude):**
+a full build of the ready-made script, the footage picker, the hover preview, New drawing, Undo, rebuild.
+Video 12 is the earlier build of that script, already in the Archive (never posted: it was archived at
+20:14 on Oct 3, the minute the archive code arrived; ask Marc whether he marked it posted).
+
+**Open concerns, waiting for Marc's call:**
+1. 9 Create clips sit in Clips as "ready" (8 are old test builds of two questions). Propose: Recycle
+   Bin the 8, keep video 12's, and ask "also remove the clip?" when a video is removed from Create.
+2. An automatic archive never undoes itself when the post goes away.
+3. No `PEXELS_API_KEY` (free; the code calls it the best for people footage).
+4. NASA runs on every footage search (about 5 requests); suggest opt-in or space topics only.
+5. Every build sends scratch files to the Recycle Bin (stock folder is 526 MB): delete scratch directly?
+6. The footage prompts and physics check assume physics: blocks "Create for anybody".
+7. The script writer's schema shows ~10 app-only Visual fields (`picked`, `previous`, `redo`...):
+   wasted tokens, and it invites invention. Use a smaller writer-only schema.
+8. Small: filter Coverr's `is_ai_generated`; the first idea in the list duplicates the ready-made script.
+
+**Speed ideas (tell Marc first, time a real build before changing anything):** make shots in parallel;
+encode shots with NVENC (they are x264 crf 16, then encoded again at assembly).
+
+**Marc's own list of Create issues is still to come** (he waits to tell the better model). Ask for it first.
+
+**Tools:** Ponytail is installed (user plugin; `/ponytail-gain` to check its numbers). Graphify was tried on
+`src/` and judged not worth it: its answers were 4 to 6 times bigger than grep's and noisy; the 71.5x
+claim is against reading every file. It's still installed as a uv tool, with an uncommitted
+`.graphifyignore`, a `.gitignore` entry and a git-ignored `src/graphify-out/`; remove with `graphify uninstall`
+and `uv tool uninstall graphifyy` if Marc wants.
+
+**Cloud session:** it kept pushing to master (last at 20:23 local, dropping the deny list). If still open,
+Marc should close it: selfupdate pulls everything it pushes.
