@@ -57,8 +57,13 @@ def sync_all(rows: list[dict[str, str]]) -> list[str]:
             problems.append(f"Instagram @{ig_api.username(path)}: {exc}")
     for path in yt_api.token_files():
         try:
-            ig_sync.apply(yt_api.list_shorts(yt_api.access_token(path)), rows,
-                          account=yt_api.name(path), platform="youtube")
+            account = yt_api.name(path)
+            result = ig_sync.apply(yt_api.list_shorts(yt_api.access_token(path)), rows,
+                                   account=account, platform="youtube")
+            own = own_campaign(account)
+            if own and result.unmatched:  # a Short on your own channel with no clip of Clipper's: adopt it (D144)
+                adopt_uploads(rows, result.unmatched, own, account)
+                ig_sync.apply(result.unmatched, rows, account=account, platform="youtube")
         except yt_api.YouTubeError as exc:
             problems.append(f"YouTube {yt_api.name(path)}: {exc}")
     for path in x_api.account_files():  # paid per post read: every few hours, not every sync
@@ -69,6 +74,54 @@ def sync_all(rows: list[dict[str, str]]) -> list[str]:
     return problems
 
 
+def own_campaign(account: str) -> str:
+    """The campaign of the own channel whose handle is `account` ("" when it's a clipping account)."""
+    from ..create import channel
+
+    ch = channel.load()
+    return ch.campaign if account.lstrip("@").lower() == ch.handle.lstrip("@").lower() else ""
+
+
+def ensure_create_rows(rows: list[dict[str, str]]) -> None:
+    """Every Short Create has built gets a row in the log, so the sync can match the post it becomes
+    (D144). Before this, a Short you posted was filed in the library but never in the log, and the
+    sync matches posts to log rows by caption: it could never be found."""
+    from . import db
+
+    with db.connect() as con:
+        built = con.execute("SELECT campaign, source_id, clip_id, caption, source_title, file, duration_s "
+                            "FROM clips WHERE source_id='create' AND deleted_at IS NULL").fetchall()
+    index = {(r.get("campaign", ""), r.get("source_id", ""), r.get("clip_id", "")): r for r in rows}
+    for c in built:
+        row = index.get((c["campaign"], c["source_id"], c["clip_id"]))
+        if row is None:
+            rows.append({"caption": c["caption"], "campaign": c["campaign"], "source_id": c["source_id"],
+                         "clip_id": c["clip_id"], "source_title": c["source_title"], "file": c["file"],
+                         "duration_s": f"{c['duration_s'] or 0:.1f}"})
+        elif not (row.get("url") or "").strip():
+            row["caption"] = c["caption"]  # not posted yet: follow the script's description
+
+
+def adopt_uploads(rows: list[dict[str, str]], shorts: list, campaign: str, account: str) -> None:
+    """Shorts already on your own channel that Clipper didn't make: filed as clips without a video
+    file, under the channel's campaign, so their views count in Stats and the dashboard (D144)."""
+    from . import db
+
+    known = {(r.get("campaign", ""), r.get("source_id", ""), r.get("clip_id", "")) for r in rows}
+    with db.connect() as con:
+        for s in shorts:
+            clip_id = f"yt-{s.id}"
+            if (campaign, "channel", clip_id) in known:
+                continue
+            db.upsert_clip(con, {"campaign": campaign, "source_id": "channel", "clip_id": clip_id,
+                                 "source_title": s.title, "title": s.title, "file": "", "hook": s.title,
+                                 "caption": s.caption, "duration_s": None, "start_s": 0.0, "end_s": 0.0,
+                                 "scores": '{"picked_by": "channel"}'})
+            rows.append({"caption": s.caption, "campaign": campaign, "source_id": "channel", "clip_id": clip_id,
+                         "source_title": s.title, "platform": "youtube", "account": account,
+                         "video_id": s.id, "url": s.url})
+
+
 def run_sync() -> dict:
     """One full sync: platforms -> performance log -> snapshots. Never two at once."""
     from . import db
@@ -77,6 +130,7 @@ def run_sync() -> dict:
         return {"skipped": True, "problems": [], "last_synced": ""}
     try:
         rows = perf.read()
+        ensure_create_rows(rows)
         problems = sync_all(rows)
         try:
             perf.write(rows)

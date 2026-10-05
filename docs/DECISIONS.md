@@ -2590,3 +2590,13 @@ picked it", Y/B rating); what was missing was links and one vocabulary.
 - **In the background.** Builds show a pill next to clipping; an AI chip names who is working; Settings
   has "Tell me when it's done" (browser notifications, only when the tab is hidden, nothing sent anywhere).
 - **Rating and bulk.** Good on the card (it had Not good); bulk Mark posted and Not good.
+
+## D144: Your own channel's views reach Clipper
+The German Professor's YouTube account was connected but showed 0 posts and 0 views, though the latest
+Short was live. Cause: the sync matches a platform's posts to rows of the performance log by caption, and
+Create filed a built Short in the library without ever adding a log row, so no post could match. Fixes:
+`stats.ensure_create_rows` adds a row for every Create clip each sync (and keeps an unposted one's
+caption in step with the script); `stats.adopt_uploads` files the Shorts already on an own-channel
+account (matched by its handle against the channel profile) as clips without a video file, "Already on
+your channel", so older videos count too. The channel's posts no longer count as "links to submit".
+Result for Marc: 9 Shorts, 5,111 views, the newest one found and archived.

@@ -348,7 +348,8 @@ class Snapshot:
             clips=len(mine), counts=counts,
             views=sum(p.views or 0 for p in posts),
             est_earnings=round(sum(earnings), 2) if earnings else None,
-            to_submit=sum(1 for p in posts if not p.submitted_at),
+            # Your own channel has no campaign to submit links to (D144).
+            to_submit=0 if brief and brief.own_channel else sum(1 for p in posts if not p.submitted_at),
             last_post=max((p.posted_at for p in posts if p.posted_at), default=None),
             min_payout_usd=brief.min_payout_usd if brief else None,
             locked_usd=locked[0], locked_posts=locked[1], own_channel=bool(brief and brief.own_channel),
@@ -698,7 +699,8 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         every = scoped(snap, scope)
         clips = [c for c in every if c.campaign in active]
         posts = [p for c in every for p in c.posts]
-        todo = [p for c in clips for p in c.posts]
+        todo = [p for c in clips if not (snap.campaigns.get(c.campaign) and snap.campaigns[c.campaign].own_channel)
+                for p in c.posts]
         earnings = [p.est_earnings for p in posts if p.est_earnings is not None]
         views = [p.views for p in posts if p.views is not None]
         since = None

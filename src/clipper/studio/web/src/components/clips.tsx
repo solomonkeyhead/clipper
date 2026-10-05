@@ -442,7 +442,9 @@ function Preview({ clip, className }: { clip: Clip; className?: string }) {
         <img src={clip.thumb} alt="" loading="lazy" decoding="async"
              className="absolute inset-0 size-full object-cover" />
       ) : (
-        <div className="absolute inset-0 grid place-items-center text-xs text-subtle">File missing</div>
+        <div className="absolute inset-0 grid place-items-center px-2 text-center text-xs text-subtle">
+          {clip.picked_by === "channel" ? "Already on your channel" : "File missing"}
+        </div>
       )}
       {playing && clip.file_exists && (
         <video src={clip.video} muted autoPlay playsInline loop
