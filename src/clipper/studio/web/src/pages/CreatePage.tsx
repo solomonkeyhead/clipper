@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
   ExternalLink, Trash2, Upload, Wand2, X,
@@ -756,6 +757,19 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
           <CheckNote text={video.check_notes} />
           <div className="flex flex-wrap gap-2">
             {clip && <Button variant="primary" onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
+            {/* Where this video goes next, and where its numbers are (D143). */}
+            {clip && (clip.posts.length > 0 || video.posted) && (
+              <Link to="/stats" search={{ campaign: clip.campaign }}
+                    className="inline-flex h-9 items-center rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
+                See its stats
+              </Link>
+            )}
+            {clip && (
+              <Link to="/clips" search={{ campaign: clip.campaign, status: "all" }}
+                    className="inline-flex h-9 items-center rounded-sm px-3 text-sm font-medium text-muted hover:bg-surface-2 hover:text-fg">
+                All your Shorts in Clips
+              </Link>
+            )}
             <Tip label="Same words and voice: footage and diagrams planned again, then built">
               <Button variant="secondary" disabled={busy !== null} onClick={onPictures}>
                 {busy === "pictures" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "pictures" ? "Planning…" : "New pictures"}

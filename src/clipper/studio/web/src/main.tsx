@@ -51,8 +51,9 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root, path: "/new", component: NewClipsPage,
-    validateSearch: (s: Record<string, unknown>): { campaign?: string } => ({
+    validateSearch: (s: Record<string, unknown>): { campaign?: string; source?: string } => ({
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
+      source: typeof s.source === "string" ? s.source : undefined,
     }),
   }),
   // Create (D108): original Shorts for the user's own channel.
@@ -71,7 +72,14 @@ const routes = [
                 beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "ready" } }); } }),
   createRoute({ getParentRoute: () => root, path: "/submissions",
                 beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "posted" } }); } }),
-  createRoute({ getParentRoute: () => root, path: "/stats", component: StatsPage }),
+  createRoute({
+    getParentRoute: () => root, path: "/stats", component: StatsPage,
+    // Where a number on another page came from: that campaign, sorted by that column (D143).
+    validateSearch: (s: Record<string, unknown>): { campaign?: string; sort?: string } => ({
+      campaign: typeof s.campaign === "string" ? s.campaign : undefined,
+      sort: typeof s.sort === "string" ? s.sort : undefined,
+    }),
+  }),
   createRoute({ getParentRoute: () => root, path: "/learning", component: LearningPage }),
   createRoute({ getParentRoute: () => root, path: "/accounts", component: AccountsPage }),
   createRoute({ getParentRoute: () => root, path: "/settings", component: SettingsPage }),

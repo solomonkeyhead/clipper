@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { keys } from "@/api/client";
+import { notify } from "./notify";
 import { useUI } from "./store";
 
 /** Server-Sent Events: the server says what changed, the page refetches just that. */
@@ -45,7 +46,9 @@ export function useLiveUpdates() {
         } else if (finished) {
           // Whatever page is open: clipping runs in the background (D74).
           if (job.status === "failed") toast.error(`${job.name}: clipping failed`, { description: job.message });
-          else toast.success(job.clips ? `${job.name}: ${job.clips} clip${job.clips === 1 ? "" : "s"} made` : `${job.name}: no clips good enough`,
+          notify(job.status === "failed" ? "Clipping failed" : job.clips ? `${job.clips} clip${job.clips === 1 ? "" : "s"} made` : "No clips good enough",
+                 job.name, job.clips ? "/clips" : "/new");
+          if (job.status !== "failed") toast.success(job.clips ? `${job.name}: ${job.clips} clip${job.clips === 1 ? "" : "s"} made` : `${job.name}: no clips good enough`,
                              { description: job.clips ? "They're in Clips, ready to post." : job.message });
           if (job.status === "done") refreshClips();
         }

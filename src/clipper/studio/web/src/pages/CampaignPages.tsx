@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { AlertTriangle, Archive, ArchiveRestore, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, BarChart3, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, Scissors, Search, ShieldCheck, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import {
@@ -7,7 +7,7 @@ import {
 } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Button, Card, Chip, CopyButton, EmptyState, PageHeader, Skeleton, Tip } from "@/components/ui";
+import { BackLink, Button, Card, Chip, CopyButton, EmptyState, PageHeader, Skeleton, Tip } from "@/components/ui";
 import { FindCampaigns } from "./FindCampaigns";
 import { PostTable } from "./StatsPage";
 import { ClipFilters, NoClips, firstFilter, inFilter, type ClipFilter } from "./WorkPages";
@@ -290,6 +290,7 @@ export function CampaignPage() {
 
   return (
     <div className="fade-in">
+      <BackLink to="/campaigns">All campaigns</BackLink>
       <PageHeader
         title={<span className="flex items-center gap-3">{c.title}{c.archived && <Chip>Archived</Chip>}</span>}
         subtitle={
@@ -302,6 +303,20 @@ export function CampaignPage() {
           </span>
         }
         actions={<>
+          {/* The next step from here: clip this campaign's footage, or (your own channel) write a Short. */}
+          {!c.archived && (c.own_channel
+            ? <Link to="/create" className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                <Wand2 className="size-4" /> Make a Short
+              </Link>
+            : <Link to="/new" search={{ campaign: c.name }} className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                <Scissors className="size-4" /> Make clips
+              </Link>)}
+          {posts.length > 0 && (
+            <Link to="/stats" search={{ campaign: c.name }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
+              <BarChart3 className="size-4" /> Stats
+            </Link>
+          )}
           {brief?.campaign_url && (
             <a href={brief.campaign_url} target="_blank" rel="noopener noreferrer"
                className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
@@ -337,7 +352,7 @@ export function CampaignPage() {
           {tab === "clips" ? (
             clips.length ? <>
               <ClipFilters clips={clips} value={showing} onChange={setFilter} />
-              {shown.length ? <ClipGrid clips={shown} /> : <NoClips filter={showing} />}
+              {shown.length ? <ClipGrid clips={shown} /> : <NoClips filter={showing} campaign={c.name} />}
             </> : <EmptyState icon={<Megaphone className="size-5" />} title="No clips yet"
               body="Give Clipper this campaign's footage and the clips land here."
               action={<Link to="/new" search={{ campaign: c.name }} className="text-sm font-medium text-accent hover:underline">Make clips →</Link>} />

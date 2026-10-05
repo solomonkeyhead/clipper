@@ -2571,3 +2571,22 @@ charge, counts toward its limits) or Gemini, even with a key in `.env`. Adding a
 lets the key do that job too. No key is set in his `.env` today, so nothing was being billed; this
 makes sure adding one later can't spend on more than drawings. The Create page says which of the two
 is drawing.
+
+## D143: The pages link to each other, and say the same words
+Marc asked for a pass on how Clipper feels to use: every place you'd think "this would be easier if".
+Several suggestions already existed (bulk select, J/K through clips, the clipping pill, "Why Clipper
+picked it", Y/B rating); what was missing was links and one vocabulary.
+- **Links.** Dashboard earnings, views and median open Stats; "views since", "new posts" and the top
+  mover open Stats or the clip. Stats takes `?campaign=` and `?sort=`; its rows link to the campaign
+  and the account. The campaign page has Make clips (or Make a Short for your own channel), Stats and a
+  way back. A built Short links to its stats and to Clips. Settings switches link to Learning.
+  New clips takes `?source=` and the finished list has "Clip it again" (one click, the campaign's current
+  profile). Empty states say what puts a clip there and link to it.
+- **One vocabulary.** `STATUS_LABEL` in `ui.tsx` is the only place the four words live: Ready to post, To
+  submit (posted, link not yet submitted), Submitted, Skipped. Your own channel has nothing to submit, so
+  its clips read "Posted". A "?" beside the tabs explains them.
+- **Next step.** The dashboard has one button for the next thing to do (post the next clip, submit the
+  next link, a brief task, your Short, or make clips), and a line for this week.
+- **In the background.** Builds show a pill next to clipping; an AI chip names who is working; Settings
+  has "Tell me when it's done" (browser notifications, only when the tab is hidden, nothing sent anywhere).
+- **Rating and bulk.** Good on the card (it had Not good); bulk Mark posted and Not good.

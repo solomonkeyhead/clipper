@@ -1,10 +1,11 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Film, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
+  AlertTriangle, BarChart3, Bot, Film, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
   Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useCampaigns, useClips, useJobs, useStatus, useSyncNow } from "@/api/client";
+import { useCampaigns, useClips, useCreate, useCreateAI, useJobs, useSetup, useStatus, useSyncNow } from "@/api/client";
+import { notify } from "@/lib/notify";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
 import { useUI } from "@/lib/store";
@@ -99,6 +100,58 @@ function ClippingPill() {
   );
 }
 
+/** A Short being built, on every page, like clipping is (D143). */
+function BuildPill() {
+  const { data } = useCreate();
+  const building = data?.videos.find((v) => v.status === "building");
+  if (!building) return null;
+  const label = `Building a Short${building.pct != null ? ` · ${Math.round(building.pct)}%` : ""}`;
+  return (
+    <Tip label={building.script.title || "Building"}>
+      <Link to="/create" className="flex h-8 items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 text-xs font-medium text-accent hover:border-accent" aria-label={label}>
+        <Loader2 className="size-3.5 animate-spin" /> {label}
+      </Link>
+    </Tip>
+  );
+}
+
+/** Tell the user (when they've turned notifications on) that a Short finished building while they were elsewhere. */
+function useBuildNotifications() {
+  const { data } = useCreate();
+  const seen = useRef<Map<number, string>>(new Map());
+  useEffect(() => {
+    if (!data) return;
+    for (const v of data.videos) {
+      const before = seen.current.get(v.id);
+      if (before === "building" && v.status !== "building") {
+        notify(v.status === "failed" ? "A Short didn't build" : "Your Short is built", v.script.title || "Untitled", "/create");
+      }
+      seen.current.set(v.id, v.status);
+    }
+  }, [data]);
+}
+
+/** Which AI is doing the work, on every page; a click opens Settings (D143). */
+function AIPill() {
+  const { data: ai } = useCreateAI();
+  const { data: setup } = useSetup();
+  if (!ai) return null;
+  const claude = (ai.order[0] ?? "").startsWith("claude_code") || (ai.order[0] ?? "").startsWith("anthropic");
+  const paid = (ai.order[0] ?? "").startsWith("anthropic");
+  const problem = ai.problem || (setup && !setup.ai_ready ? "Gemini isn't set up" : "");
+  const label = problem ? "AI needs setup" : claude ? "Claude + Gemini" : "Gemini";
+  return (
+    <Tip label={problem || (claude
+      ? `Claude ${paid ? "(paid API, drawing only)" : "on your plan"} judges moments and draws; Gemini does ${ai.gemini_jobs.join(", ") || "the rest"} and watches the video.`
+      : "Gemini is doing everything: Claude isn't set up.")}>
+      <Link to="/settings" className={cn("hidden h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs hover:border-line-strong lg:flex",
+        problem ? "text-warning" : "text-muted hover:text-fg")}>
+        <Bot className="size-3.5" /> {label}
+      </Link>
+    </Tip>
+  );
+}
+
 function SyncPill() {
   const { data: status } = useStatus();
   const syncing = useUI((s) => s.syncing) || status?.syncing;
@@ -169,6 +222,7 @@ export function AppShell() {
   const setShortcuts = useUI((s) => s.setShortcuts);
   const setAsk = useUI((s) => s.setAsk);
   const nav = useNav();
+  useBuildNotifications();
   const pendingG = useRef(0);
 
   const goto = (to: string) => () => {
@@ -248,7 +302,9 @@ export function AppShell() {
               </button>
             </Tip>
             <AccountScope />
+            <AIPill />
             <ClippingPill />
+            <BuildPill />
             <AutoPostPill />
             <SyncPill />
           </div>

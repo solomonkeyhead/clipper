@@ -1,5 +1,5 @@
 import { Link, useSearch } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Film, Loader2, Plus, Scissors, Square, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Film, Loader2, Plus, RefreshCw, Scissors, Square, UploadCloud, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -9,7 +9,7 @@ import {
 import { JobResults, LinkImport } from "@/components/footage";
 import { Segmented, TextInput } from "@/components/form";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Button, Card, Chip, EmptyState, PageHeader } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, PageHeader, Tip } from "@/components/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { ago, cn } from "@/lib/utils";
 
@@ -91,6 +91,19 @@ const modeLabel = (job: Job) =>
 function FinishedRow({ job }: { job: Job }) {
   const title = useCampaignTitle();
   const [open, setOpen] = useState(false);
+  const qc = useQueryClient();
+  const { data: campaigns = [] } = useCampaigns();
+  const again = campaigns.some((c) => c.name === job.campaign && !c.archived && !c.own_channel) && (job.mode === "auto" || job.mode === "top");
+  // Clip the same video again under the campaign's current profile: one click (D143).
+  const rerun = async () => {
+    try {
+      await startJob(job.campaign, job.source, "auto");
+      await qc.invalidateQueries({ queryKey: ["jobs"] });
+      toast.success("Clipping again", { description: "With the campaign's profile as it is now; progress shows above." });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   return (
     <div className="rounded-md border border-line bg-surface-1">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
@@ -107,11 +120,20 @@ function FinishedRow({ job }: { job: Job }) {
           <div className="text-xs text-muted">{modeLabel(job)}</div>
           {job.message && <p className="text-xs text-muted">{job.message}</p>}
           {job.status === "done" && <JobResults job={job} />}
-          {job.clips > 0 && (
-            <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium text-accent hover:underline">
-              See its clips →
-            </Link>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {job.clips > 0 && (
+              <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium text-accent hover:underline">
+                See its clips →
+              </Link>
+            )}
+            {again && (
+              <Tip label="Clip this video again with the campaign's current rules and profile">
+                <Button size="sm" variant="secondary" onClick={() => void rerun()}>
+                  <RefreshCw className="size-3.5" /> Clip it again
+                </Button>
+              </Tip>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -354,7 +376,7 @@ export function NewClipsPage() {
   const active = campaigns.filter((c) => c.has_brief && !c.archived && !c.own_channel);  // never clip for your own channel (D140)
   const [campaign, setCampaign] = useState(search.campaign ?? "");
   // The videos to clip, in the order picked; one job each (D72).
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(search.source ? [search.source] : []);   // opened from a video: it's picked (D143)
   const source = picked[0] ?? "";
   const [mode, setMode] = useState<JobMode>("auto");
   const [top, setTop] = useState(4);

@@ -1,8 +1,8 @@
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Film, Info, PartyPopper } from "lucide-react";
 import { useCampaigns, useClips, type Clip } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
-import { Card, EmptyState, Kbd, PageHeader, Skeleton } from "@/components/ui";
+import { Card, EmptyState, Kbd, PageHeader, Skeleton, StatusLegend } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 // In the order a clip moves through them, opening on what's waiting to be posted; All last (D78).
@@ -34,6 +34,7 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
             {label} <span className="tabular ml-1 opacity-70">{clips.filter((c) => inFilter(c, key)).length}</span>
           </button>
         ))}
+        <StatusLegend />
       </div>
       {hints && HINTS[value] && (
         <Card className="mb-5 flex items-start gap-2.5 border-dashed p-3.5 text-sm text-muted">
@@ -44,11 +45,30 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
   );
 }
 
-/** What a filtered list shows when it's empty. */
-export function NoClips({ filter }: { filter: ClipFilter }) {
-  return filter === "posted"
-    ? <EmptyState icon={<PartyPopper className="size-5 text-money" />} title="All caught up" body="Every posted clip is submitted." />
-    : <EmptyState icon={<Film className="size-5" />} title="No clips here" body="Try another filter, or make clips on the New clips page." />;
+const linkClass = "inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover";
+
+/** What a filtered list shows when it's empty: what puts a clip here, and a link to do it (D143). */
+export function NoClips({ filter, campaign }: { filter: ClipFilter; campaign?: string }) {
+  const make = <Link to="/new" search={{ campaign }} className={linkClass}>Make clips</Link>;
+  if (filter === "posted") {
+    return <EmptyState icon={<PartyPopper className="size-5 text-money" />} title="All caught up" body="Every posted clip is submitted."
+      action={<Link to="/clips" search={{ status: "ready" }} className={linkClass}>See what's ready to post</Link>} />;
+  }
+  if (filter === "ready") {
+    return <EmptyState icon={<Film className="size-5" />} title="Nothing waiting to be posted"
+      body="Clips you haven't posted yet land here. Make more from a campaign's footage, or write a Short for your own channel."
+      action={<span className="flex flex-wrap justify-center gap-2">{make}<Link to="/create" className="inline-flex h-9 items-center rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">Make a Short</Link></span>} />;
+  }
+  if (filter === "submitted") {
+    return <EmptyState icon={<Film className="size-5" />} title="Nothing submitted yet"
+      body="Once you've pasted a post's link into its campaign, mark the clip submitted and it moves here."
+      action={<Link to="/clips" search={{ status: "posted" }} className={linkClass}>See links to submit</Link>} />;
+  }
+  if (filter === "skipped") {
+    return <EmptyState icon={<Film className="size-5" />} title="Nothing skipped"
+      body="Clips you skip or mark not good are kept here, and Clipper learns from them." />;
+  }
+  return <EmptyState icon={<Film className="size-5" />} title="No clips yet" body="Give Clipper a campaign's footage and the clips land here." action={make} />;
 }
 
 function useActive() {
@@ -90,7 +110,7 @@ export function ClipsPage() {
         </div>
       ) : list.length ? (
         <ClipGrid clips={list} showCampaign={campaign === "active" || campaign === "all"} />
-      ) : <NoClips filter={status} />}
+      ) : <NoClips filter={status} campaign={campaign !== "active" && campaign !== "all" ? campaign : undefined} />}
     </div>
   );
 }

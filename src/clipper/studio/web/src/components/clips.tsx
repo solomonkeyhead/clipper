@@ -1,9 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  AlertTriangle, Check, CheckCircle2, Download, ThumbsDown, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
+  AlertTriangle, Check, CheckCircle2, Download, ThumbsDown, ThumbsUp, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
   Lock, Pencil, Scissors, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -58,6 +58,27 @@ export function useNotGood() {
       toast.error((err as Error).message);
     }
   };
+}
+
+/** Whether a campaign is your own channel (no submitting links there: its clips are just "Posted"). */
+function useIsOwn() {
+  const { data: campaigns = [] } = useCampaigns();
+  const own = new Set(campaigns.filter((c) => c.own_channel).map((c) => c.name));
+  return (name: string) => own.has(name);
+}
+
+/** Good, from the card itself (D143): the same rating the sheet's Good button and Y give. */
+function GoodButton({ clip }: { clip: Clip }) {
+  const rate = useRateClip();
+  const good = (clip.rating ?? 0) >= 4;
+  return (
+    <Tip label={good ? "Rated good (click to undo)" : "Good: Clipper learns what you like"}>
+      <Button size="sm" variant="ghost" aria-label="Good" aria-pressed={good} className={cn(good && "text-success")}
+              onClick={(e) => { e.stopPropagation(); rate.mutate({ id: clip.id, rating: good ? null : 5, reasons: clip.reasons }); }}>
+        <ThumbsUp className="size-3.5" />
+      </Button>
+    </Tip>
+  );
 }
 
 function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
@@ -287,6 +308,7 @@ export function useBulk() {
   const status = useSetClipStatus();
   const submitted = useSetClipSubmitted();
   const del = useDeleteClip();
+  const qc = useQueryClient();
   const each = async (clips: Clip[], fn: (c: Clip) => Promise<unknown>) => {
     for (const c of clips) await fn(c).catch(() => undefined);
   };
@@ -297,6 +319,12 @@ export function useBulk() {
       void each(clips, (c) => status.mutateAsync({ id: c.id, status: to }));
       done(clips.length, STATUS_WORD[to] === "ready to post" ? "back to ready" : STATUS_WORD[to],
         () => void each(clips, (c) => status.mutateAsync({ id: c.id, status: c.marked as ClipStatus })));
+    },
+    notGood: (clips: Clip[]) => {
+      const refresh = () => qc.invalidateQueries({ queryKey: ["clips"] });
+      void each(clips, (c) => markNotGood(c.id)).then(refresh);
+      done(clips.length, "marked not good and skipped", () => void each(clips, (c) => markNotGood(c.id, { status: c.marked })).then(refresh),
+        "Open one to say why, so Clipper learns the right thing");
     },
     submit: (clips: Clip[]) => {
       void each(clips, (c) => submitted.mutateAsync({ id: c.id, submitted: true }));
@@ -322,6 +350,18 @@ export function SelectionBar({ clips, onClear }: { clips: Clip[]; onClear: () =>
     <div role="toolbar" aria-label="Picked clips"
       className="fade-in fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-xl border border-line-strong bg-surface-1 p-1.5 pl-4 shadow-3">
       <span className="tabular mr-2 text-sm font-medium whitespace-nowrap">{clips.length} selected</span>
+      {ready.length > 0 && (
+        <Button size="sm" variant="secondary" onClick={act(() => bulk.setStatus(ready, "posted"))}>
+          <Upload className="size-3.5" /> Mark posted{count(ready.length)}
+        </Button>
+      )}
+      {ready.length > 0 && (
+        <Tip label="Skip them, and Clipper learns they weren't good">
+          <Button size="sm" variant="secondary" onClick={act(() => bulk.notGood(ready))}>
+            <ThumbsDown className="size-3.5" /> Not good{count(ready.length)}
+          </Button>
+        </Tip>
+      )}
       {ready.length > 0 && (
         <Button size="sm" variant="secondary" onClick={act(() => bulk.setStatus(ready, "skipped"))}>
           <SkipForward className="size-3.5" /> Skip{count(ready.length)} <Kbd>X</Kbd>
@@ -468,6 +508,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
   const open = useUI((s) => s.setOpenClip);
   const title = useCampaignTitle();
   const campaignUrl = useCampaignUrl()(clip.campaign);
+  const isOwn = useIsOwn();
   const { views, best } = bestViews(clip);
   return (
     <article
@@ -497,7 +538,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5">
-            <StatusChip status={clip.status} />
+            <StatusChip status={clip.status} own={isOwn(clip.campaign)} />
             {clip.duplicates.length > 0 && clip.status === "ready" && (
               <Tip label={`Already posted: repeats “${clip.duplicates[0].title}” (${clip.duplicates[0].posted_on.join(", ")})`}>
                 <span aria-label="Already posted" className="text-warning"><AlertTriangle className="size-3.5" /></span>
@@ -531,7 +572,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
             {clip.posts.length === 1 && campaignUrl
               ? <SubmitLinkButton post={clip.posts[0]} campaignUrl={campaignUrl} label="Submit" />
               : <LinkButtons posts={clip.posts} withLabel={clip.posts.length < 2} />}
-            <SubmitButton clip={clip} />
+            {!isOwn(clip.campaign) && <SubmitButton clip={clip} />}
           </>
         ) : clip.status === "submitted" ? (
           <LinkButtons posts={clip.posts} />
@@ -541,7 +582,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
           <>
             {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
             {clip.file_exists && <DownloadButton clip={clip} />}
-            {clip.status === "ready" && <NotGoodButton clip={clip} />}
+            {clip.status === "ready" && <><GoodButton clip={clip} /><NotGoodButton clip={clip} /></>}
           </>
         )}
         <span className="ml-auto"><DeleteButton clip={clip} /></span>
@@ -682,6 +723,7 @@ export function ClipSheet() {
   const title = useCampaignTitle();
   const campaignUrlOf = useCampaignUrl();
   const campaignUrl = clip ? campaignUrlOf(clip.campaign) : "";
+  const isOwn = useIsOwn();
   const remove = useDeleteWithUndo();
   const setNote = useSetNote();
   const [note, setNoteText] = useState("");
@@ -769,8 +811,11 @@ export function ClipSheet() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <StatusChip status={clip.status} />
-                      <span className="text-xs text-muted">{title(clip.campaign)} · {clip.source_title} · {formatDuration(clip.duration_s)}</span>
+                      <StatusChip status={clip.status} own={isOwn(clip.campaign)} />
+                      <span className="text-xs text-muted">
+                        <Link to="/campaigns/$name" params={{ name: clip.campaign }} onClick={() => setOpen(null)} className="hover:text-accent hover:underline">{title(clip.campaign)}</Link>
+                        {" · "}{clip.source_title} · {formatDuration(clip.duration_s)}
+                      </span>
                     </div>
                     <Dialog.Title className="text-lg font-semibold">{clip.title}</Dialog.Title>
                     {clip.hook && clip.hook !== clip.title && (
@@ -786,7 +831,7 @@ export function ClipSheet() {
                 <DuplicateWarning clip={clip} />
 
                 <div className="flex flex-wrap gap-2">
-                  {(clip.status === "posted" || clip.status === "submitted") && <SubmitButton clip={clip} size="md" />}
+                  {(clip.status === "posted" || clip.status === "submitted") && !isOwn(clip.campaign) && <SubmitButton clip={clip} size="md" />}
                   {clip.status === "ready" ? (
                     <Button variant="primary" onClick={() => setStatus(clip, "posted")}>
                       <Upload className="size-4" /> Mark posted <Kbd className="border-accent-fg/30 bg-accent-fg/10 text-accent-fg">P</Kbd>

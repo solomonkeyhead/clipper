@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, CheckCircle2, ExternalLink, Eye, KeyRound, Loader2, Monitor, Moon, Plus, Stethoscope, Sun, XCircle,
 } from "lucide-react";
@@ -11,6 +12,7 @@ import { Field, TextInput } from "@/components/form";
 import { GroupsCard } from "@/components/groups";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, CopyButton, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
+import { notifyOn, notifySupported, setNotify } from "@/lib/notify";
 import { useUI, type Theme } from "@/lib/store";
 import { cn, openTab } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -459,6 +461,23 @@ function Row({ title, body, control, id }: { title: string; body: ReactNode; con
   );
 }
 
+const Where = ({ to, children }: { to: string; children: ReactNode }) => (
+  <> <Link to={to} className="font-medium text-accent hover:underline">{children}</Link></>
+);
+
+/** Browser notifications when a clipping job or a Short's build finishes in the background (D143). */
+function NotifySwitch() {
+  const [on, setOn] = useState(notifyOn());
+  if (!notifySupported()) return <span className="text-xs text-muted">Not supported by this browser</span>;
+  return (
+    <Switch label="Tell me when it's done" checked={on}
+            onChange={(v) => void setNotify(v).then((now) => {
+              setOn(now);
+              if (v && !now) toast.error("Notifications are blocked", { description: "Allow them for this page in your browser's site settings, then try again." });
+            })} />
+  );
+}
+
 function AIKey() {
   const { data: setup } = useSetup();
   const save = useSetKeys();
@@ -626,10 +645,16 @@ export function SettingsPage() {
           ) : <Skeleton className="h-9 w-32" />}
         />
         <Row
+          title="Tell me when it's done"
+          body="A notification when a clipping job or a Short's build finishes while you're on another tab or window. Only this browser; it asks permission the first time."
+          control={<NotifySwitch />}
+        />
+        <Row
           title="Claude judges the moments"
           body={<>Claude reads every moment in a video, scores it and picks each clip's opening line, on your Claude plan
             (about 10 requests a video, counted toward its usage limit). Gemini still watches the video and takes over if
-            Claude can't answer. Off: Gemini's free models judge, as before.</>}
+            Claude can't answer. Off: Gemini's free models judge, as before.
+            <Where to="/learning">See how well its scores match your taste →</Where></>}
           control={settings ? (
             <Switch label="Claude judges the moments" checked={settings.claude_judge !== "0"}
                     onChange={(v) => save.mutate({ claude_judge: v ? "1" : "0" })} />
@@ -639,7 +664,8 @@ export function SettingsPage() {
           title="Open on the payoff"
           body={<>Podcast and stream clips start with the first half of their best line, stopping just before it lands, then
             a quick flash back to the setup, and end on that line so they loop. Never on scripted TV or film, where it spoils
-            the joke; skipped when a brief forbids re-edits or no line works on its own.</>}
+            the joke; skipped when a brief forbids re-edits or no line works on its own.
+            <Where to="/learning">See whether it's working →</Where></>}
           control={settings ? (
             <Switch label="Open on the payoff" checked={settings.payoff_first !== "0"}
                     onChange={(v) => save.mutate({ payoff_first: v ? "1" : "0" })} />
@@ -649,7 +675,8 @@ export function SettingsPage() {
           title="Pick the cover"
           body={<>Clipper finds each clip's best still (a clear face, sharp, well lit) and puts it on the first frame with the
             hook, so TikTok and Instagram show it as the cover and you don't have to choose one. It's held for 1/15 of a
-            second, too short to notice when it plays. Skipped when a brief forbids re-edits.</>}
+            second, too short to notice when it plays. Skipped when a brief forbids re-edits.
+            <Where to="/learning">See whether it's working →</Where></>}
           control={settings ? (
             <Switch label="Pick the cover" checked={settings.auto_cover !== "0"}
                     onChange={(v) => save.mutate({ auto_cover: v ? "1" : "0" })} />

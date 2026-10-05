@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp, Wand2 } from "lucide-react";
 import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
@@ -20,7 +20,8 @@ function Earnings({ est, paid, views, posts, trend, locked, lockedPosts, window 
   const all = window === "all";
   const waiting = all && est !== null ? Math.max(0, est - (paid ?? 0)) : 0;
   return (
-    <Card className="flex flex-col gap-3 p-5 sm:col-span-2">
+    <Link to="/stats" className="block sm:col-span-2" aria-label="Open Stats">
+    <Card className="flex h-full flex-col gap-3 p-5 transition-colors hover:border-line-strong hover:bg-surface-2">
       <div className="grid grid-cols-2 gap-4">
         <Tip label="Views ÷ 1,000 × each campaign's rate, for posts that have reached their campaign's minimum payout. Campaigns verify views themselves.">
           <div className="flex flex-col gap-1">
@@ -47,6 +48,7 @@ function Earnings({ est, paid, views, posts, trend, locked, lockedPosts, window 
         )}
       </div>
     </Card>
+    </Link>
   );
 }
 
@@ -178,7 +180,10 @@ export function DashboardPage() {
   const setTask = useSetTask();
   const [range, setRange] = useState<Range>("all");
   const open = useUI((s) => s.setOpenClip);
+  const setListIds = useUI((s) => s.setListIds);
+  const navigate = useNavigate();
   const { data: campaigns = [] } = useCampaigns();
+  const { data: create } = useCreate();
   const archived = new Set(campaigns.filter((c) => c.archived).map((c) => c.name));
 
   if (!home) {
@@ -209,12 +214,30 @@ export function DashboardPage() {
   const active = clips.filter((c) => c.status !== "skipped" && !archived.has(c.campaign));
   const by = (s: string) => active.filter((c) => c.status === s);
 
+  // The one thing to do next (D143): the first clip to post, else the first link to submit, else a
+  // brief task, else the channel's next step, else more clips. One button, so opening the app has a next move.
+  const openFirst = (list: Clip[]) => { setListIds(list.map((c) => c.id)); open(list[0].id); };
+  const channelBusy = create?.videos.find((v) => v.status !== "built");
+  const next: { label: string; run: () => void } | null = firstRun ? null
+    : by("ready").length ? { label: `Post the next clip (${by("ready").length})`, run: () => openFirst(by("ready")) }
+    : by("posted").length ? { label: `Submit the next link (${by("posted").length})`, run: () => openFirst(by("posted")) }
+    : due.length ? { label: "Do the next brief task", run: () => open(due[0].post.clip) }
+    : channelBusy ? { label: `Your Short: ${channelBusy.status === "draft" ? "approve the script" : channelBusy.status === "approved" ? "add the voice" : "see it"}`, run: () => void navigate({ to: "/create" }) }
+    : { label: "Make more clips", run: () => void navigate({ to: "/new" }) };
+  // This week, in a line: what you posted and what it brought.
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const weekPosts = posts.filter((p) => (p.posted_at ?? "") >= weekAgo).length;
+  const weekViews = gained(days.slice(-8));
+  const week = weekPosts || weekViews
+    ? `This week: ${weekPosts} post${weekPosts === 1 ? "" : "s"} up, +${formatCount(weekViews)} views.` : "";
+
   return (
     <div className="fade-in flex flex-col gap-8">
       <PageHeader
         title={!firstRun && by("ready").length ? `${greeting()} ${by("ready").length} clip${by("ready").length === 1 ? "" : "s"} to post` : greeting()}
         hi={`${by("ready").length} clip`}
-        subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : "Here's where your clips stand."} />
+        subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : `${week ? `${week} ` : ""}Here's where your clips stand.`}
+        actions={next && <Button variant="primary" size="md" onClick={next.run}>{next.label} <ArrowRight className="size-4" /></Button>} />
       <ChannelCard />
       {firstRun && <GetStarted done={home.first_run} />}
       {home.first_run.clips && <>
@@ -226,8 +249,10 @@ export function DashboardPage() {
         <Metric label={range === "all" ? "Views" : `Views, last ${range} days`} value={formatCount(viewsShown)}
                 trend={trend.length >= 2 ? trend : undefined}
                 hint="Total views on your posts at the end of each day, from the syncs"
+                to="/stats" search={{ sort: "views" }}
                 sub={range === "all" ? "every campaign, archived too, since the first sync" : "gained, every campaign"} />
-        <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more" />
+        <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more"
+                to="/stats" search={{ sort: "views" }} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -237,23 +262,23 @@ export function DashboardPage() {
           </h2>
           {since ? (
             <div className="grid gap-4 sm:grid-cols-3">
-              <div>
+              <Link to="/stats" search={{ sort: "views" }} className="rounded-md hover:bg-surface-2">
                 <div className={cn("tabular text-2xl font-semibold", since.views_gained > 0 ? "text-money" : "text-muted")}>+{formatCount(since.views_gained)}</div>
                 <div className="text-xs text-muted">views since {ago(since.since)}</div>
-              </div>
-              <div>
+              </Link>
+              <Link to="/stats" className="rounded-md hover:bg-surface-2">
                 <div className="tabular text-2xl font-semibold">{since.new_posts}</div>
                 <div className="text-xs text-muted">new posts</div>
-              </div>
+              </Link>
               <div className="min-w-0">
                 {since.top_mover ? (
-                  <>
+                  <button type="button" onClick={() => open(since.top_mover!.clip)} className="block w-full min-w-0 rounded-md text-left hover:bg-surface-2">
                     <div className="flex items-center gap-1.5 text-sm font-medium">
                       <TrendingUp className="size-4 text-money" /> Top mover
                     </div>
                     <div className="truncate text-xs text-muted">{since.top_mover.clip_title}</div>
                     <div className="tabular text-xs text-money">+{formatCount(since.top_mover_gain)} views</div>
-                  </>
+                  </button>
                 ) : <div className="text-sm text-muted">No movers yet</div>}
               </div>
             </div>

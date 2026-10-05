@@ -1,6 +1,7 @@
 import * as RadixSwitch from "@radix-ui/react-switch";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
-import { Check, Copy } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft, Check, Copy, Info } from "lucide-react";
 import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn, copyText } from "@/lib/utils";
 
@@ -119,15 +120,50 @@ export const Chip = ({ children, tone = "neutral", className, title }: {
 );
 
 const STATUS_TONE = { ready: "info", posted: "warning", submitted: "success", skipped: "neutral" } as const;
-const STATUS_LABEL = { ready: "Ready to post", posted: "Posted", submitted: "Submitted", skipped: "Skipped" } as const;
+/** The one vocabulary for where a clip is (D143): the chip, the tabs, the cards and the dashboard all say
+ *  these words. "To submit" is a clip that is posted but whose link still needs submitting to its
+ *  campaign; your own channel has no submitting, so there it stays "Posted". */
+export const STATUS_LABEL = { ready: "Ready to post", posted: "To submit", submitted: "Submitted", skipped: "Skipped" } as const;
+export const STATUS_MEANING = {
+  ready: "Made, and waiting for you to post it on your account.",
+  posted: "Posted on your account. Its link still has to be submitted to the campaign.",
+  submitted: "Its link has been submitted to the campaign.",
+  skipped: "You passed on it. It stays here, and Clipper learns from why.",
+} as const;
 
-export function StatusChip({ status }: { status: string }) {
+export function StatusChip({ status, own = false }: { status: string; own?: boolean }) {
   const s = (status in STATUS_TONE ? status : "ready") as keyof typeof STATUS_TONE;
   return (
-    <Chip tone={STATUS_TONE[s]} className="whitespace-nowrap">
+    <Chip tone={STATUS_TONE[s]} className="whitespace-nowrap" title={STATUS_MEANING[s]}>
       <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden />
-      {STATUS_LABEL[s]}
+      {own && s === "posted" ? "Posted" : STATUS_LABEL[s]}
     </Chip>
+  );
+}
+
+/** "What do these mean?" beside any set of status tabs. */
+export function StatusLegend() {
+  return (
+    <Tip side="bottom" label={
+      <span className="flex flex-col gap-1 py-0.5">
+        {(Object.keys(STATUS_LABEL) as (keyof typeof STATUS_LABEL)[]).map((k) => (
+          <span key={k}><b>{STATUS_LABEL[k]}</b>: {STATUS_MEANING[k]}</span>
+        ))}
+      </span>
+    }>
+      <button type="button" aria-label="What the statuses mean" className="grid size-8 place-items-center rounded-full text-subtle hover:text-fg">
+        <Info className="size-4" />
+      </button>
+    </Tip>
+  );
+}
+
+/** A way back up: the list a detail page belongs to. */
+export function BackLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link to={to} className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg">
+      <ArrowLeft className="size-3.5" /> {children}
+    </Link>
   );
 }
 
@@ -247,16 +283,19 @@ export function Sparkline({ values, className }: { values: number[]; className?:
   );
 }
 
-export function Metric({ label, value, hint, tone, sub, trend }: {
+export function Metric({ label, value, hint, tone, sub, trend, to, search }: {
   label: string; value: ReactNode; hint?: string; tone?: "money"; sub?: ReactNode; trend?: number[];
+  /** Makes the card a link to where the number comes from (D143). */
+  to?: string; search?: Record<string, string>;
 }) {
-  const body = (
-    <Card className="flex flex-col gap-1 p-4">
+  const card = (
+    <Card className={cn("flex h-full flex-col gap-1 p-4", to && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
       <span className="text-xs font-medium text-muted">{label}</span>
       <span className={cn("num text-[1.9rem] leading-tight", tone === "money" && "text-money")}>{value}</span>
       {trend && <Sparkline values={trend} className="mt-1" />}
       {sub && <span className="text-xs text-muted">{sub}</span>}
     </Card>
   );
+  const body = to ? <Link to={to} search={search} className="block rounded-lg">{card}</Link> : card;
   return hint ? <Tip label={hint}>{body}</Tip> : body;
 }

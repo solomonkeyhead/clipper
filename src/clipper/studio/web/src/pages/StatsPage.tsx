@@ -1,6 +1,7 @@
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, BarChart3 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useCampaigns, useClips, usePosts, type Post } from "@/api/client";
+import { useCampaignTitle, useCampaigns, useClips, usePosts, type Post } from "@/api/client";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Chip, CopyButton, EmptyState, Metric, PageHeader, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
@@ -37,11 +38,13 @@ function cell(p: Post, key: Key): React.ReactNode {
   }
 }
 
-export function PostTable({ posts }: { posts: Post[] }) {
+export function PostTable({ posts, initialSort, showCampaign = false }: { posts: Post[]; initialSort?: string; showCampaign?: boolean }) {
   const open = useUI((s) => s.setOpenClip);
   const { data: clips = [] } = useClips();
+  const campaignTitle = useCampaignTitle();
   const thumbs = useMemo(() => new Map(clips.map((c) => [c.id, c.thumb])), [clips]);
-  const [sort, setSort] = useState<{ key: Key; desc: boolean }>({ key: "posted", desc: true });
+  const start = (COLUMNS.some((c) => c.key === initialSort) ? initialSort : "posted") as Key;
+  const [sort, setSort] = useState<{ key: Key; desc: boolean }>({ key: start, desc: true });
 
   const sorted = useMemo(() => {
     const get = sort.key === "posted" ? (p: Post) => p.posted_at ?? ""
@@ -54,7 +57,8 @@ export function PostTable({ posts }: { posts: Post[] }) {
 
   if (!posts.length) {
     return <EmptyState icon={<BarChart3 className="size-5" />} title="No posts yet"
-      body="Post a clip with its caption and the next sync picks it up, with its link and numbers." />;
+      body="Post a clip with its caption and the next sync picks it up, with its link and numbers."
+      action={<Link to="/clips" search={{ status: "ready" }} className="inline-flex h-9 items-center rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">See clips ready to post</Link>} />;
   }
   const header = (key: Key, label: string, tip?: string) => {
     const th = (
@@ -84,11 +88,24 @@ export function PostTable({ posts }: { posts: Post[] }) {
           {sorted.map((p) => (
             <tr key={p.url} className="h-12 border-b border-line last:border-0 hover:bg-surface-2">
               <td className="px-3">
-                <button onClick={() => open(p.clip)} className="flex items-center gap-2.5 text-left" title={p.clip_title}>
-                  <img src={thumbs.get(p.clip)} alt="" loading="lazy" className="aspect-[9/16] w-6 shrink-0 rounded-[3px] bg-black object-cover" />
-                  <PlatformIcon platform={p.platform} className="text-muted" />
-                  <span className="block w-[240px] truncate xl:w-[300px]">{p.clip_title}</span>
-                </button>
+                <div className="flex items-center gap-2.5">
+                  <button onClick={() => open(p.clip)} className="flex items-center gap-2.5 text-left" title={p.clip_title}>
+                    <img src={thumbs.get(p.clip)} alt="" loading="lazy" className="aspect-[9/16] w-6 shrink-0 rounded-[3px] bg-black object-cover" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="block w-[240px] truncate xl:w-[300px]">{p.clip_title}</span>
+                    </span>
+                  </button>
+                  <span className="flex min-w-0 flex-col text-xs">
+                    <Tip label={`${PLATFORM_NAME[p.platform] ?? p.platform}${p.account ? ` @${p.account}` : ""}: open Accounts`}>
+                      <Link to="/accounts" className="text-muted hover:text-fg"><PlatformIcon platform={p.platform} /></Link>
+                    </Tip>
+                  </span>
+                  {showCampaign && (
+                    <Link to="/campaigns/$name" params={{ name: p.campaign }} className="hidden max-w-32 truncate text-xs text-muted hover:text-accent xl:block">
+                      {campaignTitle(p.campaign)}
+                    </Link>
+                  )}
+                </div>
               </td>
               <td className="px-3 whitespace-nowrap text-muted">
                 {ago(p.posted_at)}
@@ -123,7 +140,9 @@ function ByPlatform({ posts }: { posts: Post[] }) {
       <div className="flex flex-col gap-2.5">
         {rows.map((r) => (
           <div key={r.platform} className="grid grid-cols-[120px_1fr_auto] items-center gap-3 text-sm">
-            <span className="flex items-center gap-2"><PlatformIcon platform={r.platform} />{PLATFORM_NAME[r.platform] ?? r.platform}</span>
+            <Link to="/accounts" className="flex items-center gap-2 hover:text-accent" title="Open Accounts">
+              <PlatformIcon platform={r.platform} />{PLATFORM_NAME[r.platform] ?? r.platform}
+            </Link>
             <span className="h-2 overflow-hidden rounded-full bg-surface-3">
               <span className="block h-full rounded-full bg-accent" style={{ width: `${(r.total / top) * 100}%` }} />
             </span>
@@ -141,7 +160,10 @@ function ByPlatform({ posts }: { posts: Post[] }) {
 export function StatsPage() {
   const { data: posts, isLoading } = usePosts();
   const { data: campaigns = [] } = useCampaigns();
-  const [campaign, setCampaign] = useState("all");
+  const search = useSearch({ from: "/stats" });
+  const navigate = useNavigate({ from: "/stats" });
+  const campaign = search.campaign ?? "all";
+  const setCampaign = (value: string) => void navigate({ search: (s) => ({ ...s, campaign: value === "all" ? undefined : value }) });
   const list = (posts ?? []).filter((p) => campaign === "all" || p.campaign === campaign);
   const sum = (f: (p: Post) => number | null | undefined) => list.reduce((s, p) => s + (f(p) ?? 0), 0);
   const withWatch = list.filter((p) => p.avg_watch_s != null);
@@ -172,7 +194,7 @@ export function StatsPage() {
                     sub="lower is better" />
           </div>
           <ByPlatform posts={list} />
-          <PostTable posts={list} />
+          <PostTable key={search.sort ?? "posted"} posts={list} initialSort={search.sort} showCampaign={campaign === "all"} />
         </div>
       )}
     </div>
