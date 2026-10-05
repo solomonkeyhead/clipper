@@ -218,6 +218,9 @@ class LLMConfig(StrictModel):
     campaign_focus: str = ""
     # The language captions, hooks and descriptions are written in, set per run from the campaign (D147).
     language: str = "en"
+    # Who does which job, when the user chose (Settings > Who does what, D148): job -> "claude_plan" |
+    # "claude_api" | "gemini" | "ollama". A job not listed is automatic: the order the other settings give.
+    job_providers: dict[str, str] = Field(default_factory=dict)
     # What the user's own ratings say they like and dislike (learn/feedback.py),
     # set per run; guidance for the scorer, weaker than the campaign focus.
     user_taste: str = ""
@@ -417,10 +420,25 @@ class WatchConfig(StrictModel):
     ntfy_server: str = "https://ntfy.sh"
 
 
+def write_auto(patch: dict) -> None:
+    """Merge `patch` into `<data>/config.auto.yaml`, the settings the Control Center chooses for the user
+    (this computer's speech model, who does which AI job). The user's own config.yaml still overrides it."""
+    from .paths import data_root
+
+    path = data_root() / "config.auto.yaml"
+    have = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) if path.is_file() else {}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    note = "# Written by Settings (This computer, Who does what). Your own config.yaml overrides it.\n"
+    path.write_text(note + yaml.safe_dump(_merged(have, patch)), encoding="utf-8")
+
+
 def _merged(base: dict, over: dict) -> dict:
     """`over` laid on `base`: mappings merge key by key, anything else is replaced."""
     out = dict(base)
     for key, value in over.items():
+        if value is None and key in out:   # `None` takes a setting back out (Settings' "Automatic")
+            del out[key]
+            continue
         out[key] = _merged(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict) else value
     return out
 
@@ -449,9 +467,11 @@ class Config(StrictModel):
         if own:
             from .paths import data_root
 
-            local = data_root() / "config.yaml"
-            if local.is_file():
-                data = _merged(data, yaml.safe_load(local.read_text(encoding="utf-8")) or {})
+            # What Settings > This computer chose (hardware.py), then the user's own file over it.
+            for name in ("config.auto.yaml", "config.yaml"):
+                local = data_root() / name
+                if local.is_file():
+                    data = _merged(data, yaml.safe_load(local.read_text(encoding="utf-8")) or {})
         return cls.model_validate(data)
 
 

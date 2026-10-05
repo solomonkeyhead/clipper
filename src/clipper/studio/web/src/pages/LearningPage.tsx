@@ -1,8 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { useRef } from "react";
+import { toast } from "sonner";
 import { FlaskConical, Lightbulb } from "lucide-react";
 import { useLearning, useSetSettings, useSettings, useWhatsWorking, type Learning, type WhatsWorking } from "@/api/client";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Card, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
+import { Button, Card, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { cn, formatCount, PLATFORM_NAME } from "@/lib/utils";
 
 const VERDICT: Record<string, { text: string; tone: string }> = {
@@ -167,6 +170,46 @@ function WhatsWorkingCard() {
   );
 }
 
+/** Teaching it from nothing, and taking what it learnt with you (D148): a progress line toward the first
+ *  learnt weights, and the taste as a file to export, or a file from another install to start from. */
+function TastePanel({ have, need }: { have: number; need: number }) {
+  const qc = useQueryClient();
+  const file = useRef<HTMLInputElement>(null);
+  const exportIt = async () => {
+    const res = await fetch("/api/learning/taste");
+    const blob = new Blob([JSON.stringify(await res.json(), null, 2)], { type: "application/json" });
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "clipper-taste.json" });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const importIt = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      const res = await fetch("/api/learning/taste", { method: "PUT", headers: { "Content-Type": "application/json" }, body: await f.text() });
+      if (!res.ok) throw new Error((await res.json()).detail ?? "that didn't work");
+      toast.success("Starting from that taste", { description: "Your own ratings take over as you rate clips." });
+      void qc.invalidateQueries({ queryKey: ["learning"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  return (
+    <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="text-sm">
+        {have < need ? (
+          <><b>Teach it your taste:</b> you've rated {have} of {need} clips it needs before its scores start following you.{" "}
+            <Link to="/clips" search={{ status: "ready" }} className="font-medium text-accent hover:underline">Rate clips →</Link></>
+        ) : <><b>It has learnt from {have} clips.</b> Export what it learnt to keep, or to start another install from.</>}
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" variant="secondary" onClick={() => void exportIt()}>Export my taste</Button>
+        <Button size="sm" variant="secondary" onClick={() => file.current?.click()}>Start from a taste file</Button>
+        <input ref={file} type="file" accept="application/json,.json" className="hidden" onChange={(e) => void importIt(e.target.files?.[0])} />
+      </div>
+    </Card>
+  );
+}
+
 export function LearningPage() {
   const { data: report, isLoading } = useLearning();
   const { data: settings } = useSettings();
@@ -180,6 +223,8 @@ export function LearningPage() {
     <div className="fade-in flex max-w-5xl flex-col gap-6">
       <PageHeader title="Learning"
         subtitle="Clipper learns which moments to pick from the clips you post, the ones you mark not good, and how many views your posts get. This page shows whether its scores match your taste and your views." />
+
+      <TastePanel have={report.weights_n} need={report.min_for_weights} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="flex flex-col gap-1 p-4">

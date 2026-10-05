@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  downloadUrl, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useSetTask, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
+  downloadUrl, useStatus, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useSetTask, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -728,6 +728,7 @@ export function ClipSheet() {
   const campaignUrlOf = useCampaignUrl();
   const campaignUrl = clip ? campaignUrlOf(clip.campaign) : "";
   const isOwn = useIsOwn();
+  const hosted = useStatus().data?.hosted === true;   // on a server there is no folder of yours to open (D148)
   const remove = useDeleteWithUndo();
   const setNote = useSetNote();
   const [note, setNoteText] = useState("");
@@ -798,9 +799,9 @@ export function ClipSheet() {
                       <Download className="size-4" /> Download <Kbd className="ml-auto border-accent-fg/30 bg-accent-fg/10 text-accent-fg">D</Kbd>
                     </a>
                   )}
-                  <Tip label="Show in folder"><Button variant="secondary" size="icon" aria-label="Show in folder" onClick={() => void showFile(clip.id)}>
+                  {!hosted && <Tip label="Show in folder"><Button variant="secondary" size="icon" aria-label="Show in folder" onClick={() => void showFile(clip.id)}>
                     <FolderOpen className="size-4" />
-                  </Button></Tip>
+                  </Button></Tip>}
                   <DeleteButton clip={clip} size="md" />
                 </div>
                 {(clip.status === "ready" || clip.status === "skipped") && (

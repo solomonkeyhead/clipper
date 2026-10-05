@@ -139,11 +139,21 @@ def judge_backend(config: Config, backend_override: str | None = None) -> LLMBac
 
     from .llm.claude_code import cli
 
-    model = config.llm.judge_model
-    if not model or backend_override or not _claude_judge_on():
+    pick = config.llm.job_providers.get("judge", "")
+    model = config.llm.judge_model or (config.llm.create_model if pick else None)
+    if pick == "gemini" or backend_override:   # the user said Gemini: the scoring backend judges
+        return None
+    if pick == "ollama":
+        return create_backend("ollama", max_retries=1, requests_per_minute=60, timeout=300)
+    if not model or (not pick and not _claude_judge_on()):
         return None
     try:
-        if os.environ.get("ANTHROPIC_API_KEY", "").strip() and "judge" in config.llm.paid_api_jobs:
+        paid_ok = pick == "claude_api" or (not pick and "judge" in config.llm.paid_api_jobs)
+        if pick == "claude_plan":
+            if cli():
+                return create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=420)
+            return None
+        if os.environ.get("ANTHROPIC_API_KEY", "").strip() and paid_ok:
             return create_backend("anthropic", model=model, max_retries=1, requests_per_minute=50, timeout=300)
         if config.llm.create_via_claude_plan and cli():
             return create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=420)

@@ -2640,3 +2640,22 @@ channel's pace over a silent track).
   there are numbers or the link is only filed, whether an account can be connected). The config, link parser,
   accounts and finder derive from it; `npm run gen:api` writes the page's `platforms.gen.ts` from it (a test
   fails if they differ). Facebook Reels, Snapchat Spotlight and Threads are now campaign targets (link-only).
+
+## D148: Any computer, any AI, a server later
+- **This computer** (`hardware.py`): detects the GPU, memory and CPU, recommends the Whisper model and
+  precision that fit (a GPU with 8 GB: large-v3 float16, as before; 4 GB: compressed; none: small, base or
+  tiny), shows a rough "minutes per hour of footage", and writes the choice to `<data>/config.auto.yaml`
+  (under the user's own config.yaml). Settings > This computer.
+- **Mac and Linux**: Trash, clipboard and "show in folder" have versions (`gio trash`/`trash-put`/the
+  freedesktop folder, `pbcopy`/`wl-copy`/`xclip`, `open -R`/`xdg-open`).
+- **Server** (`docs/HOSTING.md`): `CLIPPER_HOST` makes it reachable, and then it will not start without
+  `CLIPPER_TOKEN`, which is checked on every request (`?token=` once, then a cookie). `status.hosted` hides
+  what only makes sense on your own computer. Not done: several users, platform sign-ins from a public URL.
+- **Who does what** (Settings): each AI job (judge the moments, script, fact check, drawings, drawing
+  review, footage, placing clips, ideas, and clipping's captions and checks) can be given to Claude on the
+  plan, Claude by API key, Gemini or Ollama, or left Automatic. A pick is asked first; the usual order
+  follows. It is how the paid key is allowed beyond drawing (D142). `llm.job_providers`, written to
+  `config.auto.yaml` (`write_auto`; `None` takes a setting back out).
+- **Taste file**: Learning can export the six rubric weights and the reasons given most (no clip text) and
+  start another install from them (`taste_seed`); its own ratings take over as they come. The page counts
+  the ratings still needed.

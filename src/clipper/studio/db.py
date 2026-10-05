@@ -215,6 +215,9 @@ DEFAULT_SETTINGS = {
     "use_finder": "1",
     # The channel Create is working on (create/channel.py); "" = the first.
     "create_channel": "",
+    # A taste profile imported from a file (D148): the rubric weights to start from instead of the
+    # defaults, until your own ratings take over. JSON, "" = none.
+    "taste_seed": "",
     # Which plan's features are on (studio/plans.py). A local install is the
     # owner's, so everything; a hosted version would set this per account.
     "plan": "pro",

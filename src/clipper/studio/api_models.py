@@ -431,6 +431,7 @@ class Status(BaseModel):
     problems: list[str]
     auto_post: bool
     accounts: list[Account]
+    hosted: bool = False   # on a server others reach, not this one computer: local-only actions are hidden (D148)
 
 
 class EditorWord(BaseModel):

@@ -28,7 +28,39 @@ class CreateError(RuntimeError):
     """Something Create couldn't do; the message says why, for the page."""
 
 
+def _chosen(config, model: str | None, job: str) -> list:
+    """The provider the user picked for `job` in Settings > Who does what (D148), as a backend, or nothing
+    when it's automatic or can't be set up (then the usual order answers)."""
+    from ..llm.base import create as create_backend
+    from ..llm.claude_code import cli
+    from ..runner import _correction_backends
+
+    pick = config.llm.job_providers.get(job, "") if job else ""
+    model = model or config.llm.create_model
+    try:
+        if pick == "claude_api" and os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            return [create_backend("anthropic", model=model, max_retries=1, requests_per_minute=config.llm.requests_per_minute,
+                                   timeout=CLAUDE_TIMEOUT)]
+        if pick == "claude_plan" and cli():
+            return [create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=CLAUDE_TIMEOUT + 60)]
+        if pick == "gemini":
+            return _correction_backends(config, "gemini")
+        if pick == "ollama":
+            return [create_backend("ollama", max_retries=1, requests_per_minute=60, timeout=CLAUDE_TIMEOUT)]
+    except Exception as exc:  # not set up: the usual order answers
+        log.warning("create: the %s you chose for %s isn't available (%s)", pick, job, exc)
+    return []
+
+
 def backends(config, model: str | None = None, job: str = "") -> list:
+    """Who can answer `job`: the user's own pick first (D148), then the usual order."""
+    first = _chosen(config, model, job)
+    rest = _default_backends(config, model, job)
+    names = {b.describe() for b in first}
+    return first + [b for b in rest if b.describe() not in names]
+
+
+def _default_backends(config, model: str | None = None, job: str = "") -> list:
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
     from ..runner import _correction_backends
@@ -110,14 +142,15 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             return hit.text
     order = backends(config, config.llm.create_quick_model if quick else None, job)
     claude = [b for b in order if b.name in ("anthropic", "claude_code")]
-    gemini_first = job in config.llm.create_gemini_jobs
+    picked = config.llm.job_providers.get(job, "") if job else ""
+    gemini_first = picked in ("gemini", "ollama") if picked else job in config.llm.create_gemini_jobs
     if gemini_first:
         order = [b for b in order if b not in claude] + claude
         for b in order:
             if b not in claude and job != "footage":
                 b.timeout = max(b.timeout, GEMINI_PATIENCE)
     for backend in order:
-        if config.llm.create_claude_only and claude and backend not in claude and not gemini_first:
+        if config.llm.create_claude_only and claude and backend not in claude and not gemini_first and not picked:
             # Claude was there but didn't answer: stop rather than let Gemini draw (D117).
             why = misses.get(claude[0].describe(), "it didn't answer")
             raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "

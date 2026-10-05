@@ -628,11 +628,33 @@ def _learning(config: Config, campaign: CampaignConfig) -> tuple[dict[str, float
         log.warning("not using post views to learn: %s", exc)
         performance = {}
     clips = feedback.from_rows(rows, performance=performance)
-    weights, n = feedback.learned_weights(clips, config.llm.rubric_weights.as_dict())
+    defaults, seeded = _seeded(config.llm.rubric_weights.as_dict())
+    weights, n = feedback.learned_weights(clips, defaults)
     if n >= feedback.MIN_FOR_WEIGHTS:
         log.info("rubric weights learnt from %d rated clip(s): %s", n,
                  ", ".join(f"{k} {v:.2f}" for k, v in weights.items()))
-    return (weights if n >= feedback.MIN_FOR_WEIGHTS else None), feedback.taste(clips, campaign.name)
+    return (weights if (n >= feedback.MIN_FOR_WEIGHTS or seeded) else None), feedback.taste(clips, campaign.name)
+
+
+def _seeded(defaults: dict[str, float]) -> tuple[dict[str, float], bool]:
+    """Where the rubric weights start: a taste file imported on this install, else the defaults. Your own
+    ratings take over from there (D148)."""
+    try:
+        seed = _taste_seed()
+        if seed and set(seed) == set(defaults):
+            return seed, True
+    except Exception as exc:
+        log.warning("taste file unreadable: %s", exc)
+    return defaults, False
+
+
+def _taste_seed() -> dict[str, float] | None:
+    """The weights of an imported taste file, or None."""
+    from .studio import db
+
+    with db.connect() as con:
+        raw = db.settings(con).get("taste_seed") or ""
+    return json.loads(raw)["weights"] if raw else None
 
 
 def _render_with_replacement(

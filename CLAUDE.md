@@ -65,6 +65,14 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 - Cached stages in `data/work/<source>/` carry a `.key` of the settings that made them
   (`pipeline.stage_keys`); a changed campaign redoes them (D139).
 
+## Nothing of the owner in the repo (D145-D148)
+- Campaigns are in `<data>/campaigns`, personal settings in `<data>/config.yaml` over `config/default.yaml`
+  (and `config.auto.yaml` from Settings under it). Don't commit either. New defaults must be generic.
+- Create channels are `data/create/channels/<slug>.json`, made from niche packs (`create/packs.py`); the
+  physics pack's prompts must stay byte-identical (`tests/fixtures/*_physics.txt`).
+- Platforms: one list in `platforms.py`; `npm run gen:api` writes the page's copy.
+- Running elsewhere or hosted: `docs/HOSTING.md`.
+
 ## Where things are
 - `src/clipper/cli.py` commands; `studio/server.py` + `studio/create_api.py` the web API;
   `studio/web/src/` the page source (built into `studio/static/`, don't read the build).

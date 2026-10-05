@@ -88,7 +88,15 @@ TREND_DAYS = 14
 MAX_TREND_DAYS = 400
 
 STATIC = Path(__file__).parent / "static"
-HOST, PORT = "127.0.0.1", 8765
+#: Where it listens. 127.0.0.1 is this computer only. CLIPPER_HOST=0.0.0.0 makes it reachable from other
+#: machines (a server, D148), and then CLIPPER_TOKEN is required: without a token it refuses to start.
+HOST, PORT = os.environ.get("CLIPPER_HOST", "").strip() or "127.0.0.1", 8765
+LOOPBACK = ("127.0.0.1", "localhost", "::1")
+
+
+def hosted() -> bool:
+    """On a server others reach (CLIPPER_HOST set to something other than this computer)."""
+    return HOST not in LOOPBACK or os.environ.get("CLIPPER_HOSTED", "") == "1"
 HEARTBEAT_SECONDS = 15
 SESSION_GAP_MINUTES = 30
 #: After "Mark posted", sync every FAST_SYNC_SECONDS for this long, so the post's
@@ -665,6 +673,28 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     # and the live event stream are left as they are (Starlette's own exclusions).
     app.add_middleware(GZipMiddleware, minimum_size=2048)
 
+    token = os.environ.get("CLIPPER_TOKEN", "").strip()
+
+    @app.middleware("http")
+    async def access_token(request: Request, call_next):
+        """On a server (CLIPPER_TOKEN set): nothing without the token, given once as ?token=... and
+        kept in a cookie. On this computer alone there is no token and nothing changes (D148)."""
+        if not token:
+            return await call_next(request)
+        import hmac
+
+        from fastapi.responses import JSONResponse, RedirectResponse
+
+        given = request.query_params.get("token", "")
+        if given and hmac.compare_digest(given, token):
+            reply = RedirectResponse(request.url.path or "/", status_code=303)
+            reply.set_cookie("clipper_token", token, httponly=True, samesite="strict", max_age=60 * 60 * 24 * 90)
+            return reply
+        have = request.cookies.get("clipper_token", "") or request.headers.get("authorization", "").removeprefix("Bearer ")
+        if have and hmac.compare_digest(have, token):
+            return await call_next(request)
+        return JSONResponse({"detail": "this Clipper needs its access token: open it once with ?token=..."}, status_code=401)
+
     @app.middleware("http")
     async def same_origin_writes(request: Request, call_next):
         """Only the Control Center's own pages may change things.
@@ -688,7 +718,73 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         return Status(last_synced=stats.last_synced(rows), syncing=stats.syncing(),
                       sync_minutes=int(settings["sync_minutes"] or 15),
                       problems=list(last_problems), auto_post=settings["auto_post"] == "1",
-                      accounts=accounts())
+                      accounts=accounts(), hosted=hosted())
+
+    #: The AI jobs a user can give to a provider (Settings > Who does what, D148): id, label, what it is.
+    AI_JOBS = [
+        ("judge", "Judge the moments", "Reads every moment of a video, scores it, and picks each clip's opening line."),
+        ("script", "Write Create's scripts", "The script for a Short."),
+        ("check", "Fact-check scripts", "Reads a script for mistakes."),
+        ("sketch", "Draw the diagrams", "Chalkboard drawings. The one job the paid Claude key is meant for."),
+        ("review", "Review the drawings", "Looks at a drawing and fixes it."),
+        ("footage", "Pick stock footage", "Judges thumbnails and writes the searches."),
+        ("place", "Place your own clips", "Matches your clips to the script's sentences."),
+        ("topics", "Think up ideas", "The ideas list for a channel."),
+    ]
+    BACKENDS = {"claude_plan": "claude_code", "claude_api": "anthropic", "gemini": "gemini", "ollama": "ollama"}
+
+    @app.get("/api/ai-jobs")
+    def ai_jobs() -> dict:
+        """Who does which AI job, and which providers this computer can use (D148)."""
+        import shutil
+
+        from ..config import Config
+        from ..llm.claude_code import cli
+
+        config = Config.load()
+        mine = config.llm.backend
+        current = next((k for k, v in BACKENDS.items() if v == mine), "")
+        return {"jobs": [{"id": i, "label": label, "about": about, "choice": config.llm.job_providers.get(i, "")}
+                         for i, label, about in AI_JOBS],
+                "clipping": {"choice": current if mine != "gemini" else "", "now": mine},
+                "available": {"claude_plan": bool(cli()), "claude_api": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
+                              "gemini": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "ollama": bool(shutil.which("ollama"))}}
+
+    @app.put("/api/ai-jobs")
+    def set_ai_job(body: dict) -> dict:
+        from ..config import write_auto
+
+        job, choice = str(body.get("job") or ""), str(body.get("choice") or "")
+        if choice and choice not in BACKENDS:
+            raise HTTPException(400, "unknown provider")
+        if job == "clipping":   # captions, descriptions, rule checks and the rest of clipping
+            write_auto({"llm": {"backend": BACKENDS[choice] if choice else None}})
+        elif job in {j[0] for j in AI_JOBS}:
+            write_auto({"llm": {"job_providers": {job: choice or None}}})
+        else:
+            raise HTTPException(404, "no such job")
+        return {"job": job, "choice": choice}
+
+    @app.get("/api/compute")
+    def compute() -> dict:
+        """This computer, and the speech-recognition settings that suit it (hardware.py, D148)."""
+        from .. import hardware
+        from ..config import Config
+
+        hw = hardware.detect()
+        plan = hardware.recommend(hw)
+        mine = hardware.current(Config.load())
+        return hardware.as_dict(hw, plan) | {
+            "current": mine, "matches": mine["model"] == plan.model and mine["compute_type"] == plan.compute_type
+            and mine["device"] in (plan.device, "auto")}
+
+    @app.post("/api/compute/apply")
+    def compute_apply() -> dict:
+        from .. import hardware
+
+        plan = hardware.recommend(hardware.detect())
+        hardware.apply(plan)
+        return {"applied": plan.label}
 
     @app.get("/api/home")
     def home(scope: str | None = None) -> Home:
@@ -1502,6 +1598,35 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         return Learning(active=active, min_for_weights=feedback.MIN_FOR_WEIGHTS,
                         min_for_agreement=feedback.MIN_FOR_AGREEMENT, **result.__dict__)
 
+    @app.get("/api/learning/taste")
+    def taste_export() -> dict:
+        """What Clipper has learnt about this user's taste, as a file to keep or give to a new install:
+        the six rubric weights and the reasons they give most. No clip text, no titles (D148)."""
+        result = learning()
+        return {"version": 1, "rated": result.rated,
+                "weights": {d.key: d.learned for d in result.dimensions},
+                "reasons": [{"key": r.key, "count": r.count} for r in result.reasons]}
+
+    @app.put("/api/learning/taste")
+    def taste_import(body: dict) -> dict:
+        """Start from a taste file: its weights are the prior until this install's own ratings take over."""
+        from ..learn import feedback
+
+        weights = body.get("weights")
+        valid = isinstance(weights, dict) and set(weights) == set(feedback.RUBRIC) \
+            and all(isinstance(v, int | float) and 0 <= v <= 1 for v in weights.values())
+        if not valid:
+            raise HTTPException(400, "that isn't a taste file from Clipper")
+        with db.connect() as con:
+            db.set_setting(con, "taste_seed", json.dumps({"weights": {k: float(v) for k, v in weights.items()}}))
+        return {"imported": True}
+
+    @app.delete("/api/learning/taste")
+    def taste_clear() -> dict:
+        with db.connect() as con:
+            db.set_setting(con, "taste_seed", "")
+        return {"cleared": True}
+
     @app.get("/api/learning/compare")
     def whats_working() -> WhatsWorking:
         """Posts with each change against posts without it, fairly (D105)."""
@@ -1734,6 +1859,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             # whole "/select,..." argument, which Explorer can't parse when the
             # name has spaces or brackets -- it opened Documents instead.
             subprocess.Popen(f'explorer /select,"{path}"')
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path.parent)])
         return {"path": str(path)}
 
     @app.delete("/api/clips/{clip_id}")
@@ -1972,6 +2101,9 @@ def serve(*, open_browser: bool = True, port: int = PORT) -> None:
         return
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    if HOST not in LOOPBACK and not os.environ.get("CLIPPER_TOKEN", "").strip():
+        raise SystemExit("CLIPPER_HOST makes Clipper reachable from other computers: set CLIPPER_TOKEN too "
+                         "(any long secret), or it would be open to anyone who finds it. See docs/HOSTING.md.")
     uvicorn.run(create_app(auto_sync=True), host=HOST, port=port, log_level="warning")
 
 

@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, CheckCircle2, ExternalLink, Eye, KeyRound, Loader2, Monitor, Moon, Plus, Stethoscope, Sun, XCircle,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
@@ -502,6 +503,89 @@ function Uses() {
   );
 }
 
+interface Compute {
+  hardware: { gpu: string; vram_gb: number; cpu_cores: number; ram_gb: number; system: string };
+  recommended: { device: string; model: string; compute_type: string; label: string; minutes_per_hour: number };
+  current: { device: string; model: string; compute_type: string };
+  matches: boolean;
+}
+
+/** What this computer is, and the speech-recognition model that suits it (D148). */
+function Computer() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["compute"], queryFn: async () => {
+    const res = await fetch("/api/compute");
+    if (!res.ok) throw new Error(res.statusText);
+    return res.json() as Promise<Compute>;
+  } });
+  if (!data) return <Skeleton className="h-16" />;
+  const { hardware: hw, recommended: rec, current: now } = data;
+  const apply = async () => {
+    const res = await fetch("/api/compute/apply", { method: "POST" });
+    if (res.ok) {
+      toast.success("Settings updated", { description: "The next video you clip uses them." });
+      void qc.invalidateQueries({ queryKey: ["compute"] });
+    } else toast.error("Couldn't save the settings");
+  };
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <div>{hw.gpu ? `${hw.gpu}, ${hw.vram_gb} GB` : "No NVIDIA graphics card found"} · {hw.cpu_cores} CPU cores{hw.ram_gb ? ` · ${Math.round(hw.ram_gb)} GB memory` : ""}</div>
+      <div className="text-muted">Speech recognition now: <b className="text-fg">{now.model}</b> ({now.compute_type}, {now.device}).</div>
+      <div className="text-muted">Best for this computer: <b className="text-fg">{rec.model}</b> ({rec.compute_type}, {rec.device}). {rec.label}.
+        An hour of footage takes about {rec.minutes_per_hour} minutes to read, roughly.</div>
+      {data.matches
+        ? <div className="text-success">Already set up this way.</div>
+        : <Button variant="primary" size="sm" className="self-start" onClick={() => void apply()}>Use the best settings for this computer</Button>}
+    </div>
+  );
+}
+
+interface AIJobs {
+  jobs: { id: string; label: string; about: string; choice: string }[];
+  clipping: { choice: string; now: string };
+  available: Record<string, boolean>;
+}
+
+const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude, paid API key"], ["gemini", "Gemini"], ["ollama", "Ollama (on this computer)"]];
+
+/** Which AI does which job (D148). Automatic keeps Clipper's own order; a pick is tried first, and the
+ *  paid Claude key is only ever used where you choose it here. */
+function WhoDoesWhat() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["ai-jobs"], queryFn: async () => {
+    const res = await fetch("/api/ai-jobs");
+    if (!res.ok) throw new Error(res.statusText);
+    return res.json() as Promise<AIJobs>;
+  } });
+  if (!data) return <Skeleton className="h-32" />;
+  const set = async (job: string, choice: string) => {
+    const res = await fetch("/api/ai-jobs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job, choice }) });
+    if (!res.ok) { toast.error("Couldn't save that"); return; }
+    toast.success("Saved", { description: "Used from the next job." });
+    void qc.invalidateQueries({ queryKey: ["ai-jobs"] });
+    void qc.invalidateQueries({ queryKey: ["create", "ai"] });
+  };
+  const rows = [
+    { id: "clipping", label: "Captions, descriptions and checks", about: "Everything else in clipping: captions, post descriptions, rule checks, scene splits.", choice: data.clipping.choice },
+    ...data.jobs,
+  ];
+  return (
+    <div className="flex flex-col divide-y divide-line">
+      {rows.map((r) => (
+        <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+          <div className="min-w-0 max-w-md"><div className="text-sm font-medium">{r.label}</div><div className="text-xs text-muted">{r.about}</div></div>
+          <select value={r.choice} aria-label={r.label} onChange={(e) => void set(r.id, e.target.value)}
+                  className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+            <option value="">Automatic</option>
+            {PROVIDERS.map(([k, label]) => <option key={k} value={k} disabled={!data.available[k]}>{label}{data.available[k] ? "" : " (not set up)"}</option>)}
+          </select>
+        </div>
+      ))}
+      <div className="py-2.5 text-xs text-muted">Watching the video itself is always Gemini: Claude can't take video. With no Gemini key that step is skipped and moments are judged from the words.</div>
+    </div>
+  );
+}
+
 function AIKey() {
   const { data: setup } = useSetup();
   const save = useSetKeys();
@@ -655,8 +739,11 @@ export function SettingsPage() {
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
       <AIKey />
+      <Card className="px-5 py-3"><h2 className="text-md font-semibold">Who does what</h2>
+        <p className="mt-0.5 mb-1 text-sm text-muted">Pick the AI for each job, or leave it on Automatic.</p><WhoDoesWhat /></Card>
       <FootageKeys />
       <Card className="divide-y divide-line px-5">
+        <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />
         <Row title="What you use Clipper for" body="Parts you turn off are hidden everywhere, so the app only shows what you do." control={<Uses />} />
         <Row
           title="Sync every"
