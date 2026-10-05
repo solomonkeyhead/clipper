@@ -168,7 +168,8 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
     for _ in range(rounds):
         try:
             answer = ask(channels.fill(DRAW + "\n\n" + REVIEW), user + "\nYour sketch:\n" + sketch.model_dump_json(),
-                         _Review, temperature=0.0, media=[(_png(sketch, title), "image/png")])
+                         _Review, temperature=0.0, media=[(_png(sketch, title), "image/png")],
+                         job="review", keep=True)
             review = _Review.model_validate(json.loads(answer))
         except (CreateError, ValueError, TypeError) as exc:  # no one to look: keep what we have
             log.info("create: sketch not reviewed (%s)", exc)

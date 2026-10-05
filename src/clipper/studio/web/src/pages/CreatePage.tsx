@@ -91,7 +91,7 @@ function PostedLine({ video }: { video: CreateVideo }) {
   );
 }
 
-/** Which AI writes and draws, always in view: Claude or Gemini was a guess for two videos (D118). */
+/** Which AI does what, always in view: Claude or Gemini was a guess for two videos (D118). */
 function AIStrip() {
   const { data: ai } = useCreateAI();
   if (!ai) return null;
@@ -99,7 +99,7 @@ function AIStrip() {
   const claude = first.startsWith("claude_code") || first.startsWith("anthropic");
   const miss = Object.entries(ai.misses)[0];
   const text = ai.problem ? ai.problem
-    : claude ? `Written and drawn by ${first.split(":").pop()} on your Claude plan.`
+    : claude ? `Drawings by ${first.split(":").pop()} on your Claude plan.${ai.gemini_jobs.length ? ` Gemini does ${ai.gemini_jobs.join(", ")}.` : ""}`
     : `Claude isn't set up: ${first.split(":").pop() || "no AI"} will write and draw.`;
   return (
     <p className={cn("mt-1 flex flex-wrap items-center gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>

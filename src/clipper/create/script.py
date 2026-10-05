@@ -175,7 +175,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") 
             f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
             + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
-    answer = ask(_system(channel), user, _WriterScript, temperature=0.85)
+    answer = ask(_system(channel), user, _WriterScript, temperature=0.85, job="script")
     try:
         return tidy(_parse(answer))
     except (ValueError, TypeError) as exc:
@@ -359,7 +359,7 @@ def _diagrams(script: Script) -> str:
 def check(script: Script) -> Review:
     diagrams = _diagrams(script)
     user = f"Title: {script.title}\nScript:\n{script.text}" + (f"\n\nDiagrams shown:\n{diagrams}" if diagrams else "")
-    answer = ask(channels.fill(CHECK), user, Review, temperature=0.0)
+    answer = ask(channels.fill(CHECK), user, Review, temperature=0.0, job="check", keep=True)
     try:
         return Review.model_validate(json.loads(answer))
     except (ValueError, TypeError):
@@ -384,19 +384,18 @@ def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Scr
                 "\n".join(f"- {p}" for p in review.problems)
     else:
         note = "Physics check: no problems found."
-    return _sketched(script, note)
+    return _signed(script, note)
 
 
-def _sketched(script: Script, note: str) -> tuple[Script, str]:
-    """The script with its sketches drawn (they're drawn last, for the final words)."""
+def _signed(script: Script, note: str) -> tuple[Script, str]:
+    """The script, with the check's note and who wrote it. The sketches are drawn when the video is
+    built, not now (D136): a script that is rewritten, edited or dropped would waste every drawing."""
     from . import ai
-    from .sketch import draw_all
 
-    drawn, notes = draw_all(script)
     who = ai.last_used.split(":", 1)[-1] if ai.last_used else "unknown"
     missed = [f"{name.split(':', 1)[0]} didn't answer: {why}" for name, why in ai.misses.items()
               if name != ai.last_used]
-    return tidy(drawn), "\n".join([note, *notes, f"Written and drawn by: {who}.", *missed])
+    return tidy(script), "\n".join([note, f"Written by: {who}.", *missed])
 
 
 def replan(script: Script) -> tuple[Script, str]:
@@ -412,7 +411,7 @@ def replan(script: Script) -> tuple[Script, str]:
         user = (f"This approved script is already recorded, sentence by sentence. Keep every sentence "
                 f"exactly as written, in order, one beat each, and plan the pictures again.\n\n"
                 f"Title: {script.title}\n{beats}\n" + (f"\nFix these problems:\n{feedback}\n" if feedback else ""))
-        answer = ask(_system(channel), user, _WriterScript, temperature=0.4)
+        answer = ask(_system(channel), user, _WriterScript, temperature=0.4, job="script")
         try:
             planned = _parse(answer)
         except (ValueError, TypeError) as exc:
@@ -429,6 +428,6 @@ def replan(script: Script) -> tuple[Script, str]:
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
         review = check(fresh)
         if review.ok or not review.problems:
-            return _sketched(fresh, "Pictures planned again. Physics check: no problems found.")
+            return _signed(fresh, "Pictures planned again. Physics check: no problems found.")
         feedback = "\n".join(f"- {p}" for p in review.problems)
-    return _sketched(fresh, "Pictures planned again. Physics check, still unsure:\n" + feedback)
+    return _signed(fresh, "Pictures planned again. Physics check, still unsure:\n" + feedback)

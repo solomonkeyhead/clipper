@@ -356,6 +356,7 @@ def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[
     from ..campaign.description import describe, pasted_brief
     from ..config import CampaignConfig, Config
     from ..learn import log as perf
+    from ..llm.cache import LLMCache
     from ..models import SourceInfo, Transcript
     from ..paths import REPO_ROOT, work_dir
     from ..runner import with_range_transcript
@@ -393,7 +394,7 @@ def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[
                 words = with_range_transcript(words, start, end, listener.words_between(start, end))
             text = " ".join(w.text for w in words if start <= (w.start + w.end) / 2 < end)
             line, _ = split_caption(clip["caption"])
-            description = describe(text, campaign, line, backends, hook=clip["hook"] or "", brief=brief)
+            description = describe(text, campaign, line, backends, cache=LLMCache(), hook=clip["hook"] or "", brief=brief)
             if not description:
                 continue
             caption = with_description(clip["caption"], description)

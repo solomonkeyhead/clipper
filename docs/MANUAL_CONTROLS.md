@@ -20,7 +20,7 @@ is the order I'd build them.
 | Stopping a build | Ran to the end | Cancel while it builds (stops at the next step; a finished version stays); Build again on a finished video | **Done** (D122) | |
 | How long a drawing stays up | One picture per sentence, unless the plan holds a drawing | "Keep the drawing above, building on" on any sentence after a drawing | **Done** (D124) | |
 | Archiving a posted video | Moves to the Archive once posted (found or marked in Clips) | Archive any video by hand; "Back to Create" keeps it out | **Done** (D131) | |
-| Who judges footage | Gemini first (`llm.create_footage_judge`) | Switch in Settings between Gemini and Claude | Gap (config only) | S |
+| Who does each AI job | Gemini first for script, check, review and footage; Claude draws (`llm.create_gemini_jobs`, D136) | Switches in Settings per job | Gap (config only) | S |
 | Which stock clip | The AI judge picks one of ~6 | "New footage" opens a picker: searches written for the part, both libraries, every clip scored, best first; pick one (or several for a long part), or let Clipper choose | **Done** (D129) | |
 | Redo one picture | "New pictures" redoes all of them | On a built video: per part, "New footage" or "New drawing" (with optional words), undo, and a rebuild that keeps every other part as it was | **Done** (D125) | |
 | Diagram contents | Templates and sketches are generated | Edit labels, numbers, arrows and colours of a diagram; move or delete a sketch's words | Gap | L |

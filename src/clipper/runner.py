@@ -1196,7 +1196,7 @@ def _description(plan: ClipPlan, words: list[Word], campaign: CampaignConfig,
         except Exception as exc:  # no key, backend not installed, ...
             log.warning("no description: %s", exc)
             return ""
-    return describe(text, campaign, plan.suggested_caption, backends,
+    return describe(text, campaign, plan.suggested_caption, backends, cache=LLMCache(),
                     hook=plan.hook_text if plan.hook_shown else "", brief=pasted_brief(campaign.name))
 
 

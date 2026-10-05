@@ -392,7 +392,7 @@ def place(video_id: int, script: Script, seconds: list[float], *, use_ai: bool =
                     "The user chose every one of these clips and wants all of them used: place each where it "
                     "fits best, even loosely, and leave the other sentences without one.")
             answer = ask(channels.fill(PLACE), f"Video title: {script.title}\n\nSentences:\n{sentences}\n\nClips:\n{listing}\n\n{rule}",
-                         _Plan, temperature=0.0, media=strips)
+                         _Plan, temperature=0.0, media=strips, job="place", keep=True)
             layout = normalize(_Plan.model_validate(json.loads(answer)), count, lengths)
             if layout:
                 how = f"by {ai.last_used.split(':', 1)[-1] or 'the AI'}"

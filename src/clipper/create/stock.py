@@ -22,6 +22,7 @@ import io
 import json
 import os
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -101,6 +102,14 @@ def search(query: str) -> list[dict]:
     return merged
 
 
+def _save(path: Path, data: bytes) -> None:
+    """Written whole or not at all: footage is looked up on several threads at once (D136), and one
+    reading a file another is still writing would find half of it."""
+    tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
+    tmp.write_bytes(data)
+    tmp.replace(path)
+
+
 def _cached(source: str):
     """A library's search, remembered a day on disk by its normalised query."""
     def wrap(fetch):
@@ -112,7 +121,7 @@ def _cached(source: str):
             if path.is_file() and time.time() - path.stat().st_mtime < SEARCH_HOURS * 3600:
                 return json.loads(path.read_text(encoding="utf-8"))
             hits = fetch(q)
-            path.write_text(json.dumps(hits), encoding="utf-8")
+            _save(path, json.dumps(hits).encode("utf-8"))
             return hits
         return cached_fetch
     return wrap
@@ -283,7 +292,9 @@ def _thumb(hit: dict) -> bytes | None:
         try:  # small: Pexels sends full-size frames, and the judge needs only a glance
             img = Image.open(io.BytesIO(r.content)).convert("RGB")
             img.thumbnail((360, 360))
-            img.save(cached, "JPEG", quality=82)
+            small = io.BytesIO()
+            img.save(small, "JPEG", quality=82)
+            _save(cached, small.getvalue())
         except OSError:
             return None
     return cached.read_bytes()
@@ -311,7 +322,7 @@ def _judge(sentence: str, query: str, hits: list[dict], context: str = "",
         prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "")
                   + f"Sentence: {sentence}\nSearched for: {query}\n{_listing(shown)}")
         answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True,
-                     footage=True)
+                     job="footage", keep=True)
         verdict = _Pick.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
         raise _NoAnswer from exc
@@ -424,7 +435,7 @@ def plan_searches(sentence: str, context: str = "", wish: str = "", tried: list[
             + (f"The user wants to see: {wish}\n" if wish else "")
             + (f"Already tried: {', '.join(tried)}\n" if tried else ""))
     try:
-        answer = ask(channels.fill(SEARCHES), user, _Searches, temperature=0.3, quick=True, footage=True)
+        answer = ask(channels.fill(SEARCHES), user, _Searches, temperature=0.3, quick=True, job="footage", keep=True)
         found = _Searches.model_validate(json.loads(answer)).searches
     except (CreateError, ValueError, TypeError) as exc:
         log.info("create: no searches planned (%s)", exc)
@@ -461,7 +472,7 @@ def rank(sentence: str, hits: list[dict], context: str = "") -> list[dict]:
     try:
         answer = ask(RANK, (f"The whole script:\n{context}\n\n" if context else "") + f"Sentence: {sentence}\n"
                      + _listing(shown), _Ranks, temperature=0.0,
-                     media=[(t, "image/jpeg") for _, t in shown], quick=True, footage=True)
+                     media=[(t, "image/jpeg") for _, t in shown], quick=True, job="footage", keep=True)
         got = _Ranks.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
         log.info("create: candidates not scored (%s)", exc)

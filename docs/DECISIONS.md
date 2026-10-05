@@ -2467,3 +2467,34 @@ on 2026-10-03 and picked up by the venv, no longer takes it. `av>=11,<19` is now
 `pyproject.toml` (18.1.0 and older accept it) and the venv holds 18.1.0. `test_audio_decode.py`
 decodes a file through faster-whisper's own decoder, so the next break shows up in the tests.
 
+## D136 - Fewer AI calls, and Gemini for the jobs Marc chose
+
+Marc asked for fewer calls without worse quality, and for the script writing, the sketch review and
+the physics check to be done by Gemini. A typical 10-sentence Short made 25 to 35 calls.
+- **Gemini jobs.** `llm.create_gemini_jobs` (script, check, review, footage) replaces the footage-only
+  `create_footage_judge`. `ai.ask(job=...)` sends those to Gemini first and to Claude only if Gemini
+  can't answer; `create_claude_only` doesn't apply to them. A script or review answered by Gemini gets
+  120 s (`GEMINI_PATIENCE`) before falling back, not the 30 s caption fixes get. Drawing the sketches,
+  topic ideas and clip placing stay with Claude. The page's AI strip says who does what.
+- **Sketches are drawn when the video is built**, not when the script is written. A rewrite, an edit or
+  a dropped script used to throw away 8 to 15 Opus calls of drawings. `build._build` draws what is
+  missing first (a few at once) and saves the script, so a retry doesn't redraw. The script step no
+  longer shows drawn sketches, only each sentence's idea for one.
+- **Create's answers are remembered** (`ask(keep=True)`, `llm/cache.py`): the physics check, footage
+  judging, ranking and search writing, the sketch review and clip placing. The same question, words,
+  pictures and job again (a failed build retried, the check pressed twice, a rebuild) costs no call. Only
+  answers that fit their schema are kept. The writer and the sketcher are not kept: another take should
+  be new.
+- **Post descriptions are remembered** (`runner._description`, `library.describe_clips`): a re-render or
+  a hook change no longer pays for a new description with slightly different words.
+- **Footage searches are written only when needed** (`build._pick_footage`). The script's own searches
+  go first; the footage model writes searches for the sentence only if none finds a clip scoring 7 or
+  more. A wish, or New footage, goes straight to written searches. The log says per sentence which it
+  was ("the script's own searches were enough"); if too many sentences need the second step, put the
+  always-write order back. Not measured on a real build yet.
+- **Footage for every sentence is chosen at once** (`build._prefetch`, 4 at a time). A choice that
+  clashes with an earlier sentence's clip is made again in turn. Search and thumbnail files are written
+  whole or not at all (`stock._save`) because threads share them. Gemini's own rate limit (10 a minute,
+  shared by all threads) still spaces the calls, so the gain is overlapping the waiting, not more speed
+  than the limit allows.
+

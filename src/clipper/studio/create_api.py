@@ -292,7 +292,8 @@ def routes(app: FastAPI, publish) -> None:
         except CreateError as exc:
             order, problem = [], str(exc)
         return {"order": order, "last_used": create_ai_module.last_used, "misses": dict(create_ai_module.misses),
-                "claude_only": config.llm.create_claude_only, "problem": problem,
+                "claude_only": config.llm.create_claude_only, "gemini_jobs": list(config.llm.create_gemini_jobs),
+                "problem": problem,
                 "spent_usd": round(claude_code.spent_usd, 2)}
 
     @app.post("/api/create/ideas")
@@ -602,7 +603,7 @@ def routes(app: FastAPI, publish) -> None:
     @app.post("/api/create/videos/{video_id}/plan")
     async def create_plan(video_id: int) -> dict:
         """Plan the pictures for the script as it is now (sentences kept as written, pictures the
-        user chose themselves kept too), with the physics check and the sketches drawn."""
+        user chose themselves kept too), with the physics check (the sketches are drawn when it is built, D136)."""
         from ..create import script as scripts
 
         row = video_or_404(video_id)

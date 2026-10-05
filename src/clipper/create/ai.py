@@ -57,23 +57,66 @@ def backends(config, model: str | None = None) -> list:
     return chosen
 
 
+#: A Gemini answer for a whole script or a drawing review takes longer than the 30 s that
+#: caption fixes get before falling back (a fallback model would write the script).
+GEMINI_PATIENCE = 120.0
+
+
+def _kept(system: str, user: str, schema, media, temperature: float, job: str):
+    """The cache and key for one question: the same words, pictures and job get the same answer."""
+    import hashlib
+
+    from ..llm.cache import LLMCache
+
+    cache = LLMCache()
+    pictures = ",".join(f"{mime}:{hashlib.sha1(data).hexdigest()}" for data, mime in media or [])
+    name = getattr(schema, "__name__", str(schema))
+    key = cache.key(backend="create", model="", prompt_key=f"{job}:{name}:{temperature}",
+                    payload=f"{system}\x00{user}\x00{pictures}")
+    return cache, key
+
+
+def _valid(schema, text: str) -> bool:
+    """Whether an answer fits its schema: only those are kept (a bad one would come back for ever)."""
+    from pydantic import TypeAdapter, ValidationError
+
+    if schema is None:
+        return bool(text.strip())
+    try:
+        TypeAdapter(schema).validate_json(text)
+    except (ValidationError, ValueError):
+        return False
+    return True
+
+
 def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple[bytes, str]] | None = None,
-        quick: bool = False, footage: bool = False) -> str:
-    """The first model's answer; `quick` for small, many-times jobs (the footage judge),
-    which go to `llm.create_quick_model` to spare the plan's usage (D116). `footage` is the
-    footage judge itself: by `llm.create_footage_judge`, Gemini first, and never stopped by
-    `create_claude_only`, as the user chose Gemini for that job (D124)."""
+        quick: bool = False, job: str = "", keep: bool = False) -> str:
+    """The first model's answer. `job` names what is being done: one in `llm.create_gemini_jobs`
+    goes to Gemini first, then Claude if Gemini can't (D136), and is never stopped by
+    `create_claude_only`; any other goes to Claude first and stops when Claude can't answer (D117).
+    `quick` is for small, many-times jobs (the footage judge), which go to `llm.create_quick_model`
+    to spare the plan's usage (D116). `keep`: the answer is remembered by its question, so the same
+    question again (a rebuild, a retry, the check pressed twice) costs no call."""
     from ..config import Config
     from ..llm.base import LLMRequest, miss_level
 
     global last_used
     config = Config.load()
+    if keep:
+        cache, key = _kept(system, user, schema, media, temperature, job)
+        if (hit := cache.get(key)) is not None:
+            last_used = hit.model
+            return hit.text
     order = backends(config, config.llm.create_quick_model if quick else None)
     claude = [b for b in order if b.name in ("anthropic", "claude_code")]
-    if footage and config.llm.create_footage_judge == "gemini":
+    gemini_first = job in config.llm.create_gemini_jobs
+    if gemini_first:
         order = [b for b in order if b not in claude] + claude
+        for b in order:
+            if b not in claude and job != "footage":
+                b.timeout = max(b.timeout, GEMINI_PATIENCE)
     for backend in order:
-        if config.llm.create_claude_only and claude and backend not in claude and not footage:
+        if config.llm.create_claude_only and claude and backend not in claude and not gemini_first:
             # Claude was there but didn't answer: stop rather than let Gemini draw (D117).
             why = misses.get(claude[0].describe(), "it didn't answer")
             raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "
@@ -82,6 +125,8 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text
             last_used = backend.describe()
+            if keep and _valid(schema, text):
+                cache.put(key, text=text, model=last_used)
             return text
         except Exception as exc:
             log.log(miss_level(exc), "create: %s did not answer (%s)", backend.describe(), str(exc)[:160])

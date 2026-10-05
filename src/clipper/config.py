@@ -197,10 +197,12 @@ class LLMConfig(StrictModel):
     # When Claude is set up but can't answer (a plan's weekly limit), stop with the reason
     # instead of falling back to Gemini, whose scripts and drawings were judged awful (D117).
     create_claude_only: bool = True
-    # Who judges stock footage (D124): "gemini" (the free Gemini key, then Claude if it can't),
-    # or "claude" (Claude first). The user chose Gemini for footage: it is free, and the footage
-    # judge was most of a video's Claude usage. create_claude_only doesn't apply to this one job.
-    create_footage_judge: Literal["gemini", "claude"] = "gemini"
+    # The Create jobs Gemini does first, Claude only if Gemini can't answer (D124, D136): "script"
+    # (writing and re-planning), "check" (the physics check), "review" (the sketch look-and-fix)
+    # and "footage" (judging, ranking and searching stock footage). Drawing the sketches and
+    # the rest stay with Claude. create_claude_only doesn't apply to these jobs.
+    create_gemini_jobs: list[Literal["script", "check", "review", "footage"]] = Field(
+        default_factory=lambda: ["script", "check", "review", "footage"])
     # Hard-drop candidates both prompts say need earlier context. Off for
     # scripted TV, where nearly every scene "needs context" by that standard
     # yet works as a clip: on a sitcom episode 26 of 48 were dropped for it.

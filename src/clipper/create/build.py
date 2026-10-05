@@ -17,7 +17,9 @@ import hashlib
 import json
 import math
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import NamedTuple
 
 from ..config import Config
 from ..ingest.probe import probe
@@ -31,6 +33,7 @@ from . import channel as channels
 from . import diagrams, stock, store, userclips
 from .ai import CreateError
 from .script import Script, Visual, spans
+from .sketch import draw_all
 from .voice import Timings, folder
 
 log = get_logger(__name__)
@@ -223,8 +226,75 @@ def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
 ASKED_GOOD_ENOUGH = 6   # 4 let poor footage through (D129)
 
 
+class _Footage(NamedTuple):
+    parts: list[float]       # seconds of each shot of the sentence
+    hits: list               # the clip for each (None: nothing fit)
+    queries: list[str]       # the searches that found them
+
+
+def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, avoid: set,
+                  asked: bool) -> _Footage:
+    """The stock clip(s) for a sentence's picture, a clip per MAX_SHOT seconds, each a different one.
+    The searches the script was written with come first; only when none finds a clip good enough does
+    the footage model write searches of its own for the sentence, in the script's context (D129): it
+    was a call per sentence even when the first searches worked (D136). A wish, or new footage asked
+    for, goes straight to the written searches."""
+    count = max(1, math.ceil(seconds / MAX_SHOT - 1e-6))
+    parts = [seconds / count] * count
+    queries = [q for q in (visual.queries or [visual.query]) if q.strip()]
+    group = next((g for g in spans(script) if g[0] == i), [i])
+    text = " ".join(script.beats[k].text for k in group)
+    widened = asked or bool(visual.wish)
+    good = ASKED_GOOD_ENOUGH if asked else stock.GOOD_ENOUGH
+
+    def widen() -> list[str]:
+        written = stock.plan_searches(text, script.text, wish=visual.wish, tried=queries if asked else None)
+        return list(dict.fromkeys([*written, *queries]))[:6] or [beat.text]
+
+    searches = widen() if widened else queries or [beat.text]
+    hits: list = []
+    for part in parts:  # one at a time, so each part of a long sentence gets a different clip
+        taken = avoid | {h["id"] for h in hits if h}
+        hit = stock.choose(searches, part, taken, sentence=beat.text, context=script.text, good_enough=good)
+        if hit is None and not widened:
+            searches, widened = widen(), True
+            hit = stock.choose(searches, part, taken, sentence=beat.text, context=script.text, good_enough=good)
+        hits.append(hit)
+    log.info("create: footage for sentence %d: %s", i + 1,
+             "searches written for it" if widened else "the script's own searches were enough")
+    return _Footage(parts, hits, searches)
+
+
+FOOTAGE_WORKERS = 4
+
+
+def _prefetch(script: Script, timings: Timings, groups: list[list[int]]) -> dict[int, _Footage]:
+    """The footage for every stock picture at once (D136): one sentence's AI wait, searches and
+    thumbnails overlap the others'. A choice that clashes with an earlier sentence's clip (the same
+    one picked twice) is made again in turn by `_planned`, so no clip is used twice."""
+    todo = []
+    for group in groups:
+        v = script.beats[group[0]].visual
+        if v.kind == "stock" and not v.clip and not (v.picked and all(h.get("url") for h in v.picked)):
+            todo.append((group[0], timings.beats[group[-1]][1] - timings.beats[group[0]][0]))
+    if len(todo) < 2:
+        return {}
+
+    def one(job: tuple[int, float]) -> tuple[int, _Footage | None]:
+        i, seconds = job
+        v = script.beats[i].visual
+        try:
+            return i, _pick_footage(i, script.beats[i], v, seconds, script, set(v.avoid), bool(v.redo))
+        except Exception as exc:  # chosen again in turn, where the same trouble is reported
+            log.info("create: footage for sentence %d not chosen ahead (%s)", i + 1, exc)
+            return i, None
+
+    with ThreadPoolExecutor(max_workers=FOOTAGE_WORKERS) as pool:
+        return {i: got for i, got in pool.map(one, todo) if got}
+
+
 def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: Script, work: Path, used: set,
-             tag: str = "") -> list[Path]:
+             tag: str = "", pre: _Footage | None = None) -> list[Path]:
     """The shot(s) of the picture planned for a sentence: a diagram, or stock footage (a clip per
     MAX_SHOT seconds, each a different one), or a drawing when no footage fits. `tag` keeps a
     filler's files apart from the sentence's own clip. Footage a build picked before is used
@@ -250,29 +320,15 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
             return shot
         return [_diagram(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", said)]
 
-    count = max(1, math.ceil(seconds / MAX_SHOT - 1e-6))
-    parts = [seconds / count] * count
-    queries = [q for q in (visual.queries or [visual.query]) if q.strip()]
-    turned_down = set(visual.avoid)
     # The part's own footage is kept unless another part already uses it; `avoid` only steers new
     # choices (a part that kept its clip when nothing new fit has that clip in both, D129).
     kept = [h for h in visual.picked if h.get("id") not in used and h.get("url")] if not tag else []
     if kept and len(kept) == len(visual.picked):  # what was picked before, cut as before
-        parts = [seconds / len(kept)] * len(kept)
-        hits = kept
+        parts, hits, queries = [seconds / len(kept)] * len(kept), kept, []
     else:
-        # Searches written for this sentence in the script's context come first; the plan's own
-        # were often loose or off the point (D129).
-        group = next((g for g in spans(script) if g[0] == i), [i])
-        planned = stock.plan_searches(" ".join(script.beats[k].text for k in group), script.text,
-                                      wish=visual.wish, tried=queries if asked else None)
-        queries = list(dict.fromkeys([*planned, *queries]))[:6] or [beat.text]
-        hits = []
-        for part in parts:  # one at a time, so each part of a long sentence gets a different clip
-            hit = stock.choose(queries, part, turned_down | used | {h["id"] for h in hits if h},
-                               sentence=beat.text, context=script.text,
-                               good_enough=ASKED_GOOD_ENOUGH if asked else stock.GOOD_ENOUGH)
-            hits.append(hit)
+        reuse = pre and not any(h and h["id"] in used for h in pre.hits)   # chosen ahead, no clash
+        got = pre if reuse else _pick_footage(i, beat, visual, seconds, script, set(visual.avoid) | used, bool(asked))
+        parts, hits, queries = got.parts, list(got.hits), got.queries
     for hit in hits:
         if hit:
             used.add(hit["id"])
@@ -389,6 +445,9 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
         # A held drawing (or the footage asked for in its place, D126) covers all its sentences;
         # the user's own clip plays its own sentence alone.
         groups += [group] if not root.clip else [[i] for i in group]
+    if progress:
+        progress("Choosing footage", 8)
+    ahead = _prefetch(script, timings, groups)
     for n, group in enumerate(groups):
         i, beat = group[0], script.beats[group[0]]
         if progress:
@@ -407,7 +466,7 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
                     made += _planned(i, beat, beat.visual, rest, [(t - at, w) for t, w in said if t >= at - 0.05],
                                      script, work, used, tag="b")
                 continue
-        made += _planned(i, beat, beat.visual, seconds, said, script, work, used)
+        made += _planned(i, beat, beat.visual, seconds, said, script, work, used, pre=ahead.get(i))
     return made
 
 
@@ -490,6 +549,13 @@ def _build(video_id: int, progress) -> int:
         if said:
             notes.append(said)
         store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
+    if progress:
+        progress("Drawing the sketches", 4)
+    drawn, failed = draw_all(script)  # the sketches the script is still missing, a few at once (D136)
+    if drawn != script:
+        script = drawn
+        store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
+    notes += failed
     work = folder(video_id) / "work"
     if work.exists():
         shutil.rmtree(work, ignore_errors=True)  # scratch, deleted outright: it's rebuilt each time (D133)

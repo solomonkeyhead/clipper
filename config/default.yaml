@@ -65,8 +65,10 @@ llm:
   create_quick_model: claude-sonnet-5-5
   # Claude set up but out of usage? Stop and say so, rather than let Gemini make it (D117).
   create_claude_only: true
-  # Who judges stock footage: gemini (free key; Claude only if Gemini can't) or claude (D124).
-  create_footage_judge: gemini
+  # Create jobs Gemini does first (free key), Claude only if it can't answer (D136): script (writing
+  # and re-planning), check (physics), review (sketch look-and-fix), footage (judging stock clips).
+  # Drawing the sketches stays with Claude. Remove a name to give that job back to Claude.
+  create_gemini_jobs: [script, check, review, footage]
   # Caption fixes ruled wrong on review ("heard -> replacement"); never applied again.
   # Every applied fix is listed per clip in report.md -- add a bad one here.
   rejected_caption_fixes:

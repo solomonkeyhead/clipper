@@ -63,7 +63,6 @@ def test_a_manual_pick_survives_tidy_and_replanning(monkeypatch):
                                     for i, b in enumerate(s.beats)])
     monkeypatch.setattr(scripts, "ask", lambda *a, **k: plan.model_dump_json())
     monkeypatch.setattr(scripts, "check", lambda sc: scripts.Review(ok=True, problems=[]))
-    monkeypatch.setattr(scripts, "_sketched", lambda sc, note: (sc, note))
     fresh, _ = scripts.replan(s)
     assert fresh.beats[0].visual.template == "card" and fresh.beats[1].visual.manual
     assert fresh.beats[2].visual.query == "new 2"        # the unchosen one is planned
@@ -262,7 +261,7 @@ def test_a_held_drawing_is_one_shot_with_every_word(tmp_path, monkeypatch):
     s = scripts.tidy(_held_script())
     shots = []
 
-    def fake(i, beat, visual, seconds, said, script_, work, used, tag=""):
+    def fake(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None):
         shots.append((i, round(seconds, 2), [w for _, w in said]))
         return [tmp_path / f"{i}.mp4"]
 

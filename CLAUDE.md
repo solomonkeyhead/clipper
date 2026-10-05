@@ -44,16 +44,19 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 
 ## Create pipeline (src/clipper/create/)
 - `topics.py` ideas -> `script.py` writes the script (beats, each with a visual plan),
-  physics check, `replan` for "New pictures" -> `sketch.py` draws chalk sketches (marks on a
+  physics check, `replan` for "New pictures" -> Marc records the voice -> `voice.py` times
+  words -> `build.py` first has `sketch.py` draw the chalk sketches still missing (marks on a
   1000x600 grid, then a look-and-fix review with the rendered PNG; `fit` scales to the
-  board) -> Marc records the voice -> `voice.py` times words -> `build.py` makes shots:
+  board; drawn at build, not at writing, D136), then makes shots:
   `diagrams.py` (templates + sketches, animated with Pillow), `stock.py` (Pixabay/Pexels,
   judged by the model, score >= 7, subject-aware crop) -> ffmpeg assembly, captions, cover.
 - AI calls go through `create/ai.py`: Claude first (API key, else Claude Code headless on
   Marc's plan via `llm/claude_code.py`), Gemini only when no Claude is set up
-  (`create_claude_only`, D117). `clipper ai-check` shows which AI is used and why.
+  (`create_claude_only`, D117), except the jobs in `llm.create_gemini_jobs` (script, check,
+  review, footage; D136), which Gemini does first. `ask(job=, keep=)`: `keep` remembers an
+  answer by its question. `clipper ai-check` shows which AI is used and why.
 - Settings: `config/default.yaml` -> `llm.create_model`, `create_quick_model`,
-  `create_via_claude_plan`, `create_claude_only`.
+  `create_via_claude_plan`, `create_claude_only`, `create_gemini_jobs`.
 
 ## Where things are
 - `src/clipper/cli.py` commands; `studio/server.py` + `studio/create_api.py` the web API;

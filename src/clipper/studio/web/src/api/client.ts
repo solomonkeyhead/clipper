@@ -652,7 +652,7 @@ export const useCreate = () =>
   } });
 
 export interface CreateAI {
-  order: string[]; last_used: string; misses: Record<string, string>; claude_only: boolean; problem: string; spent_usd: number;
+  order: string[]; last_used: string; misses: Record<string, string>; claude_only: boolean; gemini_jobs: string[]; problem: string; spent_usd: number;
 }
 /** Which AI Create will ask, and why any didn't answer (no model call; D118). */
 export const useCreateAI = () =>

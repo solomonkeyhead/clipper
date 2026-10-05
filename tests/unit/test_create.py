@@ -247,7 +247,7 @@ def test_the_judge_sees_the_script_and_searches_again_with_its_own_words(monkeyp
     monkeypatch.setattr(stock, "ask", fake)
     hit = stock.choose(["wall music"], 2.0, set(), sentence="Like music through a wall.", context="A video about sound.")
     assert hit and hit["id"] in (3, 4) and len(prompts) == 2
-    assert "A video about sound." in prompts[0] and all(k.get("footage") for k in seen_kw)
+    assert "A video about sound." in prompts[0] and all(k.get("job") == "footage" for k in seen_kw)
 
 
 def test_footage_goes_to_gemini_first_and_isnt_stopped_by_claude_only(monkeypatch):
@@ -266,7 +266,7 @@ def test_footage_goes_to_gemini_first_and_isnt_stopped_by_claude_only(monkeypatc
 
     claude, gemini = B("claude_code"), B("gemini")
     monkeypatch.setattr(ai, "backends", lambda config, model=None: [claude, gemini])
-    assert ai.ask("s", "u", None, temperature=0.0, quick=True, footage=True) == "gemini"
+    assert ai.ask("s", "u", None, temperature=0.0, quick=True, job="footage") == "gemini"
     assert ai.ask("s", "u", None, temperature=0.0) == "claude_code"   # everything else: Claude first
 
 
@@ -346,7 +346,7 @@ class TestSketch:
         fixed = {"marks": self.MARKS}
         seen = []
 
-        def ask(system, user, schema, *, temperature, media=None):
+        def ask(system, user, schema, *, temperature, media=None, **_):
             seen.append(bool(media))
             if schema is sketch.Sketch:
                 return json.dumps(first)
