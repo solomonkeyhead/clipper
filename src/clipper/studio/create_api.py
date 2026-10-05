@@ -287,12 +287,13 @@ def routes(app: FastAPI, publish) -> None:
 
         config = Config.load()
         try:
-            order = [b.describe() for b in create_ai_module.backends(config)]
+            order = [b.describe() for b in create_ai_module.backends(config, job="sketch")]
             problem = ""
         except CreateError as exc:
             order, problem = [], str(exc)
         return {"order": order, "last_used": create_ai_module.last_used, "misses": dict(create_ai_module.misses),
                 "claude_only": config.llm.create_claude_only, "gemini_jobs": list(config.llm.create_gemini_jobs),
+                "paid_api_jobs": list(config.llm.paid_api_jobs),
                 "problem": problem,
                 "spent_usd": round(claude_code.spent_usd, 2)}
 

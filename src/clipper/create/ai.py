@@ -28,14 +28,15 @@ class CreateError(RuntimeError):
     """Something Create couldn't do; the message says why, for the page."""
 
 
-def backends(config, model: str | None = None) -> list:
+def backends(config, model: str | None = None, job: str = "") -> list:
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
     from ..runner import _correction_backends
 
     chosen = []
     model = model or config.llm.create_model
-    if model and os.environ.get("ANTHROPIC_API_KEY", "").strip():
+    # The paid API only for the jobs the user allowed it (D142); the rest on their plan or Gemini.
+    if model and os.environ.get("ANTHROPIC_API_KEY", "").strip() and job in config.llm.paid_api_jobs:
         try:
             chosen.append(create_backend("anthropic", model=model, max_retries=1,
                                          requests_per_minute=config.llm.requests_per_minute,
@@ -107,7 +108,7 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
         if (hit := cache.get(key)) is not None:
             last_used = hit.model
             return hit.text
-    order = backends(config, config.llm.create_quick_model if quick else None)
+    order = backends(config, config.llm.create_quick_model if quick else None, job)
     claude = [b for b in order if b.name in ("anthropic", "claude_code")]
     gemini_first = job in config.llm.create_gemini_jobs
     if gemini_first:

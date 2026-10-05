@@ -161,7 +161,7 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
     user = (f"The video's script, for context:\n{script_text}\n\n" if script_text else "") + \
         f"Sentence: {sentence}\nWhat to draw: {idea}\n" + (f"Title over it: {title}\n" if title else "")
     try:
-        sketch = Sketch.model_validate(json.loads(ask(channels.fill(DRAW), user, Sketch, temperature=0.4)))
+        sketch = Sketch.model_validate(json.loads(ask(channels.fill(DRAW), user, Sketch, temperature=0.4, job="sketch")))
     except (ValueError, TypeError) as exc:
         raise CreateError("the sketch came back unreadable") from exc
     sketch = fit(sketch, bool(title or sketch.title))

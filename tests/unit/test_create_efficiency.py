@@ -35,7 +35,7 @@ class Ok(BaseModel):
 @pytest.fixture
 def models(data_root, monkeypatch):
     claude, gemini = Fake("claude_code"), Fake("gemini")
-    monkeypatch.setattr(ai, "backends", lambda config, model=None: [claude, gemini])
+    monkeypatch.setattr(ai, "backends", lambda config, model=None, job="": [claude, gemini])
     return claude, gemini
 
 

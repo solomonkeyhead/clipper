@@ -2561,3 +2561,13 @@ Also, a rerun of a video leaves out moments that lie >= 50% inside a clip of the
 rated 1 or 2 stars (`runner._skip_rejected`): the rescore offered 3 of the 4 moments Marc had
 already rated 1 star. Result: 3 clips (the guilty verdict into Supa Hot Fire's entrance, the
 cousin joke, Brody thrown out), 40 below the bar.
+
+## D142: The paid Claude API only draws
+Marc: the paid Claude API (ANTHROPIC_API_KEY, billed per use) is too expensive for anything but the
+diagrams. `llm.paid_api_jobs` (default `[sketch]`) lists the jobs the key may do; `create/ai.backends`
+and `pipeline.judge_backend` use it only for those, whatever else is set. Every other job (script,
+check, review, footage, place, topics, judging clips) runs on Claude Code on his plan (no per-use
+charge, counts toward its limits) or Gemini, even with a key in `.env`. Adding a name to the list
+lets the key do that job too. No key is set in his `.env` today, so nothing was being billed; this
+makes sure adding one later can't spend on more than drawings. The Create page says which of the two
+is drawing.

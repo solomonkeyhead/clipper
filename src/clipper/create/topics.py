@@ -44,7 +44,7 @@ def generate(count: int = 30) -> int:
     user = (f"Channel: {channel.name} ({channel.niche}).\n"
             f"Already made or planned, don't repeat:\n" + "\n".join(f"- {q}" for q in done) +
             f"\n\nGive {count} new ideas.")
-    answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9)
+    answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9, job="topics")
     try:
         ideas = [_Idea.model_validate(i).model_dump() for i in json.loads(answer)]
     except (ValueError, TypeError) as exc:

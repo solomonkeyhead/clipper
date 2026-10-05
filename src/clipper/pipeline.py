@@ -143,7 +143,7 @@ def judge_backend(config: Config, backend_override: str | None = None) -> LLMBac
     if not model or backend_override or not _claude_judge_on():
         return None
     try:
-        if os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        if os.environ.get("ANTHROPIC_API_KEY", "").strip() and "judge" in config.llm.paid_api_jobs:
             return create_backend("anthropic", model=model, max_retries=1, requests_per_minute=50, timeout=300)
         if config.llm.create_via_claude_plan and cli():
             return create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=420)

@@ -99,7 +99,7 @@ function AIStrip() {
   const claude = first.startsWith("claude_code") || first.startsWith("anthropic");
   const miss = Object.entries(ai.misses)[0];
   const text = ai.problem ? ai.problem
-    : claude ? `Drawings by ${first.split(":").pop()} on your Claude plan.${ai.gemini_jobs.length ? ` Gemini does ${ai.gemini_jobs.join(", ")}.` : ""}`
+    : claude ? `Drawings by ${first.split(":").pop()} ${first.startsWith("anthropic") ? `on your paid Claude API key (it does only: ${ai.paid_api_jobs.join(", ")})` : "on your Claude plan"}.${ai.gemini_jobs.length ? ` Gemini does ${ai.gemini_jobs.join(", ")}.` : ""}`
     : `Claude isn't set up: ${first.split(":").pop() || "no AI"} will write and draw.`;
   return (
     <p className={cn("mt-1 flex flex-wrap items-center gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>

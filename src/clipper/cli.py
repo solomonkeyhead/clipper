@@ -973,9 +973,10 @@ def ai_check() -> None:
     console.print(f"claude on PATH: {cli() or 'NO (Claude Code not installed, or not on this window PATH)'}")
     config = Config.load()
     console.print(f"create_model: {config.llm.create_model}   create_via_claude_plan: "
-                  f"{config.llm.create_via_claude_plan}   API key set: {bool(os.environ.get('ANTHROPIC_API_KEY'))}")
+                  f"{config.llm.create_via_claude_plan}   API key set: {bool(os.environ.get('ANTHROPIC_API_KEY'))}   "
+                  f"paid API only for: {', '.join(config.llm.paid_api_jobs) or 'nothing'}")
     try:
-        order = ai.backends(config)
+        order = ai.backends(config, job="sketch")
     except Exception as exc:
         console.print(f"[red]no AI set up: {exc}[/red]")
         raise typer.Exit(1) from exc

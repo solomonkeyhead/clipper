@@ -77,3 +77,19 @@ def test_a_rerun_leaves_out_moments_already_rated_not_good(data_root):
     runner._skip_rejected(outcome)
     # m1 is mostly the 1-star clip; m2 only grazes it; m3 is the 5-star one.
     assert [s.candidate_id for s in outcome.scored.scored] == ["m2", "m3"]
+
+
+def test_the_paid_api_key_never_judges_moments_unless_allowed(monkeypatch):
+    """D142: with a key set, judging still runs on the Claude plan, not the billed API."""
+    from clipper.llm import claude_code
+
+    made = []
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr(claude_code, "cli", lambda: "claude")
+    monkeypatch.setattr(pipeline, "_claude_judge_on", lambda: True)
+    monkeypatch.setattr(pipeline, "create_backend", lambda name, **kw: made.append(name) or name)
+    config = Config()
+    config = config.model_copy(update={"llm": config.llm.model_copy(update={"judge_model": "claude-opus-5-5"})})
+    assert pipeline.judge_backend(config) == "claude_code"
+    allowed = config.model_copy(update={"llm": config.llm.model_copy(update={"paid_api_jobs": ["sketch", "judge"]})})
+    assert pipeline.judge_backend(allowed) == "anthropic" and made == ["claude_code", "anthropic"]

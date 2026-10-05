@@ -215,8 +215,13 @@ def test_claude_goes_first_only_with_a_key(monkeypatch):
     config = Config.load()
     assert all(b.name != "anthropic" for b in ai.backends(config))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
-    first = ai.backends(config)[0]
+    # D142: the paid key does the drawing and nothing else, unless the user lists more jobs.
+    first = ai.backends(config, job="sketch")[0]
     assert first.name == "anthropic" and first.model == config.llm.create_model
+    for job in ("script", "topics", "footage", ""):
+        assert all(b.name != "anthropic" for b in ai.backends(config, job=job)), job
+    more = config.model_copy(update={"llm": config.llm.model_copy(update={"paid_api_jobs": ["sketch", "script"]})})
+    assert ai.backends(more, job="script")[0].name == "anthropic"
     free = config.model_copy(update={"llm": config.llm.model_copy(update={"create_model": None})})
     assert all(b.name != "anthropic" for b in ai.backends(free))
 
@@ -265,7 +270,7 @@ def test_footage_goes_to_gemini_first_and_isnt_stopped_by_claude_only(monkeypatc
             return type("R", (), {"text": self.name})()
 
     claude, gemini = B("claude_code"), B("gemini")
-    monkeypatch.setattr(ai, "backends", lambda config, model=None: [claude, gemini])
+    monkeypatch.setattr(ai, "backends", lambda config, model=None, job="": [claude, gemini])
     assert ai.ask("s", "u", None, temperature=0.0, quick=True, job="footage") == "gemini"
     assert ai.ask("s", "u", None, temperature=0.0) == "claude_code"   # everything else: Claude first
 
@@ -494,6 +499,6 @@ def test_when_claude_is_out_of_usage_create_stops_instead_of_using_gemini(monkey
         def complete(self, request):
             raise AssertionError("Gemini must not be asked")
 
-    monkeypatch.setattr(ai, "backends", lambda config, model=None: [Claude(), Gemini()])
+    monkeypatch.setattr(ai, "backends", lambda config, model=None, job="": [Claude(), Gemini()])
     with pytest.raises(CreateError, match="weekly limit"):
         ai.ask("s", "u", None, temperature=0)

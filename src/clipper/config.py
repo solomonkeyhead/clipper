@@ -203,6 +203,12 @@ class LLMConfig(StrictModel):
     # the rest stay with Claude. create_claude_only doesn't apply to these jobs.
     create_gemini_jobs: list[Literal["script", "check", "review", "footage"]] = Field(
         default_factory=lambda: ["script", "check", "review", "footage"])
+    # The jobs the PAID Claude API (ANTHROPIC_API_KEY, billed per use) may do (D142). Any job not
+    # listed never touches the key: it runs on Claude Code on your plan (no per-use charge), or
+    # Gemini. Default: only drawing the sketches. Add "judge" for clip judging, or script, check,
+    # review, footage, place, topics for Create's other jobs.
+    paid_api_jobs: list[Literal["sketch", "judge", "script", "check", "review", "footage", "place", "topics"]] = Field(
+        default_factory=lambda: ["sketch"])
     # Hard-drop candidates both prompts say need earlier context. Off for
     # scripted TV, where nearly every scene "needs context" by that standard
     # yet works as a clip: on a sitcom episode 26 of 48 were dropped for it.
