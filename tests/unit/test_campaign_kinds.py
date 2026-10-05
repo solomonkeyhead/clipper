@@ -53,4 +53,4 @@ def test_platforms_come_from_one_registry_and_the_page_has_the_same_list():
     assert PLATFORMS == platforms.TARGETS and "facebook_reels" in PLATFORMS
     assert posts.platform_of("https://fb.watch/abc") == "facebook" and posts.platform_of("https://youtu.be/x") == "youtube"
     generated = Path(__file__).parents[2] / "src" / "clipper" / "studio" / "web" / "src" / "api" / "platforms.gen.ts"
-    assert generated.read_text(encoding="utf-8") == platforms.typescript()   # run `npm run gen:api` after changing it
+    assert generated.read_text(encoding="utf-8").replace("\r\n", "\n") == platforms.typescript()   # run `npm run gen:api` after changing it
