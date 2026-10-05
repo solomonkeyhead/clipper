@@ -279,7 +279,7 @@ def chain(draw, v: Visual, t: float, d: float) -> None:
     box = min(150, (BOTTOM - first - (n - 1) * gap) / n)
     total = n * box + (n - 1) * gap
     y = first + (BOTTOM - first - total) / 2
-    title(draw, v, stage(t, d, 0, n + 1)) if v.title else None
+    title(draw, v, stage(t, d, 0, n + 1))
     for i, step in enumerate(steps):
         p = stage(t, d, i + (1 if v.title else 0), n + (1 if v.title else 0), label=i)
         if p <= 0:  # not said yet; a later step said already still shows, in its place

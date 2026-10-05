@@ -129,7 +129,9 @@ def test_a_written_script_has_no_clips_and_replan_keeps_them():
     s = script(2).model_copy(update={"beats": [
         b.model_copy(update={"visual": b.visual.model_copy(update={"clip": "c9", "clip_start": 2.0, "fill": "loop"})})
         for b in script(2).beats]})
-    assert all(b.visual.clip == "" for b in scripts._without_clips(s).beats)
+    answer = json.dumps({"title": "t", "beats": [{"text": "A b c d e.", "visual": {"clip": "c9", "picked": [{"id": 1}]}}]})
+    assert scripts._parse(answer).beats[0].visual.clip == ""   # the writer can't place clips
+    assert "clip" not in scripts._WriterVisual.model_fields and "picked" not in scripts._WriterVisual.model_fields
     gone, dropped = userclips.forget(s, {"c1"})
     assert dropped == 2 and all(b.visual.clip == "" and b.visual.fill == "auto" for b in gone.beats)
     kept, dropped = userclips.forget(s, {"c9"})

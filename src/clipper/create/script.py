@@ -16,13 +16,12 @@ import json
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 
 from . import channel as channels
 from .ai import CreateError, ask
 from .sketch import Sketch
 
-PROMPT_VERSION = "create-script-v5"
 TEMPLATES = ("sketch", "forces", "circle", "equation", "compare", "chain", "graph", "wave", "particles", "ray", "number")
 
 
@@ -84,6 +83,22 @@ class Script(BaseModel):
     @property
     def words(self) -> int:
         return len(self.text.split())
+
+
+#: The fields of a picture only the app sets (the user's clips, what a build picked): left out of
+#: the writer's schema, so it isn't shown ~12 fields it can't use and can't invent them.
+APP_ONLY = {"sketch", "clip", "clip_start", "fill", "manual", "picked", "avoid", "redo", "previous", "wish", "notice"}
+_WriterVisual = create_model("WriterVisual", **{k: (f.annotation, f) for k, f in Visual.model_fields.items()
+                                                if k not in APP_ONLY})
+_WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""),
+                           visual=(_WriterVisual, Field(default_factory=_WriterVisual)))
+_WriterScript = create_model("WriterScript", title=(str, ...), beats=(list[_WriterBeat], ...), description=(str, ""),
+                             hashtags=(list[str], Field(default_factory=list)))
+
+
+def _parse(answer: str) -> Script:
+    """The writer's answer as a Script: only what the writer's schema holds is taken."""
+    return Script.model_validate(_WriterScript.model_validate(json.loads(answer)).model_dump())
 
 
 VISUALS = """Split the script into beats: one spoken sentence each (two only if both are very
@@ -160,24 +175,11 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") 
             f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
             + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
-    answer = ask(_system(channel), user, Script, temperature=0.85)
+    answer = ask(_system(channel), user, _WriterScript, temperature=0.85)
     try:
-        script = Script.model_validate(json.loads(answer))
+        return tidy(_parse(answer))
     except (ValueError, TypeError) as exc:
         raise CreateError("the script came back unreadable; try again") from exc
-    return tidy(_without_clips(script))
-
-
-#: The fields of a picture only the app sets: whatever the writer put in them is dropped.
-APP_FIELDS = {"clip": "", "clip_start": None, "fill": "auto", "manual": False, "picked": [], "avoid": [],
-              "redo": False, "previous": None, "wish": "", "notice": ""}
-
-
-def _without_clips(script: Script) -> Script:
-    """A written script has none of the app's own picture fields (the user's clips, what a build
-    picked): the writer sees them in its schema and could invent them."""
-    return script.model_copy(update={"beats": [
-        b.model_copy(update={"visual": b.visual.model_copy(update=dict(APP_FIELDS))}) for b in script.beats]})
 
 
 #: Short words that end in a full stop without ending the sentence.
@@ -410,9 +412,9 @@ def replan(script: Script) -> tuple[Script, str]:
         user = (f"This approved script is already recorded, sentence by sentence. Keep every sentence "
                 f"exactly as written, in order, one beat each, and plan the pictures again.\n\n"
                 f"Title: {script.title}\n{beats}\n" + (f"\nFix these problems:\n{feedback}\n" if feedback else ""))
-        answer = ask(_system(channel), user, Script, temperature=0.4)
+        answer = ask(_system(channel), user, _WriterScript, temperature=0.4)
         try:
-            planned = Script.model_validate(json.loads(answer))
+            planned = _parse(answer)
         except (ValueError, TypeError) as exc:
             raise CreateError("the new pictures came back unreadable; try again") from exc
         if len(planned.beats) != len(script.beats):
@@ -422,7 +424,7 @@ def replan(script: Script) -> tuple[Script, str]:
         # ...and so do the pictures the user chose themselves (D120).
         fresh = tidy(script.model_copy(update={"beats": [
             b.model_copy(update={"visual": b.visual if b.visual.manual else p.visual.model_copy(update={
-                **APP_FIELDS, "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
+                "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
                 "emphasis": p.emphasis or b.emphasis})
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
         review = check(fresh)

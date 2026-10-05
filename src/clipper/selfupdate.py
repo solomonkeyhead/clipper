@@ -9,6 +9,7 @@ When the dependencies changed it reinstalls them. CLIPPER_NO_UPDATE=1 turns it o
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 
@@ -48,8 +49,10 @@ def pull() -> str:
         return ""
     changed = _git("diff", "--name-only", before, after).stdout.split()
     if "pyproject.toml" in changed or "uv.lock" in changed:
-        done = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-e", str(REPO_ROOT)],
-                              capture_output=True, text=True)
+        # The venv Clipper is installed in is uv's, which has no pip: uv installs into it.
+        uv = shutil.which("uv")
+        install = [uv, "pip", "install", "-q", "--python", sys.executable] if uv else [sys.executable, "-m", "pip", "install", "-q"]
+        done = subprocess.run([*install, "-e", str(REPO_ROOT)], capture_output=True, text=True)
         if done.returncode:
             log.warning("update: dependencies not reinstalled: %s", done.stderr[-300:])
     count = _git("rev-list", "--count", f"{before}..{after}").stdout.strip()

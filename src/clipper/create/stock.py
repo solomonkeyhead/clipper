@@ -16,6 +16,7 @@ day and downloads for good (both ask API users to cache), under data/create/stoc
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import io
 import json
@@ -100,20 +101,26 @@ def search(query: str) -> list[dict]:
     return merged
 
 
-def _cached(source: str, query: str) -> tuple[str, Path, list[dict] | None]:
-    q = " ".join(query.lower().split())[:100]
-    name = hashlib.sha1(q.encode()).hexdigest()[:16]
-    cached = ensure(_dir() / "search") / f"{source}-v2-{name}.json"   # v2: with previews (D130)
-    if cached.is_file() and time.time() - cached.stat().st_mtime < SEARCH_HOURS * 3600:
-        return q, cached, json.loads(cached.read_text(encoding="utf-8"))
-    return q, cached, None
+def _cached(source: str):
+    """A library's search, remembered a day on disk by its normalised query."""
+    def wrap(fetch):
+        @functools.wraps(fetch)
+        def cached_fetch(query: str) -> list[dict]:
+            q = " ".join(query.lower().split())[:100]
+            name = hashlib.sha1(q.encode()).hexdigest()[:16]
+            path = ensure(_dir() / "search") / f"{source}-v2-{name}.json"   # v2: with previews (D130)
+            if path.is_file() and time.time() - path.stat().st_mtime < SEARCH_HOURS * 3600:
+                return json.loads(path.read_text(encoding="utf-8"))
+            hits = fetch(q)
+            path.write_text(json.dumps(hits), encoding="utf-8")
+            return hits
+        return cached_fetch
+    return wrap
 
 
-def pexels(query: str) -> list[dict]:
+@_cached("pexels")
+def pexels(q: str) -> list[dict]:
     """Pexels' videos for `query` (cached a day). Its ids are kept apart from Pixabay's."""
-    q, cached, hits = _cached("pexels", query)
-    if hits is not None:
-        return hits
     try:
         r = httpx.get(PEXELS, params={"query": q, "per_page": 15, "size": "medium"},
                       headers={"Authorization": _pexels_key()}, timeout=20)
@@ -136,15 +143,12 @@ def pexels(query: str) -> list[dict]:
         hits.append({"id": f"pexels-{v['id']}", "duration": v.get("duration", 0), "tags": tags,
                      "url": best["url"], "width": best["width"], "height": best["height"],
                      "thumb": v.get("image", ""), "preview": small["url"]})
-    cached.write_text(json.dumps(hits), encoding="utf-8")
     return hits
 
 
-def pixabay(query: str) -> list[dict]:
+@_cached("pixabay")
+def pixabay(q: str) -> list[dict]:
     """Pixabay's videos for `query`, most relevant first (cached a day)."""
-    q, cached, hits = _cached("pixabay", query)
-    if hits is not None:
-        return hits
     try:
         r = httpx.get(API, params={"key": _key(), "q": q, "per_page": 20, "safesearch": "true"}, timeout=20)
         r.raise_for_status()
@@ -160,16 +164,13 @@ def pixabay(query: str) -> list[dict]:
         hits.append({"id": h["id"], "duration": h.get("duration", 0), "tags": h.get("tags", ""),
                      "url": v["url"], "width": v["width"], "height": v["height"], "thumb": thumb,
                      "preview": small})
-    cached.write_text(json.dumps(hits), encoding="utf-8")
     return hits
 
 
-def coverr(query: str) -> list[dict]:
+@_cached("coverr")
+def coverr(q: str) -> list[dict]:
     """Coverr's videos for `query` (cached a day): free, no credit needed, a free key from
     coverr.co/developers in COVERR_API_KEY (D130)."""
-    q, cached, hits = _cached("coverr", query)
-    if hits is not None:
-        return hits
     try:
         r = httpx.get(COVERR, params={"query": q, "page_size": 12, "urls": "true"},
                       headers={"Authorization": f"Bearer {_coverr_key()}"}, timeout=20)
@@ -188,7 +189,6 @@ def coverr(query: str) -> list[dict]:
         hits.append({"id": f"coverr-{v.get('id')}", "duration": float(v.get("duration") or 0), "tags": tags.strip(),
                      "url": url, "width": int(v.get("max_width") or 1920), "height": int(v.get("max_height") or 1080),
                      "thumb": v.get("thumbnail") or v.get("poster") or "", "preview": preview})
-    cached.write_text(json.dumps(hits), encoding="utf-8")
     return hits
 
 
@@ -197,13 +197,11 @@ def _rendition_named(files: list[str], *names: str) -> str | None:
     return next((f for n in names for f in files if f"~{n}." in f), None)
 
 
-def nasa(query: str) -> list[dict]:
+@_cached("nasa")
+def nasa(q: str) -> list[dict]:
     """NASA's videos for `query` (cached a day): public, no key; NASA's own footage is not under
     copyright (its logos must not suggest it endorses the video). Each video's files are listed in a
     manifest, read for the first few results only (D130)."""
-    q, cached, hits = _cached("nasa", query)
-    if hits is not None:
-        return hits
     try:
         r = httpx.get(NASA, params={"q": q, "media_type": "video"}, timeout=20)
         r.raise_for_status()
@@ -232,7 +230,6 @@ def nasa(query: str) -> list[dict]:
                      "tags": tags.strip(), "url": url.replace("http://", "https://"), "width": 1920, "height": 1080,
                      "thumb": next((x.get("href", "") for x in it.get("links", []) if x.get("render") == "image"), ""),
                      "preview": (small or url).replace("http://", "https://")})
-    cached.write_text(json.dumps(hits), encoding="utf-8")
     return hits
 
 
@@ -292,6 +289,13 @@ def _thumb(hit: dict) -> bytes | None:
     return cached.read_bytes()
 
 
+def _listing(shown: list[tuple[dict, bytes]]) -> str:
+    """The thumbnails' numbers, shape and library tags, as the judge is told them."""
+    listed = "\n".join(f"{i}. {'tall' if h['height'] > h['width'] else 'wide'}, {h.get('tags') or 'no tags'}"
+                       for i, (h, _) in enumerate(shown, start=1))
+    return f"Thumbnails 1 to {len(shown)}, in order:\n{listed}"
+
+
 class _NoAnswer(Exception):
     """The model couldn't look (busy, offline): not the same as "none of these fit"."""
 
@@ -304,11 +308,8 @@ def _judge(sentence: str, query: str, hits: list[dict], context: str = "",
     if not shown:
         raise _NoAnswer
     try:
-        listed = "\n".join(f"{i}. {'tall' if h['height'] > h['width'] else 'wide'}, {h.get('tags') or 'no tags'}"
-                           for i, (h, _) in enumerate(shown, start=1))
         prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "")
-                  + f"Sentence: {sentence}\nSearched for: {query}\n"
-                  f"Thumbnails 1 to {len(shown)}, in order:\n{listed}")
+                  + f"Sentence: {sentence}\nSearched for: {query}\n{_listing(shown)}")
         answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True,
                      footage=True)
         verdict = _Pick.model_validate(json.loads(answer))
@@ -353,12 +354,18 @@ def by_words(queries: list[str], ranked: list[dict]) -> dict | None:
     return None
 
 
-def _pool(queries: list[str], used: set, seconds: float) -> list[dict]:
+def _gather(queries: list[str], exclude: set) -> list[dict]:
+    """Every search's best results, each once, in the libraries' own order, minus `exclude`."""
     pool: list[dict] = []
     for q in queries:
         for h in search(q)[:PER_QUERY]:
-            if h["id"] not in used and all(h["id"] != p["id"] for p in pool):
-                pool.append(h)
+            if h["id"] not in exclude and all(h["id"] != p["id"] for p in pool):
+                pool.append({**h, "query": q})  # preview: a small file to play on hover (D130)
+    return pool
+
+
+def _pool(queries: list[str], used: set, seconds: float) -> list[dict]:
+    pool = _gather(queries, used)
     # Long enough first, then vertical, keeping the search order within each.
     return sorted(pool, key=lambda h: (h["duration"] < seconds + 0.3, h["height"] <= h["width"]))[:CANDIDATES]
 
@@ -451,11 +458,9 @@ def rank(sentence: str, hits: list[dict], context: str = "") -> list[dict]:
     shown = [(h, t) for h in hits if (t := _thumb(h))]
     if not shown:
         return []
-    listed = "\n".join(f"{i}. {'tall' if h['height'] > h['width'] else 'wide'}, {h.get('tags') or 'no tags'}"
-                       for i, (h, _) in enumerate(shown, start=1))
     try:
         answer = ask(RANK, (f"The whole script:\n{context}\n\n" if context else "") + f"Sentence: {sentence}\n"
-                     f"Thumbnails 1 to {len(shown)}, in order:\n{listed}", _Ranks, temperature=0.0,
+                     + _listing(shown), _Ranks, temperature=0.0,
                      media=[(t, "image/jpeg") for _, t in shown], quick=True, footage=True)
         got = _Ranks.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
@@ -475,12 +480,7 @@ def candidates(queries: list[str], seconds: float, exclude: set, sentence: str, 
     """Footage to choose from for a sentence: every search's results from both libraries, minus
     `exclude` (the clip being replaced, clips used elsewhere in the video), long enough first,
     then scored, best first (D129)."""
-    pool: list[dict] = []
-    for q in queries:
-        for h in search(q)[:PER_QUERY]:
-            if h["id"] not in exclude and all(h["id"] != p["id"] for p in pool):
-                pool.append({**h, "query": q})  # preview: a small file to play on hover (D130)
-    pool = sorted(pool, key=lambda h: (h["duration"] < min(seconds, 6.0), h["height"] <= h["width"]))[:limit]
+    pool = sorted(_gather(queries, exclude), key=lambda h: (h["duration"] < min(seconds, 6.0), h["height"] <= h["width"]))[:limit]
     return rank(sentence, pool, context)
 
 

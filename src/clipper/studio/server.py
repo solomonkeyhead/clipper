@@ -651,6 +651,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         """Stop, for a `clipper studio` started on newer code (only from this computer)."""
         if request.client and request.client.host not in ("127.0.0.1", "::1", "localhost"):
             raise HTTPException(403, "only from this computer")
+        from . import create_api
+
+        # Never mid-work: a render or a Create build would be cut off (the old copy keeps running).
+        if create_api._running or any(j["status"] in ("queued", "running") for j in jobs.list()):
+            raise HTTPException(409, "busy: a job is running")
         threading.Timer(0.5, lambda: os._exit(0)).start()
         return {"stopping": True}
     # The clip list is ~200 KB of JSON; compressed it's a fraction. Video, images
@@ -1993,9 +1998,10 @@ def _replace_older(port: int) -> bool:
     if not here or there == here:
         return False
     try:
-        httpx.post(f"{base}/api/quit", timeout=3)
+        if httpx.post(f"{base}/api/quit", timeout=3).status_code != 200:
+            return False  # busy (or too old to know /api/quit): leave it running
     except httpx.HTTPError:
-        return False  # it couldn't be asked (too old to know /api/quit): leave it
+        return False
     for _ in range(40):
         time.sleep(0.25)
         if not _running(port):

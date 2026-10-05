@@ -65,3 +65,18 @@ def test_its_own_commits_or_another_branch_or_turned_off_skip_it(repos, monkeypa
     assert "on branch experiment" in selfupdate.pull()
     monkeypatch.setenv("CLIPPER_NO_UPDATE", "1")
     assert selfupdate.pull() == ""
+
+
+def test_changed_dependencies_are_installed_with_uv_when_there_is_no_pip(repos, monkeypatch):
+    _, theirs = repos
+    (theirs / "pyproject.toml").write_text("x")
+    git(theirs, "add", "pyproject.toml")
+    git(theirs, "commit", "-qm", "dep")
+    git(theirs, "push", "-q", "origin", "master")
+    ran = []
+    real = subprocess.run
+    monkeypatch.setattr(selfupdate.shutil, "which", lambda name: "/bin/uv")
+    monkeypatch.setattr(selfupdate.subprocess, "run",
+                        lambda cmd, **kw: ran.append(cmd) or real(["git", "--version"], **kw) if cmd[0] == "/bin/uv" else real(cmd, **kw))
+    assert selfupdate.pull().startswith("updated")
+    assert ran and ran[0][:3] == ["/bin/uv", "pip", "install"] and "--python" in ran[0]

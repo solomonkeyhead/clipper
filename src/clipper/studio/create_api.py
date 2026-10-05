@@ -8,6 +8,7 @@ at a time, telling the page how far along they are ("create.changed").
 from __future__ import annotations
 
 import asyncio
+import functools
 import math
 import threading
 import traceback
@@ -228,6 +229,21 @@ def _work(video_id: int, publish) -> None:
         publish("clips.changed", {})
 
 
+def _start(video_id: int, publish) -> None:
+    threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
+
+
+def _beat(body: dict, count: int | None = None) -> int:
+    """The sentence number (from 1) a request is about; with `count`, it must be one of them."""
+    try:
+        beat = int(body.get("beat"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, "beat is a sentence number") from exc
+    if count is not None and not 1 <= beat <= count:
+        raise HTTPException(400, "no such sentence")
+    return beat
+
+
 def _editable(row: dict) -> None:
     """The video can change unless it is being timed or built right now: a script edit or a new
     voice mid-build cleared the voice and timings under the running build (D132)."""
@@ -370,7 +386,7 @@ def routes(app: FastAPI, publish) -> None:
                 out.write(chunk)
         partial.replace(kept)
         store.update_video(video_id, voice=str(kept), status="voiced", error="", timings="")  # timed afresh
-        threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
+        _start(video_id, publish)
         return {"queued": True}
 
     @app.post("/api/create/videos/{video_id}/pictures")
@@ -386,7 +402,7 @@ def routes(app: FastAPI, publish) -> None:
         planned, notes = await asyncio.to_thread(ai, script.replan, Script.model_validate(row["script"]))
         store.update_video(video_id, script={**planned.model_dump(), "take": row["script"].get("take", 1)},
                            check_notes=notes, status="voiced", error="")
-        threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
+        _start(video_id, publish)
         return {"queued": True}
 
     @app.post("/api/create/videos/{video_id}/build")
@@ -399,7 +415,7 @@ def routes(app: FastAPI, publish) -> None:
             raise HTTPException(409, "it's being built already")
         # Locked from now: the clips and placements can't change under a build that has begun (D119).
         store.update_video(video_id, status="voiced", error="")
-        threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
+        _start(video_id, publish)
         return {"queued": True}
 
     # ---------- the user's own clips (D119) ----------
@@ -540,10 +556,7 @@ def routes(app: FastAPI, publish) -> None:
 
         row = video_or_404(video_id)
         _editable(row)
-        try:
-            beat = int(body.get("beat"))
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(400, "beat is a sentence number") from exc
+        beat = _beat(body)
         start = body.get("start")
         if start is not None:
             try:
@@ -629,12 +642,7 @@ def routes(app: FastAPI, publish) -> None:
         row = video_or_404(video_id)
         _editable(row)
         script = _script(row)
-        try:
-            beat = int(body.get("beat"))
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(400, "beat is a sentence number") from exc
-        if not 1 <= beat <= len(script.beats):
-            raise HTTPException(400, "no such sentence")
+        beat = _beat(body, len(script.beats))
         want, note = body.get("want"), " ".join(str(body.get("note") or "").split())[:200]
         b = script.beats[beat - 1]
         v = b.visual
@@ -690,12 +698,7 @@ def routes(app: FastAPI, publish) -> None:
         row = video_or_404(video_id)
         _editable(row)
         script = _script(row)
-        try:
-            beat = int(body.get("beat"))
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(400, "beat is a sentence number") from exc
-        if not 1 <= beat <= len(script.beats):
-            raise HTTPException(400, "no such sentence")
+        beat = _beat(body, len(script.beats))
         group, seconds = _part(row, script, beat)
         root = script.beats[group[0]]
         wish = " ".join(str(body.get("wish") or "").split())[:200]
@@ -728,12 +731,7 @@ def routes(app: FastAPI, publish) -> None:
         row = video_or_404(video_id)
         _editable(row)
         script = _script(row)
-        try:
-            beat = int(body.get("beat"))
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(400, "beat is a sentence number") from exc
-        if not 1 <= beat <= len(script.beats):
-            raise HTTPException(400, "no such sentence")
+        beat = _beat(body, len(script.beats))
         ids = [str(x) for x in (body.get("ids") or [])]
         pool = offered.get(video_id, {})
         if not ids:
@@ -798,6 +796,7 @@ def routes(app: FastAPI, publish) -> None:
 
     # ---------- ready-made scripts that ship with Clipper (D121) ----------
 
+    @functools.cache
     def _ready() -> dict[str, dict]:
         import json as _json
 

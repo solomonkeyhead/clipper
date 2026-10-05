@@ -2438,3 +2438,24 @@ The first session on the user's own machine went through the cloud session's Cre
   German Professor's prompts read exactly as before; another channel gets its own field checked
   (a chemistry channel, a history channel). Still physics-flavoured: the diagram templates, the
   "Check physics" button labels. A channel settings page is the next step.
+
+## D134 - Review of the cloud session's work (D109-D133)
+
+Marc asked for the whole run of cloud commits to be read for blatant mistakes, redundancy and waste.
+Tests and ruff were green; what the read found, now fixed:
+- **The script writer was shown 12 fields it can't use** (`picked`, `previous`, `redo`, the sketch
+  and the rest) and then had them stripped afterwards. `script._WriterScript` is built from
+  `Visual` minus `APP_ONLY`, so the schema is half the size and `_without_clips` is gone.
+- **Self-update could not install new dependencies.** Clipper's venv is uv's and has no pip, so
+  `python -m pip install -e` failed quietly and the next start would have crashed on an import. It
+  now uses `uv pip install --python <this python>` when uv is there (`selfupdate.pull`).
+- **`/api/quit` ended a running render or Create build.** A newer `clipper studio` asked the old one
+  to quit even mid-job. It now answers 409 while a job or Create build runs, and the old copy keeps
+  going (`server._replace_older`).
+- **Duplicated code in stock.py, build.py, create_api.py:** one cache wrapper for the four
+  libraries, one gatherer for search results, one thumbnail listing for the judge; one
+  `_fill_frame` filter for stock and own clips; one `_start` and `_beat` in the API. A failed build
+  no longer leaves the shot cache pointing at its video. The ready-made scripts are read once.
+- **Dead code:** an unused prompt version, the sketch grid constants, a no-op conditional in the
+  chain diagram. Graphify's leftover files went to the Recycle Bin.
+

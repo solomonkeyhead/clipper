@@ -42,8 +42,6 @@ class Sketch(BaseModel):
     marks: list[Mark] = Field(default_factory=list)
 
 
-GRID_W, GRID_H = 1000, 600
-
 DRAW = """You draw quick, clear chalkboard sketches for a 45-second {subject} video on a phone, in
 the style of a good lecturer: the real thing, simply drawn, a few labels, motion where things
 move. One sketch shows what its sentence says, so a viewer gets it in two seconds. When it

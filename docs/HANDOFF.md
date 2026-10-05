@@ -106,8 +106,7 @@ Video 12 is the earlier build of that script, already in the Archive (never post
 4. NASA runs on every footage search (about 5 requests); suggest opt-in or space topics only.
 5. Every build sends scratch files to the Recycle Bin (stock folder is 526 MB): delete scratch directly?
 6. The footage prompts and physics check assume physics: blocks "Create for anybody".
-7. The script writer's schema shows ~10 app-only Visual fields (`picked`, `previous`, `redo`...):
-   wasted tokens, and it invites invention. Use a smaller writer-only schema.
+7. (Done, D134.) The script writer now gets a schema without the app-only Visual fields.
 8. Small: filter Coverr's `is_ai_generated`; the first idea in the list duplicates the ready-made script.
 
 **Speed ideas (tell Marc first, time a real build before changing anything):** make shots in parallel;
@@ -116,10 +115,8 @@ encode shots with NVENC (they are x264 crf 16, then encoded again at assembly).
 **Marc's own list of Create issues is still to come** (he waits to tell the better model). Ask for it first.
 
 **Tools:** Ponytail is installed (user plugin; `/ponytail-gain` to check its numbers). Graphify was tried on
-`src/` and judged not worth it: its answers were 4 to 6 times bigger than grep's and noisy; the 71.5x
-claim is against reading every file. It's still installed as a uv tool, with an uncommitted
-`.graphifyignore`, a `.gitignore` entry and a git-ignored `src/graphify-out/`; remove with `graphify uninstall`
-and `uv tool uninstall graphifyy` if Marc wants.
+`src/` and judged not worth it; its leftover files are gone, and the tool itself can go with
+`graphify uninstall` and `uv tool uninstall graphifyy`.
 
 **Cloud session:** it kept pushing to master (last at 20:23 local, dropping the deny list). If still open,
 Marc should close it: selfupdate pulls everything it pushes.

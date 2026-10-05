@@ -78,6 +78,15 @@ def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> f
     return hint if hint is not None else 0.5
 
 
+def _fill_frame(push: str, x: float) -> str:
+    """ffmpeg filters that cover the 9:16 frame, then push in by `push` (an expression in t), the
+    crop's left edge placed so the subject at `x` lands as near the middle as the picture allows:
+    (iw*x - W/2) clamped to [0, iw - W]."""
+    return (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+            f"scale=w='trunc(iw*{push}/2)*2':h=-2:eval=frame,"
+            f"crop={W}:{H}:x='max(0,min(iw-{W},iw*{x:.4f}-{W // 2}))':y='(ih-{H})/2',fps={FPS},setsar=1")
+
+
 def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None, skip: float = 0.0) -> Path:
     """`seconds` of a stock clip filling the 9:16 frame, pushing in slowly, the crop placed on
     its subject (D111): a wide shot cut to its middle lost the speaker cone to one side and
@@ -88,12 +97,7 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
     length = info.duration or seconds
     offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
     x = min(1.0, max(0.0, _subject_x(src, offset, seconds, center)))
-    push = f"(1+{PUSH_IN}*t/{seconds:.3f})"
-    # Cover the frame, then push in; the crop's left edge sits so the subject lands as near
-    # the middle as the picture allows: (iw*x - W/2) clamped to [0, iw - W].
-    vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
-          f"scale=w='trunc(iw*{push}/2)*2':h=-2:eval=frame,"
-          f"crop={W}:{H}:x='max(0,min(iw-{W},iw*{x:.4f}-{W // 2}))':y='(ih-{H})/2',fps={FPS},setsar=1")
+    vf = _fill_frame(f"(1+{PUSH_IN}*t/{seconds:.3f})", x)
     run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y",
          *(["-stream_loop", "-1"] if length < seconds + offset else ["-ss", f"{offset:.3f}"]),
          "-i", str(src), "-t", f"{seconds:.3f}", "-an", "-vf", vf,
@@ -115,11 +119,8 @@ def _own_shot(src: Path, start: float, play: float, total: float, out: Path, slo
         return out
     x = min(1.0, max(0.0, _subject_x(src, start, play, None)))
     span = max(play * slow, 0.1)
-    push = f"(1+{PUSH_IN}*min(t,{span:.3f})/{span:.3f})"
-    vf = (f"{f'setpts={slow:.4f}*PTS,' if slow != 1.0 else ''}"
-          f"scale={W}:{H}:force_original_aspect_ratio=increase,"
-          f"scale=w='trunc(iw*{push}/2)*2':h=-2:eval=frame,"
-          f"crop={W}:{H}:x='max(0,min(iw-{W},iw*{x:.4f}-{W // 2}))':y='(ih-{H})/2',fps={FPS},setsar=1")
+    vf = (f"setpts={slow:.4f}*PTS," if slow != 1.0 else "") + \
+        _fill_frame(f"(1+{PUSH_IN}*min(t,{span:.3f})/{span:.3f})", x)
     rest = total - span
     if rest > 0.03:
         vf += f",tpad=stop_mode=clone:stop_duration={rest:.3f}"
@@ -456,6 +457,14 @@ def _campaign(channel: channels.Channel) -> None:
 
 def build(video_id: int, progress=None) -> int:
     """Make the video and file it; returns its clip id in the library."""
+    global shot_cache
+    try:
+        return _build(video_id, progress)
+    finally:
+        shot_cache = None  # also when it failed: the cache belongs to one build
+
+
+def _build(video_id: int, progress) -> int:
     from ..render.cover import pick, put_first
     from ..studio import db, library
     from ..utils.recycle import recycle
@@ -529,7 +538,6 @@ def build(video_id: int, progress=None) -> int:
     for old in (shot_cache.glob("*.mp4") if shot_cache.is_dir() else []):
         if old not in used_shots:  # shots of pictures no longer in the video
             old.unlink(missing_ok=True)
-    shot_cache = None
     log.info("create: video %s built as clip %s (%s)", video_id, clip_id, rel)
     return clip_id
 
