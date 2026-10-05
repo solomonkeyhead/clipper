@@ -2459,3 +2459,11 @@ Tests and ruff were green; what the read found, now fixed:
 - **Dead code:** an unused prompt version, the sketch grid constants, a no-op conditional in the
   chain diagram. Graphify's leftover files went to the Recycle Bin.
 
+## D135 - Transcription broke on PyAV 19
+
+Every run failed with `open() got an unexpected keyword argument 'metadata_errors'`. faster-whisper
+1.2.1 (the newest) decodes audio with `av.open(..., metadata_errors="ignore")`; PyAV 19.0.1, released
+on 2026-10-03 and picked up by the venv, no longer takes it. `av>=11,<19` is now pinned in
+`pyproject.toml` (18.1.0 and older accept it) and the venv holds 18.1.0. `test_audio_decode.py`
+decodes a file through faster-whisper's own decoder, so the next break shows up in the tests.
+

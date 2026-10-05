@@ -21,6 +21,9 @@ dependencies = [
     "openpyxl>=3.1",
     # media
     "faster-whisper>=1.2.1",
+    # faster-whisper decodes audio with av.open(metadata_errors=...), which PyAV 19 dropped:
+    # every transcription failed with a TypeError. Lift the cap when faster-whisper stops passing it.
+    "av>=11,<19",
     "yt-dlp>=2025.1.1",
     "soundfile>=0.13",
     "opencv-python-headless>=4.11",
