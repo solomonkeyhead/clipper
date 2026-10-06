@@ -11,11 +11,11 @@
 </head>
 <body>
 <h1>Clipper – Privacy Policy</h1>
-<p>Last updated: 30 September 2026</p>
+<p>Last updated: 5 October 2026</p>
 
-<p>Clipper is a personal tool that runs on its owner's own computer. It helps the owner make short video
-clips and keep track of how their own posts perform. This page explains what Clipper does with
-information it receives from Google APIs.</p>
+<p>Clipper is a tool that runs on its user's own computer. It helps them make short video clips and keep track
+of how their own posts perform. This page explains what Clipper does with information it receives from Google,
+TikTok and Instagram when a user connects an account.</p>
 
 <h2>What Clipper accesses</h2>
 <p>When the owner connects their YouTube channel, Clipper asks Google for read-only access
@@ -26,14 +26,20 @@ information it receives from Google APIs.</p>
   <li>each video's public counts (views, likes, comments) and its analytics (average view duration and shares).</li>
 </ul>
 <p>Clipper cannot upload, change or delete anything on YouTube, and does not read anything outside the connected channel.</p>
+<p>The same applies to TikTok (<code>user.info.basic</code>, <code>video.list</code>: the account's name and its videos'
+public counts) and Instagram (<code>instagram_business_basic</code>, <code>instagram_business_manage_insights</code>:
+the account's name and its Reels' counts and insights). All access is read-only.</p>
 
 <h2>How it is used</h2>
 <p>The information is used only to show the owner how their own posts are doing, inside Clipper, and to match
 each post to the clip it came from.</p>
 
 <h2>Where it is kept</h2>
-<p>Everything stays on the owner's computer, in Clipper's data folder. Clipper has no server; nothing is sent to
-the developer or to anyone else. The sign-in token is stored in that same folder.</p>
+<p>Everything stays on the user's computer, in Clipper's data folder, including the sign-in tokens.</p>
+<p><b>The sign-in service.</b> To log in, the user is sent through a small sign-in service run by the developer. It
+passes the user to Google, TikTok or Instagram, receives the sign-in tokens, and hands them straight to the user's own
+computer. It does not store them, and keeps no accounts, no statistics and no logs of them. It sees the tokens for
+a moment while it does this, and again when a token is renewed. Nothing else is sent to it.</p>
 
 <h2>Sharing</h2>
 <p>Clipper does not sell, share or transfer this information to anyone, does not use it for advertising, and does
@@ -43,8 +49,10 @@ not use it to train AI models.</p>
 including the Limited Use requirements.</p>
 
 <h2>Removing access and data</h2>
-<p>Disconnect the channel on Clipper's Accounts page, which deletes the stored sign-in, and remove Clipper's access
-at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. Statistics already
+<p>Disconnect the account on Clipper's Accounts page, which deletes the stored sign-in, and remove Clipper's access
+in the platform's settings (Google: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>;
+TikTok: Settings and privacy, Security and permissions, Apps and services permissions; Instagram: Settings, Website
+permissions, Apps and websites). Statistics already
 saved can be deleted with Clipper's data folder.</p>
 
 <h2>Contact</h2>
