@@ -4,8 +4,8 @@ Phase 0 output, per BUILD_BRIEF.md section 0. Stack as actually resolved on this
 machine, proposed deviations with reasons, and risks.
 
 Every number below was measured, not estimated, unless labelled otherwise. The
-raw evidence is in [docs/VERIFIED.md](docs/VERIFIED.md); the choices are in
-[docs/DECISIONS.md](docs/DECISIONS.md).
+raw evidence is in [VERIFIED.md](VERIFIED.md); the choices are in
+[DECISIONS.md](DECISIONS.md).
 
 ---
 

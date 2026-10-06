@@ -58,11 +58,3 @@ def test_showing_its_title_is_free_but_choosing_is_paid(client, data_root):
 def test_posted_clips_keep_their_video(client, data_root):
     cid = add(data_root, "c1", "first line", "first line", status="posted")
     assert client.post(f"/api/clips/{cid}/rerender", json={}).status_code == 400
-
-
-def test_a_campaigns_mismatched_hooks_are_all_queued(client, data_root):
-    a = add(data_root, "c1", "second line", "first line")
-    add(data_root, "c2", "first line", "first line")      # already matches
-    add(data_root, "c3", "own title", "first line")       # not a brief line
-    assert client.post("/api/campaigns/plm/rerender-hooks").json() == {"queued": 1}
-    assert client.app.state.asked == [(a, "second line")]

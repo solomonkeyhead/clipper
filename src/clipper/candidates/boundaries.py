@@ -1,4 +1,4 @@
-"""Refining a selected clip's start and end (BUILD_BRIEF.md section 10).
+"""Refining a selected clip's start and end (docs/BUILD_BRIEF.md section 10).
 
 Candidate windows are sentence-aligned, which is correct but blunt. A clip that
 opens on "So, um, yeah, the thing is..." wastes the three seconds that decide

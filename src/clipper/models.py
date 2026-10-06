@@ -1,7 +1,7 @@
 """The data that moves between pipeline stages.
 
 Every stage reads and writes these as JSON under ``data/work/<source_id>/`` so
-any stage can resume from the previous one's output (BUILD_BRIEF.md section 6).
+any stage can resume from the previous one's output (docs/BUILD_BRIEF.md section 6).
 They are pydantic models rather than dataclasses so that a half-written artifact
 from a crashed run fails loudly on load instead of propagating nonsense.
 """
@@ -227,7 +227,7 @@ class Candidates(Artifact):
 
 
 class RubricScores(Artifact):
-    """One LLM's verdict on one candidate (BUILD_BRIEF.md section 9.1)."""
+    """One LLM's verdict on one candidate (docs/BUILD_BRIEF.md section 9.1)."""
 
     hook_strength: int = Field(ge=0, le=10)
     standalone_clarity: int = Field(ge=0, le=10)

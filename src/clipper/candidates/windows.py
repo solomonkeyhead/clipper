@@ -1,6 +1,6 @@
 """Generating candidate windows.
 
-BUILD_BRIEF.md section 8 opens by saying this stage "determines the ceiling of
+docs/BUILD_BRIEF.md section 8 opens by saying this stage "determines the ceiling of
 everything else", and that is literally true: no amount of clever scoring can
 select a moment that was never proposed. So generation is generous, and the hard
 filters that follow are the only thing standing between it and an unbounded LLM

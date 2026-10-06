@@ -61,7 +61,7 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 ## Clipping AI
 - Moments are judged (rubric scores, opening lines) by Claude when `llm.judge_model` is set and
   Claude is reachable (API key, else Claude Code on Marc's plan), Gemini otherwise; Gemini always
-  watches the video (D139). Settings switch: `claude_judge`.
+  watches the video (D139). Settings, Who does what, Judge the moments picks it (`llm.job_providers.judge`).
 - Cached stages in `data/work/<source>/` carry a `.key` of the settings that made them
   (`pipeline.stage_keys`); a changed campaign redoes them (D139).
 
@@ -77,4 +77,4 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 - `src/clipper/cli.py` commands; `studio/server.py` + `studio/create_api.py` the web API;
   `studio/web/src/` the page source (built into `studio/static/`, don't read the build).
 - `llm/` model backends; `render/` ffmpeg, captions, faces, cover; `campaign/` campaign rules.
-- `campaigns/*.yaml` one per campaign; `german-professor.yaml` is Marc's channel.
+- `<data>/campaigns/*.yaml` one per campaign (the repo keeps only `campaigns/example.yaml`, the template).

@@ -86,7 +86,6 @@ def test_the_paid_api_key_never_judges_moments_unless_allowed(monkeypatch):
     made = []
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setattr(claude_code, "cli", lambda: "claude")
-    monkeypatch.setattr(pipeline, "_claude_judge_on", lambda: True)
     monkeypatch.setattr(pipeline, "create_backend", lambda name, **kw: made.append(name) or name)
     config = Config()
     config = config.model_copy(update={"llm": config.llm.model_copy(update={"judge_model": "claude-opus-5-5"})})

@@ -112,7 +112,7 @@ function FinishedRow({ job }: { job: Job }) {
         <span className="min-w-0 flex-1 truncate text-sm">{job.name}</span>
         <span className="hidden shrink-0 text-xs text-muted sm:inline">{title(job.campaign)} · {ago(job.created)}</span>
         {job.status === "failed" ? <Chip tone="danger">Failed</Chip>
-          : job.clips > 0 ? <Chip tone="success">{job.clips} clip{job.clips === 1 ? "" : "s"}</Chip>
+          : job.clips > 0 ? <Chip tone="success">made {job.clips} clip{job.clips === 1 ? "" : "s"}</Chip>
           : <Chip tone="warning">No clips</Chip>}
       </button>
       {open && (
@@ -149,7 +149,7 @@ function FinishedList({ jobs }: { jobs: Job[] }) {
   return (
     <>
       <h2 className="mb-3 flex items-baseline gap-2 text-md font-semibold">
-        Finished <span className="text-xs font-normal text-muted">{jobs.length} video{jobs.length === 1 ? "" : "s"} · {made} clip{made === 1 ? "" : "s"}</span>
+        Finished <span className="text-xs font-normal text-muted">{jobs.length} run{jobs.length === 1 ? "" : "s"} · {made} clip{made === 1 ? "" : "s"} made</span>
       </h2>
       <div className="flex flex-col gap-1.5">
         {(all ? jobs : jobs.slice(0, FINISHED_SHOWN)).map((j) => <FinishedRow key={j.id} job={j} />)}

@@ -1,4 +1,4 @@
-"""Campaign rule enforcement (BUILD_BRIEF.md section 7.2).
+"""Campaign rule enforcement (docs/BUILD_BRIEF.md section 7.2).
 
 Separate from the QA gate because the two answer different questions. QA asks
 "is this clip technically sound"; compliance asks "does this clip satisfy the

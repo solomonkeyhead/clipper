@@ -1,4 +1,4 @@
-"""The LLM rubric signal (BUILD_BRIEF.md section 9.1).
+"""The LLM rubric signal (docs/BUILD_BRIEF.md section 9.1).
 
 Each candidate is scored by two prompts at low temperature, batched to bound
 cost. The combination is::
@@ -11,7 +11,7 @@ Keeping the result on an **absolute** 0-10 scale matters beyond this module.
 Every other signal becomes a per-video percentile rank, which by construction
 says nothing about whether a video contains anything good at all. The raw rubric
 total is the one quantity that can say "nothing here is worth clipping", so
-`select/pick.py` gates on it. See PLAN.md P1.
+`select/pick.py` gates on it. See docs/PLAN.md P1.
 """
 
 from __future__ import annotations
@@ -213,7 +213,7 @@ def _hard_drop_reason(
     `needs_prior_context` requires *both* prompts to agree, since a single
     prompt reading a transcript out of context is prone to a false positive.
     With the second opinion disabled there is only one verdict to use, which the
-    brief leaves undefined -- recorded in PLAN.md and resolved here.
+    brief leaves undefined -- recorded in docs/PLAN.md and resolved here.
     """
     opinions = [s for s in (a, b) if s is not None]
     if not opinions:

@@ -1,6 +1,6 @@
 """Anthropic backend -- optional and paid.
 
-Never required: BUILD_BRIEF.md section 2 makes free-and-local the default and
+Never required: docs/BUILD_BRIEF.md section 2 makes free-and-local the default and
 paid APIs a swappable extra. The SDK is an optional dependency, so importing
 this module without it installed raises ImportError, which `base._load_builtins`
 catches and treats as "backend unavailable".

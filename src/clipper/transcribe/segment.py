@@ -1,6 +1,6 @@
 """Words -> sentences -> paragraphs.
 
-This is the foundation candidate generation stands on: BUILD_BRIEF.md section 8
+This is the foundation candidate generation stands on: docs/BUILD_BRIEF.md section 8
 requires every candidate window to begin and end on a sentence boundary, so a
 bad boundary here caps the quality of everything downstream.
 
@@ -35,7 +35,7 @@ ABBREVIATIONS = frozenset({
 
 @dataclass(frozen=True)
 class SegmentConfig:
-    """Thresholds for splitting. Defaults follow BUILD_BRIEF.md section 6."""
+    """Thresholds for splitting. Defaults follow docs/BUILD_BRIEF.md section 6."""
 
     pause_boundary: float = 0.6
     """A gap this long forces a sentence break regardless of punctuation."""

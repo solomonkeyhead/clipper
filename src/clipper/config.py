@@ -134,8 +134,8 @@ class SelectionConfig(StrictModel):
     on the percentile-ranked composite -- it can only say "this is weak for this
     video". `min_llm_total` is an *absolute* guard on the raw 0-10 rubric total,
     and is the only thing that can say "this video contains nothing worth
-    clipping", which is what BUILD_BRIEF.md section 1 actually asks for. See
-    PLAN.md P1 for why the brief's single percentile threshold cannot do it.
+    clipping", which is what docs/BUILD_BRIEF.md section 1 actually asks for. See
+    docs/PLAN.md P1 for why the brief's single percentile threshold cannot do it.
     """
 
     top_n: int = Field(default=5, ge=1)

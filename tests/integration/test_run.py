@@ -157,7 +157,7 @@ class TestQualityGateEndToEnd:
     def test_an_unreachable_bar_produces_no_clips_and_says_so(
         self, long_source, cfg, campaign, module_data_root, tmp_path
     ):
-        """BUILD_BRIEF.md section 1: returning nothing beats returning filler.
+        """docs/BUILD_BRIEF.md section 1: returning nothing beats returning filler.
 
         `min_llm_total` is capped at 10.0, so this is only unreachable when no
         candidate scored a perfect 10. Checked rather than assumed.

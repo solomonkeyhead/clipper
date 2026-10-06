@@ -111,7 +111,7 @@ class TestSelectionOnRealSpeech:
     def test_a_bar_above_every_score_yields_nothing_rather_than_filler(
         self, dense, cfg, data_root
     ):
-        """The behaviour BUILD_BRIEF.md section 1 asks for.
+        """The behaviour docs/BUILD_BRIEF.md section 1 asks for.
 
         The bar is set from the observed maximum rather than a fixed number, so
         the test asserts the *behaviour* and not a property of this fixture.

@@ -3,7 +3,7 @@
 The whole render is a single FFmpeg invocation: cut, reframe, burn captions,
 normalise loudness, encode. Nothing is piped through Python.
 
-That is a deliberate departure from BUILD_BRIEF.md section 11.1, which suggests
+That is a deliberate departure from docs/BUILD_BRIEF.md section 11.1, which suggests
 decoding with OpenCV and piping raw frames out: raw 1080x1920 at 30 fps is about
 93 MB/s through a pipe, plus a Python loop in the hot path. It is also no longer
 needed for the reason it was suggested -- a moving crop. Framing is static per

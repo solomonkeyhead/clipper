@@ -1,4 +1,4 @@
-"""The audio signal (BUILD_BRIEF.md section 9.2).
+"""The audio signal (docs/BUILD_BRIEF.md section 9.2).
 
 Energy, dynamics, onset events and speech rate, computed from the 16 kHz mono
 WAV extracted at ingest. Everything is numpy and scipy -- no librosa, which

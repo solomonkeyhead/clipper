@@ -2712,3 +2712,30 @@ apps pass each platform's review. The tests walk the whole loop with the platfor
 **D151 amendment.** With a service address set, new logins go through the service even when the user's own app
 keys are also saved (Marc tests the service while his own TikTok app still holds his connected accounts). Each
 login records `via: service`; renewing follows it, and an unmarked older login renews with the user's own keys.
+
+## D152: A cleanup pass over every page
+
+**What happened.** Marc asked for a pass over the whole site for anything odd, redundant or duplicated before
+the TikTok review video. Every page was opened on his real data.
+
+**Decided (fixed).**
+- Counts that disagreed: the sidebar's Clips badge, Home's "Next up" and the German Professor card counted
+  his own channel's posted Shorts as "to submit" (they have nothing to submit, D147). Home now says
+  "15 clips to submit (43 links)" instead of "15" in one place and "43" in another; the campaign card's
+  "links to submit" chip repeated the box beside it and is gone; an own-channel card shows Posted and Skipped.
+- One setting in two places: the "Claude judges the moments" switch duplicated Who does what, Judge the
+  moments. The switch and its `claude_judge` setting are gone; the picker decides (Gemini = the old "off").
+- Wording: "Not enough yet: 3 more with" ended mid-sentence; the median card said "half your posts get more";
+  Budget left showed "Set" as if it were a value; "Payouts : "; "you feel this one" on ideas (now "felt in daily
+  life", with a tooltip); campaign slugs on Learning's hooks (now titles); "learnt from 21" next to "27 clips"
+  (now says how many have a score); New clips' "13 videos" were runs, and their clip counts are clips made.
+- Layout: the AI pill in the top bar wrapped onto three lines; the Post queue card ran off the right edge.
+- Dead code: `/api/campaigns/{name}/rerender-hooks` (a one-time fix with no button), `hardware.auto_path`, two
+  hand-rolled number formats (now `formatCount`).
+- Repo: BUILD_BRIEF.md and PLAN.md (the first day's brief and plan) moved into docs/ with VERIFIED.md; the
+  README described the first-week CLI and is rewritten with an index of the docs; CLAUDE.md's campaigns line
+  pointed at the repo folder campaigns no longer live in.
+
+**Left alone, on purpose.** `studio/server.py` is long (2,000+ lines) but splitting it is a large move with
+no change for the user. The single "Submit" button on a clip with one post is the one-click copy-and-open
+(D78). Stats repeats a caption once per platform, each row with its platform's icon.

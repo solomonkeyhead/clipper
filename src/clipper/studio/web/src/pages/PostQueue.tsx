@@ -68,10 +68,10 @@ export function PostQueuePage() {
                    className="aspect-[9/16] w-full rounded-md bg-black object-contain" />
             <div className="text-center text-xs text-muted">{line.length} left in this step</div>
           </div>
-          <Card className="flex flex-col gap-4 p-5">
+          <Card className="flex min-w-0 flex-col gap-4 p-5">
             <div>
               <div className="text-xs text-muted">{campaign?.title ?? clip.campaign}</div>
-              <h2 className="text-md font-semibold">{clip.title || clip.hook || `Clip ${clip.id}`}</h2>
+              <h2 className="text-md font-semibold break-words">{clip.title || clip.hook || `Clip ${clip.id}`}</h2>
             </div>
             {step === "post" ? (
               <>

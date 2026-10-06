@@ -1,4 +1,4 @@
-"""Clip boundary refinement (BUILD_BRIEF.md section 10).
+"""Clip boundary refinement (docs/BUILD_BRIEF.md section 10).
 
 The invariant that matters most: padding and trimming must never cut into a
 word. A clipped syllable is instantly audible.

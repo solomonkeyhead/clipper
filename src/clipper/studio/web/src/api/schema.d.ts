@@ -641,27 +641,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/campaigns/{name}/rerender-hooks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rerender Hooks
-         * @description Every unposted clip whose title is one of the brief's lines but whose
-         *     video shows another: made again showing its title (D85, D90).
-         */
-        post: operations["rerender_hooks_api_campaigns__name__rerender_hooks_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/create": {
         parameters: {
             query?: never;
@@ -4965,39 +4944,6 @@ export interface operations {
                 } | null;
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    rerender_hooks_api_campaigns__name__rerender_hooks_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

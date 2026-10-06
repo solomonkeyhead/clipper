@@ -1,6 +1,6 @@
 """`clipper learn`: compare what the tool predicted with what posts actually did.
 
-BUILD_BRIEF.md section 14.2, with one deliberate change: the primary outcome is
+docs/BUILD_BRIEF.md section 14.2, with one deliberate change: the primary outcome is
 watch-through (average watch time / clip length), not views. On a new account
 views mostly measure how many people TikTok chose to show the post to -- the
 account, not the clip -- while watch-through measures what the people who saw

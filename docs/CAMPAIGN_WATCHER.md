@@ -17,7 +17,7 @@ is not covered: check contentrewards.com/discover → New Campaigns by hand.
 
 ## Setup
 
-1. A Gmail used only for this, e.g. `solomonkeyclips.alerts@gmail.com`.
+1. A Gmail used only for this, e.g. `yourname.alerts@gmail.com`.
 2. iCloud Mail (icloud.com/mail) → gear → Settings → Rules: *is from*
    `vyro.com` → *Forward to* that Gmail. (Plain forward, so Vyro mail still
    shows in iCloud.)

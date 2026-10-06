@@ -1,4 +1,4 @@
-"""Normalising and combining the signals (BUILD_BRIEF.md section 9.5).
+"""Normalising and combining the signals (docs/BUILD_BRIEF.md section 9.5).
 
     component_i = percentile_rank(raw_i)          # per video, per signal
     composite   = sum(w_i * component_i) / sum(w_i)
@@ -13,7 +13,7 @@ It is the wrong tool for *gating* quality, and the brief conflates the two. A
 per-video percentile is uniform by construction, so the best candidate scores
 near 1.0 whether the video is excellent or worthless, and a `min_composite`
 threshold can never fire on a weak source. Selection therefore gates on the
-absolute LLM total instead -- see `select/pick.py` and PLAN.md P1.
+absolute LLM total instead -- see `select/pick.py` and docs/PLAN.md P1.
 """
 
 from __future__ import annotations

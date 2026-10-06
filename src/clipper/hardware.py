@@ -18,8 +18,6 @@ import shutil
 import subprocess
 from dataclasses import asdict, dataclass
 
-from .paths import data_root
-
 
 @dataclass
 class Hardware:
@@ -86,10 +84,6 @@ def recommend(hw: Hardware) -> Plan:
     if hw.cpu_cores >= 6:
         return Plan("cpu", "base", "int8", f"No GPU, {hw.cpu_cores} CPU cores: a base model, so it finishes", 14)
     return Plan("cpu", "tiny", "int8", f"No GPU, {hw.cpu_cores} CPU cores: the smallest model, quality drops", 10)
-
-
-def auto_path():
-    return data_root() / "config.auto.yaml"
 
 
 def current(config) -> dict:

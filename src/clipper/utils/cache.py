@@ -2,7 +2,7 @@
 
 Every stage writes a JSON artifact into ``data/work/<source_id>/``. A stage is
 skipped when its artifact already exists and nothing upstream has changed, so
-re-running a finished source is near-instant (BUILD_BRIEF.md section 6).
+re-running a finished source is near-instant (docs/BUILD_BRIEF.md section 6).
 
 `source_id` must be stable across runs and cheap on a 3 GB file, so it hashes
 size plus the first and last megabyte rather than the whole thing. Two different

@@ -1235,20 +1235,6 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         rerenders.submit(clip_id, hook)
         return {"queued": True, "hook": hook}
 
-    @app.post("/api/campaigns/{name}/rerender-hooks")
-    def rerender_hooks(name: str) -> dict:
-        """Every unposted clip whose title is one of the brief's lines but whose
-        video shows another: made again showing its title (D85, D90)."""
-        campaign = load_campaigns().get(name)
-        if campaign is None:
-            raise HTTPException(404, f"no campaign {name!r}")
-        todo = [c for c in Snapshot().clips if c.campaign == name and not c.posts
-                and c.status in ("ready", "skipped") and c.title in campaign.hook_texts
-                and c.hook and c.hook != c.title]
-        for c in todo:
-            rerenders.submit(c.id, c.title)
-        return {"queued": len(todo)}
-
     # ---------- Create: the user's own channel (D108) ----------
     from . import create_api
 

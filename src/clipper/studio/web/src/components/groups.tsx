@@ -5,7 +5,7 @@ import {
   useAccountGroups, useCampaigns, useDeleteGroup, useSaveGroup, type Account, type AccountGroup,
 } from "@/api/client";
 import { useUI } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { cn, formatCount } from "@/lib/utils";
 import { TextInput } from "./form";
 import { PlatformIcon } from "./PlatformIcon";
 import { Button, Card } from "./ui";
@@ -64,7 +64,7 @@ function GroupRow({ group, accounts, onEdit }: { group: AccountGroup; accounts: 
     <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-2 px-3 py-2.5">
       <div className="flex items-center gap-2">
         <span className="flex-1 truncate text-sm font-semibold">{group.name}</span>
-        <span className="text-xs text-muted">{posts} posts · {Intl.NumberFormat("en", { notation: "compact" }).format(views)} views</span>
+        <span className="text-xs text-muted">{posts} posts · {formatCount(views)} views</span>
         <Button size="sm" variant="ghost" onClick={() => { setScope(`group:${group.id}`); toast(`Viewing ${group.name}`, { description: "Switch back with the button in the top bar." }); }}>
           <Eye className="size-3.5" /> View
         </Button>

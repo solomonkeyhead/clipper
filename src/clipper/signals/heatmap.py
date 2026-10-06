@@ -1,4 +1,4 @@
-"""The "most replayed" heatmap signal (BUILD_BRIEF.md section 9.3).
+"""The "most replayed" heatmap signal (docs/BUILD_BRIEF.md section 9.3).
 
 YouTube's heatmap is replay density, normalised per video with its maximum
 pinned near 1.0. Two biases make the raw values misleading:

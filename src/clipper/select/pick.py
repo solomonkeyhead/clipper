@@ -1,4 +1,4 @@
-"""Greedy non-overlapping selection (BUILD_BRIEF.md section 10).
+"""Greedy non-overlapping selection (docs/BUILD_BRIEF.md section 10).
 
 Sort by composite, then walk down taking clips that satisfy every constraint:
 no overlap, a minimum gap, a cap per third of the video, and the quality gates.

@@ -269,7 +269,7 @@ export function DashboardPage() {
   const channelBusy = uses.create ? create?.videos.find((v) => v.status !== "built") : undefined;
   const next: { label: string; run: () => void } | null = firstRun ? null
     : by("ready").length ? { label: `Post the next clip (${by("ready").length})`, run: () => void navigate({ to: "/post", search: { step: "post" } }) }
-    : by("posted").length ? { label: `Submit the next link (${by("posted").length})`, run: () => void navigate({ to: "/post", search: { step: "submit" } }) }
+    : by("posted").length ? { label: `Submit the next clip (${by("posted").length})`, run: () => void navigate({ to: "/post", search: { step: "submit" } }) }
     : due.length ? { label: "Do the next brief task", run: () => open(due[0].post.clip) }
     : channelBusy ? { label: `Your Short: ${channelBusy.status === "draft" ? "approve the script" : channelBusy.status === "approved" ? "add the voice" : "see it"}`, run: () => void navigate({ to: "/create" }) }
     : uses.campaigns ? { label: "Make more clips", run: () => void navigate({ to: "/new" }) }
@@ -302,7 +302,7 @@ export function DashboardPage() {
                 hint="Total views on your posts at the end of each day, from the syncs"
                 to="/stats" search={{ sort: "views" }}
                 sub={range === "all" ? "every campaign, archived too, since the first sync" : "gained, every campaign"} />
-        <Metric label="Median views / post" value={formatCount(m.median_views)} sub="half your posts get more"
+        <Metric label="Median views / post" value={formatCount(m.median_views)} sub="the middle post: half get at least this"
                 to="/stats" search={{ sort: "views" }} />
       </div>
 
@@ -350,7 +350,7 @@ export function DashboardPage() {
           {m.to_submit > 0 && (
             <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
               <Inbox className="size-4 text-warning" />
-              <span className="flex-1 text-sm">{m.to_submit} link{m.to_submit === 1 ? "" : "s"} to submit</span>
+              <span className="flex-1 text-sm">{by("posted").length} clip{by("posted").length === 1 ? "" : "s"} to submit <span className="text-muted">({m.to_submit} link{m.to_submit === 1 ? "" : "s"})</span></span>
               <ArrowRight className="size-4 text-subtle" />
             </Link>
           )}

@@ -1,6 +1,6 @@
 """Selection: the quality gates and the placement constraints.
 
-The gate behaviour is the load-bearing part. BUILD_BRIEF.md section 1 promises
+The gate behaviour is the load-bearing part. docs/BUILD_BRIEF.md section 1 promises
 the tool will return fewer clips -- or none -- when a source is weak, and
 `min_composite` alone cannot deliver that because a per-video percentile is
 uniform by construction. These tests pin down that the absolute gate can.
@@ -71,7 +71,7 @@ class TestBasicSelection:
 
 
 class TestAbsoluteQualityGate:
-    """The fix for the brief's undeliverable `min_composite` promise (PLAN.md P1)."""
+    """The fix for the brief's undeliverable `min_composite` promise (docs/PLAN.md P1)."""
 
     def test_a_weak_source_yields_nothing(self):
         """Every candidate below the absolute bar means zero clips, not five."""

@@ -1,7 +1,7 @@
 """Disk cache for LLM responses, keyed by content.
 
 The key is a hash of (backend, model, prompt version, candidate text), per
-BUILD_BRIEF.md section 6. Crucially it is *not* keyed by source id or candidate
+docs/BUILD_BRIEF.md section 6. Crucially it is *not* keyed by source id or candidate
 id, so the same moment re-scored after re-transcription, or an identical clip in
 a different video, is a cache hit.
 

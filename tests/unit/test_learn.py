@@ -1,6 +1,6 @@
 """`clipper learn` and the performance log, on synthetic results.
 
-BUILD_BRIEF.md 14.2: under about 20 rows, describe and change nothing; with
+docs/BUILD_BRIEF.md 14.2: under about 20 rows, describe and change nothing; with
 enough, propose weights with shrinkage toward the current ones, and write only
 with --apply.
 """

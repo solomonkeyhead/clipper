@@ -1,4 +1,4 @@
-"""The text structure signal (BUILD_BRIEF.md section 9.4).
+"""The text structure signal (docs/BUILD_BRIEF.md section 9.4).
 
 Transparent rules plus a small weighted sum -- deliberately not a model. The
 point of this signal is that when it disagrees with the LLM you can read the

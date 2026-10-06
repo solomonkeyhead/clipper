@@ -272,7 +272,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">{t.question}</div>
               <div className="mt-0.5 text-xs text-muted">{t.angle}</div>
-              {t.felt ? <Chip tone="accent" className="mt-1.5 h-5 text-[11px]">you feel this one</Chip> : null}
+              {t.felt ? <Chip tone="accent" className="mt-1.5 h-5 text-[11px]" title="About something viewers have felt themselves; these ideas are listed first">felt in daily life</Chip> : null}
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => void write(t)}>

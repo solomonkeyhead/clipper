@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useRef } from "react";
 import { toast } from "sonner";
 import { FlaskConical, Lightbulb } from "lucide-react";
-import { useLearning, useSetSettings, useSettings, useWhatsWorking, type Learning, type WhatsWorking } from "@/api/client";
+import { useCampaigns, useLearning, useSetSettings, useSettings, useWhatsWorking, type Learning, type WhatsWorking } from "@/api/client";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { cn, formatCount, PLATFORM_NAME } from "@/lib/utils";
@@ -93,6 +93,7 @@ function SideCell({ label, side }: { label: string; side: Side }) {
 /** Each change Clipper made, posts with it against posts without, fairly (D105). */
 function WhatsWorkingCard() {
   const { data } = useWhatsWorking();
+  const { data: campaigns = [] } = useCampaigns();
   const { data: settings } = useSettings();
   const save = useSetSettings();
   const qc = useQueryClient();
@@ -150,7 +151,7 @@ function WhatsWorkingCard() {
               const top = Math.max(1, ...rows.map((r) => r.median_views));
               return (
                 <div key={key} className="flex flex-col gap-1.5 rounded-lg border border-line p-3">
-                  <span className="flex items-center gap-1.5 text-xs text-muted"><PlatformIcon platform={rows[0].platform} className="size-3.5" />{rows[0].campaign}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted"><PlatformIcon platform={rows[0].platform} className="size-3.5" />{campaigns.find((c) => c.name === rows[0].campaign)?.title ?? rows[0].campaign}</span>
                   {rows.slice(0, 6).map((h) => (
                     <div key={h.hook} className="flex items-center gap-2 text-xs">
                       <span className="min-w-0 flex-1 truncate" title={h.hook}>{h.hook}</span>
@@ -199,7 +200,7 @@ function TastePanel({ have, need }: { have: number; need: number }) {
         {have < need ? (
           <><b>Teach it your taste:</b> you've rated {have} of {need} clips it needs before its scores start following you.{" "}
             <Link to="/clips" search={{ status: "ready" }} className="font-medium text-accent hover:underline">Rate clips →</Link></>
-        ) : <><b>It has learnt from {have} clips.</b> Export what it learnt to keep, or to start another install from.</>}
+        ) : <><b>It has learnt from {have} scored clips.</b> Export what it learnt to keep, or to start another install from.</>}
       </div>
       <div className="flex gap-2">
         <Button size="sm" variant="secondary" onClick={() => void exportIt()}>Export my taste</Button>
@@ -230,7 +231,7 @@ export function LearningPage() {
         <Card className="flex flex-col gap-1 p-4">
           <span className="text-xs font-medium text-muted">Clips it learns from</span>
           <span className="tabular text-2xl font-semibold">{report.rated}</span>
-          <span className="text-xs text-muted">posted, or marked good or not good</span>
+          <span className="text-xs text-muted">posted, or marked good or not good{report.weights_n < report.rated && `; ${report.weights_n} of them have a Clipper score to learn from`}</span>
         </Card>
         <Verdict label="Score matches your ratings" verdict={report.agreement_verdict} rho={report.agreement}
                  n={report.scored_and_rated} need={report.min_for_agreement}

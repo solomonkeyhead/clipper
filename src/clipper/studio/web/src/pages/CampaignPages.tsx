@@ -36,8 +36,10 @@ function CampaignCard({ c }: { c: Campaign }) {
         )}
       </div>
       <div className="tabular grid grid-cols-4 gap-2 text-center">
-        {([["Ready", c.counts.ready], ["To submit", c.counts.posted], ["Submitted", c.counts.submitted],
-           ["Views", formatCount(c.views)]] as const).map(([label, value]) => (
+        {(c.submits
+          ? [["Ready", c.counts.ready], ["To submit", c.counts.posted], ["Submitted", c.counts.submitted], ["Views", formatCount(c.views)]]
+          : [["Ready", c.counts.ready], ["Posted", c.counts.posted + c.counts.submitted], ["Skipped", c.counts.skipped], ["Views", formatCount(c.views)]]
+        ).map(([label, value]) => (
           <div key={label} className="rounded-md bg-surface-2 py-2">
             <div className="text-md font-semibold">{value}</div>
             <div className="truncate px-1 text-[11px] text-muted">{label}</div>
@@ -52,7 +54,6 @@ function CampaignCard({ c }: { c: Campaign }) {
         <span className="flex flex-wrap justify-end gap-1.5">
           {c.warning && <Chip tone="danger" title={c.warning}>{c.warning.split(" · ")[0]}</Chip>}
           {c.locked_usd > 0 && <Chip tone="warning" title="Earned on paper, but under this campaign's minimum payout, so it pays nothing yet">{formatMoney(c.locked_usd)} under minimum</Chip>}
-          {c.to_submit > 0 && <Chip tone="warning">{c.to_submit} link{c.to_submit === 1 ? "" : "s"} to submit</Chip>}
         </span>
       </div>
     </Link>
@@ -223,7 +224,7 @@ function MoneyCard({ c }: { c: Campaign }) {
           {budget === null ? (
             <button type="button" className="tabular text-lg font-semibold hover:text-accent" onClick={() => setBudget(c.budget_left != null ? String(c.budget_left) : "")}
                     title={c.budget_checked_at ? `Checked ${ago(c.budget_checked_at)}` : "Not set: copy it from the campaign's page"}>
-              {c.budget_left != null ? formatMoney(c.budget_left) : <span className="text-sm font-normal text-accent">Set</span>}
+              {c.budget_left != null ? formatMoney(c.budget_left) : <span className="text-sm font-normal text-accent">Add</span>}
             </button>
           ) : (
             <input autoFocus value={budget} onChange={(e) => setBudget(e.target.value)} onBlur={saveBudget}
@@ -241,7 +242,7 @@ function MoneyCard({ c }: { c: Campaign }) {
       )}
       <details>
         <summary className="cursor-pointer text-xs text-muted hover:text-fg">
-          Payouts {payouts.length > 0 && `(${payouts.length})`}: record what the campaign actually paid
+          Payouts{payouts.length > 0 && ` (${payouts.length})`}: record what the campaign actually paid
         </summary>
         <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => {
           e.preventDefault();

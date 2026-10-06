@@ -1,6 +1,6 @@
 """Creating and editing campaigns from the Control Center.
 
-A campaign is a YAML file under campaigns/ (see example.yaml). The page edits
+A campaign is a YAML file in the data folder's campaigns/ (template: the repo's campaigns/example.yaml). The page edits
 it through `CampaignForm`, the fields a person fills in from a brief; anything
 else already in the file (forbidden terms, edit permissions, ...) is kept as
 it was. Every save is checked by `CampaignConfig` first, and the previous

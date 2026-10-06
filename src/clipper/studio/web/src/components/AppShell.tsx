@@ -33,7 +33,9 @@ function useNav(): NavItem[] {
   const working = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const active = new Set(campaigns.filter((c) => !c.archived).map((c) => c.name));
   // Clips waiting on you: ready to post, or posted and not yet submitted.
-  const waiting = clips.filter((c) => (c.status === "ready" || c.status === "posted") && active.has(c.campaign)).length;
+  // Your own channel's posted Shorts have nothing to submit, so they aren't waiting (D147).
+  const waiting = clips.filter((c) => (c.status === "ready" || (c.status === "posted" && c.submits !== false))
+                                      && active.has(c.campaign)).length;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
     // Create is the daily job, so it sits right under the Dashboard (D118); hidden when you don't use it (D145).
@@ -145,7 +147,7 @@ function AIPill() {
     <Tip label={problem || (claude
       ? `Claude ${paid ? "(paid API, drawing only)" : "on your plan"} judges moments and draws; Gemini does ${ai.gemini_jobs.join(", ") || "the rest"} and watches the video.`
       : "Gemini is doing everything: Claude isn't set up.")}>
-      <Link to="/settings" className={cn("hidden h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs hover:border-line-strong lg:flex",
+      <Link to="/settings" className={cn("hidden h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs whitespace-nowrap hover:border-line-strong lg:flex",
         problem ? "text-warning" : "text-muted hover:text-fg")}>
         <Bot className="size-3.5" /> {label}
       </Link>

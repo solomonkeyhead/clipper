@@ -15,7 +15,7 @@ import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, CopyButton, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { notifyOn, notifySupported, setNotify } from "@/lib/notify";
 import { useUI, type Theme } from "@/lib/store";
-import { cn, openTab } from "@/lib/utils";
+import { cn, formatCount, openTab } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
 /* ---------- small pieces ---------- */
@@ -86,7 +86,7 @@ function AccountRow({ account }: { account: Account }) {
           {account.expires_in_days != null && account.connected && ` Login good for ${Math.floor(account.expires_in_days)} more days.`}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-muted">{account.posts} post{account.posts === 1 ? "" : "s"} · {Intl.NumberFormat("en", { notation: "compact" }).format(account.views)} views</span>
+          <span className="text-muted">{account.posts} post{account.posts === 1 ? "" : "s"} · {formatCount(account.views)} views</span>
           {account.groups.map((g) => <span key={g} className="rounded-full border border-line px-2 py-0.5 text-subtle">{g}</span>)}
         </div>
       </div>
@@ -613,7 +613,7 @@ interface AIJobs {
   available: Record<string, boolean>;
 }
 
-const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude, paid API key"], ["gemini", "Gemini"], ["ollama", "Ollama (on this computer)"]];
+const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude, paid API key"], ["gemini", "Gemini"], ["ollama", "Ollama on this computer"]];
 
 /** Which AI does which job (D148). Automatic keeps Clipper's own order; a pick is tried first, and the
  *  paid Claude key is only ever used where you choose it here. */
@@ -672,7 +672,7 @@ function AIKey() {
           <h2 className="text-md font-semibold">AI model for clipping</h2>
           <p className="mt-0.5 text-sm text-muted">
             Clipping uses Google's Gemini to watch the video, write captions and read campaign briefs, and Claude on your plan
-            to judge the moments (switch below). Create, for your own channel, uses both; its page shows which AI is answering.
+            to judge the moments (change either under Who does what). Create, for your own channel, uses both; its page shows which AI is answering.
             Gemini is free:
             get a key at <Ext href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</Ext> (sign in, <b className="text-fg">Create API key</b>, copy).
           </p>
@@ -827,17 +827,6 @@ export function SettingsPage() {
           title="Tell me when it's done"
           body="A notification when a clipping job or a Short's build finishes while you're on another tab or window. Only this browser; it asks permission the first time."
           control={<NotifySwitch />}
-        />
-        <Row
-          title="Claude judges the moments"
-          body={<>Claude reads every moment in a video, scores it and picks each clip's opening line, on your Claude plan
-            (about 10 requests a video, counted toward its usage limit). Gemini still watches the video and takes over if
-            Claude can't answer. Off: Gemini's free models judge, as before.
-            <Where to="/learning">See how well its scores match your taste →</Where></>}
-          control={settings ? (
-            <Switch label="Claude judges the moments" checked={settings.claude_judge !== "0"}
-                    onChange={(v) => save.mutate({ claude_judge: v ? "1" : "0" })} />
-          ) : <Skeleton className="h-5 w-9" />}
         />
         <Row
           title="Open on the payoff"

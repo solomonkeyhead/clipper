@@ -1,6 +1,6 @@
 """Synthetic media fixtures, generated with FFmpeg.
 
-BUILD_BRIEF.md section 15 / Phase 1 asks for test video built from scratch so the
+docs/BUILD_BRIEF.md section 15 / Phase 1 asks for test video built from scratch so the
 render path can be exercised without copyrighted footage. Moving coloured shapes
 stand in for faces: `moving_face_video` puts a bright disc on a known, analytic
 trajectory, so a test can assert the crop followed *the right path* rather than

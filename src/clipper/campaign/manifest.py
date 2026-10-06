@@ -1,6 +1,6 @@
 """Run outputs: the manifest, the performance template, and the report.
 
-Three files with three audiences (BUILD_BRIEF.md section 13):
+Three files with three audiences (docs/BUILD_BRIEF.md section 13):
 
 * `manifest.csv` / `manifest.json` -- machine-readable, one row per clip, with
   every sub-score so `clipper learn` can correlate them against real views later.

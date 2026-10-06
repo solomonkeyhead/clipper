@@ -98,7 +98,8 @@ def _side(posts: list[PostFacts]) -> Side:
 
 def verdict(yes: Side, no: Side) -> tuple[float | None, str]:
     if yes.posts < MIN_EACH or no.posts < MIN_EACH:
-        need = [f"{MIN_EACH - s.posts} more {w}" for s, w in ((yes, "with"), (no, "without")) if s.posts < MIN_EACH]
+        need = [f"{n} more post{'s' if n > 1 else ''} {w} it" for s, w in ((yes, "with"), (no, "without"))
+                if (n := MIN_EACH - s.posts) > 0]
         return None, f"Not enough yet: {' and '.join(need)}"
     a, b = yes.median_views or 0, no.median_views or 0
     if b == 0:

@@ -1,7 +1,7 @@
 """`clipper` command line surface (Typer).
 
 Commands that are not implemented yet exit with code 2 and say which phase of
-BUILD_BRIEF.md covers them, rather than pretending to work.
+docs/BUILD_BRIEF.md covers them, rather than pretending to work.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ _STATUS_GLYPH = {"ok": "PASS", "warn": "WARN", "fail": "FAIL"}
 def _not_implemented(command: str, phase: str) -> None:
     console.print(
         f"[yellow]`clipper {command}` is not implemented yet.[/yellow] "
-        f"It lands in {phase} (see BUILD_BRIEF.md section 15)."
+        f"It lands in {phase} (see docs/BUILD_BRIEF.md section 15)."
     )
     raise typer.Exit(code=2)
 

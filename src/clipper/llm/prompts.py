@@ -2,13 +2,13 @@
 
 `PROMPT_VERSION` is part of the LLM cache key, so editing anything in this file
 must bump it -- otherwise a changed prompt silently reuses scores produced by the
-old one. BUILD_BRIEF.md section 14.2 requires this for the few-shot injection
+old one. docs/BUILD_BRIEF.md section 14.2 requires this for the few-shot injection
 too, and the same mechanism covers both.
 
 Prompt A and prompt B are the two voices from section 9.1. They are *not*
 independent judges -- same model, same call shape, correlated errors -- so the
 disagreement penalty is a hedge against prompt-specific artefacts rather than
-real variance reduction. That limitation is recorded in PLAN.md (P3).
+real variance reduction. That limitation is recorded in docs/PLAN.md (P3).
 """
 
 from __future__ import annotations

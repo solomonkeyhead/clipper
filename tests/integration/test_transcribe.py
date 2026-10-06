@@ -201,7 +201,7 @@ class TestCandidatesOnRealSpeech:
     def test_a_pause_heavy_source_yields_none(self, paused, cfg, data_root):
         """Measured at ~42% silence -- above the 25% filter, so zero is correct.
 
-        This is the behaviour BUILD_BRIEF.md section 1 asks for: returning
+        This is the behaviour docs/BUILD_BRIEF.md section 1 asks for: returning
         nothing beats returning filler.
         """
         info = ingest(str(paused.video))

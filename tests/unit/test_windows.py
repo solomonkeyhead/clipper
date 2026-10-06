@@ -1,6 +1,6 @@
 """Candidate window generation and its hard filters.
 
-BUILD_BRIEF.md section 8 says this stage sets the ceiling for everything else,
+docs/BUILD_BRIEF.md section 8 says this stage sets the ceiling for everything else,
 so the invariants (sentence-aligned bounds, duration in range, no near-duplicates)
 are tested as properties rather than examples wherever that is cheap.
 """

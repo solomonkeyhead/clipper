@@ -1,6 +1,7 @@
 # Research
 
 - `competitor-research-prompt.md`: the brief given to a research assistant on 2026-09-29.
+- `deep-research-prompts.md`: twelve questions for deep research (2026-10-05), most useful first.
 - The report it produced ("Clipper Market Research: Paid Clipping Campaign Tools", September
   2026) was pasted into the build conversation. Its conclusions and what was acted on are in
   docs/DECISIONS.md D63.

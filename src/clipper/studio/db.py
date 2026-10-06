@@ -205,7 +205,6 @@ DEFAULT_SETTINGS = {
     "payoff_first": "1",
     "auto_cover": "1",
     # Claude judges the moments and picks the opening lines when it's set up (D139).
-    "claude_judge": "1",
     # TikTok's "Disclose commercial content -> Branded content" switch, on from this date (D105).
     "tiktok_disclosed_since": "",
     # How the user uses Clipper, asked once on the dashboard (D145): which parts show.

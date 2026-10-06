@@ -1,6 +1,6 @@
 """Stage orchestration: running the pipeline and caching its artifacts.
 
-Each function here owns one stage boundary from BUILD_BRIEF.md section 6 --
+Each function here owns one stage boundary from docs/BUILD_BRIEF.md section 6 --
 reading the previous stage's artifact, writing its own, and skipping the work
 entirely when the artifact is already fresh. Keeping resumability here rather
 than inside each stage means the stages stay pure and testable.
@@ -145,7 +145,7 @@ def judge_backend(config: Config, backend_override: str | None = None) -> LLMBac
         return None
     if pick == "ollama":
         return create_backend("ollama", max_retries=1, requests_per_minute=60, timeout=300)
-    if not model or (not pick and not _claude_judge_on()):
+    if not model:
         return None
     try:
         paid_ok = pick == "claude_api" or (not pick and "judge" in config.llm.paid_api_jobs)
@@ -160,18 +160,6 @@ def judge_backend(config: Config, backend_override: str | None = None) -> LLMBac
     except Exception as exc:  # the free models still judge
         log.warning("Claude can't judge the moments (%s); Gemini will", exc)
     return None
-
-
-def _claude_judge_on() -> bool:
-    """The Control Center's "Claude judges the moments" setting (on unless turned off, D139)."""
-    from .studio import db
-
-    try:
-        with db.connect() as con:
-            return db.settings(con).get("claude_judge", "1") == "1"
-    except Exception as exc:  # no library: the default
-        log.debug("judge setting unread: %s", exc)
-        return True
 
 
 def build_backend(config: Config, *, override: str | None = None) -> LLMBackend:

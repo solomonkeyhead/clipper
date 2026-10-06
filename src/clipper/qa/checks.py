@@ -1,4 +1,4 @@
-"""The automated QA gate (BUILD_BRIEF.md section 12).
+"""The automated QA gate (docs/BUILD_BRIEF.md section 12).
 
 Nobody watches these clips before they ship, so this is the only thing standing
 between a broken render and the user posting it. Every check returns pass, warn
@@ -278,7 +278,7 @@ def _check_captions(context: QAContext, qa: QAConfig) -> list[QACheck]:
     caption event may fall outside it.
 
     Word *text* is not compared, because profanity masking legitimately rewrites
-    it (section 7.2 versus section 12 -- noted in PLAN.md). Timing coverage is
+    it (section 7.2 versus section 12 -- noted in docs/PLAN.md). Timing coverage is
     what actually catches drift.
     """
     from ..render.captions import parse_event_times
