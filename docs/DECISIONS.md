@@ -2764,3 +2764,14 @@ physiology, medicine).
 `gemini-3-flash-preview` and several others return 503 "high demand" (Google's side), the pro models 429
 (free-tier quota), 2.5 models are retired (404), and the ones that answer took 12-23 s to say "ok". Nothing is
 broken in Clipper: the usual order already skips a failing model for a while and falls to `gemini-flash-lite-latest`.
+
+**D153 addendum: scripts too.** Same three levers for the script writer, through one shared helper
+(`channel.steering`, so ideas and scripts say it the same way):
+- **Channel settings**: "Scripts should" and "Scripts must never" (`script_focus`, `script_avoid`), applied to
+  every script written, including the rewrite after a failed fact check.
+- **A note on Another take**: a line above the draft's buttons ("shorter, funnier opening, use a kitchen
+  example"), sent with that take only and cleared after it.
+- Write it on an idea uses the standing guidance only; the note is for the take after the first.
+The steering outranks the persona, style and examples, but the script's word count, the order of its structure
+and its output format still apply, and every claim must still be true, so a note can't break the timing or the
+physics check. Unsteered, the request is byte for byte what it was.

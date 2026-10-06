@@ -204,10 +204,14 @@ def _system(channel: channels.Channel) -> str:
             "never reuse their jokes or lines.")
 
 
-def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "") -> Script:
-    """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes."""
+def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "") -> Script:
+    """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes, `steer` is the
+    owner's note on what to change (D153). The channel's own standing guidance applies every time."""
     channel = channels.load()
-    user = (f"The channel's best scripts:\n\n{channels.examples_block(channel)}\n\n"
+    guide = channels.steering("scripts", channel.script_focus, channel.script_avoid, steer,
+                              yields="; the word count, the order of the structure and the output format still apply, "
+                                     "and every claim must still be true", never="Never in a script")
+    user = (guide + f"The channel's best scripts:\n\n{channels.examples_block(channel)}\n\n"
             f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
             + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
@@ -402,16 +406,16 @@ def check(script: Script) -> Review:
         return Review(ok=False, problems=[f"The {channels.check_name().lower()} came back unreadable; read it carefully yourself."])
 
 
-def write_checked(question: str, angle: str = "", *, take: int = 1) -> tuple[Script, str]:
+def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str = "") -> tuple[Script, str]:
     """A script that passed the physics check (one rewrite if it didn't), and what the
     check said, for the page."""
     from . import ai
 
     ai.misses.clear()
-    script = write(question, angle, take=take)
+    script = write(question, angle, take=take, steer=steer)
     review = check(script)
     if not review.ok and review.problems:
-        script = write(question, angle, take=take, feedback="\n".join(f"- {p}" for p in review.problems))
+        script = write(question, angle, take=take, steer=steer, feedback="\n".join(f"- {p}" for p in review.problems))
         second = check(script)
         if not second.ok and second.problems:
             note = f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems)

@@ -77,7 +77,7 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
 
 interface FullChannel {
   slug: string; name: string; handle: string; niche: string; persona: string; rules: string[]; voice: string;
-  subject: string; expert: string; areas: string; idea_focus: string; idea_avoid: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
+  subject: string; expert: string; areas: string; idea_focus: string; idea_avoid: string; script_focus: string; script_avoid: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
 }
 
 /** Everything a channel's prompts say, editable. */
@@ -123,6 +123,16 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
         <Field label="Ideas must never be about" hint="Skipped ideas also teach it what to avoid.">
           <textarea className={area} rows={3} value={val("idea_avoid") as string} placeholder="e.g. biology, physiology, medicine, how the body works inside"
                     onChange={(e) => set({ idea_avoid: e.target.value })} />
+        </Field>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Scripts should" hint="Followed by every script written. Length and format stay as they are.">
+          <textarea className={area} rows={3} value={val("script_focus") as string} placeholder="e.g. one everyday comparison, no jargon, end on a joke about the viewer"
+                    onChange={(e) => set({ script_focus: e.target.value })} />
+        </Field>
+        <Field label="Scripts must never" hint="Also applies to Another take.">
+          <textarea className={area} rows={3} value={val("script_avoid") as string} placeholder="e.g. mention biology, use puns, say 'basically'"
+                    onChange={(e) => set({ script_avoid: e.target.value })} />
         </Field>
       </div>
       <Field label="Who is speaking (the persona)"><textarea className={area} rows={4} value={val("persona") as string} onChange={(e) => set({ persona: e.target.value })} /></Field>

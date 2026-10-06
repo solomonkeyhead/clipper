@@ -321,7 +321,7 @@ def routes(app: FastAPI, publish) -> None:
         if found is None:
             raise HTTPException(404, "no such channel")
         texts = ("name", "handle", "niche", "persona", "voice", "subject", "expert", "areas", "watermark",
-                 "idea_focus", "idea_avoid")
+                 "idea_focus", "idea_avoid", "script_focus", "script_avoid")
         updates = {k: str(body[k]).strip() for k in texts if k in body}
         if "rules" in body:
             updates["rules"] = [str(r).strip() for r in body["rules"] if str(r).strip()]
@@ -393,8 +393,8 @@ def routes(app: FastAPI, publish) -> None:
         return {"id": store.add_video(topic_id, written.model_dump(), notes)}
 
     @app.post("/api/create/videos/{video_id}/rewrite")
-    async def create_rewrite(video_id: int) -> dict:
-        """Another take on the same question."""
+    async def create_rewrite(video_id: int, body: dict | None = None) -> dict:
+        """Another take on the same question, steered by the owner's note if they gave one (D153)."""
         from ..create import script
 
         row = video_or_404(video_id)
@@ -405,8 +405,9 @@ def routes(app: FastAPI, publish) -> None:
         topic = store.topic(row["topic_id"])
         question = topic["question"] if topic else row["script"].get("title", "")
         take = int(row["script"].get("take", 1)) + 1
+        steer = str((body or {}).get("steer") or "").strip()[:400]
         written, notes = await asyncio.to_thread(ai, script.write_checked, question,
-                                                 topic["angle"] if topic else "", take=take)
+                                                 topic["angle"] if topic else "", take=take, steer=steer)
         store.update_video(video_id, script={**written.model_dump(), "take": take}, check_notes=notes,
                            status="draft", voice="", timings="", error="")
         return {"ok": True}

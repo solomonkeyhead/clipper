@@ -686,7 +686,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export interface ChannelEdit {
   name?: string; handle?: string; niche?: string; persona?: string; voice?: string; subject?: string; expert?: string;
-  areas?: string; idea_focus?: string; idea_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
+  areas?: string; idea_focus?: string; idea_avoid?: string; script_focus?: string; script_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
 }
 export const createApi = {
   channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>
@@ -697,7 +697,7 @@ export const createApi = {
   ideas: (count = 20, steer = "") => send<{ added: number }>("POST", "/api/create/ideas", { count, steer }),
   skip: (topic: number) => send("POST", `/api/create/topics/${topic}/skip`),
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
-  rewrite: (video: number) => send("POST", `/api/create/videos/${video}/rewrite`),
+  rewrite: (video: number, steer = "") => send("POST", `/api/create/videos/${video}/rewrite`, { steer }),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
   footage: (video: number, body: { beat: number; wish: string }) => send<FootageOffer>("POST", `/api/create/videos/${video}/footage`, body),

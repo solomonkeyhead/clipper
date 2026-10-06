@@ -794,7 +794,7 @@ export interface paths {
         put?: never;
         /**
          * Create Rewrite
-         * @description Another take on the same question.
+         * @description Another take on the same question, steered by the owner's note if they gave one (D153).
          */
         post: operations["create_rewrite_api_create_videos__video_id__rewrite_post"];
         delete?: never;
@@ -5302,7 +5302,13 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                } | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

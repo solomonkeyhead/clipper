@@ -132,3 +132,49 @@ def test_the_page_saves_a_channels_steering_and_a_batch_note_through_the_api(dat
     monkeypatch.setattr(topics, "generate", lambda count, steer="": seen.update(count=count, steer=steer) or 0)
     client.post("/api/create/ideas", json={"count": 10, "steer": "only heat"})
     assert seen == {"count": 10, "steer": "only heat"}
+
+
+def test_a_script_is_steered_by_the_channels_standing_guidance_and_the_owners_note(data_root, monkeypatch):
+    import contextlib
+    import json
+
+    from clipper.create import script
+
+    seen = {}
+
+    def fake_ask(system, user, schema, **kw):
+        seen["user"] = user
+        return json.dumps({"title": "t", "text": "Why does a spoon flip you? Light bends. That is all.",
+                           "description": "d", "hashtags": ["#a"], "beats": []})
+
+    monkeypatch.setattr(script, "ask", fake_ask)
+    ch = channel.load()
+    channel.save(ch.model_copy(update={"script_avoid": "puns about food"}))
+    with contextlib.suppress(Exception):                             # the fake answer needn't parse; the prompt is the point
+        script.write("Why does a spoon flip you?", steer="open with a number")
+    text = seen["user"]
+    assert text.startswith("THE OWNER'S STEERING for these scripts") and "word count" in text
+    assert "Never in a script: puns about food" in text and "open with a number" in text
+    seen.clear()
+    channel.save(channel.load().model_copy(update={"script_avoid": ""}))
+    with contextlib.suppress(Exception):
+        script.write("Why does a spoon flip you?")
+    assert seen["user"].startswith("The channel's best scripts")      # unsteered: the request is as it was
+
+
+def test_another_take_passes_the_owners_note_on(data_root, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from clipper.create import script, store
+    from clipper.studio import server
+
+    client = TestClient(server.create_app())
+    client.post("/api/create/channels", json={"name": "Physics Lab", "pack": "physics"})
+    store.add_topics([{"question": "Why does a spoon flip you?", "angle": "mirror", "felt": False}])
+    topic = store.topics()[0]
+    video = store.add_video(topic["id"], {"title": "t", "text": "x", "beats": [], "description": "", "hashtags": []}, "")
+    seen = {}
+    monkeypatch.setattr(script, "write_checked", lambda q, a="", *, take=1, steer="": seen.update(steer=steer, take=take) or (
+        script.Script(title="t", text="y", beats=[], description="", hashtags=[]), "note"))
+    got = client.post(f"/api/create/videos/{video}/rewrite", json={"steer": "shorter, funnier opening"})
+    assert got.status_code == 200 and seen["steer"] == "shorter, funnier opening" and seen["take"] == 2

@@ -44,6 +44,9 @@ class Channel(BaseModel):
     # and what they must never be about. Both outrank the planner's own proportions.
     idea_focus: str = ""
     idea_avoid: str = ""
+    # The same for scripts: what they should do, and never do, on every script written.
+    script_focus: str = ""
+    script_avoid: str = ""
     abstract: str = _EXPLAINER.abstract
     hashtags: str = _EXPLAINER.hashtags
     drawings: bool = _EXPLAINER.drawings
@@ -197,6 +200,28 @@ def fill(text: str, channel: Channel | None = None) -> str:
     ch = channel or load()
     return (text.replace("{subject}", ch.subject).replace("{expert}", ch.expert).replace("{areas}", ch.areas)
             .replace("{abstract}", ch.abstract).replace("{hashtags}", ch.hashtags))
+
+
+def steering(what: str, focus: str = "", avoid: str = "", note: str = "", skipped: list[str] | None = None,
+             yields: str = "", never: str = "Never") -> str:
+    """What the owner wants, said first and said to win (D153): the standing focus and exclusions, this
+    request's own note, and the ideas they skipped as examples of what missed. `yields` names what still
+    applies (a script's length and format). Empty when there is nothing to say, so an unsteered request
+    is exactly what it was."""
+    lines = []
+    if focus.strip():
+        lines.append(f"Lean toward: {focus.strip()}")
+    if avoid.strip():
+        lines.append(f"{never}: {avoid.strip()}")
+    if note.strip():
+        lines.append(f"For this one in particular: {note.strip()}")
+    if skipped:
+        lines.append("The owner skipped these as off target; make none like them:\n"
+                     + "\n".join(f"- {q}" for q in skipped[-25:]))
+    if not lines:
+        return ""
+    return (f"THE OWNER'S STEERING for these {what}. It outranks the proportions, style and examples in your "
+            f"instructions{yields}:\n" + "\n".join(lines) + "\n\n")
 
 
 def examples_block(channel: Channel, limit: int = 5) -> str:

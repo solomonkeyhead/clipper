@@ -38,22 +38,10 @@ class _Idea(BaseModel):
 
 
 def steering(channel, steer: str = "", skipped: list[str] | None = None) -> str:
-    """What the owner wants, said first and said to win (D153): the channel's standing focus and exclusions,
-    this batch's own note, and the ideas they skipped as examples of what missed. The planner's built-in
-    leaning (most ideas about the viewer's body) pulled a physics channel toward biology; this outranks it."""
-    lines = []
-    if channel.idea_focus.strip():
-        lines.append(f"Lean toward: {channel.idea_focus.strip()}")
-    if channel.idea_avoid.strip():
-        lines.append(f"Never make an idea about: {channel.idea_avoid.strip()}")
-    if steer.strip():
-        lines.append(f"For this batch in particular: {steer.strip()}")
-    if skipped:
-        lines.append("The owner skipped these as off target; make none like them:\n" + "\n".join(f"- {q}" for q in skipped[-25:]))
-    if not lines:
-        return ""
-    return ("THE OWNER'S STEERING. It outranks the proportions and examples in your instructions, "
-            "including the share of ideas about the viewer's own body:\n" + "\n".join(lines) + "\n\n")
+    """The owner's steering for a batch of ideas (D153). The planner's built-in leaning (most ideas about the
+    viewer's body) pulled a physics channel toward biology; this outranks it."""
+    return channels.steering("ideas", channel.idea_focus, channel.idea_avoid, steer, skipped,
+                             yields=", including the share of ideas about the viewer's own body", never="Never make an idea about")
 
 
 def generate(count: int = 30, steer: str = "") -> int:

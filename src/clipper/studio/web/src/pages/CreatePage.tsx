@@ -411,6 +411,8 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
   const refresh = () => qc.invalidateQueries({ queryKey: ["create"] });
   const fact = useFactWord();
   const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState("");                     // the owner's note for Another take (D153)
+  const again = async () => { await createApi.rewrite(video.id, note); setNote(""); };   // a note is for one take
   const run = (label: string, fn: () => Promise<unknown>, done?: string) => async () => {
     setBusy(label);
     try {
@@ -460,14 +462,20 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       <ScriptEditor video={video} wps={wps} />
       <MyClips video={video} wps={wps} onRebuild={video.status === "failed" && video.voice ? run("rebuild", () => createApi.build(video.id)) : undefined}
                busyRebuild={busy === "rebuild"} />
+      {video.status === "draft" && video.topic_id !== null && (
+        <input value={note} onChange={(e) => setNote(e.target.value)} aria-label="Tell it what to change for the next take"
+               onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void run("rewrite", () => again(), "A new take")(); }}
+               placeholder="Steer Another take: shorter, funnier opening, use a kitchen example, less jargon…"
+               className="h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none placeholder:text-subtle focus:border-accent" />
+      )}
       {video.status === "draft" ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" disabled={busy !== null} onClick={run("approve", () => createApi.approve(video.id))}>
             <CheckCircle2 className="size-4" /> Approve script
           </Button>
           {video.topic_id !== null && (
-            <Tip label="Write a different script for the same idea. Replaces what's here.">
-              <Button variant="secondary" disabled={busy !== null} onClick={run("rewrite", () => createApi.rewrite(video.id), "A new take")}>
+            <Tip label="Write a different script for the same idea, following your note if you typed one. Replaces what's here.">
+              <Button variant="secondary" disabled={busy !== null} onClick={run("rewrite", () => again(), "A new take")}>
                 {busy === "rewrite" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "rewrite" ? "Writing…" : "Another take"}
               </Button>
             </Tip>
