@@ -48,6 +48,10 @@ def test_only_a_login_this_clipper_started_is_accepted(data_root):
     client = TestClient(server.create_app())
     forged = client.post("/api/accounts/broker/return", data={"payload": json.dumps({"nonce": "nope", "tokens": {"access_token": "x"}})})
     assert "wasn't started here" in forged.text
+    from_the_service = client.post("/api/accounts/broker/return", headers={"origin": "https://clipper-connect.onrender.com"},
+                                   data={"payload": "{}"})
+    assert from_the_service.status_code == 200                       # another site may post here; the nonce decides
+    assert client.post("/api/status", headers={"origin": "https://evil.test"}).status_code == 403   # nothing else
 
 
 def test_the_service_hands_a_login_only_back_to_the_users_own_computer(service):

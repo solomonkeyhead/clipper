@@ -705,7 +705,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         It listens on 127.0.0.1, but any website open in the browser could still
         send it a request; browsers label those with the site's Origin.
         """
-        if request.method not in ("GET", "HEAD", "OPTIONS"):
+        # The connect service's page posts a finished login here from its own site (D151); only a login
+        # Clipper started is accepted (its nonce is checked), so this one address is let through.
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path != "/api/accounts/broker/return":
             origin = request.headers.get("origin")
             if origin and origin.split("://", 1)[-1] != request.headers.get("host", ""):
                 from fastapi.responses import JSONResponse
