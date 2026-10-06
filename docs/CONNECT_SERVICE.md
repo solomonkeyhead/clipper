@@ -12,7 +12,7 @@ Clipper (user's PC) -> connect service -> TikTok / Instagram / Google login page
 ```
 
 The service keeps nothing. Code: `src/clipper/broker/` (the service), `src/clipper/connect.py` (Clipper's side).
-Where it is set, every "Add an account" button is one click; a user's own app keys still win.
+Where it is set, every "Add an account" button is one click and logs in through the service. A login remembers which app made it (`via`) and renews through that one, so logins made with your own keys keep working.
 
 ## What Marc has to do (nothing here can be done from code)
 

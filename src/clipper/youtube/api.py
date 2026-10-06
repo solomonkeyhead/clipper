@@ -153,8 +153,8 @@ def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
     """Open Google's consent page, wait for the redirect, keep the channel's tokens."""
     from .. import connect
 
-    if not _own_app() and connect.enabled():
-        return _finish_login(connect.login("youtube", timeout=timeout, open_browser=open_browser))
+    if connect.enabled():       # a service address means: log in through it, whatever keys are also saved
+        return _finish_login({**connect.login("youtube", timeout=timeout, open_browser=open_browser), "via": "service"})
     cid, secret = client()
     verifier = secrets.token_urlsafe(48)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -247,7 +247,7 @@ def access_token(path: Path) -> str:
         return token["access_token"]
     from .. import connect
 
-    if not _own_app() and connect.enabled():
+    if connect.refreshes_via_service(token, _own_app()):
         fresh = {**connect.refresh("youtube", token["refresh_token"]), "obtained_at": time.time()}
     else:
         cid, secret = client()

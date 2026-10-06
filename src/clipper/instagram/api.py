@@ -153,7 +153,7 @@ def login_browser(*, timeout: float = 300.0, open_browser=webbrowser.open) -> di
     app's ID and secret (INSTAGRAM_APP_ID / _SECRET) with `REDIRECT_URI` listed in the app."""
     from .. import connect
 
-    if not has_app() and connect.enabled():
+    if connect.enabled():
         tokens = connect.login("instagram", timeout=timeout, open_browser=open_browser)
         return {"display_name": login(tokens["access_token"])}
     app_id, secret = os.environ.get(ENV_ID, "").strip(), os.environ.get(ENV_SECRET, "").strip()

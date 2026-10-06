@@ -59,3 +59,12 @@ def test_the_service_hands_a_login_only_back_to_the_users_own_computer(service):
 def test_a_refresh_goes_through_the_service(service):
     assert service.post("/refresh/tiktok", data={"refresh_token": "R"}).json()["access_token"] == "A"
     assert service.post("/refresh/instagram", data={"refresh_token": "R"}).status_code == 404
+
+
+def test_a_login_renews_through_the_app_that_made_it(monkeypatch):
+    from clipper import connect
+
+    monkeypatch.setenv("CLIPPER_BROKER_URL", "https://x")            # a service is set
+    assert connect.refreshes_via_service({"via": "service"}, own_app=True)
+    assert not connect.refreshes_via_service({}, own_app=True)         # an older login: the user's own keys
+    assert connect.refreshes_via_service({}, own_app=False)

@@ -2708,3 +2708,7 @@ keeps using them. The state is HMAC-signed and a login may only be handed back t
 Steps Marc must do, and why X is left out: `docs/CONNECT_SERVICE.md`.
 **Not verified:** against any real platform or a deployed service; nothing works for strangers until the
 apps pass each platform's review. The tests walk the whole loop with the platforms faked.
+
+**D151 amendment.** With a service address set, new logins go through the service even when the user's own app
+keys are also saved (Marc tests the service while his own TikTok app still holds his connected accounts). Each
+login records `via: service`; renewing follows it, and an unmarked older login renews with the user's own keys.

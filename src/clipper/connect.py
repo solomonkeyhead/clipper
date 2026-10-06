@@ -43,6 +43,14 @@ def enabled() -> bool:
     return bool(url())
 
 
+def refreshes_via_service(token: dict, own_app: bool) -> bool:
+    """A login renews through the same app that made it: the service for one made through it, the user's
+    own keys for an older one. An old login with no mark follows whichever is available."""
+    if not enabled():
+        return False
+    return token.get("via") == "service" or (not token.get("via") and not own_app)
+
+
 def local_return() -> str:
     from .studio import server
 
