@@ -505,6 +505,10 @@ export function AccountsPage() {
           <p className="text-xs text-subtle">
             Clipper only reads stats through each platform's official API. Logins are stored on this PC only, in Clipper's data folder.
           </p>
+          <p className="text-xs text-subtle">
+            Registering an app with TikTok, Google or Meta needs a privacy policy and terms page online. Copy the ready-made ones for your
+            GitHub Pages site: privacy <SiteCopy page="privacy.html" /> terms <SiteCopy page="terms.html" /> home <SiteCopy page="index.html" />
+          </p>
         </div>
       )}
     </div>
