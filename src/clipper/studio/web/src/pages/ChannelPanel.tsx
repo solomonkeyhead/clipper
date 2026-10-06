@@ -77,7 +77,7 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
 
 interface FullChannel {
   slug: string; name: string; handle: string; niche: string; persona: string; rules: string[]; voice: string;
-  subject: string; expert: string; areas: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
+  subject: string; expert: string; areas: string; idea_focus: string; idea_avoid: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
 }
 
 /** Everything a channel's prompts say, editable. */
@@ -115,6 +115,16 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
           value={val("words_per_second") as number} onChange={(e) => set({ words_per_second: Number(e.target.value) })} /></Field>
       </div>
       <Field label="The topics it covers"><input className={input} value={val("areas") as string} onChange={(e) => set({ areas: e.target.value })} /></Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Ideas should lean toward" hint="Steers every batch of ideas. Plain words are fine.">
+          <textarea className={area} rows={3} value={val("idea_focus") as string} placeholder="e.g. forces and motion, light, sound, heat, electricity: physics acting on you or on things you use"
+                    onChange={(e) => set({ idea_focus: e.target.value })} />
+        </Field>
+        <Field label="Ideas must never be about" hint="Skipped ideas also teach it what to avoid.">
+          <textarea className={area} rows={3} value={val("idea_avoid") as string} placeholder="e.g. biology, physiology, medicine, how the body works inside"
+                    onChange={(e) => set({ idea_avoid: e.target.value })} />
+        </Field>
+      </div>
       <Field label="Who is speaking (the persona)"><textarea className={area} rows={4} value={val("persona") as string} onChange={(e) => set({ persona: e.target.value })} /></Field>
       <Field label="The rules a script follows (one per line)">
         <textarea className={area} rows={8} value={edit.rulesText ?? data.rules.join("\n")} onChange={(e) => set({ rulesText: e.target.value })} />

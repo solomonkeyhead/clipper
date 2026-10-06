@@ -37,11 +37,31 @@ class _Idea(BaseModel):
     felt: bool
 
 
-def generate(count: int = 30) -> int:
+def steering(channel, steer: str = "", skipped: list[str] | None = None) -> str:
+    """What the owner wants, said first and said to win (D153): the channel's standing focus and exclusions,
+    this batch's own note, and the ideas they skipped as examples of what missed. The planner's built-in
+    leaning (most ideas about the viewer's body) pulled a physics channel toward biology; this outranks it."""
+    lines = []
+    if channel.idea_focus.strip():
+        lines.append(f"Lean toward: {channel.idea_focus.strip()}")
+    if channel.idea_avoid.strip():
+        lines.append(f"Never make an idea about: {channel.idea_avoid.strip()}")
+    if steer.strip():
+        lines.append(f"For this batch in particular: {steer.strip()}")
+    if skipped:
+        lines.append("The owner skipped these as off target; make none like them:\n" + "\n".join(f"- {q}" for q in skipped[-25:]))
+    if not lines:
+        return ""
+    return ("THE OWNER'S STEERING. It outranks the proportions and examples in your instructions, "
+            "including the share of ideas about the viewer's own body:\n" + "\n".join(lines) + "\n\n")
+
+
+def generate(count: int = 30, steer: str = "") -> int:
     """Add `count` new ideas to the backlog; returns how many were new."""
     channel = channels.load()
     done = [t["question"] for t in store.topics(status=None)] + [e["title"] for e in channel.examples]
-    user = (f"Channel: {channel.name} ({channel.niche}).\n"
+    skipped = [t["question"] for t in store.topics(status="skipped")]
+    user = (steering(channel, steer, skipped) + f"Channel: {channel.name} ({channel.niche}).\n"
             f"Already made or planned, don't repeat:\n" + "\n".join(f"- {q}" for q in done) +
             f"\n\nGive {count} new ideas.")
     answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9, job="topics")

@@ -81,3 +81,54 @@ def test_a_video_with_no_voice_is_timed_at_the_channels_pace(tmp_path):
         except (OSError, Exception):          # no ffmpeg here: the timing above is what matters
             return
         assert out.stat().st_size > 1000
+
+
+def test_the_owners_steering_comes_first_and_says_it_wins(data_root):
+    from clipper.create import topics
+
+    ch = physics()
+    assert topics.steering(ch) == ""                                         # no steering: the request is as it was
+    ch.idea_avoid = "biology and how the body works inside"
+    text = topics.steering(ch, "only light and sound", ["Why does your skin wrinkle in a bath?"])
+    assert text.startswith("THE OWNER'S STEERING") and "outranks" in text
+    assert "Never make an idea about: biology" in text and "only light and sound" in text and "skin wrinkle" in text
+    # the planner's own prompt is untouched, so the channel's other ideas are as before
+    assert channel.fill(topics.SYSTEM, physics()) == (FIXTURES / "topics_physics.txt").read_text(encoding="utf-8")
+
+
+def test_a_batch_note_and_the_skipped_ideas_reach_the_planner_and_the_channel_keeps_its_steering(data_root, monkeypatch):
+    import json
+
+    from clipper.create import store, topics
+
+    store.add_topics([{"question": "Why does your skin wrinkle in a bath?", "angle": "osmosis", "felt": True}])
+    store.set_topic(store.topics()[0]["id"], "skipped")
+    seen = {}
+
+    def fake_ask(system, user, schema, **kw):
+        seen["user"] = user
+        return json.dumps([{"question": "Why does a spoon flip your reflection?", "angle": "concave mirror", "felt": False}])
+
+    monkeypatch.setattr(topics, "ask", fake_ask)
+    assert topics.generate(5, "only light and sound") == 1
+    assert "only light and sound" in seen["user"] and "skin wrinkle" in seen["user"] and seen["user"].startswith("THE OWNER'S STEERING")
+    ch = channel.load()
+    channel.save(ch.model_copy(update={"idea_avoid": "biology"}))
+    assert channel.load().idea_avoid == "biology"                   # the standing note is kept with the channel
+
+
+def test_the_page_saves_a_channels_steering_and_a_batch_note_through_the_api(data_root, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from clipper.create import topics
+    from clipper.studio import server
+
+    client = TestClient(server.create_app())
+    slug = client.post("/api/create/channels", json={"name": "Physics Lab", "pack": "physics"}).json()["slug"]
+    assert client.put(f"/api/create/channels/{slug}", json={"idea_focus": " light and sound ", "idea_avoid": "biology"}).status_code == 200
+    got = client.get(f"/api/create/channels/{slug}").json()
+    assert got["idea_focus"] == "light and sound" and got["idea_avoid"] == "biology"
+    seen = {}
+    monkeypatch.setattr(topics, "generate", lambda count, steer="": seen.update(count=count, steer=steer) or 0)
+    client.post("/api/create/ideas", json={"count": 10, "steer": "only heat"})
+    assert seen == {"count": 10, "steer": "only heat"}

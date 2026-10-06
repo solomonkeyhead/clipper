@@ -686,7 +686,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export interface ChannelEdit {
   name?: string; handle?: string; niche?: string; persona?: string; voice?: string; subject?: string; expert?: string;
-  areas?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
+  areas?: string; idea_focus?: string; idea_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
 }
 export const createApi = {
   channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>
@@ -694,7 +694,7 @@ export const createApi = {
   channelEdit: (slug: string, body: ChannelEdit) => send("PUT", `/api/create/channels/${slug}`, body),
   channelActive: (slug: string) => send("PUT", "/api/create/channel/active", { slug }),
   channelDelete: (slug: string) => send("DELETE", `/api/create/channels/${slug}`),
-  ideas: (count = 20) => send<{ added: number }>("POST", "/api/create/ideas", { count }),
+  ideas: (count = 20, steer = "") => send<{ added: number }>("POST", "/api/create/ideas", { count, steer }),
   skip: (topic: number) => send("POST", `/api/create/topics/${topic}/skip`),
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
   rewrite: (video: number) => send("POST", `/api/create/videos/${video}/rewrite`),

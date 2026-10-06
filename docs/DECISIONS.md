@@ -2739,3 +2739,28 @@ the TikTok review video. Every page was opened on his real data.
 **Left alone, on purpose.** `studio/server.py` is long (2,000+ lines) but splitting it is a large move with
 no change for the user. The single "Submit" button on a clip with one post is the one-click copy-and-open
 (D78). Stats repeats a caption once per platform, each row with its platform's icon.
+
+## D153: Steering the idea planner
+
+**What happened.** Marc: many of the German Professor's ideas weren't physics but biology ("Why does your skin
+look wrinkled after a long bath?", "your knuckles pop", "you hear your heartbeat on a pillow"). The planner's
+prompt says about 7 in 10 ideas should be about the viewer's own body or senses (D133: those did two to five
+times the views of object ideas). Nothing told it the body must be physics acting on the body, and the owner had
+no way to say so.
+
+**Decided.** Three ways to steer, all in the request (the planner's own prompt, and so the byte-identical
+`topics_physics.txt`, is unchanged):
+- **Channel settings**: "Ideas should lean toward" and "Ideas must never be about", kept with the channel
+  (`idea_focus`, `idea_avoid`) and applied to every batch.
+- **A note on one batch**: a line above More ideas ("only light and sound, no biology"), sent with that call.
+- **Skipped ideas teach it**: the last 25 ideas skipped are listed as off target.
+They go first, under "THE OWNER'S STEERING. It outranks the proportions...", so they beat the body-felt
+leaning. With none set, the request is exactly as before. Not set for Marc: suggested wording is in the
+settings' placeholders (lean toward forces, motion, light, sound, heat, electricity; never biology,
+physiology, medicine).
+**Not verified:** how well the model obeys it on a real batch (that costs plan usage; Marc to try).
+
+**Gemini (same day).** Marc said Gemini "hasn't been answering". Tried every model on his key: the preferred
+`gemini-3-flash-preview` and several others return 503 "high demand" (Google's side), the pro models 429
+(free-tier quota), 2.5 models are retired (404), and the ones that answer took 12-23 s to say "ok". Nothing is
+broken in Clipper: the usual order already skips a failing model for a while and falls to `gemini-flash-lite-latest`.

@@ -320,7 +320,8 @@ def routes(app: FastAPI, publish) -> None:
         found = next((c for c in channels.all_channels() if c.slug == slug), None)
         if found is None:
             raise HTTPException(404, "no such channel")
-        texts = ("name", "handle", "niche", "persona", "voice", "subject", "expert", "areas", "watermark")
+        texts = ("name", "handle", "niche", "persona", "voice", "subject", "expert", "areas", "watermark",
+                 "idea_focus", "idea_avoid")
         updates = {k: str(body[k]).strip() for k in texts if k in body}
         if "rules" in body:
             updates["rules"] = [str(r).strip() for r in body["rules"] if str(r).strip()]
@@ -372,7 +373,8 @@ def routes(app: FastAPI, publish) -> None:
         from ..create import topics
 
         count = max(5, min(50, int((body or {}).get("count") or 20)))
-        return {"added": await asyncio.to_thread(ai, topics.generate, count)}
+        steer = str((body or {}).get("steer") or "").strip()[:400]
+        return {"added": await asyncio.to_thread(ai, topics.generate, count, steer)}
 
     @app.post("/api/create/topics/{topic_id}/skip")
     def create_skip(topic_id: int) -> dict:

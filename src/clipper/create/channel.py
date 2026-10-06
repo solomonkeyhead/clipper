@@ -40,6 +40,10 @@ class Channel(BaseModel):
     subject: str = _EXPLAINER.subject
     expert: str = _EXPLAINER.expert
     areas: str = _EXPLAINER.areas
+    # Standing steering for the idea planner, in the owner's words (D153): what ideas should lean toward,
+    # and what they must never be about. Both outrank the planner's own proportions.
+    idea_focus: str = ""
+    idea_avoid: str = ""
     abstract: str = _EXPLAINER.abstract
     hashtags: str = _EXPLAINER.hashtags
     drawings: bool = _EXPLAINER.drawings

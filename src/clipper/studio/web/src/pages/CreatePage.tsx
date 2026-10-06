@@ -233,11 +233,12 @@ function YourOwn() {
 function Ideas({ topics }: { topics: CreateTopic[] }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<number | "more" | null>(null);
+  const [steer, setSteer] = useState("");
   const refresh = () => qc.invalidateQueries({ queryKey: ["create"] });
   const more = async () => {
     setBusy("more");
     try {
-      const { added } = await createApi.ideas(20);
+      const { added } = await createApi.ideas(20, steer);
       toast.success(`${added} new idea${added === 1 ? "" : "s"}`);
       await refresh();
     } catch (e) {
@@ -264,6 +265,13 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
         <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void more()}>
           {busy === "more" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} More ideas
         </Button>
+      </div>
+      <div className="border-b border-line px-4 py-2">
+        <input value={steer} onChange={(e) => setSteer(e.target.value)} aria-label="Steer the next ideas"
+               onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void more(); }}
+               placeholder="Steer the next batch, e.g. only light and sound, no biology"
+               className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
+        <p className="mt-1 text-[11px] text-subtle">Lasting guidance is under Channel settings. Skipping an idea teaches it what to avoid.</p>
       </div>
       <div className="flex-1 overflow-y-auto">
         {topics.length === 0 && <p className="p-4 text-sm text-muted">No ideas left. Press More ideas.</p>}
