@@ -260,7 +260,7 @@ function YouTubeAppKeys() {
         <li>Make a free account at <Ext href="https://github.com/signup">github.com</Ext>. Your username goes in the web address below.</li>
         <li>Open <Ext href="https://github.com/new">a new repository</Ext>. <b>Name:</b> exactly <code className="rounded bg-surface-3 px-1">YOUR-USERNAME.github.io</code>, <b>Public</b>, tick <b>Add a README file</b>, press <b>Create repository</b>.</li>
         <li>Press <b>Add file → Create new file</b>. Name it <b>privacy.html</b>, paste the page <SiteCopy page="privacy.html" />, replace both <b>YOUR-EMAIL-HERE</b> with the email you want shown, then <b>Commit changes</b> twice.</li>
-        <li>Again for <b>index.html</b> <SiteCopy page="index.html" />.</li>
+        <li>Again for <b>index.html</b> <SiteCopy page="index.html" /> and <b>terms.html</b> <SiteCopy page="terms.html" /> (TikTok asks for terms; already have the site? Open each file, press the pencil, and paste over it).</li>
         <li>After a minute, check <code className="rounded bg-surface-3 px-1">https://YOUR-USERNAME.github.io/privacy.html</code> opens.</li>
       </Part>
 

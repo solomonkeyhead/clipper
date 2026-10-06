@@ -1846,6 +1846,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/broker/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Broker Return
+         * @description Where the connect service's page posts a finished login (D151). Only a login this Clipper started
+         *     is accepted: its nonce is checked.
+         */
+        post: operations["broker_return_api_accounts_broker_return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/instagram/connect": {
         parameters: {
             query?: never;
@@ -7173,6 +7194,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    broker_return_api_accounts_broker_return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

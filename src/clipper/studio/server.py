@@ -1823,7 +1823,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.get("/api/setup/site/{page}")
     def site_page(page: str) -> PlainTextResponse:
         """The homepage and privacy policy a Google app needs to be published (docs/site, D79)."""
-        if page not in ("index.html", "privacy.html"):
+        if page not in ("index.html", "privacy.html", "terms.html"):
             raise HTTPException(404, "no such page")
         return PlainTextResponse((REPO_ROOT / "docs" / "site" / page).read_text(encoding="utf-8"))
 
