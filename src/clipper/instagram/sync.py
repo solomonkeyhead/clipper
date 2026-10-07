@@ -110,6 +110,8 @@ def _update(row: dict[str, str], reel: Reel, now: float) -> list[str]:
     # Instagram measures these itself, so its latest figure is the right one.
     if reel.avg_watch_s is not None:
         put("avg_watch_s", f"{reel.avg_watch_s:g}", only_if_empty=False)
+    if getattr(reel, "avg_view_pct", None) is not None:   # YouTube's (D155)
+        put("avg_view_pct", f"{reel.avg_view_pct:g}", only_if_empty=False)
     if reel.skip_rate_pct is not None:
         put("skip_rate_pct", f"{reel.skip_rate_pct:g}", only_if_empty=False)
     row["synced_at"] = datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M")

@@ -7,12 +7,13 @@ import { Chip, CopyButton, EmptyState, Metric, PageHeader, Skeleton, Tip } from 
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
-type Key = "posted" | "views" | "x" | "watch" | "skip" | "likes" | "shares" | "saves" | "money";
+type Key = "posted" | "views" | "x" | "watch" | "pct" | "skip" | "likes" | "shares" | "saves" | "money";
 
 const COLUMNS: { key: Key; label: string; get: (p: Post) => number | null | undefined; tip?: string }[] = [
   { key: "views", label: "Views", get: (p) => p.views },
   { key: "x", label: "vs median", get: (p) => p.x_median, tip: "Views compared with your median for this platform and campaign" },
   { key: "watch", label: "Avg watch", get: (p) => p.avg_watch_s },
+  { key: "pct", label: "% viewed", get: (p) => p.avg_view_pct, tip: "The average share of the video watched (YouTube). Over 100% means people rewatched it" },
   { key: "skip", label: "Skip 3s", get: (p) => p.skip_rate_pct, tip: "Share of viewers who swiped away in the first 3 seconds (Instagram)" },
   { key: "likes", label: "Likes", get: (p) => p.likes },
   { key: "shares", label: "Shares", get: (p) => p.shares },
@@ -29,6 +30,7 @@ function cell(p: Post, key: Key): React.ReactNode {
       ? <span className={cn(p.x_median >= 2 ? "font-semibold text-money" : p.x_median < 0.5 ? "text-subtle" : "")}>{p.x_median}×</span>
       : na("Needs 3+ posts on this platform in this campaign, with a median of at least 10 views");
     case "watch": return p.avg_watch_s != null ? `${p.avg_watch_s}s` : na(p.platform === "tiktok" ? tiktok : "Not reported yet");
+    case "pct": return p.avg_view_pct != null ? `${p.avg_view_pct}%` : na(p.platform === "youtube" ? "Not reported yet" : "Only YouTube reports this");
     case "skip": return p.skip_rate_pct != null ? `${p.skip_rate_pct}%` : na(p.platform === "tiktok" ? tiktok : p.platform === "" ? "Instagram reports this; not in yet" : "Not reported yet");
     case "likes": return formatCount(p.likes);
     case "shares": return formatCount(p.shares);
@@ -50,7 +52,7 @@ function together(posts: Post[]): Post {
     posted_at: posts.map((p) => p.posted_at ?? "").filter(Boolean).sort()[0] ?? posts[0].posted_at,
     settling: posts.some((p) => p.settling),
     views: total((p) => p.views), x_median: best.length ? Math.max(...best) : null,
-    avg_watch_s: mean((p) => p.avg_watch_s), skip_rate_pct: mean((p) => p.skip_rate_pct),
+    avg_watch_s: mean((p) => p.avg_watch_s), avg_view_pct: mean((p) => p.avg_view_pct), skip_rate_pct: mean((p) => p.skip_rate_pct),
     likes: total((p) => p.likes), shares: total((p) => p.shares), saves: total((p) => p.saves),
     est_earnings: total((p) => p.est_earnings),
   };

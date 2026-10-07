@@ -189,6 +189,8 @@ CREATE TABLE IF NOT EXISTS create_videos (
 
 #: Defaults for `settings`; stored values win.
 DEFAULT_SETTINGS = {
+    # Learning's experiments (D155): a JSON list of {id, name, a, b, metric, pairs: [[clip, clip], ...]}.
+    "experiments": "[]",
     # Posting goes through each platform's official API. With auto-post off,
     # every post waits in the review queue for a click; on, an approved clip
     # posts itself. Off until the user turns it on.
@@ -263,6 +265,9 @@ MIGRATIONS = [
     # Which channel (create/channel.py) a video and an idea belong to (D146); '' = made before channels.
     ("create_videos", "channel", "ALTER TABLE create_videos ADD COLUMN channel TEXT NOT NULL DEFAULT ''"),
     ("create_topics", "channel", "ALTER TABLE create_topics ADD COLUMN channel TEXT NOT NULL DEFAULT ''"),
+    # The planner's score of 21 and its series (D155).
+    ("create_topics", "score", "ALTER TABLE create_topics ADD COLUMN score INTEGER"),
+    ("create_topics", "series", "ALTER TABLE create_topics ADD COLUMN series TEXT NOT NULL DEFAULT ''"),
 ]
 TRASH_DAYS = 30
 

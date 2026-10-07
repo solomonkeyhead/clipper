@@ -9,5 +9,10 @@ comparison of specs ("torque vs horsepower"). Each must have a real, explainable
 physics mechanism. Do not repeat or rephrase any question already listed.
 
 For each: question (at most 14 words, phrased to the viewer: "Why do you..." / "Why does
-your..."), angle (the physics behind it in a few words), felt (true if it's about the
-viewer's own body or senses).
+your..."), angle (the physics behind it in a few words), series (the recurring series it
+belongs to, 2-3 words, such as "Kitchen Physics" or "In the Car"; reuse a series already
+listed when one fits), and scores, each 0 to 3: felt (in the viewer's own body or senses),
+common (how many people meet this moment), surprise (how unexpected the answer is), mechanism
+(one clear mechanism, explainable in 40 seconds), showable (footage or a drawing can show it),
+searched (people type this question into search), fit (it belongs on the channel: any STEM subject, physics first, then chemistry, engineering, earth and space, maths, technology;
+never health advice, symptoms or treatments).

@@ -73,6 +73,7 @@ class Short:
     shares: int = 0
     saves: int = 0
     avg_watch_s: float | None = None
+    avg_view_pct: float | None = None    # average percentage of the Short watched (D155)
     skip_rate_pct: float | None = None
     title: str = ""
     description: str = ""
@@ -335,7 +336,7 @@ def list_shorts(token: str, *, limit: int = 200) -> list[Short]:
 
 
 def _add_analytics(shorts: list[Short], token: str) -> None:
-    """Average watch time and shares, which only the Analytics API has.
+    """Average watch time, average percentage viewed and shares, which only the Analytics API has.
 
     Analytics lags a day or two behind; a Short too new for it keeps None.
     Optional: a project without the Analytics API still syncs the counts.
@@ -345,7 +346,7 @@ def _add_analytics(shorts: list[Short], token: str) -> None:
     first = min(s.created for s in shorts)
     try:
         got = _get(ANALYTICS, token, {
-            "ids": "channel==MINE", "dimensions": "video", "metrics": "averageViewDuration,shares",
+            "ids": "channel==MINE", "dimensions": "video", "metrics": "averageViewDuration,shares,averageViewPercentage",
             "filters": "video==" + ",".join(s.id for s in shorts[:200]),
             "startDate": date.fromtimestamp(first).isoformat(), "endDate": date.today().isoformat()})
     except YouTubeError:
@@ -355,6 +356,7 @@ def _add_analytics(shorts: list[Short], token: str) -> None:
         row = by_id.get(s.id)
         if row:
             s.avg_watch_s, s.shares = float(row[1]), int(row[2])
+            s.avg_view_pct = round(float(row[3]), 1) if len(row) > 3 else None
 
 
 def name(path: Path) -> str:

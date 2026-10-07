@@ -14,7 +14,7 @@ VIDEO_STATUSES = ("draft", "approved", "voiced", "building", "built", "failed")
 def topics(status: str | None = "new") -> list[dict]:
     """The ideas of the channel being worked on (create/channel.py)."""
     with db.connect() as con:
-        sql = "SELECT * FROM create_topics WHERE channel=?" + (" AND status=?" if status else "") + " ORDER BY felt DESC, id"
+        sql = "SELECT * FROM create_topics WHERE channel=?" + (" AND status=?" if status else "") + " ORDER BY COALESCE(score, -1) DESC, felt DESC, id"
         return [dict(r) for r in con.execute(sql, (channels.active_slug(), *((status,) if status else ())))]
 
 
@@ -29,8 +29,10 @@ def add_topics(found: list[dict]) -> int:
             q = " ".join(str(t.get("question", "")).split())
             if not q or q.lower() in seen:
                 continue
-            con.execute("INSERT INTO create_topics (question, angle, felt, created_at, channel) VALUES (?,?,?,?,?)",
-                        (q, str(t.get("angle", "")).strip(), int(bool(t.get("felt"))), db.now(), channel))
+            con.execute("INSERT INTO create_topics (question, angle, felt, created_at, channel, score, series) "
+                        "VALUES (?,?,?,?,?,?,?)",
+                        (q, str(t.get("angle", "")).strip(), int(bool(t.get("felt"))), db.now(), channel,
+                         t.get("score"), str(t.get("series") or "").strip()))
             seen.add(q.lower())
             added += 1
         return added

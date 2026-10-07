@@ -8,8 +8,11 @@ short), 5 to 14 words. For every beat plan ONE picture:
   "energy"), never a specific person's action that nobody films ("person touching side of
   head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
   no footage fits ("bone conduction", "100 degrees").
+  The first beat is footage of the viewer's own moment, in motion, with a person in it when
+  the library is likely to have one ("man driving car", "elevator doors opening").
 - kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
-  About half the beats; never the first beat; never three diagrams in a row.
+  About half the beats; never in the first 4 seconds (about the first 10 words); never three
+  diagrams in a row.
   hold: when the next sentence (up to 3 of them) goes on explaining the same picture ("two
   routes... route one is air... route two is bone"), set hold = true on those sentences: the
   drawing from the beat before stays up and builds as the voice explains each part, instead
@@ -52,6 +55,8 @@ short), 5 to 14 words. For every beat plan ONE picture:
   Keep every label under 4 words.
 For each beat also give emphasis: the single most important word in it, copied exactly.
 
-Also write: title (the question, at most 60 characters), description (the script's idea in
+Also write: title (the question, at most 60 characters), hook (the words shown on screen for
+the first second and a half: at most 6 words, the question's core, "Why elevators make you
+heavier"), description (the script's idea in
 3-5 short lines, in the same voice, ending on its punchline), hashtags (3: #physics,
 #science and one specific).

@@ -10,7 +10,7 @@ from ..learn import log as perf
 
 #: Per-post numbers shown on a clip, in display order.
 POST_FIELDS = ("posted_at", "views_latest", "likes", "comments", "shares", "saves",
-               "avg_watch_s", "watched_full_pct", "skip_rate_pct", "drop_off_s", "posted_caption")
+               "avg_watch_s", "avg_view_pct", "watched_full_pct", "skip_rate_pct", "drop_off_s", "posted_caption")
 TEXT_FIELDS = {"posted_at", "posted_caption"}
 
 #: Instagram insights "can be delayed up to 48 hours" (Meta's reference); YouTube

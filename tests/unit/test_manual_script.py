@@ -274,6 +274,7 @@ def test_a_held_drawing_is_one_shot_with_every_word(tmp_path, monkeypatch):
         return [tmp_path / f"{i}.mp4"]
 
     monkeypatch.setattr(build, "_planned", fake)
+    monkeypatch.setattr(build, "_loop_back", lambda made, *a: made)
     spans = [(0.0, 2.0), (2.0, 4.0), (4.0, 7.0), (7.0, 10.0), (10.0, 12.0)]
     words = [TimedWord(text=w, start=a + 0.1 * k, end=a + 0.1 * k + 0.05)
              for b, (a, _) in zip(s.beats, spans, strict=True) for k, w in enumerate(b.text.split())]

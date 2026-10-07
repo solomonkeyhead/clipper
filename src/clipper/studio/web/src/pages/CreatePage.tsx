@@ -278,7 +278,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
   const [steer, setSteer] = useState("");
   const [find, setFind] = useState("");
   const words = find.toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = words.length ? topics.filter((t) => words.every((w) => `${t.question} ${t.angle}`.toLowerCase().includes(w))) : topics;
+  const shown = words.length ? topics.filter((t) => words.every((w) => `${t.question} ${t.angle} ${t.series ?? ""}`.toLowerCase().includes(w))) : topics;
   const refresh = () => qc.invalidateQueries({ queryKey: ["create"] });
   const more = async () => {
     setBusy("more");
@@ -318,7 +318,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
                className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
         <p className="mt-1 text-[11px] text-subtle">Lasting guidance is under Channel settings. Skipping an idea teaches it what to avoid.</p>
       </div>
-      {topics.length > 10 && (
+      {(topics.length > 10 || find) && (
         <div className="border-b border-line px-4 py-2">
           <input value={find} onChange={(e) => setFind(e.target.value)} aria-label="Search the ideas" type="search"
                  placeholder={`Search ${topics.length} ideas`}
@@ -332,7 +332,12 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
           <div key={t.id} className="group flex items-start gap-2 border-b border-line px-4 py-3 last:border-0">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">{t.question}</div>
-              <div className="mt-0.5 text-xs text-muted">{t.angle}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
+                <span>{t.angle}</span>
+                {/* The planner's score of 21 and series (D155); clicking a series shows only its ideas. */}
+                {t.score != null && <Tip label="The planner's score out of 21: felt, common, surprise, one mechanism, showable, searched, fits the channel"><span className="tabular-nums text-subtle">{t.score}/21</span></Tip>}
+                {t.series && <button type="button" onClick={() => setFind(t.series ?? "")} className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] hover:text-fg">{t.series}</button>}
+              </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => void write(t)}>
@@ -623,14 +628,19 @@ function PictureChoice({ visual, emphasis, onChange, canHold }: {
   );
 }
 
+/** The endings scripts take in turn (create/script.ENDINGS, D155), in the page's words. */
+const ENDING_NAME: Record<string, string> = { loop: "a loop back to the start", send: "a \"send this to\" line", poll: "a one-word question" };
+
 function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
   const qc = useQueryClient();
   const s = video.script;
   const [beats, setBeats] = useState(s.beats);
   const [title, setTitle] = useState(s.title);
+  const [hook, setHook] = useState(s.hook ?? "");
   const [description, setDescription] = useState(s.description ?? "");
   const [tags, setTags] = useState((s.hashtags ?? []).join(" "));
-  useEffect(() => { setBeats(s.beats); setTitle(s.title); setDescription(s.description ?? ""); setTags((s.hashtags ?? []).join(" ")); }, [s]);
+  useEffect(() => { setBeats(s.beats); setTitle(s.title); setHook(s.hook ?? ""); setDescription(s.description ?? ""); setTags((s.hashtags ?? []).join(" ")); }, [s]);
+  const hookWords = hook.split(/\s+/).filter(Boolean).length;
   const save = async (next: Partial<CreateScript>) => {
     try {
       await createApi.edit(video.id, next);
@@ -656,6 +666,14 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
       <input value={title} disabled={locked} onChange={(e) => setTitle(e.target.value)}
              onBlur={() => title !== s.title && void save({ title })} aria-label="Title"
              className="rounded-md border border-line bg-surface-2 px-3 py-2 font-semibold focus:border-accent focus:outline-none disabled:opacity-80" />
+      {/* The words on screen for the first second and a half (D155); empty shows the title. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input value={hook} disabled={locked} onChange={(e) => setHook(e.target.value)} placeholder={`On-screen hook (empty: the title)`}
+               onBlur={() => hook !== (s.hook ?? "") && void save({ hook: hook.trim() })} aria-label="On-screen hook"
+               className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+        <span className={cn("text-xs", hookWords > 6 ? "text-warning" : "text-subtle")}>{hookWords} of 6 words on screen</span>
+        {s.series && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">{s.series}</span>}
+      </div>
       <div className="flex flex-col gap-2">
         {beats.map((b, i) => (
           <div key={i} className={cn("flex flex-col gap-1.5", !locked && "rounded-md border border-line p-2")}>
@@ -690,6 +708,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
       </div>
       <p className={cn("text-xs", n < 70 || n > 130 ? "text-warning" : "text-muted")}>
         {n} words · about {seconds}s read aloud{n > 130 ? " · long for a Short" : n < 70 ? " · short for a Short" : ""}
+        {s.ending && <span className="text-subtle"> · ends with {ENDING_NAME[s.ending] ?? s.ending}</span>}
       </p>
       <div className="grid gap-2 sm:grid-cols-2">
         <textarea rows={2} value={description} disabled={locked} aria-label="Description" placeholder="Description for the post"

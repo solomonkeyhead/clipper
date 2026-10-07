@@ -19,7 +19,7 @@ def script(*beats: tuple[str, Visual]) -> Script:
 class TestTidy:
     def test_diagrams_never_first_or_three_running_and_templates_are_known(self):
         d = Visual(kind="diagram", template="chain", labels=["a", "b"])
-        s = tidy(script(("Why do you get dizzy?", d), ("Fluid moves.", d), ("It keeps moving.", d),
+        s = tidy(script(("Why do you get so dizzy after spinning around?", d), ("Fluid moves.", d), ("It keeps moving.", d),
                         ("And moving.", d), ("Your brain is confused.", Visual(kind="diagram", template="tornado"))))
         assert [b.visual.kind for b in s.beats] == ["stock", "diagram", "diagram", "stock", "stock"]
         assert s.beats[0].visual.queries and s.beats[0].visual.card  # searches and a chalk card from the sentence
@@ -141,7 +141,7 @@ def test_no_made_up_equations_or_bars_of_nothing():
     fake = Visual(kind="diagram", template="equation", equation="sound means air plus bone")
     untitled = Visual(kind="diagram", template="compare", labels=["bone", "tissue"], values=[90, 40])
     real = Visual(kind="diagram", template="equation", equation="F = m x a")
-    s = tidy(script(("Why?", Visual()), ("Fake.", fake), ("Gap.", Visual()), ("Bars.", untitled),
+    s = tidy(script(("Why do you get so dizzy after spinning around?", Visual()), ("Fake.", fake), ("Gap.", Visual()), ("Bars.", untitled),
                     ("Gap.", Visual()), ("Real.", real)))
     assert [b.visual.kind for b in s.beats] == ["stock", "stock", "stock", "stock", "stock", "diagram"]
     vague = Visual(kind="diagram", template="number", title="a lot", labels=["of energy"])

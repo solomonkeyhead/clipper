@@ -22,7 +22,8 @@ everyday misconceptions, never mean. Occasional personal asides ("I call it...",
 "Newton calls this inertia. Your stomach calls this nausea."). Spoken English,
 short sentences, the rhythm of someone explaining with a raised eyebrow."""
 
-PHYSICS_RULES = [
+#: The German Professor's rules before D155, kept so a physics channel still on them is moved to the new ones.
+PHYSICS_RULES_BEFORE_D155 = [
     "80 to 125 words in all: it is read aloud at about 2.3 words a second, 35 to 55 seconds.",
     "Open with ONE question about something the viewer has felt or seen in daily life, "
     "ideally in their own body (\"Why do you feel heavier when the elevator starts going up?\"). "
@@ -40,6 +41,41 @@ PHYSICS_RULES = [
     "The physics must be right. Simplify, never misstate: name the real mechanism.",
 ]
 
+#: D155, from the deep research report (2026-10-07): a shorter hook said to "you", shorter sentences, the
+#: first cause early, a rotating shape and ending (given with each request), the usual AI habits banned,
+#: and no health advice (YouTube's rules on AI-made medical content).
+PHYSICS_RULES = [
+    "85 to 110 words in all: it is read aloud at about 2.3 words a second, 37 to 48 seconds.",
+    "Open with ONE question of at most 8 words, said to the viewer (\"you\" or \"your\"), about a "
+    "concrete moment they have felt or seen (\"Why does the elevator make you heavier?\").",
+    "Build it in the shape named in the request.",
+    "Give the first cause within 20 words of the opening question. The answer is complete by three "
+    "quarters of the way through; what follows only lands it.",
+    "The physics as a short chain of causes, 3 to 5 steps, each its own short sentence "
+    "(\"Lower temperature means lower motion. Lower motion means slower diffusion.\").",
+    "At most one formula, said in words (\"force equals mass times acceleration\").",
+    "One everyday comparison, from something the viewer touched this week, that explains one thing "
+    "only (\"like a thief sprinting off with your wallet\").",
+    "End the way the request says, deadpan, in two short beats.",
+    "Every sentence at most 12 words. No lists, no lists of three, no emojis, no hashtags, no em "
+    "dashes, no \"it's not X, it's Y\", no \"ever wondered\", no \"here's the thing\", no \"in this "
+    "video\", no \"let's dive in\", no greeting, no call to subscribe.",
+    "Explain the physical mechanism and stop there: no health advice, no symptoms or conditions, no "
+    "tips about what to do for your body.",
+    "The physics must be right. Simplify, never misstate: name the real mechanism.",
+]
+
+#: The German Professor's script shapes, one per script in turn (D155): one shape every time reads as a
+#: template, which YouTube's July 2025 rules on mass-produced content name.
+PHYSICS_SHAPES = [
+    "Myth-bust: the question, then what people believe in one dry line (\"You say centrifugal force. "
+    "I say careful.\"), then the real chain of causes.",
+    "Walk-through: the question, then follow the viewer through the moment in the second person, step "
+    "by step (\"You press the button. The floor pushes up.\"), saying what the physics does at each step.",
+    "One number: the question, then one surprising true figure that frames it (\"On Everest, water "
+    "boils at about 70 degrees.\"), then why that number makes it happen.",
+]
+
 
 class Pack(BaseModel):
     key: str
@@ -55,6 +91,14 @@ class Pack(BaseModel):
     drawings: bool = True              # chalkboard diagrams at all
     templates: list[str] = Field(default_factory=lambda: list(GENERAL_TEMPLATES))
     words_per_second: float = 2.3
+    # What scripts are held to in code before anyone reads them (create/script.lint, D155); the same
+    # numbers the rules state.
+    words: list[int] = Field(default_factory=lambda: [80, 125])
+    sentence_max: int = 16
+    hook_max: int = 14
+    hook_you: bool = False             # the opening line must say "you" or "your"
+    shapes: list[str] = Field(default_factory=list)   # script shapes used in turn; none: the rules' one
+    scope: str = ""                    # what an idea may be about, for the planner's fit score; "" = subject
 
 
 EXPLAINER = Pack(
@@ -98,7 +142,7 @@ short sentences, nothing that sounds like a textbook.""",
     subject="history and true stories", expert="a historian",
     areas="ancient history, inventions, wars, crimes, people, disasters, science history, mysteries",
     abstract='"history", "past",\n  "era"', hashtags="#history,\n#story and one specific",
-    templates=["sketch", "number", "compare", "chain", "graph"])
+    templates=["sketch", "number", "compare", "chain", "graph"], words=[90, 130])
 
 FOOTAGE = Pack(
     key="footage", label="Facts with footage only",
@@ -119,7 +163,7 @@ dry aside now and then, no hype. Spoken English.""",
     subject="surprising facts", expert="a fact checker",
     areas="animals, space, the human body, food, technology, places, everyday life",
     abstract='"fact", "idea",\n  "concept"', hashtags="#facts,\n#didyouknow and one specific",
-    drawings=False, templates=[])
+    drawings=False, templates=[], words=[70, 110])
 
 PHYSICS = Pack(
     key="physics", label="Everyday physics (the German Professor's)",
@@ -128,7 +172,9 @@ PHYSICS = Pack(
     subject="physics", expert="a physics professor",
     areas="mechanics, heat, sound, light, electricity, fluids and pressure, materials",
     abstract='"pressure", "physics",\n  "energy"', hashtags="#physics,\n#science and one specific",
-    templates=list(ALL_TEMPLATES))
+    templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True,
+    shapes=list(PHYSICS_SHAPES),
+    scope="any STEM subject, physics first, then chemistry, engineering, earth and space, maths, technology")
 
 PACKS: dict[str, Pack] = {p.key: p for p in (EXPLAINER, STORIES, FOOTAGE, PHYSICS)}
 DEFAULT = "explainer"

@@ -75,6 +75,11 @@ class Script(BaseModel):
     beats: list[Beat]
     description: str = ""
     hashtags: list[str] = Field(default_factory=list)
+    hook: str = ""                  # the words on screen at the start, at most 6 (D155); "" = the title
+    # Set by the app, not the writer (D155): the shape and ending it was asked for, and the idea's series.
+    shape: str = ""
+    ending: str = ""
+    series: str = ""
 
     @property
     def text(self) -> str:
@@ -92,7 +97,7 @@ _WriterVisual = create_model("WriterVisual", **{k: (f.annotation, f) for k, f in
                                                 if k not in APP_ONLY})
 _WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""),
                            visual=(_WriterVisual, Field(default_factory=_WriterVisual)))
-_WriterScript = create_model("WriterScript", title=(str, ...), beats=(list[_WriterBeat], ...), description=(str, ""),
+_WriterScript = create_model("WriterScript", title=(str, ...), hook=(str, ""), beats=(list[_WriterBeat], ...), description=(str, ""),
                              hashtags=(list[str], Field(default_factory=list)))
 
 
@@ -110,8 +115,11 @@ short), 5 to 14 words. For every beat plan ONE picture:
   pot", "airplane window", "elevator doors"). Never abstract words ({abstract}), never a specific person's action that nobody films ("person touching side of
   head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
   no footage fits ("bone conduction", "100 degrees").
+  The first beat is footage of the viewer's own moment, in motion, with a person in it when
+  the library is likely to have one ("man driving car", "elevator doors opening").
 - kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
-  About half the beats; never the first beat; never three diagrams in a row.
+  About half the beats; never in the first 4 seconds (about the first 10 words); never three
+  diagrams in a row.
   hold: when the next sentence (up to 3 of them) goes on explaining the same picture ("two
   routes... route one is air... route two is bone"), set hold = true on those sentences: the
   drawing from the beat before stays up and builds as the voice explains each part, instead
@@ -171,7 +179,9 @@ TEMPLATES = {
 VISUALS_TAIL = """  Keep every label under 4 words.
 For each beat also give emphasis: the single most important word in it, copied exactly.
 
-Also write: title (the question, at most 60 characters), description (the script's idea in
+Also write: title (the question, at most 60 characters), hook (the words shown on screen for
+the first second and a half: at most 6 words, the question's core, "Why elevators make you
+heavier"), description (the script's idea in
 3-5 short lines, in the same voice, ending on its punchline), hashtags (3: {hashtags})."""
 
 
@@ -200,26 +210,113 @@ def _system(channel: channels.Channel) -> str:
     rules = "\n".join(f"- {r}" for r in channel.rules)
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
             f"{channel.name} ({channel.niche}). Rules:\n{rules}\n\n{channels.fill(visuals(channel), channel)}\n\n"
-            "The examples are the channel's own scripts: match their voice, rhythm and humour, "
-            "never reuse their jokes or lines.")
+            "The examples are the channel's own scripts, for voice and rhythm only: some break today's "
+            "rules (length, sentence length, structure), and the rules win. Never reuse their jokes or lines.")
 
 
-def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "") -> Script:
+#: How a script ends, one per script in turn (D155): a loop back to the start (rewatches), a "send this
+#: to" (shares) or a one-word question (comments). The same deadpan two-beat ending every time became a tic.
+ENDINGS = {
+    "loop": "a last line that leads straight back into the opening question, so the video loops",
+    "send": 'a dry "send this to..." line naming who needs it ("Send this to the friend who blames '
+            'centrifugal force.")',
+    "poll": 'a question the viewer can answer in one word in the comments ("Metal or wood: which wins?")',
+}
+
+
+def turn(channel: channels.Channel) -> tuple[str, str]:
+    """The shape and ending for the channel's next script (D155): in turn, by how many it has made, so
+    every pairing comes round."""
+    from . import store
+
+    n = len(store.videos())
+    shapes = channel.shapes or [""]
+    keys = list(ENDINGS)
+    return shapes[n % len(shapes)], keys[(n // len(shapes)) % len(keys)]
+
+
+def recent_endings(limit: int = 10) -> list[str]:
+    """The last lines of the channel's latest scripts, so no joke's shape comes round too soon (D155)."""
+    from . import store
+
+    out = []
+    for v in store.videos()[:limit]:
+        beats = v["script"].get("beats") or []
+        if beats:
+            out.append(beats[-1].get("text", ""))
+    return [e for e in out if e]
+
+
+def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "",
+          shape: str | None = None, ending: str | None = None) -> Script:
     """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes, `steer` is the
-    owner's note on what to change (D153). The channel's own standing guidance applies every time."""
+    owner's note on what to change (D153). The channel's own standing guidance applies every time.
+    `shape` and `ending` default to the channel's next in turn (D155)."""
     channel = channels.load()
+    if shape is None or ending is None:
+        next_shape, next_ending = turn(channel)
+        shape = next_shape if shape is None else shape
+        ending = next_ending if ending is None else ending
     guide = channels.steering("scripts", channel.script_focus, channel.script_avoid, steer,
                               yields="; the word count, the order of the structure and the output format still apply, "
                                      "and every claim must still be true", never="Never in a script")
+    endings = recent_endings()
     user = (guide + f"The channel's best scripts:\n\n{channels.examples_block(channel)}\n\n"
             f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
+            + (f"Shape: {shape}\n" if shape else "")
+            + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
+            + ("The channel's latest endings; reuse none of their jokes or their shape:\n"
+               + "\n".join(f"- {e}" for e in endings) + "\n" if endings else "")
             + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
     answer = ask(_system(channel), user, _WriterScript, temperature=0.85, job="script")
     try:
-        return tidy(_parse(answer))
+        made = tidy(_parse(answer))
     except (ValueError, TypeError) as exc:
         raise CreateError("the script came back unreadable; try again") from exc
+    return made.model_copy(update={"shape": shape, "ending": ending})
+
+
+#: Habits that mark a script as machine-written (D155), found in code before anyone reads it.
+BANNED = [
+    (re.compile(r"—"), "an em dash"),
+    (re.compile(r"\b(?:it|that|this)(?:'s| is) not\b[^.?!]{1,60}?[,;]\s*(?:it|that|this)(?:'s| is)\b", re.I),
+     '"it\'s not X, it\'s Y"'),
+    (re.compile(r"\bever wondered\b", re.I), '"ever wondered"'),
+    (re.compile(r"\bhere'?s the thing\b", re.I), '"here\'s the thing"'),
+    (re.compile(r"\bin this video\b", re.I), '"in this video"'),
+    (re.compile(r"\blet'?s dive in\b", re.I), '"let\'s dive in"'),
+    (re.compile(r"\bsubscribe\b", re.I), "a call to subscribe"),
+]
+HOOK_TEXT_MAX = 6
+
+
+def _sentences(text: str) -> list[str]:
+    return [p.strip() for p in re.split(r"(?<=[.!?])\s+", text) if p.strip()]
+
+
+def lint(script: Script, channel: channels.Channel) -> list[str]:
+    """What breaks the channel's countable rules (D155): length, sentence length, the hook, the on-screen
+    hook and the banned habits. Free: no model call. Each problem is one line the writer can act on."""
+    problems = []
+    low, high = [*channel.words, 0, 10_000][:2]
+    if not low <= script.words <= high:
+        problems.append(f"It is {script.words} words; it must be {low} to {high}.")
+    sentences = _sentences(script.text)
+    long = [s for s in sentences if len(s.split()) > channel.sentence_max]
+    if long:
+        problems.append(f"Sentences over {channel.sentence_max} words: " + " | ".join(long[:3]))
+    hook = sentences[0] if sentences else ""
+    if len(hook.split()) > channel.hook_max:
+        problems.append(f"The opening question is {len(hook.split())} words; at most {channel.hook_max}.")
+    if channel.hook_you and not re.search(r"\byou(?:r|'re|'ve)?\b", hook, re.I):
+        problems.append('The opening question must say "you" or "your".')
+    if len(script.hook.split()) > HOOK_TEXT_MAX:
+        problems.append(f"The on-screen hook is {len(script.hook.split())} words; at most {HOOK_TEXT_MAX}.")
+    for pattern, name in BANNED:
+        if pattern.search(script.text):
+            problems.append(f"Remove {name}.")
+    return problems
 
 
 #: Short words that end in a full stop without ending the sentence.
@@ -290,6 +387,8 @@ def from_text(title: str, text: str, description: str = "", hashtags: list[str] 
 
 #: At most this many sentences after a drawing may keep it on screen (D124).
 MAX_HOLD = 3
+#: About 4 seconds of speech: no drawing starts before this many words are said (D155).
+FIRST_DIAGRAM_WORDS = 9
 
 
 def _emphasis(beat: Beat) -> str:
@@ -315,7 +414,9 @@ def tidy(script: Script) -> Script:
     beats = []
     pictures: list[str] = []   # the kind of each picture so far: a held sentence adds none
     held = 0
+    before = 0                 # words said before this sentence
     for i, beat in enumerate(script.beats):
+        before, said_before = before + len(beat.text.split()), before
         v = beat.visual
         if v.hold:
             # Held on: only after a drawing, and not for ever (a picture held past ~15 s goes stale).
@@ -343,7 +444,8 @@ def tidy(script: Script) -> Script:
             diagram = False
         if diagram and v.template == "number" and not any(c.isdigit() for c in v.title):
             diagram = False
-        if diagram and (i == 0 or pictures[-2:] == ["diagram", "diagram"]):
+        # No drawing in the first 4 seconds (D155): the viewer's own moment, moving, holds them first.
+        if diagram and (i == 0 or said_before < FIRST_DIAGRAM_WORDS or pictures[-2:] == ["diagram", "diagram"]):
             diagram = False
         if not diagram:
             queries = [q for q in [*v.queries, v.query] if q.strip()] or [_query_from(beat.text)]
@@ -374,7 +476,21 @@ arrow, bar or equation that disagrees with its sentence or with the {subject} is
 (graph shape says how the y axis changes as the x axis grows; wave values are frequencies and
 amounts amplitudes; particles values are speeds and amounts how many; ray values are refractive
 indices; forces values are relative sizes); so is an "equation" that is not a real {subject}
-formula, or a "number" that is not the true figure. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct {subject}."""
+formula, or a "number" that is not the true figure. Health advice is an error too: a symptom,
+a condition, or a tip about what to do for your body, where the script should only explain the
+mechanism. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct {subject}."""
+
+CRITIC = """You are a short-form video editor reviewing a script for a {subject} Shorts channel before
+it is recorded. Judge only these, each pass or fail:
+1. Hook: the first line is about a concrete moment the viewer knows, short enough to read in two seconds.
+2. First cause early: the real reason starts within about 20 words of the opening line.
+3. Ear: every sentence says one thing and is easy to say and hear aloud.
+4. Comparison: one everyday comparison that explains the mechanism, not decoration.
+5. Payoff: the question is fully answered by three quarters of the way through.
+6. Ending: it ends the way it was asked to end, in two short beats.
+7. No AI habits: no stock phrases, no lists of three, no "it's not X, it's Y", no over-explaining.
+Do not judge whether the jokes are funny, and do not check the facts: others do that. Return ok=true
+with no problems if all pass. Otherwise, for each failure, one sentence saying exactly what to change."""
 
 
 def _diagrams(script: Script) -> str:
@@ -406,25 +522,51 @@ def check(script: Script) -> Review:
         return Review(ok=False, problems=[f"The {channels.check_name().lower()} came back unreadable; read it carefully yourself."])
 
 
+def critique(script: Script, writer: str = "") -> list[str]:
+    """What an editor would change (D155), asked of a different AI from the one that wrote it: a model
+    goes easy on its own work. Nothing when no other AI answers; the script still goes on."""
+    user = (f"It was asked to end with {ENDINGS.get(script.ending, 'a deadpan two-beat line')}.\n\n"
+            f"Title: {script.title}\nScript:\n" + "\n".join(b.text for b in script.beats))
+    try:
+        answer = ask(channels.fill(CRITIC), user, Review, temperature=0.0, job="critic", keep=True, unlike=writer)
+        review = Review.model_validate(json.loads(answer))
+    except (CreateError, ValueError, TypeError):
+        return []
+    return [] if review.ok else review.problems
+
+
 def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str = "") -> tuple[Script, str]:
-    """A script that passed the physics check (one rewrite if it didn't), and what the
-    check said, for the page."""
+    """A script held to the channel's countable rules, an editor's read and the physics check, rewritten
+    once with everything they found (D155), and what each said, for the page."""
     from . import ai
 
     ai.misses.clear()
+    channel = channels.load()
     script = write(question, angle, take=take, steer=steer)
+    writer = ai.last_used
     review = check(script)
-    if not review.ok and review.problems:
-        script = write(question, angle, take=take, steer=steer, feedback="\n".join(f"- {p}" for p in review.problems))
+    facts = review.problems if not review.ok else []
+    rules, edits = lint(script, channel), critique(script, writer)
+    notes = []
+    if facts or rules or edits:
+        feedback = "\n".join(f"- {p}" for p in [*facts, *rules, *edits])
+        script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape, ending=script.ending)
         second = check(script)
         if not second.ok and second.problems:
-            note = f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems)
+            notes.append(f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems))
+        elif facts:
+            notes.append(f"{channels.check_name()}: fixed after a first draft got this wrong:\n"
+                         + "\n".join(f"- {p}" for p in facts))
         else:
-            note = f"{channels.check_name()}: fixed after a first draft got this wrong:\n" + \
-                "\n".join(f"- {p}" for p in review.problems)
+            notes.append(f"{channels.check_name()}: no problems found.")
+        if edits:
+            notes.append("Editor's read, fixed in the rewrite:\n" + "\n".join(f"- {p}" for p in edits))
     else:
-        note = f"{channels.check_name()}: no problems found."
-    return _signed(script, note)
+        notes.append(f"{channels.check_name()}: no problems found.")
+    left = lint(script, channel)
+    if left:
+        notes.append("Still off the channel's rules:\n" + "\n".join(f"- {p}" for p in left))
+    return _signed(script, "\n".join(notes))
 
 
 def _signed(script: Script, note: str) -> tuple[Script, str]:

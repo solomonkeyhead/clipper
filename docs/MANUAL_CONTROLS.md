@@ -28,7 +28,11 @@ is the order I'd build them.
 | Shot lengths and cuts | Cuts land where each sentence starts; footage over 4.5s is split | Nudge a cut earlier or later; set the longest a shot may last | Gap | M |
 | Voice timing | Speech recognition times every word | Nudge a sentence's start; fix a misheard word | Gap | M |
 | Captions | One style from settings | Pick the style, position or none per video; edit caption text | Gap | M |
-| On-screen hook | The script title for the first seconds | Its own text, length and on/off per video | Gap | S |
+| On-screen hook | The writer's 6-word hook (else the title) for 1.5 s (D155) | Its own text per video in the script editor; length and on/off | Partial | S |
+| Script shape and ending | Taken in turn per script (D155) | Pick the shape and ending before writing | Gap | S |
+| Editor's read of a script | Another AI lists fixes and the script is rewritten once (D155); shown in the notes | Edit the script; skip the editor | Gap | S |
+| Pauses in the voice | Pauses over 0.25 s cut, 0.6 s kept before the last sentence (D155) | Off, or the pause lengths | Gap | S |
+| Last shot | The opening footage again under the last sentence, so it loops (D155) | Pick the last picture yourself (any manual pick stops it) | Done | - |
 | Cover frame | Best still picked automatically | Scrub and choose the frame | Gap | S |
 | Watermark | Channel setting | On/off and corner per video | Gap | S |
 | Loudness and music | Always normalised; no music | Normalisation off or a level; an optional music bed with ducking under the voice | Gap | M |

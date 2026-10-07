@@ -58,6 +58,7 @@ class Post(BaseModel):
     shares: float | None = None
     saves: float | None = None
     avg_watch_s: float | None = None
+    avg_view_pct: float | None = None
     watched_full_pct: float | None = None
     skip_rate_pct: float | None = None
     x_median: float | None = None

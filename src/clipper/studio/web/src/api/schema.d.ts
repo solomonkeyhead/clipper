@@ -3383,6 +3383,8 @@ export interface components {
             saves?: number | null;
             /** Avg Watch S */
             avg_watch_s?: number | null;
+            /** Avg View Pct */
+            avg_view_pct?: number | null;
             /** Watched Full Pct */
             watched_full_pct?: number | null;
             /** Skip Rate Pct */

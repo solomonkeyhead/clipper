@@ -219,9 +219,12 @@ def _work(video_id: int, publish) -> None:
                 if row["timings"]:  # the same words and voice as last time: the same cuts (D125)
                     store.update_video(video_id, status="building", error="")
                 else:
-                    timings = voice.align(Script.model_validate(row["script"]), voice.heard(path), probe(path).duration)
+                    written = Script.model_validate(row["script"])
+                    # Long pauses cut first (D155): the build then uses the tightened copy of the take.
+                    path, words, seconds = voice.tighten(path, written, voice.heard(path), probe(path).duration)
+                    timings = voice.align(written, words, seconds)
                     _check(video_id)
-                    store.update_video(video_id, timings=timings.model_dump(), status="building", error="")
+                    store.update_video(video_id, voice=str(path), timings=timings.model_dump(), status="building", error="")
                 build.build(video_id, progress=step)
             except Cancelled:
                 log.info("create: video %s build cancelled", video_id)
@@ -409,6 +412,7 @@ def routes(app: FastAPI, publish) -> None:
             raise HTTPException(404, "no such idea")
         written, notes = await asyncio.to_thread(ai, script.write_checked, topic["question"], topic["angle"])
         store.set_topic(topic_id, "used")
+        written.series = topic.get("series") or ""   # the idea's series, shown with the video (D155)
         return {"id": store.add_video(topic_id, written.model_dump(), notes)}
 
     @app.post("/api/create/videos/{video_id}/rewrite")
@@ -427,6 +431,7 @@ def routes(app: FastAPI, publish) -> None:
         steer = str((body or {}).get("steer") or "").strip()[:400]
         written, notes = await asyncio.to_thread(ai, script.write_checked, question,
                                                  topic["angle"] if topic else "", take=take, steer=steer)
+        written.series = (topic or {}).get("series") or ""
         store.update_video(video_id, script={**written.model_dump(), "take": take}, check_notes=notes,
                            status="draft", voice="", timings="", error="")
         return {"ok": True}

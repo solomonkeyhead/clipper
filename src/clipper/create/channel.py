@@ -53,12 +53,27 @@ class Channel(BaseModel):
     templates: list[str] = Field(default_factory=lambda: list(_EXPLAINER.templates))
     voice: str = "Your own voice: record it in the page, or upload an audio file"
     words_per_second: float = 2.3
+    # What scripts are held to in code, the shapes they take in turn, and what ideas may be about (D155).
+    words: list[int] = Field(default_factory=lambda: list(_EXPLAINER.words))
+    sentence_max: int = _EXPLAINER.sentence_max
+    hook_max: int = _EXPLAINER.hook_max
+    hook_you: bool = _EXPLAINER.hook_you
+    shapes: list[str] = Field(default_factory=list)
+    scope: str = ""
     # Real scripts of the channel's own, imitated for voice and rhythm, never copied.
     examples: list[dict] = Field(default_factory=list)   # {"title", "text", "views"}
     # A small logo burned into a corner of every video, if there is one.
     watermark: str = ""
     # The campaign the finished videos are filed under (studio library).
     campaign: str = ""
+
+
+#: The fields a channel file from before D155 lacks, taken from its pack when read.
+LIMITS = ("words", "sentence_max", "hook_max", "hook_you", "shapes", "scope")
+
+
+def _pack_limits(p: packs.Pack) -> dict:
+    return {k: getattr(p, k) for k in LIMITS}
 
 
 def slugify(name: str) -> str:
@@ -73,6 +88,7 @@ def make(pack: str, name: str, handle: str = "", niche: str = "", **own) -> Chan
                    persona=p.persona.replace("{name}", name), rules=list(p.rules), subject=p.subject,
                    expert=p.expert, areas=p.areas, abstract=p.abstract, hashtags=p.hashtags,
                    drawings=p.drawings, templates=list(p.templates), words_per_second=p.words_per_second,
+                   **_pack_limits(p),
                    campaign=own.pop("campaign", "") or slug, **own)
 
 
@@ -115,6 +131,12 @@ def _read(file: Path) -> Channel:
         old = packs.PHYSICS
         raw = {"pack": old.key, "abstract": old.abstract, "hashtags": old.hashtags, "drawings": old.drawings,
                "templates": list(old.templates), **raw}
+    pack = packs.get(raw["pack"])
+    if pack.key == "physics" and raw.get("rules") == packs.PHYSICS_RULES_BEFORE_D155:
+        # Never edited by its owner: moved to the new rules, with the limits that go with them (D155).
+        raw = {**raw, "rules": list(packs.PHYSICS_RULES), **_pack_limits(pack)}
+    if raw.get("rules") == pack.rules:   # a channel edited away from its pack's rules keeps the plain limits
+        raw = {**_pack_limits(pack), **raw}
     channel = Channel.model_validate(raw)
     if not channel.slug:
         channel.slug = file.stem
@@ -196,10 +218,11 @@ def check_name(channel: Channel | None = None) -> str:
 
 
 def fill(text: str, channel: Channel | None = None) -> str:
-    """A prompt with the channel's {subject}, {expert}, {areas}, {abstract} and {hashtags} filled in."""
+    """A prompt with the channel's {subject}, {expert}, {areas}, {abstract}, {hashtags} and {scope} filled in."""
     ch = channel or load()
     return (text.replace("{subject}", ch.subject).replace("{expert}", ch.expert).replace("{areas}", ch.areas)
-            .replace("{abstract}", ch.abstract).replace("{hashtags}", ch.hashtags))
+            .replace("{abstract}", ch.abstract).replace("{hashtags}", ch.hashtags)
+            .replace("{scope}", ch.scope or ch.subject))
 
 
 def steering(what: str, focus: str = "", avoid: str = "", note: str = "", skipped: list[str] | None = None,

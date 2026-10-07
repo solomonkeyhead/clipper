@@ -30,7 +30,7 @@ log = get_logger(__name__)
 #: the order TikTok Studio shows them, then what the tool needs to join back.
 RESULT_COLUMNS = ["url", "posted_at", "views_24h", "views_7d", "views_30d", "views_latest",
                   "likes", "comments", "shares", "saves",
-                  "avg_watch_s", "watched_full_pct", "drop_off_s", "skip_rate_pct",
+                  "avg_watch_s", "avg_view_pct", "watched_full_pct", "drop_off_s", "skip_rate_pct",
                   "new_followers", "verified_views", "payout_usd", "notes"]
 ID_COLUMNS = ["platform", "account", "duration_s", "opening", "lead_in_s", "hook",
               "campaign", "source_title", "file",
@@ -38,7 +38,7 @@ ID_COLUMNS = ["platform", "account", "duration_s", "opening", "lead_in_s", "hook
               "posted_caption"]
 COLUMNS = ["caption", *RESULT_COLUMNS, *ID_COLUMNS]
 NUMERIC = ["views_24h", "views_7d", "views_30d", "views_latest", "likes", "comments", "shares",
-           "saves", "avg_watch_s", "watched_full_pct", "drop_off_s", "skip_rate_pct",
+           "saves", "avg_watch_s", "avg_view_pct", "watched_full_pct", "drop_off_s", "skip_rate_pct",
            "new_followers", "verified_views", "payout_usd"]
 #: Filled by `clipper tiktok collect` from a copied TikTok Studio page.
 COLLECTED = {"avg_watch_s", "watched_full_pct", "drop_off_s", "saves", "new_followers"}
@@ -56,6 +56,7 @@ HINTS = {
     "views_latest": "Views at the last `clipper tiktok sync` (see synced_at).",
     "avg_watch_s": "Average watch time, in seconds (e.g. 9.8s). The most useful number: "
                    "it shows whether people who saw the clip stayed.",
+    "avg_view_pct": "YouTube only: the average percentage of the Short watched (filled by the sync).",
     "watched_full_pct": "Watched full video, as a percentage (e.g. 12%).",
     "saves": "Saves / favorites.",
     "drop_off_s": "Where most viewers stopped watching, in seconds (TikTok Studio: "

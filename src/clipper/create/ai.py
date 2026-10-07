@@ -137,6 +137,12 @@ def _ordered(config, job: str = "", quick: bool = False):
     return order, claude, picked, gemini_first
 
 
+def _family(name: str) -> str:
+    """Claude on the plan and on the API are one model family: neither is a second opinion on the other."""
+    name = name.split(":", 1)[0]
+    return "claude" if name in ("anthropic", "claude_code") else name
+
+
 def first_choice(config, job: str) -> str:
     """The provider `job` goes to first right now ("claude_code", "gemini"...), for Settings' "Automatic
     (now ...)" (D154). Makes no model call."""
@@ -148,13 +154,14 @@ def first_choice(config, job: str) -> str:
 
 
 def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple[bytes, str]] | None = None,
-        quick: bool = False, job: str = "", keep: bool = False) -> str:
+        quick: bool = False, job: str = "", keep: bool = False, unlike: str = "") -> str:
     """The first model's answer. `job` names what is being done: one in `llm.create_gemini_jobs`
     goes to Gemini first, then Claude if Gemini can't (D136), and is never stopped by
     `create_claude_only`; any other goes to Claude first and stops when Claude can't answer (D117).
     `quick` is for small, many-times jobs (the footage judge), which go to `llm.create_quick_model`
     to spare the plan's usage (D116). `keep`: the answer is remembered by its question, so the same
-    question again (a rebuild, a retry, the check pressed twice) costs no call."""
+    question again (a rebuild, a retry, the check pressed twice) costs no call. `unlike` (a `last_used`
+    value): another AI family answers first if one is set up, as for the editor's read of a script (D155)."""
     from ..config import Config
     from ..llm.base import LLMRequest, miss_level
 
@@ -166,12 +173,14 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             last_used = hit.model
             return hit.text
     order, claude, picked, gemini_first = _ordered(config, job, quick)
+    if unlike:
+        order = [b for b in order if _family(b.name) != _family(unlike)] + [b for b in order if _family(b.name) == _family(unlike)]
     if gemini_first:
         for b in order:
             if b not in claude and job != "footage":
                 b.timeout = max(b.timeout, GEMINI_PATIENCE)
     for backend in order:
-        if config.llm.create_claude_only and claude and backend not in claude and not gemini_first and not picked:
+        if config.llm.create_claude_only and claude and backend not in claude and not gemini_first and not picked and not unlike:
             # Claude was there but didn't answer: stop rather than let Gemini draw (D117).
             why = misses.get(claude[0].describe(), "it didn't answer")
             raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "

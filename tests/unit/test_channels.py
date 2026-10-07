@@ -107,7 +107,8 @@ def test_a_batch_note_and_the_skipped_ideas_reach_the_planner_and_the_channel_ke
 
     def fake_ask(system, user, schema, **kw):
         seen["user"] = user
-        return json.dumps([{"question": "Why does a spoon flip your reflection?", "angle": "concave mirror", "felt": False}])
+        return json.dumps([{"question": "Why does a spoon flip your reflection?", "angle": "concave mirror",
+                            "scores": dict.fromkeys(("felt", "common", "surprise", "mechanism", "showable", "searched", "fit"), 3)}])
 
     monkeypatch.setattr(topics, "ask", fake_ask)
     assert topics.generate(5, "only light and sound") == 1

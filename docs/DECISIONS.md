@@ -2822,3 +2822,41 @@ found three things that had silently stopped working.
 - Accounts: groups name the platform beside each handle; the site-page copy buttons moved to Settings, Advanced.
 - Settings: "Automatic (now Gemini)" per job; clipping and Create in separate cards, Create's next to its footage
   libraries; providers not set up are named once instead of in every list.
+
+## D155. The deep research report, put into the script, idea and build rules (2026-10-07)
+
+**What happened.** A deep research report on making the German Professor better (prompt in
+`docs/research/deep-research-german-professor.md`) came back. Marc okayed 17 of its changes.
+
+**Decided (scripts).**
+- The physics pack's rules changed on purpose, and so did its fixtures: 85 to 110 words, sentences of 12 words at
+  most, an opening question of 8 words at most that says "you", the first cause within 20 words, the answer done by
+  three quarters of the way, a comparison from something touched this week, the usual AI habits banned, and no
+  health advice (YouTube's rules on AI-made medical content). A physics channel still on the old rules word for word
+  moves to the new ones when read; one its owner edited keeps its own rules and the old limits.
+- Shapes and endings in turn: three shapes (myth-bust, walk-through, one number) and three endings (loop back,
+  "send this to", a one-word question), one pairing per script by how many the channel has made, so the channel
+  doesn't read as a template (YouTube's July 2025 rule on mass-produced content). The writer sees the last 10 endings.
+  The examples are labelled voice and rhythm only: several break the new rules.
+- `script.lint` checks the countable rules in code (length, sentence length, hook, on-screen hook, banned phrases),
+  free. A new "Edit scripts" job reads each script as an editor against 7 points, asked of a different AI family
+  from the writer (`ask(unlike=)`), since a model goes easy on its own work. It doesn't judge jokes: the report found
+  AI can't. Everything the check, lint and editor find goes into one rewrite; what's left shows in the notes.
+- Ideas get 7 scores of 0 to 3 (felt, common, surprise, mechanism, showable, searched, fit) and a series name.
+  Under 15 of 21, or a fit under 2, is dropped. Fit is the channel's `scope` (physics: any STEM subject, physics
+  first; Marc: "keep it STEM"). Ideas list best first, with the score and a series chip that filters to its series.
+
+**Decided (build).**
+- No drawing in the first 4 seconds (9 words); the first shot is the viewer's moment in motion.
+- The on-screen hook is its own 6-word line (editable in the script editor), shown 1.5 s; empty uses the title.
+- Captions: already inside the report's safe box (bottom edge at y 1240, x 120 to 780), so unchanged.
+- The last sentence plays over the opening footage again, so the end flows into the start, unless the last picture
+  is a manual pick, the user's clip or a held drawing.
+- Pauses over 0.25 s in the voice are cut from a copy (`voice_tight.wav`; the take is kept), with 0.6 s kept before
+  the last sentence for the deadpan beat.
+
+**Decided (measuring).**
+- YouTube's average percentage viewed is synced (`avg_view_pct`) and shown on Stats. "Viewed vs swiped away" is in
+  YouTube Studio only, not the Analytics API.
+- Learning has Experiments: name what A and B are, pair videos, compare by % viewed, watch time or views. A side is
+  trusted when the one-sided sign test is under 0.06 (8 of 10 pairs, or 5 of 5). Stored in the `experiments` setting.

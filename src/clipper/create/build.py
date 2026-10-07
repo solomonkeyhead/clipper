@@ -439,6 +439,10 @@ def _own(i: int, visual: Visual, seconds: float, own: dict, cursor: dict, defaul
     return [shot], (rest if mode == "planned" else 0.0)
 
 
+#: The on-screen hook's time (D155): long enough to read 6 words, gone before the first cause.
+HOOK_SECONDS = 1.5
+
+
 def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict | None = None,
           notes: list[str] | None = None, default_fill: str = "auto") -> list[Path]:
     """One shot (or two) per picture: a sentence, or a drawing and the sentences that hold it (D124). `own` maps clip ids to (file, seconds, name) for the
@@ -456,7 +460,9 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
     if progress:
         progress("Choosing footage", 8)
     ahead = _prefetch(script, timings, groups, progress)
+    starts = []   # where each picture's shots begin in `made`
     for n, group in enumerate(groups):
+        starts.append(len(made))
         i, beat = group[0], script.beats[group[0]]
         if progress:
             progress(f"Shot {n + 1} of {len(groups)}", 10 + 60 * n / len(groups))
@@ -475,7 +481,25 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
                                      script, work, used, tag="b")
                 continue
         made += _planned(i, beat, beat.visual, seconds, said, script, work, used, pre=ahead.get(i))
-    return made
+    return _loop_back(made, starts, groups, script, timings, work)
+
+
+def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], script: Script, timings: Timings,
+               work: Path) -> list[Path]:
+    """The last sentence over the opening shot again (D155), so the end flows back into the start when the
+    Short loops. Only when the last picture is the writer's plain footage plan (not a drawing being held,
+    not the user's own clip or pick) and the opening is footage too."""
+    last = groups[-1] if groups else []
+    v = script.beats[last[0]].visual if last else None
+    if (len(groups) < 3 or len(last) != 1 or v is None or v.manual or v.clip or v.kind != "stock"
+            or script.beats[0].visual.kind != "stock" or script.beats[0].visual.clip):
+        return made
+    a, b = timings.beats[last[0]]
+    out = work / "loop_back.mp4"
+    run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-stream_loop", "-1", "-i", str(made[0]),
+         "-t", f"{b - a:.3f}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16",
+         "-pix_fmt", "yuv420p", str(out)])
+    return [*made[:starts[-1]], out]
 
 
 def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, out: Path,
@@ -485,8 +509,8 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     ass = out.with_suffix(".ass")
     cap.write_ass(cap.build_ass(words, style=cap.get_style(rc.caption_style), width=W, height=H,
                                 safe_area=rc.safe_area, duration=timings.duration,
-                                hook_text=script.title if rc.show_hook_text else "",
-                                hook_seconds=rc.hook_text_seconds if rc.show_hook_text else 0.0), ass)
+                                hook_text=(script.hook or script.title) if rc.show_hook_text else "",
+                                hook_seconds=HOOK_SECONDS if rc.show_hook_text else 0.0), ass)
     inputs = [arg for p in parts for arg in ("-i", str(p))] + ["-i", str(voice)]
     n = len(parts)
     graph = "".join(f"[{i}:v]" for i in range(n)) + f"concat=n={n}:v=1:a=0[cv]"

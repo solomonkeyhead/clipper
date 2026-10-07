@@ -262,7 +262,8 @@ class Snapshot:
                     posted_caption=p.get("posted_caption"),
                     views=views, likes=p.get("likes"), comments=p.get("comments"),
                     shares=p.get("shares"), saves=p.get("saves"),
-                    avg_watch_s=p.get("avg_watch_s"), watched_full_pct=p.get("watched_full_pct"),
+                    avg_watch_s=p.get("avg_watch_s"), avg_view_pct=p.get("avg_view_pct"),
+                    watched_full_pct=p.get("watched_full_pct"),
                     skip_rate_pct=p.get("skip_rate_pct"),
                     # Against a median under MIN_MEDIAN views, "22x" said nothing (22 views on a median of 1, D154).
                     x_median=(round(views / median, 1) if median and median >= stats.MIN_MEDIAN and views is not None
@@ -751,6 +752,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         ("judge", "Judge the moments", "Reads every moment of a video, scores it, and picks each clip's opening line."),
         ("script", "Write Create's scripts", "The script for a Short."),
         ("check", "Fact-check scripts", "Reads a script for mistakes."),
+        ("critic", "Edit scripts", "Reads a new script as an editor would and lists what to fix. A different AI from the writer when one is set up."),
         ("sketch", "Draw the diagrams", "Chalkboard drawings. The one job the paid Claude key is meant for."),
         ("review", "Review the drawings", "Looks at a drawing and fixes it."),
         ("footage", "Pick stock footage", "Judges thumbnails and writes the searches."),

@@ -79,6 +79,58 @@ def heard(path: Path) -> list[TimedWord]:
     return [TimedWord(text=w.word.strip(), start=w.start, end=w.end) for s in segments for w in s.words or []]
 
 
+#: Pauses longer than this are cut down to it (D155); the one before the last sentence keeps up to
+#: BEAT_PAUSE, the deadpan beat before the punchline.
+MAX_PAUSE = 0.25
+BEAT_PAUSE = 0.6
+LEAD = 0.1      # silence kept before the first word
+
+
+def cuts(words: list[TimedWord], last_from: int) -> list[tuple[float, float]]:
+    """The stretches of silence to take out: each pause over MAX_PAUSE loses its middle, so the words
+    either side keep their tails; `last_from` is the first word of the last sentence."""
+    out = []
+    if words and words[0].start > LEAD:
+        out.append((0.0, words[0].start - LEAD))
+    for k in range(1, len(words)):
+        keep = BEAT_PAUSE if k == last_from else MAX_PAUSE
+        gap = words[k].start - words[k - 1].end
+        if gap > keep + 0.02:
+            mid = (words[k - 1].end + words[k].start) / 2
+            out.append((mid - (gap - keep) / 2, mid + (gap - keep) / 2))
+    return out
+
+
+def tighten(path: Path, script: Script, words_heard: list[TimedWord], audio_seconds: float) -> tuple[Path, list[TimedWord], float]:
+    """The voice with its long pauses cut (D155): a copy next to the recording (the take itself is kept),
+    and the heard words moved to their new times. Nothing to cut: the recording as it is."""
+    from ..render.ffmpeg import run
+
+    if path.stem == "voice_tight":   # already cut; ffmpeg can't write the file it reads
+        return path, words_heard, audio_seconds
+    last_words = len(script.beats[-1].text.split()) if script.beats else 0
+    # The last sentence's first word, counted from the end of what was heard (missed words aside).
+    last_from = max(0, len(words_heard) - last_words)
+    gaps = cuts(words_heard, last_from)
+    if not gaps:
+        return path, words_heard, audio_seconds
+    keep, at = [], 0.0
+    for a, b in gaps:
+        keep.append((at, a))
+        at = b
+    keep.append((at, audio_seconds))
+    select = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in keep if b > a)
+    out = path.with_name("voice_tight.wav")
+    run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i", str(path),
+         "-af", f"aselect='{select}',asetpts=N/SR/TB", str(out)])
+
+    def moved(t: float) -> float:
+        return round(t - sum(min(b, t) - a for a, b in gaps if a < t), 3)
+
+    words = [w.model_copy(update={"start": moved(w.start), "end": moved(w.end)}) for w in words_heard]
+    return out, words, moved(audio_seconds)
+
+
 def align(script: Script, words_heard: list[TimedWord], audio_seconds: float) -> Timings:
     """The script's words with the voice's times, and each beat's span."""
     said = [w for b in script.beats for w in b.text.split()]

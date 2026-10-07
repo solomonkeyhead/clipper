@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { FlaskConical, Lightbulb } from "lucide-react";
-import { useCampaigns, useLearning, useSetSettings, useSettings, useWhatsWorking, type Learning, type WhatsWorking } from "@/api/client";
+import { useCampaigns, useLearning, usePosts, useSetSettings, useSettings, useWhatsWorking, type Learning, type Post, type WhatsWorking } from "@/api/client";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { cn, formatCount, PLATFORM_NAME } from "@/lib/utils";
@@ -225,6 +225,141 @@ function TastePanel({ have, need }: { have: number; need: number }) {
   );
 }
 
+/* ---------- experiments (D155) ---------- */
+
+type Experiment = { id: string; name: string; a: string; b: string; metric: "pct" | "views" | "watch"; pairs: [number, number][] };
+
+const METRIC: Record<Experiment["metric"], { label: string; get: (p: Post) => number | null | undefined; total?: boolean }> = {
+  pct: { label: "% viewed", get: (p) => p.avg_view_pct },
+  watch: { label: "average watch time", get: (p) => p.avg_watch_s },
+  views: { label: "views", get: (p) => p.views, total: true },
+};
+
+/** The chance of at least `wins` of `n` coin flips coming up one way: the sign test, one-sided. */
+function signTest(wins: number, n: number): number {
+  let p = 0;
+  let c = 1;   // n choose k, built up from k = 0
+  for (let k = 0; k <= n; k++) {
+    if (k >= wins) p += c / 2 ** n;
+    c = (c * (n - k)) / (k + 1);
+  }
+  return p;
+}
+
+/** A video's number for a metric: summed for views, averaged over its platforms otherwise. */
+function score(posts: Post[], clip: number, metric: Experiment["metric"]): number | null {
+  const m = METRIC[metric];
+  const v = posts.filter((p) => p.clip === clip).map(m.get).filter((x): x is number => x != null);
+  if (!v.length) return null;
+  const sum = v.reduce((a, b) => a + b, 0);
+  return m.total ? sum : sum / v.length;
+}
+
+/** Pairs of videos that differ in one thing, A against B; a side is trusted when the sign test says its
+ *  wins are unlikely to be luck (8 of 10). Small channels can't wait for big numbers (the research, D155). */
+function Experiments() {
+  const { data: settings } = useSettings();
+  const save = useSetSettings();
+  const { data: posts = [] } = usePosts();
+  const [draft, setDraft] = useState({ name: "", a: "", b: "", metric: "pct" as Experiment["metric"] });
+  let list: Experiment[] = [];
+  try { list = JSON.parse(settings?.experiments ?? "[]"); } catch { list = []; }
+  const put = (next: Experiment[]) => save.mutate({ experiments: JSON.stringify(next) }, { onError: (e) => toast.error((e as Error).message) });
+  const clips = [...new Map(posts.map((p) => [p.clip, p.clip_title])).entries()];
+  const add = () => {
+    if (!draft.name.trim() || !draft.a.trim() || !draft.b.trim()) return toast.error("Give it a name and say what A and B are");
+    put([...list, { id: String(Date.now()), name: draft.name.trim(), a: draft.a.trim(), b: draft.b.trim(), metric: draft.metric, pairs: [] }]);
+    setDraft({ name: "", a: "", b: "", metric: "pct" });
+  };
+  const field = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  return (
+    <Card className="flex flex-col gap-3 p-5">
+      <div>
+        <h2 className="flex items-center gap-2 text-md font-semibold"><FlaskConical className="size-4 text-accent" /> Experiments</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          Change one thing between two videos (A and B), post both, and pair them here. One side has to win about 8 pairs of 10
+          before it's more than luck.
+        </p>
+      </div>
+      {list.map((x) => <ExperimentRow key={x.id} x={x} posts={posts} clips={clips}
+        onChange={(next) => put(list.map((y) => (y.id === x.id ? next : y)))}
+        onRemove={() => put(list.filter((y) => y.id !== x.id))} />)}
+      <details className="text-sm">
+        <summary className="cursor-pointer text-muted hover:text-fg">New experiment</summary>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input className={cn(field, "w-56")} placeholder="Name, e.g. Ending: loop or send" aria-label="Experiment name"
+                 value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <input className={cn(field, "w-40")} placeholder="A, e.g. loop ending" aria-label="What A is"
+                 value={draft.a} onChange={(e) => setDraft({ ...draft, a: e.target.value })} />
+          <input className={cn(field, "w-40")} placeholder="B, e.g. send-to ending" aria-label="What B is"
+                 value={draft.b} onChange={(e) => setDraft({ ...draft, b: e.target.value })} />
+          <select className={field} aria-label="Compare by" value={draft.metric}
+                  onChange={(e) => setDraft({ ...draft, metric: e.target.value as Experiment["metric"] })}>
+            {Object.entries(METRIC).map(([k, m]) => <option key={k} value={k}>by {m.label}</option>)}
+          </select>
+          <Button size="sm" variant="secondary" onClick={add}>Add</Button>
+        </div>
+      </details>
+    </Card>
+  );
+}
+
+function ExperimentRow({ x, posts, clips, onChange, onRemove }: {
+  x: Experiment; posts: Post[]; clips: [number, string][]; onChange: (x: Experiment) => void; onRemove: () => void;
+}) {
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const title = (id: number) => clips.find(([c]) => c === id)?.[1] ?? `Clip ${id}`;
+  const results = x.pairs.map(([ca, cb]) => {
+    const va = score(posts, ca, x.metric), vb = score(posts, cb, x.metric);
+    return { ca, cb, va, vb, winner: va == null || vb == null || va === vb ? null : va > vb ? "A" : "B" };
+  });
+  const aWins = results.filter((r) => r.winner === "A").length, bWins = results.filter((r) => r.winner === "B").length;
+  const n = aWins + bWins, lead = Math.max(aWins, bWins), leader = aWins >= bWins ? x.a : x.b;
+  const p = n ? signTest(lead, n) : 1;
+  const fmt = (v: number | null) => (v == null ? "not in yet" : x.metric === "pct" ? `${v.toFixed(1)}%` : x.metric === "watch" ? `${v.toFixed(1)}s` : formatCount(v));
+  const pick = "h-8 max-w-56 rounded-sm border border-line bg-surface-2 px-2 text-xs";
+  return (
+    <div className="rounded-md border border-line p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-sm font-medium">{x.name} <span className="font-normal text-muted">· A: {x.a} · B: {x.b} · by {METRIC[x.metric].label}</span></div>
+        <button type="button" className="text-xs text-subtle hover:text-danger" onClick={onRemove}>Remove</button>
+      </div>
+      <p className={cn("mt-1 text-sm", n && aWins !== bWins && p < 0.06 ? "font-semibold text-success" : "text-muted")}>
+        {n === 0 ? "No pairs with numbers yet."
+          : aWins === bWins ? `Even so far: ${aWins} each.`
+          : p < 0.06 ? `${leader} wins ${lead} of ${n} pairs. That's unlikely to be luck.`
+          : `${leader} leads ${lead} of ${n}. Not enough yet to trust.`}
+      </p>
+      {results.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-1 text-xs">
+          {results.map((r, i) => (
+            <li key={i} className="flex flex-wrap items-center gap-x-2">
+              <span className={cn(r.winner === "A" && "font-semibold")}>A: {title(r.ca)} ({fmt(r.va)})</span>
+              <span className="text-subtle">vs</span>
+              <span className={cn(r.winner === "B" && "font-semibold")}>B: {title(r.cb)} ({fmt(r.vb)})</span>
+              <button type="button" className="text-subtle hover:text-danger" aria-label="Remove this pair"
+                      onClick={() => onChange({ ...x, pairs: x.pairs.filter((_, j) => j !== i) })}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select className={pick} value={a} onChange={(e) => setA(e.target.value)} aria-label={`A video for ${x.name}`}>
+          <option value="">A video…</option>
+          {clips.map(([c, t]) => <option key={c} value={c}>{t}</option>)}
+        </select>
+        <select className={pick} value={b} onChange={(e) => setB(e.target.value)} aria-label={`B video for ${x.name}`}>
+          <option value="">B video…</option>
+          {clips.map(([c, t]) => <option key={c} value={c}>{t}</option>)}
+        </select>
+        <Button size="sm" variant="secondary" disabled={!a || !b || a === b}
+                onClick={() => { onChange({ ...x, pairs: [...x.pairs, [Number(a), Number(b)]] }); setA(""); setB(""); }}>Add pair</Button>
+      </div>
+    </div>
+  );
+}
+
 export function LearningPage() {
   const { data: report, isLoading } = useLearning();
   const { data: settings } = useSettings();
@@ -240,6 +375,8 @@ export function LearningPage() {
         subtitle="Clipper learns which moments to pick from the clips you post, the ones you mark not good, and how many views your posts get. This page shows whether its scores match your taste and your views." />
 
       <TastePanel have={report.weights_n} need={report.min_for_weights} />
+
+      <Experiments />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="flex flex-col gap-1 p-4">

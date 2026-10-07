@@ -636,8 +636,12 @@ export interface FootageOffer {
 }
 export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
 export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }
-export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number }
-export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string }
+export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number;
+  /** On-screen words at the start; the shape and ending it was asked for; the idea's series (D155). */
+  hook?: string; shape?: string; ending?: string; series?: string }
+export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string;
+  /** The planner's score of 21, and the series it belongs to (D155). */
+  score?: number | null; series?: string }
 export interface CreateVideo {
   id: number; topic_id: number | null; status: "draft" | "approved" | "voiced" | "building" | "built" | "failed";
   script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;

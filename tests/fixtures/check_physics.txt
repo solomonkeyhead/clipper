@@ -6,4 +6,6 @@ arrow, bar or equation that disagrees with its sentence or with the physics is a
 (graph shape says how the y axis changes as the x axis grows; wave values are frequencies and
 amounts amplitudes; particles values are speeds and amounts how many; ray values are refractive
 indices; forces values are relative sizes); so is an "equation" that is not a real physics
-formula, or a "number" that is not the true figure. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct physics.
+formula, or a "number" that is not the true figure. Health advice is an error too: a symptom,
+a condition, or a tip about what to do for your body, where the script should only explain the
+mechanism. Return ok=true with no problems if it is correct. Otherwise list each problem in one sentence with the correct physics.
