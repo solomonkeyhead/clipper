@@ -89,7 +89,8 @@ export function ClipsPage() {
   const campaign = search.campaign ?? "active";
   const mine = (clips ?? []).filter((c) =>
     campaign === "active" ? active.has(c.campaign) : campaign === "all" || c.campaign === campaign);
-  const list = mine.filter((c) => inFilter(c, status));
+  // From Learning's "Rate them" (D154): every clip with no thumbs up or down yet, whatever its status.
+  const list = search.rate ? (clips ?? []).filter((c) => c.rating == null) : mine.filter((c) => inFilter(c, status));
 
   return (
     <div className="fade-in">
@@ -107,8 +108,16 @@ export function ClipsPage() {
             {campaigns.filter((c) => c.clips > 0).map((c) => <option key={c.name} value={c.name}>{c.title}</option>)}
           </select>
         </>} />
-      <ClipFilters clips={mine} value={status} hints
-                   onChange={(key) => void navigate({ search: (s) => ({ ...s, status: key }) })} />
+      {search.rate ? (
+        <Card className="mb-5 flex flex-wrap items-center gap-2.5 border-dashed p-3.5 text-sm text-muted">
+          <Info className="size-4 shrink-0 text-accent" />
+          <p className="flex-1">{list.length} clip{list.length === 1 ? "" : "s"} with no rating. Thumbs up or down on each teaches Clipper your taste.</p>
+          <Link to="/clips" search={{ status }} className="font-medium text-accent hover:underline">Back to all clips</Link>
+        </Card>
+      ) : (
+        <ClipFilters clips={mine} value={status} hints
+                     onChange={(key) => void navigate({ search: (s) => ({ ...s, status: key }) })} />
+      )}
       {isLoading ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
           {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="aspect-[9/19]" />)}

@@ -2775,3 +2775,50 @@ broken in Clipper: the usual order already skips a failing model for a while and
 The steering outranks the persona, style and examples, but the script's word count, the order of its structure
 and its output format still apply, and every claim must still be true, so a note can't break the timing or the
 physics check. Unsteered, the request is byte for byte what it was.
+
+## D154. A pass over every page, and three quiet failures found on the way (2026-10-07)
+
+**What happened.** Marc asked for every page to be scrutinised for easier paths and clearer layout, picked what
+to change from a numbered list, and asked that anything done works for any user, not only him. Looking closely
+found three things that had silently stopped working.
+
+**Fixed (bugs).**
+- **False "Already posted".** Every Create Short is filed under source `create` from 0 s, so the duplicate check
+  read any two Shorts as "the same moment". Sources that name no real footage no longer compare by time.
+- **YouTube sync failing on one channel.** Google refuses a valid, fresh token about 1 call in 20 on that channel
+  ("invalid authentication credentials", fine on the next try). A sync makes several calls, so most failed. A 401
+  is now tried again twice before it counts. Accounts also shows an account red with the last sync's error
+  instead of "ok".
+- **Campaign alerts stopped.** The automatic check only ran with a Discord bot; Whop-only setups were never checked
+  after Oct 1. It now runs when either is watched. Whop finds are labelled "on Whop", not "by email".
+- **A clip with no file.** Shorts adopted from YouTube (D144) have file `''`, and `clip_path('')` is the library
+  folder itself. So their thumbnail and file checks passed ("exists"), every start loaded a speech model to
+  transcribe them, and the 30-day trash purge would have sent the whole library to the Recycle Bin. An empty name
+  is now a path that can't exist; their thumbnail is YouTube's own.
+
+**Decided (pages).**
+- Top bar and sidebar: the build pill shows the step ("Choosing footage: 4 of 10", counted as each pick lands)
+  and the Create build card says when Gemini is overloaded, with "Use Claude for footage". Lazy pages show an
+  outline while loading. Badges only where something waits on you; Post queue is in the sidebar and carries it.
+- AI problems on Create show only from the last 15 minutes, with how long ago, and clear when that model answers.
+  The API-price line and the build's "about a minute" are gone.
+- Ideas already made into a Short (matched on the subject words of the title, any clip filed under the channel)
+  are hidden; ideas can be searched; the "felt in daily life" tag is gone.
+- Dashboard: the post count skips repeats; median views are per platform.
+- **Submit thresholds, from any brief.** A milestone whose task says "submit" ("Wait until your video passes 2,000
+  views, then ... submit") is the campaign's submit threshold. A posted clip under it shows a progress bar and is
+  left out of "to submit" counts, the dashboard and the Post queue; Mark submitted stays (D120).
+- "vs median" is shown only against a median of 10 views or more: on a median of 1, "22x" said nothing.
+- Stats: one row per clip with its platforms folded under it, tighter columns, a platform filter. Shorts adopted
+  from YouTube with no file here show YouTube's own thumbnail.
+- Campaign cards: names wrap; an idle campaign says how many were skipped and offers Make clips. Campaign page:
+  On-screen lines and Notes start folded; clip cards have the same buttons whatever the number of posts.
+- New clips: a video clipped twice is one row ("clipped 2 times"); archived campaigns' footage sits behind a toggle.
+- Post queue: no paid-content label for your own channel.
+- Find campaigns: good fits first with a badge, poor fits folded; the rate is always per 1K from the judged number,
+  and the post's own wording shows when it names another unit.
+- Learning: comparisons with no verdict yet are one line; plain words instead of rho (the number on hover);
+  "Rate them" opens every clip with no rating; hook lists name their platform.
+- Accounts: groups name the platform beside each handle; the site-page copy buttons moved to Settings, Advanced.
+- Settings: "Automatic (now Gemini)" per job; clipping and Create in separate cards, Create's next to its footage
+  libraries; providers not set up are named once instead of in every list.

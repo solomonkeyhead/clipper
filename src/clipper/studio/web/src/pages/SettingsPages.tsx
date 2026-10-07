@@ -505,10 +505,6 @@ export function AccountsPage() {
           <p className="text-xs text-subtle">
             Clipper only reads stats through each platform's official API. Logins are stored on this PC only, in Clipper's data folder.
           </p>
-          <p className="text-xs text-subtle">
-            Registering an app with TikTok, Google or Meta needs a privacy policy and terms page online. Copy the ready-made ones for your
-            GitHub Pages site: privacy <SiteCopy page="privacy.html" /> terms <SiteCopy page="terms.html" /> home <SiteCopy page="index.html" />
-          </p>
         </div>
       )}
     </div>
@@ -608,16 +604,20 @@ function Computer() {
 }
 
 interface AIJobs {
-  jobs: { id: string; label: string; about: string; choice: string }[];
+  jobs: { id: string; label: string; about: string; choice: string; now: string }[];
   clipping: { choice: string; now: string };
   available: Record<string, boolean>;
 }
 
 const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude, paid API key"], ["gemini", "Gemini"], ["ollama", "Ollama on this computer"]];
+/** The backend names the server reports for "now", in the dropdown's words. */
+const NOW_NAME: Record<string, string> = { claude_code: "Claude on my plan", anthropic: "Claude, paid API key", gemini: "Gemini", ollama: "Ollama" };
+/** Clipping's jobs; the rest are Create's (D154: one list of nine read as a wall). */
+const CLIPPING_JOBS = new Set(["clipping", "judge"]);
 
 /** Which AI does which job (D148). Automatic keeps Clipper's own order; a pick is tried first, and the
  *  paid Claude key is only ever used where you choose it here. */
-function WhoDoesWhat() {
+function WhoDoesWhat({ part }: { part: "clipping" | "create" }) {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["ai-jobs"], queryFn: async () => {
     const res = await fetch("/api/ai-jobs");
@@ -633,9 +633,12 @@ function WhoDoesWhat() {
     void qc.invalidateQueries({ queryKey: ["create", "ai"] });
   };
   const rows = [
-    { id: "clipping", label: "Captions, descriptions and checks", about: "Everything else in clipping: captions, post descriptions, rule checks, scene splits.", choice: data.clipping.choice },
+    { id: "clipping", label: "Captions, descriptions and checks", about: "Everything else in clipping: captions, post descriptions, rule checks, scene splits.",
+      choice: data.clipping.choice, now: data.clipping.now },
     ...data.jobs,
-  ];
+  ].filter((r) => CLIPPING_JOBS.has(r.id) === (part === "clipping"));
+  // Only providers this computer has; one not set up is named once below, not in every list (D154).
+  const missing = PROVIDERS.filter(([k]) => !data.available[k]).map(([, label]) => label);
   return (
     <div className="flex flex-col divide-y divide-line">
       {rows.map((r) => (
@@ -643,12 +646,18 @@ function WhoDoesWhat() {
           <div className="min-w-0 max-w-md"><div className="text-sm font-medium">{r.label}</div><div className="text-xs text-muted">{r.about}</div></div>
           <select value={r.choice} aria-label={r.label} onChange={(e) => void set(r.id, e.target.value)}
                   className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
-            <option value="">Automatic</option>
-            {PROVIDERS.map(([k, label]) => <option key={k} value={k} disabled={!data.available[k]}>{label}{data.available[k] ? "" : " (not set up)"}</option>)}
+            {/* What Automatic picks right now, so a stuck job's AI is visible here (D154). */}
+            <option value="">Automatic{NOW_NAME[r.now] ? ` (now ${NOW_NAME[r.now]})` : ""}</option>
+            {PROVIDERS.filter(([k]) => data.available[k] || k === r.choice).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </div>
       ))}
-      <div className="py-2.5 text-xs text-muted">Watching the video itself is always Gemini: Claude can't take video. With no Gemini key that step is skipped and moments are judged from the words.</div>
+      {part === "clipping" && (
+        <div className="py-2.5 text-xs text-muted">Watching the video itself is always Gemini: Claude can't take video. With no Gemini key that step is skipped and moments are judged from the words.</div>
+      )}
+      {missing.length > 0 && (
+        <div className="py-2.5 text-xs text-subtle">Not set up on this computer: {missing.join(", ")}.</div>
+      )}
     </div>
   );
 }
@@ -806,8 +815,11 @@ export function SettingsPage() {
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
       <AIKey />
-      <Card className="px-5 py-3"><h2 className="text-md font-semibold">Who does what</h2>
-        <p className="mt-0.5 mb-1 text-sm text-muted">Pick the AI for each job, or leave it on Automatic.</p><WhoDoesWhat /></Card>
+      <Card className="px-5 py-3"><h2 className="text-md font-semibold">Who does what: clipping</h2>
+        <p className="mt-0.5 mb-1 text-sm text-muted">Pick the AI for each job, or leave it on Automatic.</p><WhoDoesWhat part="clipping" /></Card>
+      {/* Create's AI and its footage libraries, together (D154). */}
+      <Card className="px-5 py-3" id="create-ai"><h2 className="text-md font-semibold">Who does what: Create</h2>
+        <p className="mt-0.5 mb-1 text-sm text-muted">For your own channel's Shorts.</p><WhoDoesWhat part="create" /></Card>
       <FootageKeys />
       <Card className="divide-y divide-line px-5">
         <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />
@@ -884,6 +896,13 @@ export function SettingsPage() {
               <Switch label="Auto-post" checked={settings.auto_post === "1"}
                       onChange={(v) => save.mutate({ auto_post: v ? "1" : "0" })} />
             ) : <Skeleton className="h-5 w-9" />}
+          />
+          {/* Moved here from Accounts (D154): needed once, when registering your own platform apps. */}
+          <Row
+            title="Pages for your own platform apps"
+            body={<>Registering an app with TikTok, Google or Meta needs a privacy policy and terms page online. Copy the
+              ready-made ones for your GitHub Pages site: privacy <SiteCopy page="privacy.html" /> terms <SiteCopy page="terms.html" /> home <SiteCopy page="index.html" /></>}
+            control={null}
           />
           <Row
             title="Plan (preview)"

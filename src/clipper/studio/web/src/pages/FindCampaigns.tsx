@@ -89,6 +89,23 @@ function CheckBox() {
   );
 }
 
+/** Where an alert came from, as the list says it (D154): Whop posts read "by email" before. */
+const VIA: Record<string, string> = { discord: " on Discord", whop: " on Whop", email: " by email" };
+
+/** The rate, always per 1,000 views from the number the judge read (D154). The post's own wording joins it
+ *  when it names another unit ("$1.50 / 1M views" read as $1.50 per 1K), so a misread shows. */
+function rateText(found: FoundCampaign) {
+  if (found.rate_per_1k_usd == null) return found.rate;
+  const per1k = `$${found.rate_per_1k_usd.toFixed(2)} per 1K views`;
+  return /\b1\s*m\b|million/i.test(found.rate) ? `${per1k} (the post says "${found.rate}"; check it)` : per1k;
+}
+
+function FitChip({ fit }: { fit: string }) {
+  if (fit === "yes") return <Chip tone="success" className="h-5 text-[11px]">Good fit</Chip>;
+  if (fit === "maybe") return <Chip tone="warning" className="h-5 text-[11px]">Maybe</Chip>;
+  return null;
+}
+
 function FoundRow({ found }: { found: FoundCampaign }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -110,11 +127,12 @@ function FoundRow({ found }: { found: FoundCampaign }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">{found.name || "Unnamed campaign"}</span>
+            <FitChip fit={found.fit} />
             {found.niche && <Chip className="h-5 text-[11px]">{found.niche}</Chip>}
           </div>
           <div className="text-xs text-muted">
-            {[found.source !== "other" && found.source[0].toUpperCase() + found.source.slice(1), found.rate,
-              found.platforms.join(", "), `found ${ago(found.found_at)}${found.via === "discord" ? " on Discord" : " by email"}`]
+            {[found.source !== "other" && found.source[0].toUpperCase() + found.source.slice(1), rateText(found),
+              found.platforms.join(", "), `found ${ago(found.found_at)}${VIA[found.via] ?? ""}`]
               .filter(Boolean).join(" · ")}
           </div>
           {found.why && <p className="mt-1 text-xs text-muted">{found.why}</p>}
@@ -168,7 +186,12 @@ export function FindCampaigns() {
   const setNiche = (n: string) => { setNicheState(n); try { localStorage.setItem(NICHE_KEY, n); } catch { /* fine */ } };
   // A remembered niche with nothing in it now shows everything rather than an empty list.
   const active = niche && found.some((f) => f.niche === niche) ? niche : "";
-  const shown = active ? found.filter((f) => f.niche === active) : found;
+  // Good fits first, then maybes; the poor fits fold away behind one button (D154).
+  const rank = (f: FoundCampaign) => (f.fit === "yes" ? 0 : f.fit === "maybe" ? 1 : 2);
+  const inNiche = (active ? found.filter((f) => f.niche === active) : found).slice().sort((a, b) => rank(a) - rank(b));
+  const [showPoor, setShowPoor] = useState(false);
+  const poor = inNiche.filter((f) => rank(f) === 2);
+  const shown = showPoor ? inNiche : inNiche.filter((f) => rank(f) < 2);
   return (
     <>
     <CampaignAlerts />
@@ -179,6 +202,11 @@ export function FindCampaigns() {
           <h2 className="mb-3 text-md font-semibold">New campaigns from your alerts</h2>
           <NicheFilter found={found} niche={active} setNiche={setNiche} />
           {shown.map((f) => <FoundRow key={f.key} found={f} />)}
+          {poor.length > 0 && (
+            <Button size="sm" variant="ghost" className="mt-2" onClick={() => setShowPoor(!showPoor)}>
+              {showPoor ? "Hide the poor fits" : `Show ${poor.length} poor fit${poor.length === 1 ? "" : "s"}`}
+            </Button>
+          )}
         </Card>
       )}
     </div>

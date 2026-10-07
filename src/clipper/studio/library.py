@@ -34,7 +34,10 @@ def library_dir() -> Path:
 
 
 def clip_path(relative: str) -> Path:
-    return library_dir() / relative
+    """The clip's file. A clip with none (a Short adopted from YouTube, D144) gets a path that can't exist:
+    an empty name was the library folder itself, which the trash purge would have sent to the Recycle Bin
+    whole (D154). "<" and ">" can't be in a Windows file name."""
+    return library_dir() / (relative or "<no file>")
 
 
 def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignConfig,
@@ -110,7 +113,7 @@ def backfill_text() -> int:
     with db.connect() as con:
         todo = [c for c in db.clips(con)
                 if json.loads(c.get("scores") or "{}").get("text_v") != 2
-                and clip_path(c["file"]).exists()]
+                and c["file"] and clip_path(c["file"]).is_file()]  # no file (adopted from YouTube): nothing to hear
     if not todo:
         return 0
     from ..transcribe.whisper import GPU_LOCK

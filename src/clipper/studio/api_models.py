@@ -165,6 +165,8 @@ class Clip(BaseModel):
     proof: Proof | None = None
     watching: bool = False         # marked posted; looking for the post every 2 minutes
     duplicates: list[Duplicate] = []  # already-posted clips this one repeats
+    # Posted, and the brief says to submit only once a post passes this many views; it hasn't yet (D154).
+    submit_at_views: int | None = None
     # Not posted yet: each platform's text, and the brief's rules checked (D81).
     post_copy: list[PostCopy] = []
     pinned_comment: str = ""       # to pin under the post on every platform (campaign/extras.py)
@@ -178,6 +180,7 @@ class CampaignCounts(BaseModel):
     posted: int = 0
     submitted: int = 0
     skipped: int = 0
+    waiting: int = 0      # of the posted: still under the views the brief wants before submitting (D154)
 
 
 class Campaign(BaseModel):

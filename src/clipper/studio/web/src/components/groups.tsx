@@ -5,7 +5,7 @@ import {
   useAccountGroups, useCampaigns, useDeleteGroup, useSaveGroup, type Account, type AccountGroup,
 } from "@/api/client";
 import { useUI } from "@/lib/store";
-import { cn, formatCount } from "@/lib/utils";
+import { cn, formatCount, PLATFORM_NAME } from "@/lib/utils";
 import { TextInput } from "./form";
 import { PlatformIcon } from "./PlatformIcon";
 import { Button, Card } from "./ui";
@@ -47,7 +47,9 @@ function Member({ account }: { account: Account | undefined }) {
   if (!account) return null;
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs">
-      <PlatformIcon platform={account.platform} className="size-3" /> @{account.handle}
+      {/* The platform named too (D154): the same handle on two platforms read as a duplicate. */}
+      <PlatformIcon platform={account.platform} className="size-3" />
+      <span className="text-muted">{PLATFORM_NAME[account.platform] ?? account.platform}</span> @{account.handle}
     </span>
   );
 }
@@ -101,7 +103,7 @@ function GroupEditor({ group, accounts, onDone }: { group: AccountGroup; account
           {accounts.map((a) => (
             <button key={a.key} type="button" aria-pressed={members.includes(a.key)} className={chip(members.includes(a.key))}
                     onClick={() => toggle(members, setMembers, a.key)}>
-              <PlatformIcon platform={a.platform} className="size-3.5" /> @{a.handle}
+              <PlatformIcon platform={a.platform} className="size-3.5" /> {PLATFORM_NAME[a.platform] ?? a.platform} @{a.handle}
             </button>
           ))}
         </div>

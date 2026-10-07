@@ -30,7 +30,8 @@ export function PostQueuePage() {
   const mine = (clips ?? []).filter((c) => !archived.has(c.campaign) && (!search.campaign || c.campaign === search.campaign));
   const lists: Record<Step, Clip[]> = {
     post: mine.filter((c) => c.status === "ready" && c.file_exists),
-    submit: mine.filter((c) => c.status === "posted" && c.submits !== false),
+    // Not yet the views the brief wants before submitting: nothing to do on it yet (D154).
+    submit: mine.filter((c) => c.status === "posted" && c.submits !== false && !c.submit_at_views),
   };
   const step: Step = search.step ?? (lists.post.length ? "post" : "submit");
   const line = [...lists[step].filter((c) => !later.includes(c.id)), ...later.flatMap((id) => lists[step].filter((c) => c.id === id))];

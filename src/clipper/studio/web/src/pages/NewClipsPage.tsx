@@ -88,7 +88,7 @@ const modeLabel = (job: Job) =>
     : job.mode === "top" ? `up to ${job.top} clips` : "Clipper decides how many";
 
 /** A finished video: one line, its details on a click (the list can run to dozens after a batch). */
-function FinishedRow({ job }: { job: Job }) {
+function FinishedRow({ job, runs = 1 }: { job: Job; runs?: number }) {
   const title = useCampaignTitle();
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
@@ -110,7 +110,7 @@ function FinishedRow({ job }: { job: Job }) {
               className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-2">
         <ChevronRight className={cn("size-3.5 shrink-0 text-muted transition-transform", open && "rotate-90")} />
         <span className="min-w-0 flex-1 truncate text-sm">{job.name}</span>
-        <span className="hidden shrink-0 text-xs text-muted sm:inline">{title(job.campaign)} · {ago(job.created)}</span>
+        <span className="hidden shrink-0 text-xs text-muted sm:inline">{title(job.campaign)} · {ago(job.created)}{runs > 1 ? ` · clipped ${runs} times` : ""}</span>
         {job.status === "failed" ? <Chip tone="danger">Failed</Chip>
           : job.clips > 0 ? <Chip tone="success">made {job.clips} clip{job.clips === 1 ? "" : "s"}</Chip>
           : <Chip tone="warning">No clips</Chip>}
@@ -143,7 +143,7 @@ function FinishedRow({ job }: { job: Job }) {
 /** How many finished videos show before "Show all". */
 const FINISHED_SHOWN = 8;
 
-function FinishedList({ jobs }: { jobs: Job[] }) {
+function FinishedList({ jobs, runs }: { jobs: Job[]; runs: (j: Job) => number }) {
   const [all, setAll] = useState(false);
   const made = jobs.reduce((n, j) => n + j.clips, 0);
   return (
@@ -152,7 +152,7 @@ function FinishedList({ jobs }: { jobs: Job[] }) {
         Finished <span className="text-xs font-normal text-muted">{jobs.length} run{jobs.length === 1 ? "" : "s"} · {made} clip{made === 1 ? "" : "s"} made</span>
       </h2>
       <div className="flex flex-col gap-1.5">
-        {(all ? jobs : jobs.slice(0, FINISHED_SHOWN)).map((j) => <FinishedRow key={j.id} job={j} />)}
+        {(all ? jobs : jobs.slice(0, FINISHED_SHOWN)).map((j) => <FinishedRow key={j.id} job={j} runs={runs(j)} />)}
       </div>
       {jobs.length > FINISHED_SHOWN && (
         <Button variant="ghost" size="sm" className="mt-2" onClick={() => setAll(!all)}>
@@ -379,6 +379,7 @@ export function NewClipsPage() {
   const [picked, setPicked] = useState<string[]>(search.source ? [search.source] : []);   // opened from a video: it's picked (D143)
   const source = picked[0] ?? "";
   const [mode, setMode] = useState<JobMode>("auto");
+  const [showArchived, setShowArchived] = useState(false);
   const [top, setTop] = useState(4);
   const [ranges, setRanges] = useState<Range[]>([{ start: "", end: "" }]);
   const [busy, setBusy] = useState(false);
@@ -414,9 +415,12 @@ export function NewClipsPage() {
     .sort((a, b) => (a.status === "running" ? -1 : b.status === "running" ? 1 : a.id - b.id));
   // A failed run that a later run of the same video for the same campaign replaced is noise:
   // one bad minute (a setting changed mid-update) once left 13 "Failed" rows above the 9 clips.
+  // The same goes for an earlier finished run of a video clipped again: the latest one stands for both,
+  // marked "clipped twice" (D154).
+  const sameVideo = (j: Job, k: Job) => k.campaign === j.campaign && k.source.split(/[\\/]/).pop() === j.source.split(/[\\/]/).pop();
   const finished = jobs.filter((j) => j.status !== "running" && j.status !== "queued"
-    && !(j.status === "failed" && jobs.some((k) => k.id > j.id && k.status === "done"
-      && k.campaign === j.campaign && k.source.split(/[\\/]/).pop() === j.source.split(/[\\/]/).pop())));
+    && !jobs.some((k) => k.id > j.id && k.status === "done" && sameVideo(j, k)));
+  const runs = (j: Job) => jobs.filter((k) => k.status === "done" && sameVideo(j, k)).length;
   // Videos already clipped, and how many clips each gave, so none is clipped twice by mistake.
   const clipped = new Map<string, number>();
   for (const j of jobs) {
@@ -425,6 +429,7 @@ export function NewClipsPage() {
   // Footage by campaign (studio/footage.py): the picked campaign's first and open,
   // then each other campaign folded, then anything not sorted yet (D73).
   const titleOf = (name: string) => campaigns.find((c) => c.name === name)?.title ?? name;
+  const archivedNames = new Set(campaigns.filter((c) => c.archived).map((c) => c.name));
   const groups = (() => {
     const by = new Map<string, Source[]>();
     for (const s of sources) by.set(s.campaign ?? "", [...(by.get(s.campaign ?? "") ?? []), s]);
@@ -435,11 +440,15 @@ export function NewClipsPage() {
                  hint: mine.length ? undefined : "None yet. Upload or import above, or pick from the other groups: whatever you clip is filed here." });
     }
     for (const [key, videos] of by) {
-      if (key && key !== campaign) out.push({ key, title: titleOf(key), videos, open: !campaign && by.size === 1 });
+      if (key && key !== campaign && !archivedNames.has(key)) out.push({ key, title: titleOf(key), videos, open: !campaign && by.size === 1 });
     }
     if (by.get("")?.length) out.push({ key: "", title: "Not sorted yet", videos: by.get("") ?? [], open: !campaign || !mine.length });
     return out;
   })();
+  // Archived campaigns' footage, folded away under one toggle (D154).
+  const archivedGroups = [...new Set(sources.map((s) => s.campaign ?? ""))]
+    .filter((key) => key && key !== campaign && archivedNames.has(key))
+    .map((key) => ({ key, title: titleOf(key), videos: sources.filter((s) => s.campaign === key) }));
   const ready = Boolean(campaign && picked.length && !overCap && (mode !== "manual" || rangesOk));
 
   const make = async () => {
@@ -527,6 +536,16 @@ export function NewClipsPage() {
                     picked={picked} manual={mode === "manual"} clipped={clipped} onToggle={toggle}
                     onAll={mode === "manual" ? undefined : () => setPicked((p) => [...new Set([...p, ...g.videos.map((v) => v.path)])].slice(0, batchCap ?? undefined))} />
                 ))}
+                {archivedGroups.length > 0 && (
+                  <button type="button" className="self-start text-xs text-muted hover:text-fg" onClick={() => setShowArchived(!showArchived)}>
+                    {showArchived ? "Hide archived campaigns' footage" : `Archived campaigns' footage (${archivedGroups.length})`}
+                  </button>
+                )}
+                {showArchived && archivedGroups.map((g) => (
+                  <FootageGroup key={g.key} title={g.title} videos={g.videos} open={false}
+                    picked={picked} manual={mode === "manual"} clipped={clipped} onToggle={toggle}
+                    onAll={mode === "manual" ? undefined : () => setPicked((p) => [...new Set([...p, ...g.videos.map((v) => v.path)])].slice(0, batchCap ?? undefined))} />
+                ))}
               </div>
             </>
           )}
@@ -591,7 +610,7 @@ export function NewClipsPage() {
               <div className="mb-6 flex flex-col gap-2">{queue.map((j) => <JobCard key={j.id} job={j} />)}</div>
             </>
           )}
-          {finished.length > 0 && <FinishedList jobs={finished} />}
+          {finished.length > 0 && <FinishedList jobs={finished} runs={runs} />}
           {!jobs.length && (
             <EmptyState icon={<Scissors className="size-5" />} title="Nothing clipping yet"
               body="A full episode takes a few minutes: transcribing, finding scenes, scoring moments, then rendering each clip." />

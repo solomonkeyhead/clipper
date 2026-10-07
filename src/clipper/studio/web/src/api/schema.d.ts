@@ -2677,6 +2677,11 @@ export interface components {
              * @default 0
              */
             skipped: number;
+            /**
+             * Waiting
+             * @default 0
+             */
+            waiting: number;
         };
         /** CampaignDetail */
         CampaignDetail: {
@@ -2950,6 +2955,8 @@ export interface components {
              * @default []
              */
             duplicates: components["schemas"]["Duplicate"][];
+            /** Submit At Views */
+            submit_at_views?: number | null;
             /**
              * Post Copy
              * @default []

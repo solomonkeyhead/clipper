@@ -32,8 +32,13 @@ def _words(text: str) -> set[str]:
             if len(w) >= 3 and w not in COMMON}
 
 
+#: Source ids that name no real footage: every Short made in Create is filed under "create", so two of
+#: them starting at 0 s are different videos, not the same moment.
+NO_SOURCE = {None, "", "create"}
+
+
 def _time_share(a: dict, b: dict) -> float:
-    if a.get("source_id") != b.get("source_id") or None in (a.get("start_s"), a.get("end_s"),
+    if a.get("source_id") in NO_SOURCE or a.get("source_id") != b.get("source_id") or None in (a.get("start_s"), a.get("end_s"),
                                                             b.get("start_s"), b.get("end_s")):
         return 0.0
     shared = min(a["end_s"], b["end_s"]) - max(a["start_s"], b["start_s"])

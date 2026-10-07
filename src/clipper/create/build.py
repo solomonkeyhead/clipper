@@ -17,7 +17,7 @@ import hashlib
 import json
 import math
 import shutil
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import NamedTuple
 
@@ -268,7 +268,7 @@ def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, 
 FOOTAGE_WORKERS = 4
 
 
-def _prefetch(script: Script, timings: Timings, groups: list[list[int]]) -> dict[int, _Footage]:
+def _prefetch(script: Script, timings: Timings, groups: list[list[int]], progress=None) -> dict[int, _Footage]:
     """The footage for every stock picture at once (D136): one sentence's AI wait, searches and
     thumbnails overlap the others'. A choice that clashes with an earlier sentence's clip (the same
     one picked twice) is made again in turn by `_planned`, so no clip is used twice."""
@@ -289,8 +289,16 @@ def _prefetch(script: Script, timings: Timings, groups: list[list[int]]) -> dict
             log.info("create: footage for sentence %d not chosen ahead (%s)", i + 1, exc)
             return i, None
 
+    # Counted as each one is chosen: a slow AI kept one number on screen for minutes (D154).
+    out: dict[int, _Footage] = {}
     with ThreadPoolExecutor(max_workers=FOOTAGE_WORKERS) as pool:
-        return {i: got for i, got in pool.map(one, todo) if got}
+        for n, done in enumerate(as_completed([pool.submit(one, job) for job in todo]), 1):
+            i, got = done.result()
+            if got:
+                out[i] = got
+            if progress:
+                progress(f"Choosing footage: {n} of {len(todo)}", 8 + 2 * n / len(todo))
+    return out
 
 
 def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: Script, work: Path, used: set,
@@ -447,7 +455,7 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
         groups += [group] if not root.clip else [[i] for i in group]
     if progress:
         progress("Choosing footage", 8)
-    ahead = _prefetch(script, timings, groups)
+    ahead = _prefetch(script, timings, groups, progress)
     for n, group in enumerate(groups):
         i, beat = group[0], script.beats[group[0]]
         if progress:

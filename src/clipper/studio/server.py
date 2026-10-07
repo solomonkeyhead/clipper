@@ -28,7 +28,13 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
 from .. import connect
@@ -258,7 +264,9 @@ class Snapshot:
                     shares=p.get("shares"), saves=p.get("saves"),
                     avg_watch_s=p.get("avg_watch_s"), watched_full_pct=p.get("watched_full_pct"),
                     skip_rate_pct=p.get("skip_rate_pct"),
-                    x_median=round(views / median, 1) if median and views is not None else None,
+                    # Against a median under MIN_MEDIAN views, "22x" said nothing (22 views on a median of 1, D154).
+                    x_median=(round(views / median, 1) if median and median >= stats.MIN_MEDIAN and views is not None
+                              else None),
                     est_earnings=stats.post_earnings(views, brief),
                     submitted_at=self.submitted.get(p["url"]),
                     tasks=[PostTask(views=m.views, task=m.task, done=(p["url"], m.views) in self.tasks_done)
@@ -269,11 +277,13 @@ class Snapshot:
                 status = "submitted" if all(m.submitted_at for m in models) else "posted"
             scores = json.loads(c.get("scores") or "{}")
             # The file's change time, in its links: a re-rendered clip's new frame shows at once.
-            try:
-                version = int(library.clip_path(c["file"]).stat().st_mtime)
-            except OSError:
-                version = 0
+            # A clip with no file of its own (a Short adopted from YouTube) has an empty name, which is the
+            # library folder itself: not a file to play or download (D154).
+            file = library.clip_path(c["file"])
+            version = int(file.stat().st_mtime) if c["file"] and file.is_file() else 0
             copy, rule_state = self._rules(c, brief) if brief and status in ("ready", "skipped") else ([], None)
+            threshold = self.submit_at(brief) if status == "posted" else None
+            best = max((m.views or 0 for m in models), default=0)
             self.clips.append(Clip(
                 post_copy=copy, rules=rule_state,
                 pinned_comment=rulecheck.extras(c).get("pinned_comment", "") if status == "ready" else "",
@@ -293,7 +303,8 @@ class Snapshot:
                 marked=c["status"], notes=c["notes"], created_at=c["created_at"],
                 file_exists=bool(version), video=f"/media/{c['id']}?v={version}",
                 thumb=f"/thumb/{c['id']}?v={version}", posts=models,
-                rerendering=rerender.state_of(c["id"])[0], rerender_error=rerender.state_of(c["id"])[1]))
+                rerendering=rerender.state_of(c["id"])[0], rerender_error=rerender.state_of(c["id"])[1],
+                submit_at_views=threshold if threshold and best < threshold else None))
         # Before posting: which already-posted clips each one repeats (studio/duplicates.py).
         from . import duplicates
 
@@ -323,6 +334,14 @@ class Snapshot:
                            checking=rulecheck.checking(campaign.name),
                            brief=[BriefProblem(**p) for p in found.get("problems") or []] if current else [])
 
+    def submit_at(self, campaign: CampaignConfig | None) -> int | None:
+        """The views a post needs before it's submitted, if the brief sets one (D154)."""
+        from ..campaign import milestones
+
+        if campaign is None or not campaign.submits:
+            return None
+        return milestones.submit_at(campaign, self.briefs.get(campaign.name))
+
     def milestones(self, campaign: CampaignConfig | None) -> list:
         """The brief's view-milestone tasks (campaign/milestones.py), read once per campaign."""
         from ..campaign import milestones
@@ -341,7 +360,8 @@ class Snapshot:
         brief = self.campaigns.get(name)
         mine = [c for c in self.clips if c.campaign == name]
         posts = [p for c in mine for p in c.posts]
-        counts = CampaignCounts(**{s: sum(1 for c in mine if c.status == s) for s in db.STATUSES})
+        counts = CampaignCounts(**{s: sum(1 for c in mine if c.status == s) for s in db.STATUSES},
+                                waiting=sum(1 for c in mine if c.submit_at_views))
         earnings = [p.est_earnings for p in posts if p.est_earnings is not None]
         st = self.state.get(name, {})
         auto = st.get("auto_post")
@@ -611,9 +631,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             log.info("couldn't transcribe clips for the duplicate check: %s", exc)
 
     async def alerts_loop() -> None:
-        """Campaign alerts from Discord, every few minutes (studio/alerts.py)."""
+        """Campaign alerts from Discord and Whop, every few minutes (studio/alerts.py). Whop alone counts:
+        this used to wait for a Discord bot, so a Whop-only setup was never checked on its own."""
         while True:
-            if alerts.token() and alerts.watched():
+            if (alerts.token() and alerts.watched()) or alerts.whop_watched():
                 try:
                     await asyncio.to_thread(alerts.check, publish=broker.publish)
                 except Exception:
@@ -749,8 +770,22 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         config = Config.load()
         mine = config.llm.backend
         current = next((k for k, v in BACKENDS.items() if v == mine), "")
-        return {"jobs": [{"id": i, "label": label, "about": about, "choice": config.llm.job_providers.get(i, "")}
-                         for i, label, about in AI_JOBS],
+        from ..create import ai as create_ai
+        from ..pipeline import judge_backend
+
+        # What "Automatic" means right now, per job (D154): Marc's scripts sat on an overloaded Gemini
+        # while the page only said "Automatic".
+        def now(job: str) -> str:
+            if job == "judge":
+                try:
+                    judge = judge_backend(config)
+                except Exception:
+                    judge = None
+                return judge.name if judge else mine
+            return create_ai.first_choice(config, job)
+
+        return {"jobs": [{"id": i, "label": label, "about": about, "choice": config.llm.job_providers.get(i, ""),
+                          "now": now(i)} for i, label, about in AI_JOBS],
                 "clipping": {"choice": current if mine != "gemini" else "", "now": mine},
                 "available": {"claude_plan": bool(cli()), "claude_api": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
                               "gemini": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "ollama": bool(shutil.which("ollama"))}}
@@ -1670,6 +1705,12 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             mine = [p for p in posts if account_groups.key(p.platform, p.account) == a.key]
             a.posts, a.views = len(mine), sum(p.views or 0 for p in mine)
             a.groups = [g["name"] for g in groups if a.key in g["members"]]
+            # The last sync's problem with this account, so a failing one doesn't read "ok" here.
+            label = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "x": "X"}[a.platform]
+            failed = next((p for p in last_problems if p.startswith(f"{label} ")
+                           and p.split(":", 1)[0].removeprefix(f"{label} ").lstrip("@") == a.handle), "")
+            if failed:
+                a.health, a.detail = "error", f"Last sync failed: {failed.split(':', 1)[1].strip()}"
         return found
 
     @app.get("/api/account-groups")
@@ -2007,13 +2048,19 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
                 ".mov": "video/quicktime"}.get(target.suffix.lower(), "application/octet-stream")
         return FileResponse(target, media_type=kind)
 
-    @app.get("/thumb/{clip_id}")
-    def thumb(clip_id: int) -> FileResponse:
+    @app.get("/thumb/{clip_id}", response_model=None)
+    def thumb(clip_id: int) -> FileResponse | RedirectResponse:
         """A still of the clip at 1.5s (hook on screen), made once and kept."""
         with db.connect() as con:
             found = db.clip(con, clip_id)
         path = library.clip_path(found["file"]) if found else None
-        if path is None or not path.exists():
+        if path is None or not path.is_file():   # no file: an empty name points at the library folder
+            # A Short adopted from your channel has no file here (D144): YouTube's own still of it (D154).
+            clip = next((c for c in Snapshot().clips if c.id == clip_id), None) if found else None
+            video = next((m.group(1) for p in (clip.posts if clip else []) if p.platform == "youtube"
+                          for m in [re.search(r"(?:shorts/|v=|youtu\.be/)([\w-]{11})", p.url)] if m), None)
+            if video:
+                return RedirectResponse(f"https://i.ytimg.com/vi/{video}/hqdefault.jpg")
             raise HTTPException(404, "no such clip file")
         # A clip that opens on its chosen cover shows that, as the platforms will (D104).
         covered = (json.loads(found.get("scores") or "{}") or {}).get("cover") is not None
@@ -2073,7 +2120,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         with db.connect() as con:
             found = db.clip(con, clip_id)
         path = library.clip_path(found["file"]) if found else None
-        if path is None or not path.exists():
+        if path is None or not path.is_file():
             raise HTTPException(404, "no such clip file")
         if download:
             name = re.sub(r'[\\/:*?"<>|]+', "", found["title"] or found["clip_id"]).strip()[:80]

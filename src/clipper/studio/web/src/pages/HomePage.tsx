@@ -5,6 +5,8 @@ import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetSettings, u
 import { Button, Card, Metric, PageHeader, Skeleton, Sparkline, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatCount, formatMoney } from "@/lib/utils";
+import { PLATFORM_NAME } from "@/api/platforms.gen";
+import { PlatformIcon } from "@/components/PlatformIcon";
 
 function greeting() {
   const h = new Date().getHours();
@@ -262,13 +264,25 @@ export function DashboardPage() {
     .sort((a, b) => (a.post.posted_at ?? "").localeCompare(b.post.posted_at ?? ""));
   const firstRun = Object.values(home.first_run).some((done) => !done);
   const active = clips.filter((c) => c.status !== "skipped" && !archived.has(c.campaign));
-  const by = (s: string) => active.filter((c) => c.status === s && !(s === "posted" && c.submits === false));
+  // To submit: not your own channel's, and not still short of the views the brief wants first (D154).
+  const by = (s: string) => active.filter((c) => c.status === s && !(s === "posted" && (c.submits === false || c.submit_at_views)));
+  const waitingViews = active.filter((c) => c.status === "posted" && c.submit_at_views);
+  // A clip that repeats one already up isn't counted as one to post (D154).
+  const toPost = by("ready").filter((c) => !c.duplicates?.length);
+  // Each platform's median, side by side: one median across them all read "1" (D154).
+  const medians = Object.entries(posts.reduce<Record<string, number[]>>((acc, p) => {
+    (acc[p.platform] ??= []).push(p.views ?? 0);
+    return acc;
+  }, {})).map(([platform, views]) => {
+    const sorted = [...views].sort((a, b) => a - b);
+    return { platform, posts: sorted.length, median: sorted[Math.floor(sorted.length / 2)] };
+  }).sort((a, b) => b.median - a.median);
 
   // The one thing to do next (D143): the first clip to post, else the first link to submit, else a
   // brief task, else the channel's next step, else more clips. One button, so opening the app has a next move.
   const channelBusy = uses.create ? create?.videos.find((v) => v.status !== "built") : undefined;
   const next: { label: string; run: () => void } | null = firstRun ? null
-    : by("ready").length ? { label: `Post the next clip (${by("ready").length})`, run: () => void navigate({ to: "/post", search: { step: "post" } }) }
+    : toPost.length ? { label: `Post the next clip (${toPost.length})`, run: () => void navigate({ to: "/post", search: { step: "post" } }) }
     : by("posted").length ? { label: `Submit the next clip (${by("posted").length})`, run: () => void navigate({ to: "/post", search: { step: "submit" } }) }
     : due.length ? { label: "Do the next brief task", run: () => open(due[0].post.clip) }
     : channelBusy ? { label: `Your Short: ${channelBusy.status === "draft" ? "approve the script" : channelBusy.status === "approved" ? "add the voice" : "see it"}`, run: () => void navigate({ to: "/create" }) }
@@ -284,8 +298,8 @@ export function DashboardPage() {
   return (
     <div className="fade-in flex flex-col gap-8">
       <PageHeader
-        title={!firstRun && by("ready").length ? `${greeting()} ${by("ready").length} clip${by("ready").length === 1 ? "" : "s"} to post` : greeting()}
-        hi={`${by("ready").length} clip`}
+        title={!firstRun && toPost.length ? `${greeting()} ${toPost.length} clip${toPost.length === 1 ? "" : "s"} to post` : greeting()}
+        hi={`${toPost.length} clip`}
         subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : `${week ? `${week} ` : ""}Here's where your clips stand.`}
         actions={next && <Button variant="primary" size="md" onClick={next.run}>{next.label} <ArrowRight className="size-4" /></Button>} />
       {uses.loaded && !uses.onboarded && <Welcome />}
@@ -302,8 +316,21 @@ export function DashboardPage() {
                 hint="Total views on your posts at the end of each day, from the syncs"
                 to="/stats" search={{ sort: "views" }}
                 sub={range === "all" ? "every campaign, archived too, since the first sync" : "gained, every campaign"} />
-        <Metric label="Median views / post" value={formatCount(m.median_views)} sub="the middle post: half get at least this"
-                to="/stats" search={{ sort: "views" }} />
+        <Tip label="The middle post on each platform: half your posts there get at least this many views.">
+          <Link to="/stats" search={{ sort: "views" }} className="block rounded-lg">
+            <Card className="flex h-full flex-col gap-2 p-4 transition-colors hover:border-line-strong hover:bg-surface-2">
+              <span className="text-xs font-medium text-muted">Median views per post</span>
+              {medians.length === 0 && <span className="num text-[1.9rem] leading-tight">–</span>}
+              {medians.map((r) => (
+                <div key={r.platform} className="flex items-center gap-2 text-sm">
+                  <PlatformIcon platform={r.platform} className="size-4 text-muted" />
+                  <span className="flex-1 text-muted">{PLATFORM_NAME[r.platform] ?? r.platform}</span>
+                  <span className="num text-lg">{formatCount(r.median)}</span>
+                </div>
+              ))}
+            </Card>
+          </Link>
+        </Tip>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -347,10 +374,17 @@ export function DashboardPage() {
               <ArrowRight className="size-4 text-subtle" />
             </Link>
           )}
-          {m.to_submit > 0 && (
+          {by("posted").length > 0 && (
             <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
               <Inbox className="size-4 text-warning" />
-              <span className="flex-1 text-sm">{by("posted").length} clip{by("posted").length === 1 ? "" : "s"} to submit <span className="text-muted">({m.to_submit} link{m.to_submit === 1 ? "" : "s"})</span></span>
+              <span className="flex-1 text-sm">{by("posted").length} clip{by("posted").length === 1 ? "" : "s"} to submit</span>
+              <ArrowRight className="size-4 text-subtle" />
+            </Link>
+          )}
+          {waitingViews.length > 0 && (
+            <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 text-muted hover:bg-surface-2">
+              <Inbox className="size-4" />
+              <span className="flex-1 text-sm">{waitingViews.length} posted, waiting for enough views to submit</span>
               <ArrowRight className="size-4 text-subtle" />
             </Link>
           )}
@@ -368,7 +402,7 @@ export function DashboardPage() {
             </div>
           ))}
           {due.length > 3 && <span className="px-2 text-xs text-subtle">+{due.length - 3} more brief tasks</span>}
-          {m.ready === 0 && m.to_submit === 0 && !due.length && (
+          {m.ready === 0 && by("posted").length === 0 && !waitingViews.length && !due.length && (
             <p className="flex items-center gap-2 p-2 text-sm text-muted">
               <CheckCircle2 className="size-4 text-success" /> All caught up.
             </p>

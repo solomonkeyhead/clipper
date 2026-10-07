@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { AlertTriangle, Archive, ArchiveRestore, BarChart3, CalendarClock, ExternalLink, Megaphone, Pencil, Plus, Scissors, Search, ShieldCheck, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, Archive, ArchiveRestore, BarChart3, CalendarClock, ChevronRight, ExternalLink, Megaphone, Pencil, Plus, Scissors, Search, ShieldCheck, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import {
@@ -14,12 +14,16 @@ import { ClipFilters, NoClips, firstFilter, inFilter, type ClipFilter } from "./
 import { PLATFORM_NAME, ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
 function CampaignCard({ c }: { c: Campaign }) {
+  const navigate = useNavigate();
+  // Nothing to post or submit: say where its clips went, and the next step (D154). HardScope showed 0 0 0 0
+  // with 18 clips made, all skipped.
+  const idle = !c.own_channel && c.counts.ready + c.counts.posted + c.counts.submitted === 0;
   return (
     <Link to="/campaigns/$name" params={{ name: c.name }}
           className="group flex flex-col gap-4 rounded-lg border border-line bg-surface-1 p-5 shadow-1 transition-colors duration-[var(--dur-base)] hover:border-line-strong hover:bg-surface-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-md font-semibold">{c.title}</h3>
+          <h3 className="line-clamp-2 text-md font-semibold" title={c.title}>{c.title}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-muted">
             {c.platforms.map((p) => (
               <Tip key={p} label={PLATFORM_NAME[p] ?? p}><span><PlatformIcon platform={p} /></span></Tip>
@@ -37,7 +41,7 @@ function CampaignCard({ c }: { c: Campaign }) {
       </div>
       <div className="tabular grid grid-cols-4 gap-2 text-center">
         {(c.submits
-          ? [["Ready", c.counts.ready], ["To submit", c.counts.posted], ["Submitted", c.counts.submitted], ["Views", formatCount(c.views)]]
+          ? [["Ready", c.counts.ready], ["To submit", c.counts.posted - (c.counts.waiting ?? 0)], ["Submitted", c.counts.submitted], ["Views", formatCount(c.views)]]
           : [["Ready", c.counts.ready], ["Posted", c.counts.posted + c.counts.submitted], ["Skipped", c.counts.skipped], ["Views", formatCount(c.views)]]
         ).map(([label, value]) => (
           <div key={label} className="rounded-md bg-surface-2 py-2">
@@ -47,9 +51,17 @@ function CampaignCard({ c }: { c: Campaign }) {
         ))}
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted">
+        <span className="flex items-center gap-2 text-muted">
           {c.est_earnings !== null && c.est_earnings !== undefined
             ? <>Est. <span className="text-money">{formatMoney(c.est_earnings)}</span> so far</> : " "}
+          {idle && c.counts.skipped > 0 && <span>{c.counts.skipped} skipped</span>}
+          {(c.counts.waiting ?? 0) > 0 && <span title="Posted, and short of the views the brief wants before you submit">{c.counts.waiting} waiting for views</span>}
+          {idle && (
+            <button type="button" className="font-medium text-accent hover:underline"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void navigate({ to: "/new", search: { campaign: c.name } }); }}>
+              Make clips →
+            </button>
+          )}
         </span>
         <span className="flex flex-wrap justify-end gap-1.5">
           {c.warning && <Chip tone="danger" title={c.warning}>{c.warning.split(" · ")[0]}</Chip>}
@@ -172,16 +184,28 @@ function BriefPanel({ brief }: { brief: Brief }) {
           ))}
         </Card>
       )}
+      {/* The long lists start folded (D154): open when you need them. */}
       {brief.hook_texts.length > 0 && (
-        <Card className="flex flex-col gap-1.5 p-4">
-          <h2 className="text-sm font-semibold">On-screen lines</h2>
-          {brief.hook_texts.map((h) => <p key={h} className="text-sm text-muted">“{h}”</p>)}
+        <Card className="p-4">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold">
+              <ChevronRight className="size-4 text-muted transition-transform group-open:rotate-90" />
+              On-screen lines <span className="font-normal text-subtle">{brief.hook_texts.length}</span>
+            </summary>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {brief.hook_texts.map((h) => <p key={h} className="text-sm text-muted">“{h}”</p>)}
+            </div>
+          </details>
         </Card>
       )}
       {brief.notes && (
         <Card className="p-4">
-          <h2 className="mb-1.5 text-sm font-semibold">Notes</h2>
-          <p className="text-sm whitespace-pre-wrap text-muted">{brief.notes}</p>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold">
+              <ChevronRight className="size-4 text-muted transition-transform group-open:rotate-90" /> Notes
+            </summary>
+            <p className="mt-2 text-sm whitespace-pre-wrap text-muted">{brief.notes}</p>
+          </details>
         </Card>
       )}
     </aside>

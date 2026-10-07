@@ -9,6 +9,7 @@ across every corner of physics so the channel doesn't repeat itself.
 from __future__ import annotations
 
 import json
+import re
 
 from pydantic import BaseModel
 
@@ -58,3 +59,24 @@ def generate(count: int = 30, steer: str = "") -> int:
     except (ValueError, TypeError) as exc:
         raise CreateError("the ideas came back unreadable; try again") from exc
     return store.add_topics(ideas)
+
+
+#: Words that say nothing about the subject of a question.
+_PLAIN = set("why does do you your the a an when what how with make makes feel like so much more than "  # noqa: SIM905 (a word list reads better as text)
+             "get gets from into out about this that there are is it its can".split())
+
+
+def _subject(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) > 2 and w not in _PLAIN}
+
+
+def made_already(question: str, titles: list[str]) -> bool:
+    """Whether a Short about this question exists (D154): an idea worded differently from the video
+    made of it ("helium ... like a cartoon" against "helium ... sound funny") stayed on the list."""
+    mine = _subject(question)
+    for title in titles:
+        theirs = _subject(title)
+        shared = mine & theirs
+        if len(shared) >= 2 and len(shared) / max(1, min(len(mine), len(theirs))) >= 0.6:
+            return True
+    return False

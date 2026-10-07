@@ -7,6 +7,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import { AppShell } from "./components/AppShell";
+import { Skeleton } from "./components/ui";
 import { useUI } from "./lib/store";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
@@ -45,9 +46,10 @@ const routes = [
   createRoute({ getParentRoute: () => root, path: "/campaigns/$name/edit", component: CampaignEditorPage }),
   createRoute({
     getParentRoute: () => root, path: "/clips", component: ClipsPage,
-    validateSearch: (s: Record<string, unknown>): { status?: ClipFilter; campaign?: string } => ({
+    validateSearch: (s: Record<string, unknown>): { status?: ClipFilter; campaign?: string; rate?: boolean } => ({
       status: typeof s.status === "string" ? (s.status as ClipFilter) : undefined,
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
+      rate: s.rate === true || s.rate === "true" || s.rate === 1 || s.rate === "1" ? true : undefined,
     }),
   }),
   createRoute({
@@ -97,6 +99,11 @@ const router = createRouter({
   routeTree: root.addChildren(routes),
   defaultPreload: "intent",
   defaultPreloadDelay: 100,
+  // A page still loading shows its outline, not an empty screen for a second or more (D154).
+  defaultPendingMs: 100,
+  defaultPendingComponent: () => (
+    <div className="flex flex-col gap-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-96" /></div>
+  ),
 });
 
 declare module "@tanstack/react-router" {

@@ -61,6 +61,16 @@ class TestDelete:
         with db.connect() as con:
             assert db.clip(con, clip) is None
 
+    def test_a_clip_with_no_file_never_recycles_the_library(self, data_root):
+        """A Short adopted from YouTube has file ''; that once named the library folder itself (D154)."""
+        from clipper.studio import server
+
+        clip = add_clip(data_root)
+        with db.connect() as con:
+            con.execute("UPDATE clips SET file='', deleted_at='2020-01-01 00:00' WHERE id=?", (clip,))
+        assert server.purge_trash() == 1
+        assert (data_root / "library" / "test-campaign" / "x.mp4").exists()
+
 
 class TestDownload:
     def test_the_download_is_named_after_the_clip(self, client, data_root):

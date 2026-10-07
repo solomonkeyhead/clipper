@@ -11,6 +11,7 @@ import asyncio
 import functools
 import math
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -35,6 +36,16 @@ class Cancelled(Exception):
 
 #: Videos deleted while their build was running: deleted when it stops (D123).
 doomed: set[int] = set()
+
+
+def _made_titles(ch, videos: list[dict]) -> list[str]:
+    """Every title the channel has made: its videos, the clips filed under it (a Short can outlive its
+    Create row), and its own example scripts."""
+    from . import db
+
+    with db.connect() as con:
+        clips = [r[0] or "" for r in con.execute("SELECT title FROM clips WHERE campaign=?", (ch.campaign,))]
+    return [(v.get("script") or {}).get("title", "") for v in videos] + clips + [e.get("title", "") for e in ch.examples]
 
 
 def _delete(row: dict) -> None:
@@ -137,6 +148,7 @@ def _view() -> dict:
     except Exception as exc:  # never stop the page over the archive
         log.warning("create: couldn't check what's posted (%s)", exc)
         posted = {}
+    from ..create import topics as topics_mod
     from ..create import userclips
     from ..create.script import Script
 
@@ -160,7 +172,9 @@ def _view() -> dict:
                         "niche": ch.niche, "subject": ch.subject},
             "channels": [{"slug": c.slug, "name": c.name, "handle": c.handle, "pack": c.pack} for c in channels.all_channels()],
             "packs": [{"key": p.key, "label": p.label, "about": p.about, "drawings": p.drawings} for p in packs.PACKS.values()],
-            "topics": store.topics(), "videos": videos}
+            # Ideas already made into a Short (or one of the channel's own examples) don't show (D154).
+            "topics": [t for t in store.topics() if not topics_mod.made_already(t["question"], _made_titles(ch, videos))],
+            "videos": videos}
 
 
 def _shots(v: dict, timings: dict | None) -> list[dict]:
@@ -362,7 +376,12 @@ def routes(app: FastAPI, publish) -> None:
             problem = ""
         except CreateError as exc:
             order, problem = [], str(exc)
-        return {"order": order, "last_used": create_ai_module.last_used, "misses": dict(create_ai_module.misses),
+        # Only problems from the last 15 minutes: an old one read as if it were still happening (D154).
+        now = time.time()
+        recent = {k: v for k, v in create_ai_module.misses.items()
+                  if now - create_ai_module.missed_at.get(k, now) < 15 * 60}
+        return {"order": order, "last_used": create_ai_module.last_used, "misses": recent,
+                "missed_ago_s": {k: round(now - create_ai_module.missed_at.get(k, now)) for k in recent},
                 "claude_only": config.llm.create_claude_only, "gemini_jobs": list(config.llm.create_gemini_jobs),
                 "paid_api_jobs": list(config.llm.paid_api_jobs),
                 "problem": problem,

@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Bot, Film, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
+  AlertTriangle, BarChart3, Bot, Film, Send, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
   Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -22,6 +22,7 @@ interface NavItem {
   icon: ReactNode;
   keys: string;
   badge?: number;
+  hint?: string;     // what the badge counts, on hover
   tone?: "accent" | "warning" | "neutral";
 }
 
@@ -34,16 +35,21 @@ function useNav(): NavItem[] {
   const active = new Set(campaigns.filter((c) => !c.archived).map((c) => c.name));
   // Clips waiting on you: ready to post, or posted and not yet submitted.
   // Your own channel's posted Shorts have nothing to submit, so they aren't waiting (D147).
-  const waiting = clips.filter((c) => (c.status === "ready" || (c.status === "posted" && c.submits !== false))
-                                      && active.has(c.campaign)).length;
+  const mine = clips.filter((c) => active.has(c.campaign));
+  const toPost = mine.filter((c) => c.status === "ready").length;
+  const toSubmit = mine.filter((c) => c.status === "posted" && c.submits !== false && !c.submit_at_views).length;
+  const waiting = toPost + toSubmit;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
     // Create is the daily job, so it sits right under the Dashboard (D118); hidden when you don't use it (D145).
     ...(uses.create ? [{ to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" }] : []),
-    { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C",
-      badge: campaigns.filter((c) => !c.archived && !c.own_channel).length },
-    { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent" },
-    { to: "/clips", label: "Clips", icon: <Film />, keys: "G L", badge: waiting, tone: "accent" },
+    // A number only where something waits on you (D154): a count of campaigns asked nothing of anyone.
+    { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C" },
+    { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent",
+      hint: `${working} clipping job${working === 1 ? "" : "s"} running or queued` },
+    { to: "/clips", label: "Clips", icon: <Film />, keys: "G L" },
+    { to: "/post", label: "Post queue", icon: <Send />, keys: "", badge: waiting, tone: "accent",
+      hint: [toPost && `${toPost} to post`, toSubmit && `${toSubmit} to submit`].filter(Boolean).join(", ") },
     { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },
     { to: "/learning", label: "Learning", icon: <GraduationCap />, keys: "G R" },
   ];
@@ -77,7 +83,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
             : item.tone === "accent" ? "bg-accent-soft text-accent"
             : item.tone === "warning" ? "bg-[color-mix(in_oklch,var(--warning)_16%,transparent)] text-warning"
             : "bg-surface-3 text-muted",
-        )}>{item.badge}</span>
+        )} title={item.hint}>{item.badge}</span>
       ) : null}
     </Link>
   );
@@ -108,11 +114,12 @@ function BuildPill() {
   const { data } = useCreate();
   const building = data?.videos.find((v) => v.status === "building");
   if (!building) return null;
-  const label = `Building a Short${building.pct != null ? ` · ${Math.round(building.pct)}%` : ""}`;
+  // The step, not only a percent: "Choosing footage: 4 of 10" shows it moving when the percent can't (D154).
+  const label = building.stage ? `Short: ${building.stage}` : "Building a Short";
   return (
-    <Tip label={building.script.title || "Building"}>
-      <Link to="/create" className="flex h-8 items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 text-xs font-medium text-accent hover:border-accent" aria-label={label}>
-        <Loader2 className="size-3.5 animate-spin" /> {label}
+    <Tip label={`${building.script.title || "Building"}${building.stage ? `: ${building.stage}` : ""}`}>
+      <Link to="/create" className="flex h-8 max-w-64 items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 text-xs font-medium whitespace-nowrap text-accent hover:border-accent" aria-label={label}>
+        <Loader2 className="size-3.5 shrink-0 animate-spin" /> <span className="truncate">{label}</span>
       </Link>
     </Tip>
   );

@@ -109,6 +109,49 @@ function PostedLine({ video }: { video: CreateVideo }) {
   );
 }
 
+/** While a build waits on an overloaded Gemini, say so and offer Claude for the footage step (D154): a
+ *  build stuck at one number for minutes looked dead. Changing it takes effect on the next AI call. */
+function GeminiStruggling() {
+  const { data: ai } = useCreateAI();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const miss = Object.entries(ai?.misses ?? {}).find(([k]) => k.startsWith("gemini"));
+  if (!ai || !miss) return null;
+  const claude = ai.order.some((b) => b.startsWith("claude_code"));
+  const useClaude = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/ai-jobs", { method: "PUT", headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ job: "footage", choice: "claude_plan" }) });
+      if (!res.ok) throw new Error("Couldn't change it");
+      toast.success("Claude picks the footage from now on. Change it back in Settings, Who does what.");
+      void qc.invalidateQueries({ queryKey: ["ai-jobs"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-[color-mix(in_oklch,var(--warning)_10%,transparent)] px-3 py-2 text-xs text-warning">
+      <AlertTriangle className="size-3.5" />
+      <span className="flex-1">Gemini is overloaded and Clipper keeps retrying, so this is slow. It hasn't stopped.</span>
+      {claude && (
+        <Tip label="Uses your Claude plan's usage for the rest of this build and later ones.">
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => void useClaude()}>
+            {busy && <Loader2 className="size-3.5 animate-spin" />} Use Claude for footage
+          </Button>
+        </Tip>
+      )}
+    </div>
+  );
+}
+
+function minutesAgo(seconds: number | undefined) {
+  const m = Math.round((seconds ?? 0) / 60);
+  return m < 1 ? "just now" : `${m} min ago`;
+}
+
 /** Which AI does what, always in view: Claude or Gemini was a guess for two videos (D118). */
 function AIStrip() {
   const { data: ai } = useCreateAI();
@@ -123,8 +166,7 @@ function AIStrip() {
     <p className={cn("mt-1 flex flex-wrap items-center gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>
       {claude && !ai.problem ? <CheckCircle2 className="size-3.5 text-success" /> : <AlertTriangle className="size-3.5" />}
       {text}
-      {miss && <span className="text-subtle">Last problem: {miss[1]}</span>}
-      {ai.spent_usd > 0 && <span className="text-subtle">This session so far: about ${ai.spent_usd.toFixed(2)} at API prices (free on a plan).</span>}
+      {miss && <span className="text-subtle">{miss[0].split(":")[0] === "gemini" ? "Gemini" : "Claude"} had a problem {minutesAgo(ai.missed_ago_s[miss[0]])}: {miss[1]}</span>}
     </p>
   );
 }
@@ -234,6 +276,9 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<number | "more" | null>(null);
   const [steer, setSteer] = useState("");
+  const [find, setFind] = useState("");
+  const words = find.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = words.length ? topics.filter((t) => words.every((w) => `${t.question} ${t.angle}`.toLowerCase().includes(w))) : topics;
   const refresh = () => qc.invalidateQueries({ queryKey: ["create"] });
   const more = async () => {
     setBusy("more");
@@ -273,14 +318,21 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
                className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
         <p className="mt-1 text-[11px] text-subtle">Lasting guidance is under Channel settings. Skipping an idea teaches it what to avoid.</p>
       </div>
+      {topics.length > 10 && (
+        <div className="border-b border-line px-4 py-2">
+          <input value={find} onChange={(e) => setFind(e.target.value)} aria-label="Search the ideas" type="search"
+                 placeholder={`Search ${topics.length} ideas`}
+                 className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto">
         {topics.length === 0 && <p className="p-4 text-sm text-muted">No ideas left. Press More ideas.</p>}
-        {topics.map((t) => (
+        {topics.length > 0 && shown.length === 0 && <p className="p-4 text-sm text-muted">No idea matches “{find}”.</p>}
+        {shown.map((t) => (
           <div key={t.id} className="group flex items-start gap-2 border-b border-line px-4 py-3 last:border-0">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">{t.question}</div>
               <div className="mt-0.5 text-xs text-muted">{t.angle}</div>
-              {t.felt ? <Chip tone="accent" className="mt-1.5 h-5 text-[11px]" title="About something viewers have felt themselves; these ideas are listed first">felt in daily life</Chip> : null}
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => void write(t)}>
@@ -432,8 +484,9 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       <div className="flex flex-col gap-2">
         <div className="flex justify-between text-sm"><span>{video.stage ?? "Starting…"}</span><span className="tabular text-muted">{Math.round(video.pct ?? 0)}%</span></div>
         <div className="h-2 overflow-hidden rounded-full bg-surface-3"><div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(3, video.pct ?? 0)}%` }} /></div>
+        <GeminiStruggling />
         <div className="flex flex-wrap items-center gap-3">
-          <p className="flex-1 text-xs text-muted">Timing your voice, finding footage, drawing the diagrams. About a minute; you can leave this page.</p>
+          <p className="flex-1 text-xs text-muted">Timing your voice, finding footage, drawing the diagrams. You can leave this page.</p>
           <Tip label="Stops at the next step. A video built before stays as it was.">
             <Button size="sm" variant="ghost" disabled={busy !== null || video.cancelling}
                     onClick={run("cancel", () => createApi.cancel(video.id), "Stopping the build")}>

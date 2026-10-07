@@ -30,6 +30,13 @@ class TestMilestones:
     def test_rates_and_minimums_are_not_tasks(self, text):
         assert milestones.find(text) == []
 
+    def test_a_submit_milestone_is_the_campaigns_submit_threshold(self):
+        from types import SimpleNamespace as NS
+
+        brief = "Pin a comment at 500 views.\nWait until your video passes 2,000 views, then submit."
+        assert milestones.submit_at(NS(notes="", posting_rules=[]), brief) == 2000
+        assert milestones.submit_at(NS(notes="Pin a comment at 500 views.", posting_rules=[])) is None
+
 
 class TestWarnings:
     TODAY = datetime(2026, 10, 2, 12, 0)

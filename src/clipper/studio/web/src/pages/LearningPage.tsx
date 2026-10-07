@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { FlaskConical, Lightbulb } from "lucide-react";
 import { useCampaigns, useLearning, useSetSettings, useSettings, useWhatsWorking, type Learning, type WhatsWorking } from "@/api/client";
@@ -26,7 +26,8 @@ function Verdict({ label, verdict, rho, n, need, explain }: {
       <span className="text-xs font-medium text-muted">{label}</span>
       <span className={cn("text-2xl font-semibold", v.tone)}>{v.text}</span>
       <span className="text-xs text-muted">
-        {verdict === "not enough yet" ? `${n} of ${need} clips needed` : <Tip label={explain}><span>ρ = {rho?.toFixed(2)} over {n} clips</span></Tip>}
+        {verdict === "not enough yet" ? `${n} of ${need} clips needed`
+          : <Tip label={`${explain} Its rank correlation is ${rho?.toFixed(2)}: 1 is a perfect match, 0 no link.`}><span>over {n} clips</span></Tip>}
       </span>
     </Card>
   );
@@ -66,7 +67,8 @@ function insights(r: Report): React.ReactNode[] {
     if (none.length) out.push(<>Its read on <b>{none.join(" and ")}</b> has no link to what you like yet.</>);
   }
   if (r.unrated > 0) {
-    out.push(<>{r.unrated} clip{r.unrated === 1 ? " has" : "s have"} no rating. Rating them, especially ones you like, is the fastest way to teach it.</>);
+    out.push(<>{r.unrated} clip{r.unrated === 1 ? " has" : "s have"} no rating. Rating them, especially ones you like, is the fastest way to teach it.{" "}
+      <Link to="/clips" search={{ rate: true }} className="font-medium text-accent hover:underline">Rate them →</Link></>);
   }
   return out;
 }
@@ -97,7 +99,11 @@ function WhatsWorkingCard() {
   const { data: settings } = useSettings();
   const save = useSetSettings();
   const qc = useQueryClient();
+  const [showAll, setShowAll] = useState(false);
   if (!data) return <Skeleton className="h-48" />;
+  // A comparison with no verdict on any platform yet is one line, not a card of dashes (D154).
+  const ready = data.comparisons.filter((c) => c.rows.some((r) => r.ratio != null));
+  const waiting = data.comparisons.filter((c) => !ready.includes(c));
   const since = (settings?.tiktok_disclosed_since ?? data.disclosed_since).slice(0, 10);
   const hookGroups = new Map<string, typeof data.hooks>();
   for (const h of data.hooks) {
@@ -113,8 +119,16 @@ function WhatsWorkingCard() {
           A verdict needs {data.min_each} posts on each side.
         </p>
       </div>
+      {waiting.length > 0 && (
+        <p className="text-xs text-muted">
+          Waiting for more posts: {waiting.map((c) => c.title).join(", ")}.{" "}
+          <button type="button" className="font-medium text-accent hover:underline" onClick={() => setShowAll(!showAll)}>
+            {showAll ? "Hide them" : "Show them"}
+          </button>
+        </p>
+      )}
       <div className="grid gap-3 lg:grid-cols-2">
-        {data.comparisons.map((c) => (
+        {(showAll ? data.comparisons : ready).map((c) => (
           <div key={c.key} className="flex flex-col gap-2 rounded-lg border border-line p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">{c.title}</h3>
@@ -151,7 +165,7 @@ function WhatsWorkingCard() {
               const top = Math.max(1, ...rows.map((r) => r.median_views));
               return (
                 <div key={key} className="flex flex-col gap-1.5 rounded-lg border border-line p-3">
-                  <span className="flex items-center gap-1.5 text-xs text-muted"><PlatformIcon platform={rows[0].platform} className="size-3.5" />{campaigns.find((c) => c.name === rows[0].campaign)?.title ?? rows[0].campaign}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted"><PlatformIcon platform={rows[0].platform} className="size-3.5" />{campaigns.find((c) => c.name === rows[0].campaign)?.title ?? rows[0].campaign} · {PLATFORM_NAME[rows[0].platform] ?? rows[0].platform}</span>
                   {rows.slice(0, 6).map((h) => (
                     <div key={h.hook} className="flex items-center gap-2 text-xs">
                       <span className="min-w-0 flex-1 truncate" title={h.hook}>{h.hook}</span>
@@ -301,7 +315,9 @@ export function LearningPage() {
           </table>
           {report.rating_vs_views != null && (
             <p className="px-2 text-xs text-muted">
-              Your own ratings vs views: ρ = {report.rating_vs_views.toFixed(2)}. {report.rating_vs_views >= 0.3
+              <Tip label={`Rank correlation ${report.rating_vs_views.toFixed(2)}: 1 is a perfect match, 0 no link.`}>
+                <span>How well your own ratings predict views: <b>{report.rating_vs_views >= 0.5 ? "strongly" : report.rating_vs_views >= 0.3 ? "fairly well" : report.rating_vs_views >= 0.1 ? "weakly" : "not yet"}</b>.</span>
+              </Tip>{" "}{report.rating_vs_views >= 0.3
                 ? "Your taste predicts views well, so learning from it should help."
                 : "Your taste and views don't line up much yet; let views settle."}
             </p>

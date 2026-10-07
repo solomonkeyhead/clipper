@@ -503,6 +503,25 @@ function BackToReady({ clip }: { clip: Clip }) {
 
 /* ---------- Card ---------- */
 
+/** Posted, but the brief wants more views before the link is submitted (D154): how far it has to go. */
+function WaitingForViews({ clip }: { clip: Clip }) {
+  const need = clip.submit_at_views ?? 0;
+  const best = Math.max(0, ...clip.posts.map((p) => p.views ?? 0));
+  return (
+    <Tip label={`The brief says to submit once a post passes ${need.toLocaleString()} views. Your best post here has ${best.toLocaleString()}.`}>
+      <div className="flex flex-col gap-1">
+        <div className="flex justify-between text-[11px] text-muted">
+          <span>Submit at {formatCount(need)} views</span>
+          <span className="tabular">{formatCount(best)} / {formatCount(need)}</span>
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-surface-3">
+          <div className="h-full rounded-full bg-warning" style={{ width: `${Math.min(100, (best / need) * 100)}%` }} />
+        </div>
+      </div>
+    </Tip>
+  );
+}
+
 export function ClipCard({ clip, showCampaign = false, focused = false, selected = false, selecting = false, onSelect }: {
   clip: Clip; showCampaign?: boolean; focused?: boolean;
   /** Picking several clips: once any is picked, a click picks instead of opening. */
@@ -510,7 +529,6 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
 }) {
   const open = useUI((s) => s.setOpenClip);
   const title = useCampaignTitle();
-  const campaignUrl = useCampaignUrl()(clip.campaign);
   const isOwn = useIsOwn();
   const { views, best } = bestViews(clip);
   return (
@@ -558,7 +576,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
           {clip.posts.length > 0 && (
             <span className="tabular text-xs text-muted">
               {formatCount(views)} view{views === 1 ? "" : "s"}
-              {best !== null && best >= 1.5 && <span className="ml-1 text-money">{best}×</span>}
+              {best !== null && best >= 1.5 && <span className="ml-1 text-money" title={`${best}× the median views for this campaign on that platform`}>{best}×</span>}
             </span>
           )}
         </div>
@@ -566,15 +584,15 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
         <div className="truncate text-xs text-muted" title={`${title(clip.campaign)} · ${clip.source_title}`}>
           {showCampaign ? title(clip.campaign) : clip.source_title}
         </div>
+        {clip.submit_at_views ? <WaitingForViews clip={clip} /> : null}
       </div>
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
         {clip.status === "posted" && clip.posts.length === 0 && clip.watching ? (
           <span className="flex items-center gap-1.5 text-xs text-muted"><Loader2 className="size-3.5 animate-spin" /> Finding your post…</span>
         ) : clip.status === "posted" ? (
+          // The same buttons whatever the number of posts (D154): one post showed "Submit", three showed links.
           <>
-            {clip.posts.length === 1 && campaignUrl
-              ? <SubmitLinkButton post={clip.posts[0]} campaignUrl={campaignUrl} label="Submit" />
-              : <LinkButtons posts={clip.posts} withLabel={clip.posts.length < 2} />}
+            <LinkButtons posts={clip.posts} withLabel={clip.posts.length < 2} />
             {!isOwn(clip.campaign) && <SubmitButton clip={clip} />}
           </>
         ) : clip.status === "submitted" ? (

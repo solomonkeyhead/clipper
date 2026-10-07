@@ -8,6 +8,7 @@ checking them (Claude takes no temperature; its thinking does the job)."""
 from __future__ import annotations
 
 import os
+import time
 
 from ..utils.logging import get_logger
 
@@ -19,6 +20,8 @@ last_used = ""
 #: Why each model that didn't answer failed, latest per model: shown with the notes, so
 #: "Claude Code isn't logged in" is seen on the page instead of a quiet fall to Gemini.
 misses: dict[str, str] = {}
+#: When each miss happened, so the page shows a problem only while it's current (D154).
+missed_at: dict[str, float] = {}
 
 #: Claude thinks before it answers: a whole script can take a couple of minutes.
 CLAUDE_TIMEOUT = 240.0
@@ -81,6 +84,7 @@ def _default_backends(config, model: str | None = None, job: str = "") -> list:
                                      timeout=CLAUDE_TIMEOUT + 60))
     elif model and config.llm.create_via_claude_plan:
         misses["claude_code"] = "Claude Code isn't installed here, or `claude` isn't on this window's PATH"
+        missed_at["claude_code"] = time.time()
     try:
         chosen += _correction_backends(config, None)
     except Exception as exc:
@@ -122,6 +126,27 @@ def _valid(schema, text: str) -> bool:
     return True
 
 
+def _ordered(config, job: str = "", quick: bool = False):
+    """Who answers `job`, in the order asked: (order, the Claude ones, the user's pick, Gemini first?)."""
+    order = backends(config, config.llm.create_quick_model if quick else None, job)
+    claude = [b for b in order if b.name in ("anthropic", "claude_code")]
+    picked = config.llm.job_providers.get(job, "") if job else ""
+    gemini_first = picked in ("gemini", "ollama") if picked else job in config.llm.create_gemini_jobs
+    if gemini_first:
+        order = [b for b in order if b not in claude] + claude
+    return order, claude, picked, gemini_first
+
+
+def first_choice(config, job: str) -> str:
+    """The provider `job` goes to first right now ("claude_code", "gemini"...), for Settings' "Automatic
+    (now ...)" (D154). Makes no model call."""
+    try:
+        order = _ordered(config, job)[0]
+    except Exception:  # nothing set up: Settings says so elsewhere
+        return ""
+    return order[0].name if order else ""
+
+
 def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple[bytes, str]] | None = None,
         quick: bool = False, job: str = "", keep: bool = False) -> str:
     """The first model's answer. `job` names what is being done: one in `llm.create_gemini_jobs`
@@ -140,12 +165,8 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
         if (hit := cache.get(key)) is not None:
             last_used = hit.model
             return hit.text
-    order = backends(config, config.llm.create_quick_model if quick else None, job)
-    claude = [b for b in order if b.name in ("anthropic", "claude_code")]
-    picked = config.llm.job_providers.get(job, "") if job else ""
-    gemini_first = picked in ("gemini", "ollama") if picked else job in config.llm.create_gemini_jobs
+    order, claude, picked, gemini_first = _ordered(config, job, quick)
     if gemini_first:
-        order = [b for b in order if b not in claude] + claude
         for b in order:
             if b not in claude and job != "footage":
                 b.timeout = max(b.timeout, GEMINI_PATIENCE)
@@ -159,10 +180,12 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text
             last_used = backend.describe()
+            misses.pop(last_used, None)  # it answers again: that problem is over
             if keep and _valid(schema, text):
                 cache.put(key, text=text, model=last_used)
             return text
         except Exception as exc:
             log.log(miss_level(exc), "create: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             misses[backend.describe()] = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
+            missed_at[backend.describe()] = time.time()
     raise CreateError("no AI model answered; try again in a minute")

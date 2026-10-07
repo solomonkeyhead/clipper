@@ -67,3 +67,9 @@ def of(campaign, brief: str | None = None) -> list[Milestone]:
             if len(m.task) > len(found.get(m.views, Milestone(0, "")).task):
                 found[m.views] = m
     return sorted(found.values(), key=lambda m: m.views)
+
+
+def submit_at(campaign, brief: str | None = None) -> int | None:
+    """The views a post needs before its link is submitted, when the brief says so ("Wait until your
+    video passes 2,000 views, then ... submit"), from any brief (D154). None: submit any time."""
+    return next((m.views for m in of(campaign, brief) if re.search(r"\bsubmit", m.task, re.IGNORECASE)), None)

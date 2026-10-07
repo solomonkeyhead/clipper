@@ -260,10 +260,17 @@ def access_token(path: Path) -> str:
 
 
 def _get(url: str, token: str, params: dict) -> dict:
-    try:
-        r = httpx.get(url, params=params, headers={"Authorization": f"Bearer {token}"}, timeout=30)
-    except httpx.HTTPError as exc:
-        raise YouTubeError(f"couldn't reach YouTube: {exc}") from exc
+    # Google turns down a good, fresh token now and then (about 1 call in 20 on one channel, 2026-10-07:
+    # "invalid authentication credentials", then fine on the next try), and a sync makes several calls,
+    # so most syncs of that channel failed. A 401 is tried again before it counts.
+    for attempt in range(3):
+        try:
+            r = httpx.get(url, params=params, headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        except httpx.HTTPError as exc:
+            raise YouTubeError(f"couldn't reach YouTube: {exc}") from exc
+        if r.status_code != 401:
+            break
+        time.sleep(0.5 * (attempt + 1))
     if r.status_code >= 400:
         try:
             message = r.json()["error"]["message"]

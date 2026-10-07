@@ -16,6 +16,8 @@ TEXT_FIELDS = {"posted_at", "posted_caption"}
 #: Instagram insights "can be delayed up to 48 hours" (Meta's reference); YouTube
 #: Analytics (watch time, shares) lags a day or two the same way.
 SETTLING_HOURS = {"instagram": 48, "youtube": 48}
+#: The smallest median a post is compared with ("3x your median"); below it the ratio is noise (D154).
+MIN_MEDIAN = 10
 #: Fewer posts than this and "x your median" means nothing.
 MEDIAN_MIN_POSTS = 3
 

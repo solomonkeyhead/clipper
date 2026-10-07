@@ -207,6 +207,15 @@ def test_a_repeated_moment_is_flagged_before_posting():
     assert 4 not in found and 1 not in found
 
 
+def test_two_create_shorts_are_not_the_same_moment():
+    """Every Create Short is filed under source "create" from 0 s; that's no shared footage."""
+    from clipper.studio import duplicates
+
+    rows = [{"id": 1, "source_id": "create", "start_s": 0, "end_s": 42, "title": "voice"},
+            {"id": 2, "source_id": "create", "start_s": 0, "end_s": 41, "title": "helium"}]
+    assert duplicates.find(rows, {1: ["YouTube @me"]}) == {}
+
+
 def test_a_run_report_explains_every_moment():
     from types import SimpleNamespace as NS
 

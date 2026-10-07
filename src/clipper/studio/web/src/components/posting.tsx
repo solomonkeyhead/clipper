@@ -90,7 +90,8 @@ export function PostPanel({ clip }: { clip: Clip }) {
             )}
           </div>
         ) : clip.caption ? <CopyButton text={clip.caption} what="Caption" label="Copy the caption" /> : <span className="text-muted">No caption.</span>}
-        <BeforePosting platforms={copies.length ? copies.map((c) => key(c.platform)) : shown} lastPost={lastPost} />
+        <BeforePosting platforms={copies.length ? copies.map((c) => key(c.platform)) : shown} lastPost={lastPost}
+                       paid={!campaign?.own_channel} />
         {clip.pinned_comment && (
           <div className="flex items-start gap-2 rounded-sm border border-line bg-surface-1 px-2.5 py-2">
             <Pin className="mt-0.5 size-3.5 shrink-0 text-accent" />
@@ -208,21 +209,24 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
 
 /** What to do on each upload page, out of the rows so they stay one line each:
  *  the paid-content switch (D95), and any platform posted to under 3 hours ago (D96). */
-function BeforePosting({ platforms, lastPost }: { platforms: string[]; lastPost: Map<string, number> }) {
+function BeforePosting({ platforms, lastPost, paid }: { platforms: string[]; lastPost: Map<string, number>; paid: boolean }) {
   const shown = [...new Set(platforms)].filter((p) => UPLOAD[p]);
-  if (!shown.length) return null;
   const soon = shown.map((p) => [p, recentHours(lastPost.get(p))] as const)
     .filter(([, h]) => h !== null && h < SPACING_HOURS);
+  // Your own channel isn't paid to post, so it gets no paid-content label (D154).
+  if (!shown.length || (!paid && !soon.length)) return null;
   return (
     <div className="flex flex-col gap-1.5 rounded-sm border border-line bg-surface-1 px-2.5 py-2 text-xs">
-      <span className="flex items-center gap-1.5 font-medium">
-        <BadgeDollarSign className="size-3.5 text-warning" /> Turn on the paid-content label
-      </span>
-      <ul className="flex flex-col gap-0.5 pl-5 text-muted">
-        {shown.map((p) => (
-          <li key={p}><b className="text-fg">{SHORT[p] ?? UPLOAD[p].name}:</b> {UPLOAD[p].label}.{UPLOAD[p].why && ` ${UPLOAD[p].why}`}</li>
-        ))}
-      </ul>
+      {paid && <>
+        <span className="flex items-center gap-1.5 font-medium">
+          <BadgeDollarSign className="size-3.5 text-warning" /> Turn on the paid-content label
+        </span>
+        <ul className="flex flex-col gap-0.5 pl-5 text-muted">
+          {shown.map((p) => (
+            <li key={p}><b className="text-fg">{SHORT[p] ?? UPLOAD[p].name}:</b> {UPLOAD[p].label}.{UPLOAD[p].why && ` ${UPLOAD[p].why}`}</li>
+          ))}
+        </ul>
+      </>}
       {soon.length > 0 && (
         <span className="flex items-start gap-1.5 text-warning">
           <Clock className="mt-px size-3.5 shrink-0" />
