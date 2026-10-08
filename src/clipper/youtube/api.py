@@ -284,6 +284,28 @@ def _get(url: str, token: str, params: dict) -> dict:
     return r.json()
 
 
+def comments(token: str, video_ids: list[str], per_video: int = 20) -> list[str]:
+    """The top comments on these videos, newest videos first (D156), for the idea planner. Reading comments needs
+    more than the read-only sign-in Clipper asks for, so it uses a YOUTUBE_API_KEY in .env (public data only, can
+    change nothing) when there is one, else the token (works if it was granted youtube.force-ssl)."""
+    key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    out: list[str] = []
+    for vid in video_ids:
+        params = {"part": "snippet", "videoId": vid, "maxResults": per_video, "textFormat": "plainText", "order": "relevance"}
+        if key:
+            r = httpx.get(f"{DATA}/commentThreads", params={**params, "key": key}, timeout=30)
+            if r.status_code >= 400:
+                raise YouTubeError(r.text[:200])
+            got = r.json()
+        else:
+            got = _get(f"{DATA}/commentThreads", token, params)
+        for item in got.get("items") or []:
+            text = item["snippet"]["topLevelComment"]["snippet"].get("textDisplay", "").strip()
+            if text:
+                out.append(" ".join(text.split())[:300])
+    return out
+
+
 def _channel(token: str) -> dict:
     items = _get(f"{DATA}/channels", token, {"part": "snippet,contentDetails", "mine": "true"}).get("items") or []
     if not items:

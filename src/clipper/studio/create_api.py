@@ -169,7 +169,7 @@ def _view() -> dict:
     return {"channel": {"slug": ch.slug, "name": ch.name, "handle": ch.handle, "voice": ch.voice, "campaign": ch.campaign,
                         "words_per_second": ch.words_per_second, "pack": ch.pack, "drawings": ch.drawings,
                         "check_name": channels.check_name(ch),
-                        "niche": ch.niche, "subject": ch.subject},
+                        "niche": ch.niche, "subject": ch.subject, "music": ch.music, "sfx": ch.sfx},
             "channels": [{"slug": c.slug, "name": c.name, "handle": c.handle, "pack": c.pack} for c in channels.all_channels()],
             "packs": [{"key": p.key, "label": p.label, "about": p.about, "drawings": p.drawings} for p in packs.PACKS.values()],
             # Ideas already made into a Short (or one of the channel's own examples) don't show (D154).
@@ -338,12 +338,21 @@ def routes(app: FastAPI, publish) -> None:
         if found is None:
             raise HTTPException(404, "no such channel")
         texts = ("name", "handle", "niche", "persona", "voice", "subject", "expert", "areas", "watermark",
-                 "idea_focus", "idea_avoid", "script_focus", "script_avoid")
+                 "idea_focus", "idea_avoid", "script_focus", "script_avoid", "character", "signoff")
         updates = {k: str(body[k]).strip() for k in texts if k in body}
         if "rules" in body:
             updates["rules"] = [str(r).strip() for r in body["rules"] if str(r).strip()]
-        if "drawings" in body:
-            updates["drawings"] = bool(body["drawings"])
+        for flag in ("drawings", "music", "sfx"):
+            if flag in body:
+                updates[flag] = bool(body[flag])
+        if "reactions" in body:   # D156: the character's reaction pictures, one path a line
+            updates["reactions"] = [str(r).strip() for r in body["reactions"] if str(r).strip()]
+        if "board" in body:
+            from ..create.diagrams import PALETTES
+
+            if body["board"] not in PALETTES:
+                raise HTTPException(400, "unknown board style")
+            updates["board"] = body["board"]
         if "words_per_second" in body:
             updates["words_per_second"] = max(1.2, min(4.0, float(body["words_per_second"])))
         channels.save(found.model_copy(update=updates))
@@ -434,6 +443,19 @@ def routes(app: FastAPI, publish) -> None:
         written.series = (topic or {}).get("series") or ""
         store.update_video(video_id, script={**written.model_dump(), "take": take}, check_notes=notes,
                            status="draft", voice="", timings="", error="")
+        return {"ok": True}
+
+    @app.put("/api/create/videos/{video_id}/sound")
+    def create_sound(video_id: int, body: dict) -> dict:
+        """Music and chalk sounds for one video (D156): true, false, or null for the channel's setting. The voice
+        and timings stay; the next build uses it."""
+        row = video_or_404(video_id)
+        _editable(row)
+        script = dict(row["script"])
+        for k in ("music", "sfx"):
+            if k in body:
+                script[k] = None if body[k] is None else bool(body[k])
+        store.update_video(video_id, script=script)
         return {"ok": True}
 
     @app.put("/api/create/videos/{video_id}/script")

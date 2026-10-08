@@ -638,7 +638,9 @@ export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
 export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }
 export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number;
   /** On-screen words at the start; the shape and ending it was asked for; the idea's series (D155). */
-  hook?: string; shape?: string; ending?: string; series?: string }
+  hook?: string; shape?: string; ending?: string; series?: string;
+  /** Music and chalk sounds for this video; null or missing: the channel's setting (D156). */
+  music?: boolean | null; sfx?: boolean | null; bit?: string }
 export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string;
   /** The planner's score of 21, and the series it belongs to (D155). */
   score?: number | null; series?: string }
@@ -657,7 +659,7 @@ export interface ReadyScript {
 }
 export interface CreateView {
   channel: { slug: string; name: string; handle: string; voice: string; campaign: string; words_per_second: number;
-             pack: string; drawings: boolean; check_name: string; niche: string; subject: string };
+             pack: string; drawings: boolean; check_name: string; niche: string; subject: string; music?: boolean; sfx?: boolean };
   channels: { slug: string; name: string; handle: string; pack: string }[];
   packs: { key: string; label: string; about: string; drawings: boolean }[];
   topics: CreateTopic[]; videos: CreateVideo[];
@@ -681,6 +683,9 @@ export const useCreateAI = () =>
     return res.json() as Promise<CreateAI>;
   }, staleTime: 10_000 });
 
+/** A YouTube Short's "viewed vs swiped away" percent from YouTube Studio, typed in (D156); null clears it. */
+export const setStayed = (url: string, pct: number | null) => send("PUT", "/api/posts/stayed", { url, pct });
+
 async function send<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
@@ -691,6 +696,8 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 export interface ChannelEdit {
   name?: string; handle?: string; niche?: string; persona?: string; voice?: string; subject?: string; expert?: string;
   areas?: string; idea_focus?: string; idea_avoid?: string; script_focus?: string; script_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
+  /** D156: the character and its reactions, the sign-off, the board's colours, music and chalk sounds by default. */
+  character?: string; reactions?: string[]; signoff?: string; board?: string; music?: boolean; sfx?: boolean;
 }
 export const createApi = {
   channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>
@@ -703,6 +710,7 @@ export const createApi = {
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
   rewrite: (video: number, steer = "") => send("POST", `/api/create/videos/${video}/rewrite`, { steer }),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
+  sound: (video: number, body: { music?: boolean | null; sfx?: boolean | null }) => send("PUT", `/api/create/videos/${video}/sound`, body),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
   footage: (video: number, body: { beat: number; wish: string }) => send<FootageOffer>("POST", `/api/create/videos/${video}/footage`, body),
   footageUse: (video: number, body: { beat: number; ids: string[] }) => send("POST", `/api/create/videos/${video}/footage/use`, body),

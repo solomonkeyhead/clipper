@@ -8,11 +8,15 @@ short), 5 to 14 words. For every beat plan ONE picture:
   "energy"), never a specific person's action that nobody films ("person touching side of
   head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
   no footage fits ("bone conduction", "100 degrees").
-  The first beat is footage of the viewer's own moment, in motion, with a person in it when
-  the library is likely to have one ("man driving car", "elevator doors opening").
+  The first beat is the moment itself, already happening: the most striking moving picture of
+  the video, with a person in it when the library is likely to have one ("man driving car",
+  "elevator doors opening"), never a slow scene-setting shot.
+  Change the kind of picture at least every 4 sentences (about 10 seconds): footage to a
+  drawing, or a close-up to a wide shot.
 - kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
   About half the beats; never in the first 4 seconds (about the first 10 words); never three
-  diagrams in a row.
+  diagrams in a row. At most 3 parts in a drawing, unless the idea can't be understood with
+  fewer; each part arrives as its word is said.
   hold: when the next sentence (up to 3 of them) goes on explaining the same picture ("two
   routes... route one is air... route two is bone"), set hold = true on those sentences: the
   drawing from the beat before stays up and builds as the voice explains each part, instead

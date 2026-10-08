@@ -36,6 +36,34 @@ CHALK = (238, 236, 226)
 YELLOW = (255, 210, 70)
 BLUE = (140, 195, 255)
 DIM = (150, 160, 150)
+SMUDGE = (60, 76, 70)
+
+#: Board colours a channel can choose (D156): board, chalk, the two accents, dim chalk and the smudges of old
+#: lessons. "slate" is the board as it always was.
+PALETTES = {
+    "slate": {"board": (28, 44, 40), "chalk": (238, 236, 226), "yellow": (255, 210, 70), "blue": (140, 195, 255),
+              "dim": (150, 160, 150), "smudge": (60, 76, 70)},
+    # The second report's: one accent only, so the key part is the only colour on the board.
+    "one_accent": {"board": (30, 42, 38), "chalk": (242, 240, 230), "yellow": (242, 201, 76), "blue": (200, 206, 196),
+                   "dim": (150, 160, 150), "smudge": (60, 74, 68)},
+    # Blueprint blue, the profile picture's colour.
+    "blueprint": {"board": (22, 52, 92), "chalk": (236, 243, 252), "yellow": (255, 206, 84), "blue": (150, 210, 255),
+                  "dim": (140, 168, 200), "smudge": (44, 78, 122)},
+    # A black school board.
+    "blackboard": {"board": (24, 24, 26), "chalk": (240, 240, 236), "yellow": (255, 214, 90), "blue": (130, 190, 255),
+                   "dim": (150, 150, 150), "smudge": (56, 56, 60)},
+}
+
+
+def use_palette(name: str) -> None:
+    """Draw on the board `name` from here on (one build at a time draws, so module colours are enough)."""
+    global BOARD, CHALK, YELLOW, BLUE, DIM, SMUDGE
+    c = PALETTES.get(name) or PALETTES["slate"]
+    if (c["board"], c["chalk"]) == (BOARD, CHALK) and c["yellow"] == YELLOW and c["blue"] == BLUE:
+        return
+    BOARD, CHALK, YELLOW, BLUE, DIM, SMUDGE = c["board"], c["chalk"], c["yellow"], c["blue"], c["dim"], c["smudge"]
+    COLORS.update({"chalk": CHALK, "yellow": YELLOW, "blue": BLUE, "dim": DIM})
+    board.cache_clear()
 FONT = REPO_ROOT / "assets" / "fonts" / "Caveat.ttf"
 #: For what the handwriting has no letter for (Greek, most maths): Clipper's own Inter.
 PLAIN = REPO_ROOT / "assets" / "fonts" / "Inter.ttf"
@@ -71,7 +99,7 @@ def board() -> Image.Image:
         x, y, r = rnd.randint(0, W), rnd.randint(0, H), rnd.randint(120, 380)
         d.ellipse((x - r, y - r * 0.6, x + r, y + r * 0.6), fill=rnd.randint(10, 22))
     smudge = smudge.filter(ImageFilter.GaussianBlur(60))
-    return Image.composite(Image.new("RGB", (W, H), (60, 76, 70)), img, smudge)
+    return Image.composite(Image.new("RGB", (W, H), SMUDGE), img, smudge)
 
 
 def ease(x: float) -> float:
@@ -119,13 +147,14 @@ def cues(v: Visual, words: list[tuple[float, str]]) -> list[float | None]:
     return out
 
 
-def text(draw: ImageDraw.ImageDraw, xy: tuple[float, float], s: str, size: int, fill=CHALK,
+def text(draw: ImageDraw.ImageDraw, xy: tuple[float, float], s: str, size: int, fill=None,
          anchor: str = "mm", max_width: int = 900, reveal: float = 1.0, halo: bool = False) -> None:
     """Chalk text, shrunk to fit, written on letter by letter as `reveal` goes 0 to 1; with
     `halo`, a rim of board round the letters so a line behind them never crosses them."""
     s = " ".join(s.split())  # one line: a label with a line break in it broke the drawing
     if reveal <= 0 or not s:
         return
+    fill = fill or CHALK   # read now, not at import: the board's colours can change (D156)
     while size > 30 and draw.textlength(s, font=font_for(s, size)) > max_width:
         size -= 4
     f = font_for(s, size)

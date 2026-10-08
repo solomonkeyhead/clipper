@@ -78,7 +78,11 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
 interface FullChannel {
   slug: string; name: string; handle: string; niche: string; persona: string; rules: string[]; voice: string;
   subject: string; expert: string; areas: string; idea_focus: string; idea_avoid: string; script_focus: string; script_avoid: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
+  watermark: string; character: string; reactions: string[]; signoff: string; board: string; music: boolean; sfx: boolean;
 }
+
+/** The board's colours (create/diagrams.PALETTES, D156). */
+const BOARDS: [string, string][] = [["slate", "Slate green"], ["one_accent", "Slate, one accent colour"], ["blueprint", "Blueprint blue"], ["blackboard", "Black board"]];
 
 /** Everything a channel's prompts say, editable. */
 function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void }) {
@@ -88,14 +92,15 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
     if (!res.ok) throw new Error(res.statusText);
     return res.json() as Promise<FullChannel>;
   } });
-  const [edit, setEdit] = useState<ChannelEdit & { rulesText?: string }>({});
+  const [edit, setEdit] = useState<ChannelEdit & { rulesText?: string; reactionsText?: string }>({});
   if (!data) return null;
   const val = <K extends keyof FullChannel>(k: K) => (edit as Partial<FullChannel>)[k] ?? data[k];
-  const set = (changes: Partial<ChannelEdit & { rulesText: string }>) => setEdit({ ...edit, ...changes });
+  const set = (changes: Partial<ChannelEdit & { rulesText: string; reactionsText: string }>) => setEdit({ ...edit, ...changes });
   const save = async () => {
-    const { rulesText, ...rest } = edit;
+    const { rulesText, reactionsText, ...rest } = edit;
     try {
-      await createApi.channelEdit(slug, { ...rest, ...(rulesText !== undefined ? { rules: rulesText.split("\n") } : {}) });
+      await createApi.channelEdit(slug, { ...rest, ...(rulesText !== undefined ? { rules: rulesText.split("\n") } : {}),
+                                          ...(reactionsText !== undefined ? { reactions: reactionsText.split("\n") } : {}) });
       await qc.invalidateQueries({ queryKey: ["create"] });
       toast.success("Channel saved", { description: "New scripts and ideas follow it." });
       onClose();
@@ -143,6 +148,26 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("drawings") as boolean} onChange={(e) => set({ drawings: e.target.checked })} />
         Use chalkboard drawings (off: real stock footage only)
+      </label>
+      {/* The look and sound of every video (D156). */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Board colours"><select className={input} value={val("board") as string} onChange={(e) => set({ board: e.target.value })}>
+          {BOARDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+        </select></Field>
+        <Field label="Sign-off" hint="Small, on screen for the last second. Empty: none."><input className={input} value={val("signoff") as string} placeholder="e.g. Class dismissed." onChange={(e) => set({ signoff: e.target.value })} /></Field>
+        <Field label="Character picture" hint="A file on this computer. Shown bottom left at the start. A transparent background is used as it is; any other is cut to a circle.">
+          <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\professor.png" onChange={(e) => set({ character: e.target.value })} /></Field>
+        <Field label="Reaction pictures (one per line)" hint="One of these at the punchline, a different one each video. Empty: the character picture.">
+          <textarea className={area} rows={3} value={edit.reactionsText ?? data.reactions.join("\n")} onChange={(e) => set({ reactionsText: e.target.value })} /></Field>
+        <Field label="Watermark" hint="A small logo in the top right. Empty: none."><input className={input} value={val("watermark") as string} onChange={(e) => set({ watermark: e.target.value })} /></Field>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("music") as boolean} onChange={(e) => set({ music: e.target.checked })} />
+        Quiet music under the voice (made by Clipper, or your own tracks in data/create/music/{slug})
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("sfx") as boolean} onChange={(e) => set({ sfx: e.target.checked })} />
+        Chalk taps on drawings and a two-note tap at the punchline
       </label>
       <div className="flex gap-2">
         <Button variant="primary" onClick={() => void save()}>Save</Button>

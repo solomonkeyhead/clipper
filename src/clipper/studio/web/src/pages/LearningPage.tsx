@@ -227,12 +227,16 @@ function TastePanel({ have, need }: { have: number; need: number }) {
 
 /* ---------- experiments (D155) ---------- */
 
-type Experiment = { id: string; name: string; a: string; b: string; metric: "pct" | "views" | "watch"; pairs: [number, number][] };
+/** `margin`: the smallest gap that counts as a win (D156); `rule`: when a side is trusted, the sign test (about 8 of
+ *  10) or the second report's "3 of every 4 pairs, at least 4" (D156). */
+type Experiment = { id: string; name: string; a: string; b: string; metric: "stayed" | "pct" | "views" | "watch"; pairs: [number, number][];
+                    margin?: number; rule?: "sign" | "three_of_four" };
 
-const METRIC: Record<Experiment["metric"], { label: string; get: (p: Post) => number | null | undefined; total?: boolean }> = {
-  pct: { label: "% viewed", get: (p) => p.avg_view_pct },
-  watch: { label: "average watch time", get: (p) => p.avg_watch_s },
-  views: { label: "views", get: (p) => p.views, total: true },
+const METRIC: Record<Experiment["metric"], { label: string; unit: string; get: (p: Post) => number | null | undefined; total?: boolean }> = {
+  stayed: { label: "viewed vs swiped away", unit: "points", get: (p) => p.stayed_pct },
+  pct: { label: "% viewed", unit: "points", get: (p) => p.avg_view_pct },
+  watch: { label: "average watch time", unit: "seconds", get: (p) => p.avg_watch_s },
+  views: { label: "views", unit: "views", get: (p) => p.views, total: true },
 };
 
 /** The chance of at least `wins` of `n` coin flips coming up one way: the sign test, one-sided. */
@@ -261,15 +265,17 @@ function Experiments() {
   const { data: settings } = useSettings();
   const save = useSetSettings();
   const { data: posts = [] } = usePosts();
-  const [draft, setDraft] = useState({ name: "", a: "", b: "", metric: "pct" as Experiment["metric"] });
+  const blank = { name: "", a: "", b: "", metric: "stayed" as Experiment["metric"], margin: 4, rule: "three_of_four" as NonNullable<Experiment["rule"]> };
+  const [draft, setDraft] = useState(blank);
   let list: Experiment[] = [];
   try { list = JSON.parse(settings?.experiments ?? "[]"); } catch { list = []; }
   const put = (next: Experiment[]) => save.mutate({ experiments: JSON.stringify(next) }, { onError: (e) => toast.error((e as Error).message) });
   const clips = [...new Map(posts.map((p) => [p.clip, p.clip_title])).entries()];
   const add = () => {
     if (!draft.name.trim() || !draft.a.trim() || !draft.b.trim()) return toast.error("Give it a name and say what A and B are");
-    put([...list, { id: String(Date.now()), name: draft.name.trim(), a: draft.a.trim(), b: draft.b.trim(), metric: draft.metric, pairs: [] }]);
-    setDraft({ name: "", a: "", b: "", metric: "pct" });
+    put([...list, { id: String(Date.now()), name: draft.name.trim(), a: draft.a.trim(), b: draft.b.trim(), metric: draft.metric,
+                    margin: draft.margin, rule: draft.rule, pairs: [] }]);
+    setDraft(blank);
   };
   const field = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
   return (
@@ -277,8 +283,8 @@ function Experiments() {
       <div>
         <h2 className="flex items-center gap-2 text-md font-semibold"><FlaskConical className="size-4 text-accent" /> Experiments</h2>
         <p className="mt-0.5 text-sm text-muted">
-          Change one thing between two videos (A and B), post both, and pair them here. One side has to win about 8 pairs of 10
-          before it's more than luck.
+          Change one thing between two videos (A and B) on the same kind of topic, post them at the same hour, and pair them
+          here. Compare "viewed vs swiped away" (type it in on Stats) where you can: it's the steadiest number for a small channel.
         </p>
       </div>
       {list.map((x) => <ExperimentRow key={x.id} x={x} posts={posts} clips={clips}
@@ -297,6 +303,15 @@ function Experiments() {
                   onChange={(e) => setDraft({ ...draft, metric: e.target.value as Experiment["metric"] })}>
             {Object.entries(METRIC).map(([k, m]) => <option key={k} value={k}>by {m.label}</option>)}
           </select>
+          <label className="flex items-center gap-1.5 text-xs text-muted">wins by at least
+            <input type="number" min={0} step="any" className={cn(field, "w-16")} aria-label="Smallest gap that counts"
+                   value={draft.margin} onChange={(e) => setDraft({ ...draft, margin: Number(e.target.value) || 0 })} /> {METRIC[draft.metric].unit}
+          </label>
+          <select className={field} aria-label="When to trust it" value={draft.rule}
+                  onChange={(e) => setDraft({ ...draft, rule: e.target.value as NonNullable<Experiment["rule"]> })}>
+            <option value="three_of_four">trusted at 3 of every 4 pairs (at least 4)</option>
+            <option value="sign">trusted when unlikely to be luck (about 8 of 10)</option>
+          </select>
           <Button size="sm" variant="secondary" onClick={add}>Add</Button>
         </div>
       </details>
@@ -310,26 +325,30 @@ function ExperimentRow({ x, posts, clips, onChange, onRemove }: {
   const [a, setA] = useState("");
   const [b, setB] = useState("");
   const title = (id: number) => clips.find(([c]) => c === id)?.[1] ?? `Clip ${id}`;
+  const margin = x.margin ?? 0;
   const results = x.pairs.map(([ca, cb]) => {
     const va = score(posts, ca, x.metric), vb = score(posts, cb, x.metric);
-    return { ca, cb, va, vb, winner: va == null || vb == null || va === vb ? null : va > vb ? "A" : "B" };
+    const known = va != null && vb != null;
+    // A gap under the margin is too close to call: no win for either side (D156).
+    return { ca, cb, va, vb, known, winner: !known || Math.abs(va - vb) < Math.max(margin, 1e-9) ? null : va > vb ? "A" : "B" };
   });
   const aWins = results.filter((r) => r.winner === "A").length, bWins = results.filter((r) => r.winner === "B").length;
+  const counted = results.filter((r) => r.known).length;
   const n = aWins + bWins, lead = Math.max(aWins, bWins), leader = aWins >= bWins ? x.a : x.b;
-  const p = n ? signTest(lead, n) : 1;
-  const fmt = (v: number | null) => (v == null ? "not in yet" : x.metric === "pct" ? `${v.toFixed(1)}%` : x.metric === "watch" ? `${v.toFixed(1)}s` : formatCount(v));
+  const trusted = aWins !== bWins && (x.rule === "three_of_four" ? counted >= 4 && lead >= 0.75 * counted : n > 0 && signTest(lead, n) < 0.06);
+  const fmt = (v: number | null) => (v == null ? "not in yet" : x.metric === "pct" || x.metric === "stayed" ? `${v.toFixed(1)}%` : x.metric === "watch" ? `${v.toFixed(1)}s` : formatCount(v));
   const pick = "h-8 max-w-56 rounded-sm border border-line bg-surface-2 px-2 text-xs";
   return (
     <div className="rounded-md border border-line p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-sm font-medium">{x.name} <span className="font-normal text-muted">· A: {x.a} · B: {x.b} · by {METRIC[x.metric].label}</span></div>
+        <div className="text-sm font-medium">{x.name} <span className="font-normal text-muted">· A: {x.a} · B: {x.b} · by {METRIC[x.metric].label}{margin ? `, wins by ${margin}+ ${METRIC[x.metric].unit}` : ""}</span></div>
         <button type="button" className="text-xs text-subtle hover:text-danger" onClick={onRemove}>Remove</button>
       </div>
-      <p className={cn("mt-1 text-sm", n && aWins !== bWins && p < 0.06 ? "font-semibold text-success" : "text-muted")}>
-        {n === 0 ? "No pairs with numbers yet."
-          : aWins === bWins ? `Even so far: ${aWins} each.`
-          : p < 0.06 ? `${leader} wins ${lead} of ${n} pairs. That's unlikely to be luck.`
-          : `${leader} leads ${lead} of ${n}. Not enough yet to trust.`}
+      <p className={cn("mt-1 text-sm", trusted ? "font-semibold text-success" : "text-muted")}>
+        {counted === 0 ? "No pairs with numbers yet."
+          : aWins === bWins ? `Even so far: ${aWins} each, of ${counted} pair${counted === 1 ? "" : "s"}.`
+          : trusted ? `${leader} wins ${lead} of ${counted} pairs. That's enough to trust.`
+          : `${leader} leads ${lead} of ${counted}. Not enough yet to trust${x.rule === "three_of_four" && counted < 4 ? ": it needs at least 4 pairs" : ""}.`}
       </p>
       {results.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1 text-xs">

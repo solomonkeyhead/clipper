@@ -1,19 +1,22 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, BarChart3, ChevronRight } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
-import { useCampaignTitle, useCampaigns, useClips, usePosts, type Post } from "@/api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { keys, setStayed, useCampaignTitle, useCampaigns, useClips, usePosts, type Post } from "@/api/client";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Chip, CopyButton, EmptyState, Metric, PageHeader, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
-type Key = "posted" | "views" | "x" | "watch" | "pct" | "skip" | "likes" | "shares" | "saves" | "money";
+type Key = "posted" | "views" | "x" | "watch" | "pct" | "stayed" | "skip" | "likes" | "shares" | "saves" | "money";
 
 const COLUMNS: { key: Key; label: string; get: (p: Post) => number | null | undefined; tip?: string }[] = [
   { key: "views", label: "Views", get: (p) => p.views },
   { key: "x", label: "vs median", get: (p) => p.x_median, tip: "Views compared with your median for this platform and campaign" },
   { key: "watch", label: "Avg watch", get: (p) => p.avg_watch_s },
   { key: "pct", label: "% viewed", get: (p) => p.avg_view_pct, tip: "The average share of the video watched (YouTube). Over 100% means people rewatched it" },
+  { key: "stayed", label: "Stayed", get: (p) => p.stayed_pct, tip: "YouTube Studio's \"viewed vs swiped away\" for a Short, typed in: no API gives it. The steadiest number for a small channel" },
   { key: "skip", label: "Skip 3s", get: (p) => p.skip_rate_pct, tip: "Share of viewers who swiped away in the first 3 seconds (Instagram)" },
   { key: "likes", label: "Likes", get: (p) => p.likes },
   { key: "shares", label: "Shares", get: (p) => p.shares },
@@ -31,6 +34,7 @@ function cell(p: Post, key: Key): React.ReactNode {
       : na("Needs 3+ posts on this platform in this campaign, with a median of at least 10 views");
     case "watch": return p.avg_watch_s != null ? `${p.avg_watch_s}s` : na(p.platform === "tiktok" ? tiktok : "Not reported yet");
     case "pct": return p.avg_view_pct != null ? `${p.avg_view_pct}%` : na(p.platform === "youtube" ? "Not reported yet" : "Only YouTube reports this");
+    case "stayed": return p.platform === "youtube" ? <StayedCell post={p} /> : p.stayed_pct != null ? `${p.stayed_pct}%` : <span className="text-subtle">–</span>;
     case "skip": return p.skip_rate_pct != null ? `${p.skip_rate_pct}%` : na(p.platform === "tiktok" ? tiktok : p.platform === "" ? "Instagram reports this; not in yet" : "Not reported yet");
     case "likes": return formatCount(p.likes);
     case "shares": return formatCount(p.shares);
@@ -38,6 +42,23 @@ function cell(p: Post, key: Key): React.ReactNode {
     case "money": return p.est_earnings != null ? <span className="text-money">{formatMoney(p.est_earnings)}</span> : na("No pay rate set for this campaign");
     default: return null;
   }
+}
+
+/** The "viewed vs swiped away" box for one YouTube Short (D156): type the percent from YouTube Studio, Enter or leave to save. */
+function StayedCell({ post }: { post: Post }) {
+  const qc = useQueryClient();
+  const save = (raw: string) => {
+    const pct = raw.trim() === "" ? null : Number(raw.replace("%", ""));
+    if (pct !== null && (Number.isNaN(pct) || pct < 0 || pct > 100)) return toast.error("A percent from 0 to 100");
+    if (pct === (post.stayed_pct ?? null)) return;
+    void setStayed(post.url, pct).then(() => qc.invalidateQueries({ queryKey: keys.posts }), (e: Error) => toast.error(e.message));
+  };
+  return (
+    <input key={post.stayed_pct ?? "none"} defaultValue={post.stayed_pct ?? ""} placeholder="type %" aria-label="Viewed vs swiped away"
+           onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
+           onBlur={(e) => save(e.target.value)}
+           className="h-6 w-14 rounded-sm border border-line bg-surface-2 px-1 text-right text-xs tabular-nums placeholder:text-subtle focus:border-accent focus:outline-none" />
+  );
 }
 
 /** A clip's posts as one row (D154): totals where they add up, the best ratio, averages for watch and skip. */
@@ -52,7 +73,7 @@ function together(posts: Post[]): Post {
     posted_at: posts.map((p) => p.posted_at ?? "").filter(Boolean).sort()[0] ?? posts[0].posted_at,
     settling: posts.some((p) => p.settling),
     views: total((p) => p.views), x_median: best.length ? Math.max(...best) : null,
-    avg_watch_s: mean((p) => p.avg_watch_s), avg_view_pct: mean((p) => p.avg_view_pct), skip_rate_pct: mean((p) => p.skip_rate_pct),
+    avg_watch_s: mean((p) => p.avg_watch_s), avg_view_pct: mean((p) => p.avg_view_pct), stayed_pct: mean((p) => p.stayed_pct), skip_rate_pct: mean((p) => p.skip_rate_pct),
     likes: total((p) => p.likes), shares: total((p) => p.shares), saves: total((p) => p.saves),
     est_earnings: total((p) => p.est_earnings),
   };

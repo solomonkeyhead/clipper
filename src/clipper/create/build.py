@@ -42,6 +42,19 @@ W, H, FPS = 1080, 1920, 30
 MAX_SHOT = 4.5
 PUSH_IN = 0.06
 WATERMARK_WIDTH = 150
+#: D156, from the second research report: shots of at most HOOK_SHOT seconds while the first ~5 s are spoken
+#: (HOOK_WORDS words), the camera move taken in turn so no two shots in a row move alike (the same push-in on
+#: every shot was the most visible "template" sign), and a quick punch-in on the highlighted word of at most
+#: PUNCHES sentences, PUNCH_GAP seconds apart.
+HOOK_SHOT = 2.5
+HOOK_WORDS = 11
+MOTIONS = ("push", "still", "pull", "pan")
+PUNCH, PUNCH_FRAMES, PUNCHES, PUNCH_GAP = 0.12, 4, 2, 8.0
+#: One look for footage from every library (D156): a little less colour, a little warmer, a faint grain.
+LOOK = "eq=saturation=0.85:contrast=1.05,colorbalance=rm=0.03:bm=-0.03,noise=alls=5:allf=t"
+#: The channel's character (D156): this wide, bottom left under the captions, at the start and at the punchline.
+CHARACTER_WIDTH = 194
+CHARACTER_START = 2.5
 
 
 def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> float:
@@ -81,16 +94,32 @@ def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> f
     return hint if hint is not None else 0.5
 
 
-def _fill_frame(push: str, x: float) -> str:
+def _fill_frame(push: str, x: float, drift: str = "0") -> str:
     """ffmpeg filters that cover the 9:16 frame, then push in by `push` (an expression in t), the
     crop's left edge placed so the subject at `x` lands as near the middle as the picture allows:
-    (iw*x - W/2) clamped to [0, iw - W]."""
+    (iw*x - W/2) clamped to [0, iw - W]; `drift` (pixels, an expression in t) moves it for a pan."""
     return (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
             f"scale=w='trunc(iw*{push}/2)*2':h=-2:eval=frame,"
-            f"crop={W}:{H}:x='max(0,min(iw-{W},iw*{x:.4f}-{W // 2}))':y='(ih-{H})/2',fps={FPS},setsar=1")
+            f"crop={W}:{H}:x='max(0,min(iw-{W},iw*{x:.4f}-{W // 2}+{drift}))':y='(ih-{H})/2',fps={FPS},setsar=1")
 
 
-def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None, skip: float = 0.0) -> Path:
+def _move(motion: str, seconds: float, x: float, punch: float | None = None) -> tuple[str, str]:
+    """The zoom and drift expressions for a camera move (D156): push in 6%, hold still, pull out 6%, or pan 3% of
+    the width a second toward the subject; times a quick 12% punch-in from `punch` seconds, held."""
+    s = f"{max(seconds, 0.1):.3f}"
+    zoom = {"push": f"(1+{PUSH_IN}*t/{s})", "still": "1", "pull": f"(1+{PUSH_IN}*(1-t/{s}))",
+            "pan": f"(1+{PUSH_IN})"}.get(motion, f"(1+{PUSH_IN}*t/{s})")
+    drift = "0"
+    if motion == "pan":   # from away from the subject toward it
+        way = -1 if x < 0.5 else 1
+        drift = f"{way * 0.03 * W:.1f}*(t-{s}/2)"
+    if punch is not None:
+        zoom += f"*(1+{PUNCH}*clip((t-{punch:.3f})/{PUNCH_FRAMES / FPS:.3f},0,1))"
+    return zoom, drift
+
+
+def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None, skip: float = 0.0,
+                motion: str = "push", punch: float | None = None) -> Path:
     """`seconds` of a stock clip filling the 9:16 frame, pushing in slowly, the crop placed on
     its subject (D111): a wide shot cut to its middle lost the speaker cone to one side and
     the skull to the other; shown whole over a blur it looked small. The window keeps the
@@ -100,7 +129,8 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
     length = info.duration or seconds
     offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
     x = min(1.0, max(0.0, _subject_x(src, offset, seconds, center)))
-    vf = _fill_frame(f"(1+{PUSH_IN}*t/{seconds:.3f})", x)
+    zoom, drift = _move(motion, seconds, x, punch)
+    vf = _fill_frame(zoom, x, drift) + "," + LOOK
     run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y",
          *(["-stream_loop", "-1"] if length < seconds + offset else ["-ss", f"{offset:.3f}"]),
          "-i", str(src), "-t", f"{seconds:.3f}", "-an", "-vf", vf,
@@ -181,7 +211,37 @@ picture_notes: list[str] = []
 #: before with the same inputs is reused, not drawn or cut again. Bump RENDER_VERSION when the
 #: drawing or cutting code changes, so no shot made by older code is reused.
 shot_cache: Path | None = None
-RENDER_VERSION = 1
+#: This build's camera moves taken so far, the punch-in times by sentence, and when each picture starts and what
+#: kind it is (for the chalk taps), all set by shots() (D156).
+_moves = [0]
+punches: dict[int, list[float]] = {}
+picture_times: list[tuple[float, str]] = []
+
+
+def _next_motion() -> str:
+    _moves[0] += 1
+    return MOTIONS[(_moves[0] - 1) % len(MOTIONS)]
+
+
+def choose_punches(script: Script, timings: Timings) -> dict[int, list[float]]:
+    """When to punch in (D156): on the highlighted word of footage sentences, after the hook and before the last
+    sentence (the punchline holds still), at most PUNCHES of them, PUNCH_GAP seconds apart."""
+    out: dict[int, list[float]] = {}
+    words, k, last = timings.words, 0, -PUNCH_GAP
+    for i, beat in enumerate(script.beats):
+        n = len(beat.text.split())
+        mine, k = words[k:k + n], k + n
+        if (i == 0 or i == len(script.beats) - 1 or not beat.emphasis or beat.visual.kind != "stock"
+                or beat.visual.hold or len(out) >= PUNCHES):
+            continue
+        key = beat.emphasis.strip(".,!?;:'\"").lower()
+        at = next((w.start for w in mine if w.text.strip(".,!?;:'\"").lower() == key), None)
+        if at is not None and at - last >= PUNCH_GAP:
+            out[i], last = [at], at
+    return out
+
+
+RENDER_VERSION = 2   # 2: camera moves, punch-ins and one footage look (D156)
 used_shots: set[Path] = set()
 _RUNTIME = {"picked", "avoid", "redo", "previous", "manual", "hold", "clip", "clip_start", "fill"}
 
@@ -206,7 +266,7 @@ def _kept(kind: str, key: object, out: Path, make) -> Path:
 
 
 def _diagram(visual: Visual, seconds: float, out: Path, said: list) -> Path:
-    key = [visual.model_dump(exclude=_RUNTIME), round(seconds, 3), [(round(t, 3), w) for t, w in said]]
+    key = [visual.model_dump(exclude=_RUNTIME), round(seconds, 3), [(round(t, 3), w) for t, w in said], diagrams.BOARD]
     return _kept("diagram", key, out, lambda o: diagrams.render(visual, seconds, o, words=said))
 
 
@@ -239,7 +299,9 @@ def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, 
     the footage model write searches of its own for the sentence, in the script's context (D129): it
     was a call per sentence even when the first searches worked (D136). A wish, or new footage asked
     for, goes straight to the written searches."""
-    count = max(1, math.ceil(seconds / MAX_SHOT - 1e-6))
+    said_before = sum(len(b.text.split()) for b in script.beats[:i])
+    longest = HOOK_SHOT if said_before < HOOK_WORDS else MAX_SHOT   # quicker pictures while the hook is said (D156)
+    count = max(1, math.ceil(seconds / longest - 1e-6))
     parts = [seconds / count] * count
     queries = [q for q in (visual.queries or [visual.query]) if q.strip()]
     group = next((g for g in spans(script) if g[0] == i), [i])
@@ -302,7 +364,7 @@ def _prefetch(script: Script, timings: Timings, groups: list[list[int]], progres
 
 
 def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: Script, work: Path, used: set,
-             tag: str = "", pre: _Footage | None = None) -> list[Path]:
+             tag: str = "", pre: _Footage | None = None, at: float | None = None) -> list[Path]:
     """The shot(s) of the picture planned for a sentence: a diagram, or stock footage (a clip per
     MAX_SHOT seconds, each a different one), or a drawing when no footage fits. `tag` keeps a
     filler's files apart from the sentence's own clip. Footage a build picked before is used
@@ -349,19 +411,23 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
         # A part with no clip of its own repeats the one before: from where it stopped, not from
         # the same frame, which played the same seconds twice in a row (D132).
         skip = sum(p for p, h in zip(parts[:k], hits[:k], strict=True) if h.get("id") == hit.get("id"))
+        motion = _next_motion()
+        begins = (at + sum(parts[:k])) if at is not None else None
+        punch = next((t - begins for t in punches.get(i, []) if begins is not None and begins <= t < begins + part), None)
 
-        def make(out: Path, part=part, holder=holder, skip=skip) -> Path:
+        def make(out: Path, part=part, holder=holder, skip=skip, motion=motion, punch=punch) -> Path:
             h = holder["hit"]
-            clip = _stock_shot(stock.fetch(h), part, out, h.get("center"), skip)
+            clip = _stock_shot(stock.fetch(h), part, out, h.get("center"), skip, motion, punch)
             if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
                 holder["hit"] = {**h, "center": 0.5}
-                clip = _stock_shot(stock.fetch(h), part, out, 0.5, skip)
+                clip = _stock_shot(stock.fetch(h), part, out, 0.5, skip, motion, punch)
             if _too_dark(clip):
                 raise _TooDark
             return clip
 
         try:
-            key = [hit.get("id"), hit.get("center"), round(part, 3)] + ([round(skip, 3)] if skip else [])
+            key = [hit.get("id"), hit.get("center"), round(part, 3), motion, punch and round(punch, 2)] + \
+                ([round(skip, 3)] if skip else [])
             clips.append(_kept("stock", key, work / f"{i:02d}{tag}_{k}_stock.mp4", make))
         except _TooDark:
             return none_fit()
@@ -441,6 +507,8 @@ def _own(i: int, visual: Visual, seconds: float, own: dict, cursor: dict, defaul
 
 #: The on-screen hook's time (D155): long enough to read 6 words, gone before the first cause.
 HOOK_SECONDS = 1.5
+#: The hook as big as the captions and more (about 120 px), the question readable from the first frame (D156).
+HOOK_SCALE = 1.25
 
 
 def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict | None = None,
@@ -460,9 +528,14 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
     if progress:
         progress("Choosing footage", 8)
     ahead = _prefetch(script, timings, groups, progress)
+    _moves[0] = 0
+    punches.clear()
+    punches.update(choose_punches(script, timings))
+    picture_times.clear()
     starts = []   # where each picture's shots begin in `made`
     for n, group in enumerate(groups):
         starts.append(len(made))
+        picture_times.append((timings.beats[group[0]][0], ""))
         i, beat = group[0], script.beats[group[0]]
         if progress:
             progress(f"Shot {n + 1} of {len(groups)}", 10 + 60 * n / len(groups))
@@ -480,7 +553,12 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
                     made += _planned(i, beat, beat.visual, rest, [(t - at, w) for t, w in said if t >= at - 0.05],
                                      script, work, used, tag="b")
                 continue
-        made += _planned(i, beat, beat.visual, seconds, said, script, work, used, pre=ahead.get(i))
+        made += _planned(i, beat, beat.visual, seconds, said, script, work, used, pre=ahead.get(i), at=a)
+    # What each picture turned out to be: a drawing (diagram or sketch, cached as "diagram-...") gets a chalk tap.
+    for n, (at, _) in enumerate(picture_times):
+        end = starts[n + 1] if n + 1 < len(starts) else len(made)
+        picture_times[n] = (at, "drawing" if any(m.name.startswith("diagram") or "_diagram" in m.name or "_sketch" in m.name
+                                                 for m in made[starts[n]:end]) else "other")
     return _loop_back(made, starts, groups, script, timings, work)
 
 
@@ -502,28 +580,96 @@ def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], scr
     return [*made[:starts[-1]], out]
 
 
+def _character(src: Path, out: Path) -> Path | None:
+    """The channel's character as a small overlay (D156): an image with a transparent background as it is, trimmed;
+    any other (a square profile picture) cut to a circle on its upper middle, with a white ring."""
+    from PIL import Image, ImageDraw
+
+    try:
+        img = Image.open(src).convert("RGBA")
+    except OSError:
+        return None
+    if img.getchannel("A").getextrema()[0] < 250:      # already cut out
+        img = img.crop(img.getbbox() or (0, 0, *img.size))
+    else:
+        side = round(min(img.size) * 0.72)
+        left, top = (img.width - side) // 2, round(img.height * 0.04)
+        img = img.crop((left, top, left + side, top + side))
+        mask = Image.new("L", img.size, 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, side - 1, side - 1), fill=255)
+        img.putalpha(mask)
+        ring = max(4, side // 40)
+        ImageDraw.Draw(img).ellipse((ring // 2, ring // 2, side - ring // 2, side - ring // 2),
+                                    outline=(255, 255, 255, 255), width=ring)
+    img = img.resize((CHARACTER_WIDTH, max(1, round(img.height * CHARACTER_WIDTH / img.width))), Image.LANCZOS)
+    img.save(out)
+    return out
+
+
+def _music_track(channel: channels.Channel, seed: int) -> Path | None:
+    """One of the user's own tracks for this channel, if they put any in data/create/music/<channel> (D156)."""
+    from ..paths import data_root
+    from .voice import AUDIO
+
+    found = sorted(f for f in (data_root() / "create" / "music" / channel.slug).glob("*") if f.suffix.lower() in AUDIO)
+    return found[seed % len(found)] if found else None
+
+
 def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, out: Path,
              channel: channels.Channel, config: Config) -> Path:
+    from . import sound
+
     rc = config.render
+    seed = int(hashlib.sha1(script.title.encode()).hexdigest()[:8], 16)
+    punchline = timings.beats[-1][0] if timings.beats else timings.duration
     words = [Word(start=w.start, end=w.end, text=w.text) for w in timings.words]
     ass = out.with_suffix(".ass")
     cap.write_ass(cap.build_ass(words, style=cap.get_style(rc.caption_style), width=W, height=H,
                                 safe_area=rc.safe_area, duration=timings.duration,
                                 hook_text=(script.hook or script.title) if rc.show_hook_text else "",
-                                hook_seconds=HOOK_SECONDS if rc.show_hook_text else 0.0), ass)
+                                hook_seconds=HOOK_SECONDS if rc.show_hook_text else 0.0,
+                                hook_scale=HOOK_SCALE, outro_text=channel.signoff), ass)
     inputs = [arg for p in parts for arg in ("-i", str(p))] + ["-i", str(voice)]
     n = len(parts)
     graph = "".join(f"[{i}:v]" for i in range(n)) + f"concat=n={n}:v=1:a=0[cv]"
-    video = "[cv]"
+    video, extra = "[cv]", n + 1
+
+    def overlay(image: Path, filters: str, where: str, enable: str = "") -> None:
+        nonlocal video, extra, graph, inputs
+        inputs += ["-i", str(image)]
+        on = f":enable='{enable}'" if enable else ""
+        graph += f";[{extra}:v]{filters}[o{extra}];{video}[o{extra}]overlay={where}{on}[m{extra}]"
+        video, extra = f"[m{extra}]", extra + 1
+
     mark = Path(channel.watermark) if channel.watermark else None
     if mark and mark.is_file():
-        inputs += ["-i", str(mark)]
-        graph += (f";[{n + 1}:v]scale={WATERMARK_WIDTH}:-1,format=rgba,colorchannelmixer=aa=0.85[wm];"
-                  f"[cv][wm]overlay=W-w-48:170[mv]")
-        video = "[mv]"
+        overlay(mark, f"scale={WATERMARK_WIDTH}:-1,format=rgba,colorchannelmixer=aa=0.85", "W-w-48:170")
+    # The character at the start and, reacting, at the punchline (D156); bottom left, under the captions.
+    face = Path(channel.character) if channel.character else None
+    if face and face.is_file() and (base := _character(face, out.with_name("character.png"))):
+        spot = f"48:{H - rc.safe_area.bottom + 20}"
+        overlay(base, "format=rgba", spot, f"lt(t,{CHARACTER_START})")
+        moods = [Path(r) for r in channel.reactions if Path(r).is_file()]
+        react = _character(moods[seed % len(moods)], out.with_name("reaction.png")) if moods else base
+        if react:
+            overlay(react, "format=rgba", spot, f"gte(t,{punchline:.3f})")
     graph += (f";{video}ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(bundled_fonts_dir())}'[v]"
               f";[{n}:a]loudnorm=I={rc.loudness_lufs}:TP={rc.true_peak_dbtp}:LRA=11,"
-              f"aresample={rc.audio_rate},apad[a]")
+              f"aresample={rc.audio_rate},apad[vo]")
+    # Music and chalk taps (D156): one track under the voice, levelled for a voice at -14 LUFS, then a limiter.
+    music = channel.music if script.music is None else script.music
+    taps = channel.sfx if script.sfx is None else script.sfx
+    if music or taps:
+        quiet = max(0.0, max((w.end for w in timings.words if w.end <= punchline), default=punchline))
+        track = sound.bed(timings.duration, words=[(w.start, w.end) for w in timings.words], quiet_from=quiet,
+                          tap_times=sound.taps([t for t, kind in picture_times if kind == "drawing"]) if taps else [],
+                          logo_at=punchline if taps else None, with_music=music, seed=seed,
+                          track=_music_track(channel, seed) if music else None)
+        inputs += ["-i", str(sound.write(track, out.with_name("bed.wav")))]
+        graph += (f";[{extra}:a]aresample={rc.audio_rate}[bd];[vo][bd]amix=inputs=2:normalize=0:duration=first,"
+                  f"alimiter=limit=0.89[a]")
+    else:
+        graph += ";[vo]anull[a]"
     run(["-hide_banner", "-nostdin", "-loglevel", "error", "-y", *inputs,
          "-filter_complex", graph, "-map", "[v]", "-map", "[a]", "-t", f"{timings.duration:.3f}",
          "-c:a", "aac", "-b:a", rc.audio_bitrate, "-ar", str(rc.audio_rate), "-ac", "2",
@@ -567,6 +713,7 @@ def _build(video_id: int, progress) -> int:
         raise CreateError("drop the voiceover in first")
     script, timings = Script.model_validate(row["script"]), Timings.model_validate(row["timings"])
     channel, config = channels.load(), Config.load()
+    diagrams.use_palette(channel.board)   # the channel's board colours, for the sketches' review too (D156)
     notes: list[str] = []
     stock.unjudged.clear()
     chosen.clear()

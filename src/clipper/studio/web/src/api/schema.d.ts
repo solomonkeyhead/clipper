@@ -803,6 +803,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/create/videos/{video_id}/sound": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create Sound
+         * @description Music and chalk sounds for one video (D156): true, false, or null for the channel's setting. The voice
+         *     and timings stay; the next build uses it.
+         */
+        put: operations["create_sound_api_create_videos__video_id__sound_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/create/videos/{video_id}/script": {
         parameters: {
             query?: never;
@@ -1526,6 +1547,26 @@ export interface paths {
         /** Posts */
         get: operations["posts_api_posts_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/posts/stayed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Post Stayed
+         * @description A post's "viewed vs swiped away" percent from YouTube Studio, typed in (D156); null clears it.
+         */
+        put: operations["post_stayed_api_posts_stayed_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3385,6 +3426,8 @@ export interface components {
             avg_watch_s?: number | null;
             /** Avg View Pct */
             avg_view_pct?: number | null;
+            /** Stayed Pct */
+            stayed_pct?: number | null;
             /** Watched Full Pct */
             watched_full_pct?: number | null;
             /** Skip Rate Pct */
@@ -5341,6 +5384,45 @@ export interface operations {
             };
         };
     };
+    create_sound_api_create_videos__video_id__sound_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_edit_api_create_videos__video_id__script_put: {
         parameters: {
             query?: never;
@@ -6607,6 +6689,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Post"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_stayed_api_posts_stayed_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

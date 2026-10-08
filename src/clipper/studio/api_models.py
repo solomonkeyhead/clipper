@@ -59,6 +59,7 @@ class Post(BaseModel):
     saves: float | None = None
     avg_watch_s: float | None = None
     avg_view_pct: float | None = None
+    stayed_pct: float | None = None      # "viewed vs swiped away", typed in from YouTube Studio (D156)
     watched_full_pct: float | None = None
     skip_rate_pct: float | None = None
     x_median: float | None = None

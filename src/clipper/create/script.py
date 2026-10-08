@@ -80,6 +80,10 @@ class Script(BaseModel):
     shape: str = ""
     ending: str = ""
     series: str = ""
+    bit: str = ""                   # the running bit it was asked to use (D156)
+    # Music and chalk sounds for this video: None = the channel's setting (D156), so two videos can differ.
+    music: bool | None = None
+    sfx: bool | None = None
 
     @property
     def text(self) -> str:
@@ -115,11 +119,15 @@ short), 5 to 14 words. For every beat plan ONE picture:
   pot", "airplane window", "elevator doors"). Never abstract words ({abstract}), never a specific person's action that nobody films ("person touching side of
   head"). Also give card: a 1-4 word phrase from the sentence to write on the chalkboard if
   no footage fits ("bone conduction", "100 degrees").
-  The first beat is footage of the viewer's own moment, in motion, with a person in it when
-  the library is likely to have one ("man driving car", "elevator doors opening").
+  The first beat is the moment itself, already happening: the most striking moving picture of
+  the video, with a person in it when the library is likely to have one ("man driving car",
+  "elevator doors opening"), never a slow scene-setting shot.
+  Change the kind of picture at least every 4 sentences (about 10 seconds): footage to a
+  drawing, or a close-up to a wide shot.
 - kind "diagram": an animated chalkboard diagram, when the beat explains HOW or HOW MUCH.
   About half the beats; never in the first 4 seconds (about the first 10 words); never three
-  diagrams in a row.
+  diagrams in a row. At most 3 parts in a drawing, unless the idea can't be understood with
+  fewer; each part arrives as its word is said.
   hold: when the next sentence (up to 3 of them) goes on explaining the same picture ("two
   routes... route one is air... route two is bone"), set hold = true on those sentences: the
   drawing from the beat before stays up and builds as the voice explains each part, instead
@@ -208,8 +216,10 @@ def visuals(channel: channels.Channel) -> str:
 
 def _system(channel: channels.Channel) -> str:
     rules = "\n".join(f"- {r}" for r in channel.rules)
+    jokes = ("\n\nJoke shapes to follow (shapes, never lines to copy):\n" + "\n".join(f"- {j}" for j in channel.jokes)
+             if channel.jokes else "")
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
-            f"{channel.name} ({channel.niche}). Rules:\n{rules}\n\n{channels.fill(visuals(channel), channel)}\n\n"
+            f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{channels.fill(visuals(channel), channel)}\n\n"
             "The examples are the channel's own scripts, for voice and rhythm only: some break today's "
             "rules (length, sentence length, structure), and the rules win. Never reuse their jokes or lines.")
 
@@ -225,14 +235,38 @@ ENDINGS = {
 
 
 def turn(channel: channels.Channel) -> tuple[str, str]:
-    """The shape and ending for the channel's next script (D155): in turn, by how many it has made, so
-    every pairing comes round."""
+    """The shape and ending for the channel's next script: picked at random but never the shape of either of the
+    last two scripts nor the last one's ending (D156; in strict turn, D155, the order itself became a pattern)."""
+    import random
+
     from . import store
 
-    n = len(store.videos())
-    shapes = channel.shapes or [""]
-    keys = list(ENDINGS)
-    return shapes[n % len(shapes)], keys[(n // len(shapes)) % len(keys)]
+    recent = [v["script"] for v in store.videos()[:2]]
+    shapes = [x for x in channel.shapes if x not in {r.get("shape") for r in recent}] or channel.shapes or [""]
+    endings = [e for e in ENDINGS if not recent or e != recent[0].get("ending")]
+    return random.choice(shapes), random.choice(endings)
+
+
+#: A running bit is retired after this many uses (D156).
+RETIRE = 8
+
+
+def next_bit(channel: channels.Channel) -> tuple[str, str]:
+    """The running bit for the next script, and how to use it (D156): none if either of the last two scripts had one
+    (so at most one in three), else the least used one not yet retired."""
+    from collections import Counter
+
+    from . import store
+
+    used = [v["script"].get("bit", "") for v in store.videos()]   # newest first
+    if not channel.bits or any(used[:2]):
+        return "", ""
+    counts = Counter(u for u in used if u)
+    live = [b for b in channel.bits if counts[b["name"]] < RETIRE]
+    if not live:
+        return "", ""
+    bit = min(live, key=lambda b: counts[b["name"]])
+    return bit["name"], bit["how"].replace("{n}", str(counts[bit["name"]] + 1))
 
 
 def recent_endings(limit: int = 10) -> list[str]:
@@ -248,7 +282,7 @@ def recent_endings(limit: int = 10) -> list[str]:
 
 
 def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "",
-          shape: str | None = None, ending: str | None = None) -> Script:
+          shape: str | None = None, ending: str | None = None, bit: tuple[str, str] | None = None) -> Script:
     """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes, `steer` is the
     owner's note on what to change (D153). The channel's own standing guidance applies every time.
     `shape` and `ending` default to the channel's next in turn (D155)."""
@@ -257,6 +291,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
         next_shape, next_ending = turn(channel)
         shape = next_shape if shape is None else shape
         ending = next_ending if ending is None else ending
+    bit = next_bit(channel) if bit is None else bit
     guide = channels.steering("scripts", channel.script_focus, channel.script_avoid, steer,
                               yields="; the word count, the order of the structure and the output format still apply, "
                                      "and every claim must still be true", never="Never in a script")
@@ -265,6 +300,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
             + (f"Shape: {shape}\n" if shape else "")
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
+            + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
             + ("The channel's latest endings; reuse none of their jokes or their shape:\n"
                + "\n".join(f"- {e}" for e in endings) + "\n" if endings else "")
             + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
@@ -274,7 +310,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
         made = tidy(_parse(answer))
     except (ValueError, TypeError) as exc:
         raise CreateError("the script came back unreadable; try again") from exc
-    return made.model_copy(update={"shape": shape, "ending": ending})
+    return made.model_copy(update={"shape": shape, "ending": ending, "bit": bit[0]})
 
 
 #: Habits that mark a script as machine-written (D155), found in code before anyone reads it.
@@ -522,6 +558,12 @@ def check(script: Script) -> Review:
         return Review(ok=False, problems=[f"The {channels.check_name().lower()} came back unreadable; read it carefully yourself."])
 
 
+def _videos() -> list[dict]:
+    from . import store
+
+    return store.videos()
+
+
 def critique(script: Script, writer: str = "") -> list[str]:
     """What an editor would change (D155), asked of a different AI from the one that wrote it: a model
     goes easy on its own work. Nothing when no other AI answers; the script still goes on."""
@@ -550,7 +592,11 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     notes = []
     if facts or rules or edits:
         feedback = "\n".join(f"- {p}" for p in [*facts, *rules, *edits])
-        script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape, ending=script.ending)
+        bit = next(((b["name"], b["how"]) for b in channel.bits if b["name"] == script.bit), ("", ""))
+        if bit[0]:   # the same law number as the first draft was asked for
+            bit = (bit[0], bit[1].replace("{n}", str(1 + sum(v["script"].get("bit") == bit[0] for v in _videos()))))
+        script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
+                       ending=script.ending, bit=bit)
         second = check(script)
         if not second.ok and second.problems:
             notes.append(f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems))

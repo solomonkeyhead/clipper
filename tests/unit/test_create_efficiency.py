@@ -93,12 +93,12 @@ def test_the_scripts_own_searches_are_tried_first_and_the_footage_model_only_whe
         return {"id": "a"} if "subwoofer speaker" in queries else None
 
     monkeypatch.setattr(stock, "choose", choose)
-    got = build._pick_footage(0, beat, beat.visual, 3.0, s, set(), False)
+    got = build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False)
     assert written == [1] and asked == [["wall music"], ["subwoofer speaker", "wall music"]] and got.hits == [{"id": "a"}]
     written.clear()
     asked.clear()
     monkeypatch.setattr(stock, "choose", lambda q, *a, **k: asked.append(q) or {"id": "b"})
-    build._pick_footage(0, beat, beat.visual, 3.0, s, set(), False)
+    build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False)
     assert written == [] and asked == [["wall music"]]              # the first searches were enough: no extra call
 
 
@@ -107,7 +107,7 @@ def test_a_wish_or_new_footage_goes_straight_to_searches_written_for_it(monkeypa
     written = []
     monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: written.append(k["wish"]) or ["subwoofer speaker"])
     monkeypatch.setattr(stock, "choose", lambda q, *a, **k: {"id": "a", "q": list(q)})
-    got = build._pick_footage(0, beat, beat.visual, 3.0, s, set(), False)
+    got = build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False)
     assert written == ["a subwoofer"] and got.hits[0]["q"][0] == "subwoofer speaker"
 
 
@@ -120,9 +120,9 @@ def test_footage_chosen_ahead_is_used_unless_an_earlier_sentence_took_that_clip(
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(build.stock, "fetch", lambda hit: tmp_path / "clip.mp4")
     monkeypatch.setattr(build, "shot_cache", None)
-    build._planned(0, beat, beat.visual, 3.0, [], s, tmp_path, set(), pre=ahead)
+    build._planned(0, beat, beat.visual, 2.0, [], s, tmp_path, set(), pre=ahead)
     assert live == []                                               # used as chosen
-    build._planned(0, beat, beat.visual, 3.0, [], s, tmp_path, {"a"}, pre=ahead)
+    build._planned(0, beat, beat.visual, 2.0, [], s, tmp_path, {"a"}, pre=ahead)
     assert live == [1]                                              # clashed: chosen again, in turn
 
 

@@ -226,6 +226,7 @@ class Snapshot:
             self.state = db.campaign_state(con)
             self.settings = db.settings(con)
             self.submitted = db.submitted(con)
+            self.stayed = db.stayed(con)
             self.briefs = db.briefs(con)
             self.tasks_done = db.tasks_done(con)
             self.payouts = db.payouts(con)
@@ -263,6 +264,7 @@ class Snapshot:
                     views=views, likes=p.get("likes"), comments=p.get("comments"),
                     shares=p.get("shares"), saves=p.get("saves"),
                     avg_watch_s=p.get("avg_watch_s"), avg_view_pct=p.get("avg_view_pct"),
+                    stayed_pct=self.stayed.get(p["url"].split("?", 1)[0]),
                     watched_full_pct=p.get("watched_full_pct"),
                     skip_rate_pct=p.get("skip_rate_pct"),
                     # Against a median under MIN_MEDIAN views, "22x" said nothing (22 views on a median of 1, D154).
@@ -1546,6 +1548,22 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def posts(campaign: str | None = None, scope: str | None = None) -> list[Post]:
         return [p for c in scoped(Snapshot(), scope) for p in c.posts
                 if campaign is None or p.campaign == campaign]
+
+    @app.put("/api/posts/stayed")
+    def post_stayed(body: dict) -> dict:
+        """A post's "viewed vs swiped away" percent from YouTube Studio, typed in (D156); null clears it."""
+        url = str(body.get("url") or "").split("?", 1)[0]
+        if not url:
+            raise HTTPException(400, "which post?")
+        pct = body.get("pct")
+        if pct is not None:
+            pct = float(pct)
+            if not 0 <= pct <= 100:
+                raise HTTPException(400, "a percent from 0 to 100")
+        with db.connect() as con:
+            db.set_stayed(con, url, pct)
+        broker.publish("clips.changed", {})
+        return {"ok": True}
 
     @app.put("/api/clips/{clip_id}/submitted")
     def clip_submitted(clip_id: int, changes: dict) -> dict:

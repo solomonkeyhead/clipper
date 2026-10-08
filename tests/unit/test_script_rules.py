@@ -61,7 +61,7 @@ def test_an_untouched_physics_channel_moves_to_the_new_rules_and_an_edited_one_k
         raw = {k: v for k, v in old.items() if k not in channel.LIMITS} | {"slug": slug, "rules": list(rules)}
         (channel.channels_dir() / f"{slug}.json").write_text(json.dumps(raw), encoding="utf-8")
     prof, mine = channel.load("prof"), channel.load("mine")
-    assert prof.rules == packs.PHYSICS_RULES and (prof.words, prof.hook_max, len(prof.shapes)) == ([85, 110], 8, 3)
+    assert prof.rules == packs.PHYSICS_RULES and (prof.words, prof.hook_max, len(prof.shapes)) == ([85, 110], 8, 6)
     assert mine.rules == ["my own rule"] and (mine.words, mine.hook_max, mine.shapes) == ([80, 125], 14, [])
 
 

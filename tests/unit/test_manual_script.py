@@ -269,7 +269,7 @@ def test_a_held_drawing_is_one_shot_with_every_word(tmp_path, monkeypatch):
     s = scripts.tidy(_held_script())
     shots = []
 
-    def fake(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None):
+    def fake(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None, at=None):
         shots.append((i, round(seconds, 2), [w for _, w in said]))
         return [tmp_path / f"{i}.mp4"]
 
@@ -296,9 +296,11 @@ def test_a_part_on_a_late_word_arrives_late_but_is_seen():
 def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(tmp_path, monkeypatch):
     from clipper.create import build, stock
 
+    monkeypatch.setattr(build, "HOOK_WORDS", 0)   # not about the quicker opening shots (D156)
+
     beat = Beat(text="Sound goes through bone here.", visual=Visual(kind="stock", query="bone"))
     s = Script(title="t", beats=[beat])
-    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None, skip=0.0: out)
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, *a, **k: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
     picks = iter([{"id": "a", "url": "u", "center": 0.3}, {"id": "b", "url": "u", "center": 0.6}])
@@ -310,7 +312,7 @@ def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(t
 
     monkeypatch.setattr(stock, "choose", choose)
     build.chosen.clear()
-    build._planned(0, beat, beat.visual, 3.0, [], s, tmp_path, set())
+    build._planned(0, beat, beat.visual, 2.0, [], s, tmp_path, set())
     kept = build.remember(s)
     assert kept.beats[0].visual.picked[0]["id"] == "a"
     # built again: the same clip, no judging
@@ -408,7 +410,7 @@ def test_asked_for_footage_and_none_fits_keeps_what_it_had(tmp_path, monkeypatch
     monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None: out)
     build.chosen.clear()
     build.picture_notes.clear()
-    build._planned(0, beat, asked, 3.0, [], s, tmp_path, set())
+    build._planned(0, beat, asked, 2.0, [], s, tmp_path, set())
     assert levels == [build.ASKED_GOOD_ENOUGH]               # a looser match is fine when asked for
     kept = build.remember(s).beats[0].visual
     assert kept.kind == "diagram" and kept.title == "Friend" and not kept.redo
@@ -418,9 +420,11 @@ def test_asked_for_footage_and_none_fits_keeps_what_it_had(tmp_path, monkeypatch
 def test_a_long_sentence_gets_a_different_clip_for_each_part(tmp_path, monkeypatch):
     from clipper.create import build, stock
 
+    monkeypatch.setattr(build, "HOOK_WORDS", 0)   # not about the quicker opening shots (D156)
+
     pool = [{"id": n, "url": "u"} for n in ("a", "b", "c")]
     monkeypatch.setattr(stock, "choose", lambda q, part, used, **k: next(h for h in pool if h["id"] not in used))
-    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None, skip=0.0: out)
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, *a, **k: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
     v = Visual(kind="stock", query="sound")
@@ -536,19 +540,19 @@ def test_asked_footage_that_doesnt_fit_says_so_on_the_part(tmp_path, monkeypatch
     seen = []
     monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: [])
     monkeypatch.setattr(stock, "choose", lambda q, part, used, good_enough=7, **k: seen.append((set(used), good_enough)))
-    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, center=None, skip=0.0: out)
+    monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, *a, **k: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
     monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None: out)
     build.chosen.clear()
-    build._planned(0, beat, asked, 3.0, [], s, tmp_path, set())
+    build._planned(0, beat, asked, 2.0, [], s, tmp_path, set())
     assert seen[0] == ({1}, 6)                                        # the old clip is never chosen again; 6 to pass
     kept = build.remember(s).beats[0].visual
     assert kept.picked[0]["id"] == 1 and "kept what it had" in kept.notice and 1 in kept.avoid
     # the next rebuild keeps that clip: nothing is chosen again
     seen.clear()
     build.chosen.clear()
-    build._planned(0, beat, kept, 3.0, [], s, tmp_path, set())
+    build._planned(0, beat, kept, 2.0, [], s, tmp_path, set())
     assert seen == [] and build.chosen[0]["picked"][0]["id"] == 1
 
 

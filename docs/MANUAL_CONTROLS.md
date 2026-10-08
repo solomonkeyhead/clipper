@@ -33,6 +33,9 @@ is the order I'd build them.
 | Editor's read of a script | Another AI lists fixes and the script is rewritten once (D155); shown in the notes | Edit the script; skip the editor | Gap | S |
 | Pauses in the voice | Pauses over 0.25 s cut, 0.6 s kept before the last sentence (D155) | Off, or the pause lengths | Gap | S |
 | Last shot | The opening footage again under the last sentence, so it loops (D155) | Pick the last picture yourself (any manual pick stops it) | Done | - |
+| Camera moves and punch-ins | Moves in turn; punch-in on two highlighted words (D156) | Choose the move per shot; turn punch-ins off | Gap | S |
+| Character, sign-off, board colours | Channel settings (D156) | Per video on or off | Partial | S |
+| Music and chalk sounds | Off; Clipper's own tune or your tracks folder (D156) | On, off or channel default per video | Done | - |
 | Cover frame | Best still picked automatically | Scrub and choose the frame | Gap | S |
 | Watermark | Channel setting | On/off and corner per video | Gap | S |
 | Loudness and music | Always normalised; no music | Normalisation off or a level; an optional music bed with ducking under the voice | Gap | M |

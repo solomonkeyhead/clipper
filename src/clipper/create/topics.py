@@ -13,9 +13,12 @@ import re
 
 from pydantic import BaseModel
 
+from ..utils.logging import get_logger
 from . import channel as channels
 from . import store
 from .ai import CreateError, ask
+
+log = get_logger(__name__)
 
 SYSTEM = """You plan topics for a short-form video channel that explains everyday {subject}.
 Each idea is ONE question a curious stranger would stop scrolling for, about something
@@ -77,15 +80,35 @@ def steering(channel, steer: str = "", skipped: list[str] | None = None) -> str:
                              yields=", including the share of ideas about the viewer's own body", never="Never make an idea about")
 
 
+def viewer_comments(channel, videos: int = 10) -> list[str]:
+    """Comments on the channel's latest YouTube Shorts (D156), so viewers' own questions become ideas. Nothing when
+    the channel isn't connected or its comments can't be read; ideas don't wait on it."""
+    from ..youtube import api as yt
+
+    handle = channel.handle.lstrip("@").lower()
+    try:
+        path = next((p for p in yt.token_files() if (yt.read_token(p).get("handle") or "").lower() == handle), None)
+        if not handle or path is None:
+            return []
+        token = yt.access_token(path)
+        return yt.comments(token, [s.id for s in yt.list_shorts(token, limit=videos)][:videos])
+    except Exception as exc:  # not connected, no key, a network problem: plan without them
+        log.info("create: no viewer comments for ideas (%s)", str(exc)[:160])
+        return []
+
+
 def generate(count: int = 30, steer: str = "") -> int:
     """Add `count` new ideas to the backlog; returns how many were new."""
     channel = channels.load()
     done = [t["question"] for t in store.topics(status=None)] + [e["title"] for e in channel.examples]
     skipped = [t["question"] for t in store.topics(status="skipped")]
     series = sorted({t["series"] for t in store.topics(status=None) if t.get("series")})
+    heard = viewer_comments(channel)
     user = (steering(channel, steer, skipped) + f"Channel: {channel.name} ({channel.niche}).\n"
             f"Already made or planned, don't repeat:\n" + "\n".join(f"- {q}" for q in done) +
             (f"\n\nSeries so far: {', '.join(series)}." if series else "") +
+            (("\n\nWhat viewers said under recent videos. A real question here is a good idea: answer it, and put "
+              "it in the series \"You Asked\":\n" + "\n".join(f"- {c}" for c in heard[:60])) if heard else "") +
             f"\n\nGive {count} new ideas.")
     answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9, job="topics")
     try:

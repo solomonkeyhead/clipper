@@ -64,12 +64,23 @@ class Channel(BaseModel):
     examples: list[dict] = Field(default_factory=list)   # {"title", "text", "views"}
     # A small logo burned into a corner of every video, if there is one.
     watermark: str = ""
+    # D156: the channel's character (an image; one with a transparent background is used as it is, any other is cut
+    # to a circle), shown at the start, and one of `reactions` at the punchline; a sign-off line for the last second;
+    # the chalkboard's colours (create/diagrams.PALETTES); music and chalk sounds by default (each video can differ).
+    character: str = ""
+    reactions: list[str] = Field(default_factory=list)
+    signoff: str = ""
+    board: str = "slate"
+    music: bool = False
+    sfx: bool = False
+    jokes: list[str] = Field(default_factory=list)
+    bits: list[dict] = Field(default_factory=list)
     # The campaign the finished videos are filed under (studio library).
     campaign: str = ""
 
 
 #: The fields a channel file from before D155 lacks, taken from its pack when read.
-LIMITS = ("words", "sentence_max", "hook_max", "hook_you", "shapes", "scope")
+LIMITS = ("words", "sentence_max", "hook_max", "hook_you", "shapes", "scope", "jokes", "bits", "signoff")
 
 
 def _pack_limits(p: packs.Pack) -> dict:
@@ -132,7 +143,7 @@ def _read(file: Path) -> Channel:
         raw = {"pack": old.key, "abstract": old.abstract, "hashtags": old.hashtags, "drawings": old.drawings,
                "templates": list(old.templates), **raw}
     pack = packs.get(raw["pack"])
-    if pack.key == "physics" and raw.get("rules") == packs.PHYSICS_RULES_BEFORE_D155:
+    if pack.key == "physics" and raw.get("rules") in packs.PHYSICS_RULES_BEFORE:
         # Never edited by its owner: moved to the new rules, with the limits that go with them (D155).
         raw = {**raw, "rules": list(packs.PHYSICS_RULES), **_pack_limits(pack)}
     if raw.get("rules") == pack.rules:   # a channel edited away from its pack's rules keeps the plain limits

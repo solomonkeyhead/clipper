@@ -314,6 +314,9 @@ def build_ass(
     mask_profanity_words: bool = False,
     hook_text: str = "",
     hook_seconds: float = 0.0,
+    hook_scale: float = 0.72,
+    outro_text: str = "",
+    outro_seconds: float = 1.0,
     credit_text: str = "",
     credit_position: str = "top_left",
     faces: list[tuple[float, list[tuple[float, float, float, float]]]] | None = None,
@@ -321,7 +324,8 @@ def build_ass(
     """Render an ASS file for one clip.
 
     `faces` (clip-relative time, face boxes on the output; render/placement.py)
-    moves any caption page that would cover a face.
+    moves any caption page that would cover a face. `hook_scale` sizes the hook against the captions;
+    `outro_text` is a small sign-off at the top for the last `outro_seconds` (Create, D156).
 
     `words` carry source-absolute times; `clip_start` shifts them to be relative
     to the clip. Events outside [0, duration] are dropped, because the QA gate
@@ -361,12 +365,17 @@ def build_ass(
     if hook_text and hook_seconds > 0:
         # Below the credit when both are at the top, not on top of it.
         hook_top = top_safe + (round(credit_size * 1.8) if credit_on_top else 0)
-        hook_size = round(font_size * 0.72)  # research R1.4: 60-72 px, white, black stroke
+        hook_size = round(font_size * hook_scale)  # research R1.4: 60-72 px, white, black stroke; Create's is bigger (D156)
         hook_until = hook_duration(hook_text, hook_seconds)
         hook_bottom = hook_top + len(hook_lines(hook_text)) * hook_size * 1.2
         events.append(_hook_event(
             hook_text, hook_until, style=style, top_margin=hook_top, font_size=hook_size,
         ))
+
+    if outro_text.strip() and duration:
+        events.append(_dialogue(max(0.0, duration - outro_seconds), duration, "Hook",
+                                f"{{\\fs{round(font_size * 0.5)}}}{escape_ass_text(outro_text.strip())}",
+                                layer=1, margin_v=top_safe))
 
     shifted = spread_squashed(_shift_words(words, clip_start, duration))
     chunks = chunk_words(shifted, style)

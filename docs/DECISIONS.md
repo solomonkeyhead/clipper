@@ -2860,3 +2860,49 @@ found three things that had silently stopped working.
   YouTube Studio only, not the Analytics API.
 - Learning has Experiments: name what A and B are, pair videos, compare by % viewed, watch time or views. A side is
   trusted when the one-sided sign test is under 0.06 (8 of 10 pairs, or 5 of 5). Stored in the `experiments` setting.
+
+## D156. The second research report: a character, camera moves, sound, jokes, comments and better experiments (2026-10-07)
+
+**What happened.** The second deep research report (`docs/research/deep-research-viral-template.md`) said the gap
+to Shorts that travel is a recognisable character, varied substance (YouTube's "Generic or Repetitive Content"
+rule names interchangeable videos), and a strong first frame; editing and sound evidence is thin, so those are
+cheap experiments. Marc okayed 18 changes.
+
+**Decided (look).**
+- The channel's character: an image shown bottom left under the captions for the first 2.5 s, and a reaction
+  image at the punchline (one per video from a list). A transparent image is used as it is; any other is cut to a
+  round badge. Marc's profile picture until hand-drawn versions are made (prompts in his Profile Pic folder).
+- Board colours are a channel choice: slate (as before, already the report's colours), one accent, blueprint blue,
+  blackboard. Diagrams are cached by board colour.
+- All stock footage gets one look (less saturation, a little warmer, faint grain). A sign-off line ("Class
+  dismissed.") shows small at the top for the last second.
+
+**Decided (movement and cuts).**
+- Camera moves in turn: push in, still, pull out, pan toward the subject. The same push-in on every shot was the
+  most visible template sign.
+- A 12% punch-in over 4 frames on the highlighted word, at most twice, 8 s apart, never in the hook or punchline.
+- Shots of at most 2.5 s while the first ~11 words are said. The writer is told to change kind every 4 sentences,
+  keep drawings to 3 parts unless more are needed, and open on the moment itself, already happening.
+- The hook text is 1.25 times the caption size (about 120 px).
+
+**Decided (writing).**
+- A second joke in the middle, none in the opening question, every joke carrying a fact; 7 joke shapes given as
+  shapes, not lines. Physics channels on the D155 rules move to these.
+- Running bits ("Professor's Law No. N", the coffee-cup unit, a grudge): at most one script in three, never two
+  running, the least used first, retired after 8 uses.
+- Six shapes, picked at random but never one of the last two; the ending never the last one's.
+- "For ElevenLabs" copies the script a sentence a line with `[pause]` before the punchline, with the report's
+  voice settings on hover.
+
+**Decided (sound).** `create/sound.py` makes a quiet plucked tune and chalk taps itself, so nothing can be claimed
+by Content ID. Music sits 20 dB under the voice, 6 dB lower while it speaks, silent from the punchline pause; taps
+at most 6, 5 s apart, on drawings, plus a two-note tap at the punchline. A channel can put its own tracks in
+`data/create/music/<channel>`. Both are off by default and can be set per video, for experiments.
+
+**Decided (comments and numbers).**
+- The idea planner reads the top comments on the channel's last 10 Shorts and turns real questions into ideas in a
+  "You Asked" series. Clipper's YouTube sign-in is read-only and can't read comments, so this needs a
+  `YOUTUBE_API_KEY` (public data only) in `.env`; without one ideas are planned as before.
+- "Viewed vs swiped away" is typed in per YouTube Short on Stats (no API gives it) and is an experiment metric.
+- Experiments take a smallest winning gap (default 4 points) and the report's rule (3 of every 4 pairs, at least
+  4) beside the sign test.

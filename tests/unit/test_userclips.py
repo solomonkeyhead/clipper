@@ -279,7 +279,7 @@ def test_shots_cut_hold_and_fill_with_the_planned_picture(data_root, tmp_path, m
 
     planned = []
 
-    def fake_planned(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None):
+    def fake_planned(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None, at=None):
         out = work / f"{i:02d}{tag}_planned.mp4"
         planned.append((i, round(seconds, 1), tag))
         return [build._own_shot(src, 0, 1.0, seconds, out, loop=True)]
@@ -316,7 +316,7 @@ def test_a_clip_that_has_run_out_gives_way_to_the_planned_picture(data_root, tmp
     seen = []
     src = make_clip(tmp_path / "src.mp4", 2.0)
 
-    def fake_planned(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None):
+    def fake_planned(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None, at=None):
         seen.append(i)
         return [build._own_shot(src, 0, 1.0, seconds, work / f"{i}{tag}.mp4", loop=True)]
 
@@ -339,7 +339,7 @@ def test_a_clip_ffmpeg_cannot_cut_falls_back_not_fails(data_root, tmp_path, monk
     broken.write_bytes(b"\x00" * 2048)
     src = make_clip(tmp_path / "ok.mp4", 2.0)
 
-    def fake_planned(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None):
+    def fake_planned(i, beat, visual, seconds, said, script_, work, used, tag="", pre=None, at=None):
         seen.append(i)
         return [build._own_shot(src, 0, 1.0, seconds, work / f"{i}{tag}.mp4", loop=True)]
 

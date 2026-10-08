@@ -768,6 +768,9 @@ function VoiceStep({ video }: { video: CreateVideo }) {
   const [way, setWay] = useState<"file" | "record" | "none">("file");
   const text = video.script.beats.map((b) => b.text.trim()).join(" ");
   const how = create?.channel.voice ?? "";
+  // For ElevenLabs v3 (D156): a sentence a line, and a [pause] before the punchline so the deadpan beat lands.
+  const beats = video.script.beats.map((b) => b.text.trim());
+  const eleven = [...beats.slice(0, -1), ...(beats.length > 1 ? ["[pause]"] : []), ...beats.slice(-1)].join("\n");
   const gotIt = async (work: () => Promise<unknown>, done: string) => {
     setBusy(true);
     try {
@@ -797,6 +800,11 @@ function VoiceStep({ video }: { video: CreateVideo }) {
         <Step n={1}>
           <span className="flex-1">Copy the script.</span>
           <Button size="sm" variant="primary" onClick={() => void copyText(text, "Script")}><ClipboardCopy className="size-3.5" /> Copy script</Button>
+          {/elevenlabs/i.test(how) && (
+            <Tip label="A sentence a line and a [pause] before the punchline, for Eleven v3. Try stability 0.55 to 0.65, similarity 0.75, style 0 to 0.1, and make the punchline 2 or 3 times to keep the flattest.">
+              <Button size="sm" variant="secondary" onClick={() => void copyText(eleven, "Script for ElevenLabs")}><ClipboardCopy className="size-3.5" /> For ElevenLabs</Button>
+            </Tip>
+          )}
         </Step>
         <Step n={2}>
           <span className="flex-1">Make the voice your way{how ? <>: <b>{how}</b></> : ""}. Any audio file works (MP3, WAV, M4A...).</span>
@@ -900,6 +908,33 @@ function Fold({ id, title, startOpen = false, children }: { id: string; title: s
   );
 }
 
+/** Music and chalk sounds for this one video (D156), so two videos can differ for an experiment; used on Build again. */
+function SoundChoice({ video }: { video: CreateVideo }) {
+  const qc = useQueryClient();
+  const { data: create } = useCreate();
+  const pick = (key: "music" | "sfx", label: string) => {
+    const mine = video.script[key];
+    const usual = create?.channel[key] ? "on" : "off";
+    return (
+      <label className="flex items-center gap-1.5">
+        {label}
+        <select value={mine == null ? "" : mine ? "on" : "off"} aria-label={label} disabled={video.status === "building"}
+                className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                onChange={(e) => void createApi.sound(video.id, { [key]: e.target.value === "" ? null : e.target.value === "on" })
+                  .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
+          <option value="">Channel ({usual})</option><option value="on">On</option><option value="off">Off</option>
+        </select>
+      </label>
+    );
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+      {pick("music", "Music")}{pick("sfx", "Chalk sounds")}
+      <span className="text-subtle">Changes show on Build again.</span>
+    </div>
+  );
+}
+
 function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
   video: CreateVideo; wps: number; busy: string | null; onPictures: () => void; onRebuild: () => void; onRemove: () => void;
 }) {
@@ -957,6 +992,7 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
             </Tip>
             <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
           </div>
+          <SoundChoice video={video} />
         </div>
       </div>
       <Fold id={`review-${video.id}`} title="Change parts you don't like" startOpen>

@@ -44,7 +44,7 @@ PHYSICS_RULES_BEFORE_D155 = [
 #: D155, from the deep research report (2026-10-07): a shorter hook said to "you", shorter sentences, the
 #: first cause early, a rotating shape and ending (given with each request), the usual AI habits banned,
 #: and no health advice (YouTube's rules on AI-made medical content).
-PHYSICS_RULES = [
+PHYSICS_RULES_D155 = [
     "85 to 110 words in all: it is read aloud at about 2.3 words a second, 37 to 48 seconds.",
     "Open with ONE question of at most 8 words, said to the viewer (\"you\" or \"your\"), about a "
     "concrete moment they have felt or seen (\"Why does the elevator make you heavier?\").",
@@ -65,6 +65,37 @@ PHYSICS_RULES = [
     "The physics must be right. Simplify, never misstate: name the real mechanism.",
 ]
 
+#: D156, from the second report: a small joke in the middle as well as the ending, none in the opening
+#: question, and every joke carrying a fact.
+PHYSICS_RULES = [
+    *PHYSICS_RULES_D155[:7],
+    "Two jokes: one small one in the middle, then the ending. No joke in the opening question: it must be a "
+    "clear question. Every joke carries a fact (\"2,000 newtons of politeness\").",
+    *PHYSICS_RULES_D155[7:],
+]
+#: Rule sets a physics channel may still have word for word; read, it moves to PHYSICS_RULES.
+PHYSICS_RULES_BEFORE = [PHYSICS_RULES_BEFORE_D155, PHYSICS_RULES_D155]
+
+#: Joke shapes for the writer to follow, never lines to copy (D156, the second report's patterns).
+PHYSICS_JOKES = [
+    "Misplaced formal register: a trivial event in official language (\"You are, legally speaking, cargo.\")",
+    "A literal reading of an everyday phrase (\"The floor pushes back. It does. With about 700 newtons.\")",
+    "Understatement of a huge number (\"The Sun loses 4 million tonnes a second. It is having a difficult week.\")",
+    "An absurd but exact comparison (\"This raindrop of fluid decides whether you feel seasick.\")",
+    "Three beats, escalating (\"The car brakes. You continue. Your coffee continues further.\")",
+    "A callback: the ending reuses a word from the opening question with a new meaning",
+    "A polite correction of the viewer (\"Cold does not come in. Heat leaves. Without saying goodbye.\")",
+]
+
+#: Running bits (D156): one is asked for at most every third script, never two scripts running, each retired after
+#: RETIRE uses. {n} is how many times the bit has been used, plus one.
+PHYSICS_BITS = [
+    {"name": "law", "how": "Include \"Professor's Law No. {n}:\" followed by a dry one-line law about this moment."},
+    {"name": "coffee", "how": "Use the Professor's coffee cup (about 0.3 kg) as the unit of one comparison."},
+    {"name": "grudge", "how": "Include one dry line of the Professor's long grudge against an everyday object in "
+                              "this moment (the elevator, the shower curtain, the car door)."},
+]
+
 #: The German Professor's script shapes, one per script in turn (D155): one shape every time reads as a
 #: template, which YouTube's July 2025 rules on mass-produced content name.
 PHYSICS_SHAPES = [
@@ -74,6 +105,13 @@ PHYSICS_SHAPES = [
     "by step (\"You press the button. The floor pushes up.\"), saying what the physics does at each step.",
     "One number: the question, then one surprising true figure that frames it (\"On Everest, water "
     "boils at about 70 degrees.\"), then why that number makes it happen.",
+    # D156: three more, so the shapes can't be learned after three videos.
+    "What if not: the question, then what would happen if the physics did not work this way (\"If the "
+    "floor didn't push harder, you'd keep the elevator's speed... downward.\"), then why it does.",
+    "Scale jump: the question, then zoom to the tiny scale where it happens (molecules, air, light), or "
+    "out to the huge one, then back to the viewer's moment.",
+    "Two things: the question, then the same physics in two everyday moments side by side (the elevator "
+    "and the car), then the one cause they share.",
 ]
 
 
@@ -99,6 +137,9 @@ class Pack(BaseModel):
     hook_you: bool = False             # the opening line must say "you" or "your"
     shapes: list[str] = Field(default_factory=list)   # script shapes used in turn; none: the rules' one
     scope: str = ""                    # what an idea may be about, for the planner's fit score; "" = subject
+    jokes: list[str] = Field(default_factory=list)   # joke shapes for the writer (D156)
+    bits: list[dict] = Field(default_factory=list)   # running bits, used now and then (D156)
+    signoff: str = ""                  # a small line on screen for the last second (D156)
 
 
 EXPLAINER = Pack(
@@ -173,7 +214,7 @@ PHYSICS = Pack(
     areas="mechanics, heat, sound, light, electricity, fluids and pressure, materials",
     abstract='"pressure", "physics",\n  "energy"', hashtags="#physics,\n#science and one specific",
     templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True,
-    shapes=list(PHYSICS_SHAPES),
+    shapes=list(PHYSICS_SHAPES), jokes=list(PHYSICS_JOKES), bits=list(PHYSICS_BITS), signoff="Class dismissed.",
     scope="any STEM subject, physics first, then chemistry, engineering, earth and space, maths, technology")
 
 PACKS: dict[str, Pack] = {p.key: p for p in (EXPLAINER, STORIES, FOOTAGE, PHYSICS)}

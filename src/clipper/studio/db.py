@@ -265,6 +265,8 @@ MIGRATIONS = [
     # Which channel (create/channel.py) a video and an idea belong to (D146); '' = made before channels.
     ("create_videos", "channel", "ALTER TABLE create_videos ADD COLUMN channel TEXT NOT NULL DEFAULT ''"),
     ("create_topics", "channel", "ALTER TABLE create_topics ADD COLUMN channel TEXT NOT NULL DEFAULT ''"),
+    # "Viewed vs swiped away" from YouTube Studio, typed in by the user: no API gives it (D156).
+    ("post_state", "stayed_pct", "ALTER TABLE post_state ADD COLUMN stayed_pct REAL"),
     # The planner's score of 21 and its series (D155).
     ("create_topics", "score", "ALTER TABLE create_topics ADD COLUMN score INTEGER"),
     ("create_topics", "series", "ALTER TABLE create_topics ADD COLUMN series TEXT NOT NULL DEFAULT ''"),
@@ -474,6 +476,17 @@ def set_submitted(con: sqlite3.Connection, url: str, done: bool) -> None:
     con.execute("INSERT INTO post_state (url, submitted_at) VALUES (?, ?) "
                 "ON CONFLICT(url) DO UPDATE SET submitted_at=excluded.submitted_at",
                 (url, now() if done else None))
+
+
+def stayed(con: sqlite3.Connection) -> dict[str, float]:
+    """Post url -> its "viewed vs swiped away" percent, as typed in (D156)."""
+    return {r["url"]: r["stayed_pct"] for r in
+            con.execute("SELECT url, stayed_pct FROM post_state WHERE stayed_pct IS NOT NULL")}
+
+
+def set_stayed(con: sqlite3.Connection, url: str, pct: float | None) -> None:
+    con.execute("INSERT INTO post_state (url, stayed_pct) VALUES (?, ?) "
+                "ON CONFLICT(url) DO UPDATE SET stayed_pct=excluded.stayed_pct", (url, pct))
 
 
 SNAPSHOT_FIELDS = ("views", "likes", "comments", "shares", "saves", "avg_watch_s", "skip_rate_pct")
