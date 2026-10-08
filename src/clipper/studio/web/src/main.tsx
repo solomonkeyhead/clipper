@@ -1,13 +1,14 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  createRootRoute, createRoute, createRouter, lazyRouteComponent, redirect, RouterProvider,
+  createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, redirect, RouterProvider,
 } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import { AppShell } from "./components/AppShell";
-import { Skeleton } from "./components/ui";
+import { MapPinOff } from "lucide-react";
+import { EmptyState, Skeleton } from "./components/ui";
 import { useUI } from "./lib/store";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
@@ -29,7 +30,15 @@ const AccountsPage = lazyRouteComponent(() => import("./pages/SettingsPages"), "
 const SettingsPage = lazyRouteComponent(() => import("./pages/SettingsPages"), "SettingsPage");
 const StatsPage = lazyRouteComponent(() => import("./pages/StatsPage"), "StatsPage");
 
-const root = createRootRoute({ component: AppShell });
+// A link to a page that isn't there (an old bookmark): say so, with the way home (D161).
+const root = createRootRoute({
+  component: AppShell,
+  notFoundComponent: () => (
+    <EmptyState icon={<MapPinOff />} title="No page here"
+                body="This address isn't a page in Clipper. It may be an old link."
+                action={<Link to="/" className="text-sm font-medium text-accent hover:underline">Go to the Dashboard</Link>} />
+  ),
+});
 const routes = [
   createRoute({ getParentRoute: () => root, path: "/", component: DashboardPage }),
   // The Research page became the Ask panel (top bar) and Find campaigns (Campaigns), D63.
@@ -119,6 +128,8 @@ function App() {
         <Toaster
           theme={theme === "light" ? "light" : "dark"}
           position="bottom-center"
+          // An open window (Radix) turns clicks off for the rest of the page; Undo has to stay clickable.
+          style={{ pointerEvents: "auto" }}
           toastOptions={{ className: "!bg-surface-3 !border-line-strong !text-fg" }}
         />
       </Tooltip.Provider>

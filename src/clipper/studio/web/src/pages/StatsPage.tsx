@@ -170,7 +170,11 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
                     {ago(row.posted_at)}
                     {row.settling && <Tip label="Instagram's and YouTube's numbers can arrive up to 48 hours late"><span className="ml-1.5"><Chip tone="warning">settling</Chip></span></Tip>}
                   </td>
-                  {COLUMNS.map((c) => <td key={c.key} className="px-2 text-right whitespace-nowrap">{cell(row, c.key)}</td>)}
+                  {COLUMNS.map((c) => {
+                    // The box to type YouTube's "stayed" in, on the clip's own row too: it hid in the folded rows (D161).
+                    const yt = c.key === "stayed" && many ? list.find((p) => p.platform === "youtube") : undefined;
+                    return <td key={c.key} className="px-2 text-right whitespace-nowrap">{yt ? <StayedCell post={yt} /> : cell(row, c.key)}</td>;
+                  })}
                   <td className="px-2 text-right">
                     {!many && <CopyButton text={row.url} what={`${PLATFORM_NAME[row.platform] ?? row.platform} link`} variant="ghost" />}
                   </td>

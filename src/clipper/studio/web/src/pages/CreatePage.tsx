@@ -50,11 +50,11 @@ export function CreatePage() {
         <AIStrip />
         <div className="mt-3"><ChannelBar data={data} /></div>
       </div>
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
         {/* The video in progress comes first on a phone-width window; the ideas wait below it. */}
         <div className="order-2 lg:order-1"><Ideas topics={data.topics} /></div>
         <div className="order-1 flex flex-col gap-4 lg:order-2">
-          <YourOwn />
+          <YourOwn wps={data.channel.words_per_second} />
           {work.length === 0 && (
             archived.length ? <p className="text-sm text-muted">Nothing in progress: everything you've made is in the Archive below.</p>
               : <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (about 20 seconds), or write your own script." />
@@ -173,7 +173,7 @@ function AIStrip() {
 
 /** Write the script yourself (D120): paste or type it, and Clipper cuts it into sentences, keeping every
  *  word. Pictures and the physics check are optional help, not a requirement. */
-function YourOwn() {
+function YourOwn({ wps }: { wps: number }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -250,7 +250,7 @@ function YourOwn() {
                 placeholder={"Paste or type your script. Each sentence becomes one picture.\nPress Enter to cut it yourself: one line is one sentence."}
                 className={cn(field, "resize-y")} />
       <p className={cn("text-xs", count && (count < 70 || count > 130) ? "text-warning" : "text-muted")}>
-        {count} words · about {Math.round(count / 2.6)}s read aloud{count > 130 ? " · long for a Short" : count && count < 70 ? " · short for a Short" : ""}
+        {count} words · about {Math.round(count / wps)}s read aloud{count > 130 ? " · long for a Short" : count && count < 70 ? " · short for a Short" : ""}
       </p>
       <div className="grid gap-2 sm:grid-cols-2">
         <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description for the post (optional)" aria-label="Description" className={cn(field, "resize-none")} />
@@ -326,7 +326,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
-        {topics.length === 0 && <p className="p-4 text-sm text-muted">No ideas left. Press More ideas.</p>}
+        {topics.length === 0 && <p className="p-4 text-sm text-muted">No ideas to pick from. Press More ideas for some.</p>}
         {topics.length > 0 && shown.length === 0 && <p className="p-4 text-sm text-muted">No idea matches “{find}”.</p>}
         {shown.map((t) => (
           <div key={t.id} className="group flex items-start gap-2 border-b border-line px-4 py-3 last:border-0">

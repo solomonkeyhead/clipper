@@ -398,7 +398,11 @@ def routes(app: FastAPI, publish) -> None:
                   if now - create_ai_module.missed_at.get(k, now) < 15 * 60}
         return {"order": order, "last_used": create_ai_module.last_used, "misses": recent,
                 "missed_ago_s": {k: round(now - create_ai_module.missed_at.get(k, now)) for k in recent},
-                "claude_only": config.llm.create_claude_only, "gemini_jobs": list(config.llm.create_gemini_jobs),
+                # Who does each job now, Settings' picks included: the defaults said "Gemini does footage"
+                # after Marc gave footage to Claude (D161).
+                "claude_only": config.llm.create_claude_only,
+                "gemini_jobs": [j for j in ("script", "check", "critic", "review", "footage", "place", "topics")
+                                if create_ai_module.first_choice(config, j) == "gemini"],
                 "paid_api_jobs": list(config.llm.paid_api_jobs),
                 "problem": problem,
                 "spent_usd": round(claude_code.spent_usd, 2)}

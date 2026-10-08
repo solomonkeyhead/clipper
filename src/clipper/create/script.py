@@ -454,7 +454,7 @@ def from_text(title: str, text: str, description: str = "", hashtags: list[str] 
         raise CreateError("write the script first: there are no sentences in it")
     if len(beats) > 40 or sum(len(b.split()) for b in beats) > 400:
         raise CreateError("that's too long for a Short (over 400 words); cut it down")
-    title = " ".join(title.split()) or beats[0].rstrip(".!?")[:60]
+    title = " ".join(title.split()) or beats[0].rstrip(".")[:60]   # a question keeps its "?" (D161)
     made = Script(title=title[:100], description=description.strip()[:1000],
                   hashtags=[h for h in (hashtags or []) if h.strip()],
                   beats=[Beat(text=b, visual=Visual(kind="stock", query=_query_from(b))) for b in beats])
@@ -534,10 +534,18 @@ def tidy(script: Script) -> Script:
     return kept.model_copy(update={"beats": _poses(kept, channels.load())})
 
 
+#: Long words that say nothing a search can show ("float water does" found nothing useful, D161).
+_FILLER = {"about", "above", "after", "again", "also", "around", "because", "been", "before", "being", "could",
+           "does", "doesn", "didn", "every", "from", "have", "here", "into", "just", "like", "many", "more", "most",
+           "much", "only", "other", "over", "really", "same", "should", "some", "than", "that", "their", "them",
+           "then", "there", "these", "they", "thing", "things", "this", "those", "through", "under", "very", "were",
+           "what", "when", "where", "which", "while", "will", "with", "would", "your", "yours"}
+
+
 def _query_from(text: str) -> str:
-    """A fallback stock query: the beat's longest words."""
-    words = sorted({w.lower() for w in re.findall(r"[A-Za-z]{4,}", text)}, key=len, reverse=True)
-    return " ".join(words[:3])
+    """A fallback stock query: the beat's longest words, filler left out, ties in the sentence's order."""
+    words = [w for w in dict.fromkeys(w.lower() for w in re.findall(r"[A-Za-z]{4,}", text)) if w not in _FILLER]
+    return " ".join(sorted(words, key=len, reverse=True)[:3])
 
 
 class Review(BaseModel):

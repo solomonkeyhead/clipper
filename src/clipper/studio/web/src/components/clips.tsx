@@ -512,7 +512,7 @@ function WaitingForViews({ clip }: { clip: Clip }) {
       <div className="flex flex-col gap-1">
         <div className="flex justify-between text-[11px] text-muted">
           <span>Submit at {formatCount(need)} views</span>
-          <span className="tabular">{formatCount(best)} / {formatCount(need)}</span>
+          <span className="tabular">best post {formatCount(best)}</span>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-surface-3">
           <div className="h-full rounded-full bg-warning" style={{ width: `${Math.min(100, (best / need) * 100)}%` }} />
@@ -799,6 +799,8 @@ export function ClipSheet() {
         <Dialog.Overlay className="fade-in fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]" />
         <Dialog.Content
           aria-describedby={undefined}
+          // A toast's Undo is outside the window: clicking it must not close the window.
+          onInteractOutside={(e) => { if ((e.target as Element).closest?.("[data-sonner-toaster]")) e.preventDefault(); }}
           className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[860px] flex-col overflow-y-auto border-l border-line bg-bg shadow-3 outline-none data-[state=open]:animate-[sheet-in_var(--dur-panel)_var(--ease-decelerate)]"
         >
           {clip && (

@@ -2950,3 +2950,26 @@ Cause: a frame size that shrinks every frame, then a filter after the crop. The 
 pan, in turn); 66 renders over the 11 crashing clips now all pass. The same video builds again as it is.
 Marc also asked for a deep research prompt on Claude skills for websites that do not look machine-made; it is in his
 Youtube Shorts German Professor folder, not in this repo.
+
+## D161. A walk through the whole app as a user: the small fixes (2026-10-08)
+
+Marc asked for every page to be tried as a user, the small fixes made at once and the bigger ones proposed. Made:
+- Video 20 opened on a drawing: the first build found no footage for the hook and kept the stand-in drawing (D125), so
+  every rebuild drew it again. A drawing standing in for footage on the opening words isn't kept now, and a build turns
+  one an earlier build kept back into footage (`retry_opening_footage`: a sketch with searches on it and no idea of its
+  own, not picked by the user).
+- With a clip's window open, a toast's Undo couldn't be clicked (the window turns clicks off elsewhere); it can, and
+  clicking it leaves the window open.
+- On a phone: Create was wider than the screen, the top bar overflowed, and Post queue, Stats, Learning, Accounts and
+  Settings had no way in. Create fits, the top bar shows icons, and the bottom bar's fifth tab is More.
+- A wrong address shows "No page here" with a link home, not a bare "Not Found".
+- Clips: "To submit" counted posts still short of the brief's view minimum; they show as "· N waiting", like the
+  Dashboard. The views bar says "best post". The Ready hint no longer says your own channel's clips go to To submit.
+- Stats: the box to type YouTube's "stayed" is on a clip's own row too, not only in its folded platform rows.
+- Create: the AI line said "Gemini does footage" after Marc gave footage to Claude in Settings; it says who does each job
+  now. Your own script's reading time uses the channel's speed, not 2.6 words a second. "No ideas left" on a new channel
+  is "No ideas to pick from". A title made from a question keeps its "?". The plain footage search made from a sentence
+  leaves out filler words ("float water does" became "float water").
+- The "Class dismissed" sign-off was half the caption size and hard to read on a phone; it is 0.8.
+- Settings: "Claude, paid API key" read as two things in a list; it is "Claude API key (paid)". The dashboard's
+  "Last Short: Why ...?." is quoted. The clipping report's lines lost their em dashes.

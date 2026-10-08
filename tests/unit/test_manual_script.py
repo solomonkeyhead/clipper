@@ -46,7 +46,7 @@ def test_fragments_join_and_long_sentences_split_at_a_comma():
 
 def test_from_text_keeps_the_words_and_refuses_the_impossible():
     s = scripts.from_text("", "Why is the sky blue? Because air scatters short waves more than long ones.", "d", ["#sky", " "])
-    assert s.title == "Why is the sky blue" and s.beats[0].text == "Why is the sky blue?"
+    assert s.title == "Why is the sky blue?" and s.beats[0].text == "Why is the sky blue?"
     assert all(b.visual.kind == "stock" and b.visual.query for b in s.beats) and s.hashtags == ["#sky"]
     with pytest.raises(CreateError, match="write the script"):
         scripts.from_text("t", "   ")

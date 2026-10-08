@@ -609,9 +609,9 @@ interface AIJobs {
   available: Record<string, boolean>;
 }
 
-const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude, paid API key"], ["gemini", "Gemini"], ["ollama", "Ollama on this computer"]];
+const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude API key (paid)"], ["gemini", "Gemini"], ["ollama", "Ollama on this computer"]];
 /** The backend names the server reports for "now", in the dropdown's words. */
-const NOW_NAME: Record<string, string> = { claude_code: "Claude on my plan", anthropic: "Claude, paid API key", gemini: "Gemini", ollama: "Ollama" };
+const NOW_NAME: Record<string, string> = { claude_code: "Claude on my plan", anthropic: "Claude API key (paid)", gemini: "Gemini", ollama: "Ollama" };
 /** Clipping's jobs; the rest are Create's (D154: one list of nine read as a wall). */
 const CLIPPING_JOBS = new Set(["clipping", "judge"]);
 

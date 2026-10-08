@@ -42,13 +42,16 @@ export function AccountScope() {
       {children}
     </button>
   );
+  const label = account ? `@${account.handle}` : group ? group.name : "All accounts";
   return (
     <div ref={box} className="relative">
       <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
+              aria-label={`Showing ${label}`}
               className={cn("flex h-8 max-w-48 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
                 scope === "all" ? "border-line bg-surface-1 text-muted hover:text-fg" : "border-accent bg-accent-soft text-fg")}>
         {account ? <PlatformIcon platform={account.platform} className="size-3.5" /> : group ? <Layers className="size-3.5" /> : <Users className="size-3.5" />}
-        <span className="truncate">{account ? `@${account.handle}` : group ? group.name : "All accounts"}</span>
+        {/* The name only fits beside the other pills from tablet width up. */}
+        <span className="hidden truncate sm:inline">{label}</span>
         <ChevronDown className="size-3 shrink-0" />
       </button>
       {open && (

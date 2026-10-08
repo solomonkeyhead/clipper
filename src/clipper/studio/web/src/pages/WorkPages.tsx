@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const FILTERS = [["ready", "Ready to post"], ["posted", "To submit"], ["submitted", "Submitted"], ["skipped", "Skipped"], ["all", "All"]] as const;
 
 const HINTS: Partial<Record<ClipFilter, React.ReactNode>> = {
-  ready: <>Download a clip and copy its caption to post it. Once it's live, the next sync finds it and moves it to <b className="text-fg">To submit</b>.</>,
+  ready: <>Download a clip and copy its caption to post it. Once it's live, the next sync finds it and moves it on: to <b className="text-fg">To submit</b> for a campaign, to All for your own channel.</>,
   posted: <>Copy each post's link into the campaign's submission form, then press <b className="text-fg">Mark submitted</b>.</>,
 };
 export type ClipFilter = (typeof FILTERS)[number][0];
@@ -25,6 +25,7 @@ export const firstFilter = (clips: Clip[]): ClipFilter =>
 export function ClipFilters({ clips, value, onChange, hints = false }: {
   clips: Clip[]; value: ClipFilter; onChange: (f: ClipFilter) => void; hints?: boolean;
 }) {
+  const waiting = clips.filter((c) => inFilter(c, "posted") && c.submit_at_views).length;
   return (
     <>
       <div className="mb-5 flex flex-wrap gap-1.5" role="tablist">
@@ -32,7 +33,10 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
           <button key={key} role="tab" aria-selected={value === key} onClick={() => onChange(key)}
                   className={cn("h-8 rounded-full border px-3 text-sm font-medium transition-colors",
                     value === key ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
-            {label} <span className="tabular ml-1 opacity-70">{clips.filter((c) => inFilter(c, key)).length}</span>
+            {label} <span className="tabular ml-1 opacity-70">{clips.filter((c) => inFilter(c, key) && !(key === "posted" && c.submit_at_views)).length}</span>
+            {/* Posts still short of the campaign's view minimum are listed here but can't be submitted yet:
+                counted apart, as the Dashboard and the Post queue do (D161). */}
+            {key === "posted" && waiting > 0 && <span className="tabular ml-1 text-xs opacity-70" title="Posted, waiting for enough views to submit">· {waiting} waiting</span>}
           </button>
         ))}
         <StatusLegend />

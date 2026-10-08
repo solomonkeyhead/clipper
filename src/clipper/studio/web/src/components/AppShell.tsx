@@ -1,7 +1,7 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   AlertTriangle, BarChart3, Bot, Film, Send, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
-  Settings, UserCircle2, Wand2, WifiOff,
+  MoreHorizontal, Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useCampaigns, useClips, useCreate, useCreateAI, useJobs, useSetup, useStatus, useSyncNow, useUses } from "@/api/client";
@@ -232,6 +232,10 @@ export function AppShell() {
   const setShortcuts = useUI((s) => s.setShortcuts);
   const setAsk = useUI((s) => s.setAsk);
   const nav = useNav();
+  const [more, setMore] = useState(false);
+  const rest = [...nav.slice(4), ...SECONDARY];
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const moreActive = rest.some((i) => path.startsWith(i.to));
   useBuildNotifications();
   const pendingG = useRef(0);
 
@@ -306,9 +310,9 @@ export function AppShell() {
           </button>
           <div className="flex items-center gap-2">
             <Tip label="Ask about your clips, campaigns and trends" keys="I">
-              <button onClick={() => setAsk(true)}
+              <button onClick={() => setAsk(true)} aria-label="Ask Clipper"
                       className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium text-muted hover:border-line-strong hover:text-fg">
-                <Sparkles className="size-3.5 text-accent" /> Ask
+                <Sparkles className="size-3.5 text-accent" /> <span className="hidden sm:inline">Ask</span>
               </button>
             </Tip>
             <AccountScope />
@@ -334,7 +338,7 @@ export function AppShell() {
 
         {/* Bottom tabs (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
-          {nav.slice(0, 5).map((item) => (
+          {nav.slice(0, 4).map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
                   className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted data-[status=active]:text-accent [&_svg]:size-5">
@@ -343,7 +347,28 @@ export function AppShell() {
               {item.badge ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-accent" /> : null}
             </Link>
           ))}
+          {/* The rest of the pages: a phone had no way to Stats, Settings and the others (D161). */}
+          <button onClick={() => setMore(!more)} aria-expanded={more} aria-haspopup="menu"
+                  className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted [&_svg]:size-5",
+                    (more || moreActive) && "text-accent")}>
+            <MoreHorizontal />
+            More
+            {rest.some((i) => i.badge) ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-accent" /> : null}
+          </button>
         </nav>
+        {more && <>
+          <button aria-label="Close the menu" className="fixed inset-0 z-30 cursor-default md:hidden" onClick={() => setMore(false)} />
+          <div role="menu" className="fixed right-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex w-52 flex-col rounded-md border border-line bg-surface-1 p-1 shadow-3 md:hidden">
+            {rest.map((item) => (
+              <Link key={item.to} to={item.to} role="menuitem" onClick={() => setMore(false)}
+                    className="flex h-10 items-center gap-3 rounded-sm px-3 text-sm text-muted hover:bg-surface-2 hover:text-fg data-[status=active]:text-accent [&_svg]:size-4">
+                {item.icon}
+                <span className="flex-1">{item.label}</span>
+                {item.badge ? <span className="text-xs text-accent">{item.badge}</span> : null}
+              </Link>
+            ))}
+          </div>
+        </>}
       </div>
 
       <ClipSheet />

@@ -155,7 +155,7 @@ function ChannelCard() {
   const video = data.videos.find((v) => v.status !== "built");
   const last = data.videos[0];
   const [text, action]: [string, string] = !video
-    ? [last ? `Last Short: ${last.script.title || "Untitled"}. Ready for the next one?` : "No Short yet.", "Make a Short"]
+    ? [last ? `Last Short: “${last.script.title || "Untitled"}”. Ready for the next one?` : "No Short yet.", "Make a Short"]
     : video.status === "draft" ? [`“${video.script.title || "Untitled"}” is written: read it and approve it.`, "Open the script"]
     : video.status === "approved" ? [`“${video.script.title}” is approved: make the voice on ElevenLabs and drop it in.`, "Add the voice"]
     : video.status === "failed" ? [`“${video.script.title}” didn't build: ${video.error || "see why"}.`, "See why"]

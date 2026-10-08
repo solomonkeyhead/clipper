@@ -374,7 +374,8 @@ def build_ass(
 
     if outro_text.strip() and duration:
         events.append(_dialogue(max(0.0, duration - outro_seconds), duration, "Hook",
-                                f"{{\\fs{round(font_size * 0.5)}}}{escape_ass_text(outro_text.strip())}",
+                                # 0.5 was too small to read on a phone (D161)
+                                f"{{\\fs{round(font_size * 0.8)}}}{escape_ass_text(outro_text.strip())}",
                                 layer=1, margin_v=top_safe))
 
     shifted = spread_squashed(_shift_words(words, clip_start, duration))

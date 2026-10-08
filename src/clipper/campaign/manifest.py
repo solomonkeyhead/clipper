@@ -248,7 +248,7 @@ def _render_report(
 
     for record in records:
         plan = record.plan
-        add(f"### {plan.clip_id} — {plan.hook_text or '(no hook)'}")
+        add(f"### {plan.clip_id}: {plan.hook_text or '(no hook)'}")
         add("")
         add(f"- **File**: `{record.file.name}`")
         add(f"- **Source range**: {to_ffmpeg(plan.start)} to {to_ffmpeg(plan.end)} "
@@ -259,11 +259,11 @@ def _render_report(
             add("- **Components**: "
                 + ", ".join(f"{k} {v:.2f}" for k, v in record.components.items()))
         add(f"- **Layout**: {plan.layout.kind if plan.layout else 'unknown'}"
-            + (f" — {plan.layout.reason}" if plan.layout and plan.layout.reason else ""))
+            + (f": {plan.layout.reason}" if plan.layout and plan.layout.reason else ""))
         add(f"- **QA**: {record.qa.status}")
         for check in record.qa.checks:
             if check.status != "pass":
-                add(f"  - {check.status}: {check.name} — {check.detail}")
+                add(f"  - {check.status}: {check.name}, {check.detail}")
         add(f"- **Compliance**: {record.compliance.summary()}")
         add("")
         add("**Suggested caption**")
@@ -299,7 +299,7 @@ def _render_report(
         for record in rejected:
             reasons = "; ".join(c.detail for c in record.qa.failures) \
                 or record.compliance.summary()
-            add(f"- **{record.plan.clip_id}** — {reasons}")
+            add(f"- **{record.plan.clip_id}**: {reasons}")
         add("")
 
     add("## Next step")

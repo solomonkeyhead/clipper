@@ -502,3 +502,20 @@ def test_when_claude_is_out_of_usage_create_stops_instead_of_using_gemini(monkey
     monkeypatch.setattr(ai, "backends", lambda config, model=None, job="": [Claude(), Gemini()])
     with pytest.raises(CreateError, match="weekly limit"):
         ai.ask("s", "u", None, temperature=0)
+
+
+def test_an_opening_drawing_that_stood_in_for_footage_goes_back_to_footage():
+    """D161: a build that found no footage for the opening kept a drawing; the next build looks again."""
+    from clipper.create.build import retry_opening_footage
+    from clipper.create.sketch import Sketch
+
+    drawn = Visual(kind="diagram", template="sketch", queries=["ice cube in water"], sketch=Sketch(marks=[]))
+    planned = Visual(kind="diagram", template="sketch", idea="an ice cube", queries=["ice"])
+    picked = drawn.model_copy(update={"manual": True})
+    s = Script(title="t", beats=[Beat(text="Why does ice float?", visual=drawn), Beat(text="Ice is lighter than the water around it.", visual=planned),
+                                 Beat(text="Water shrinks as it cools down, all the way to four degrees.", visual=drawn)])
+    out = retry_opening_footage(s).beats
+    assert out[0].visual.kind == "stock" and out[0].visual.sketch is None
+    assert out[1].visual.kind == "diagram"            # a drawing the writer planned stays
+    assert out[2].visual.kind == "diagram"            # past the opening, the kept drawing stays
+    assert retry_opening_footage(Script(title="t", beats=[Beat(text="a", visual=picked)])).beats[0].visual.kind == "diagram"

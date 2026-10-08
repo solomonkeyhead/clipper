@@ -282,9 +282,28 @@ def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
     # A drawing held over the next sentences is drawn for all of them (D124).
     group = next((g for g in spans(script) if g[0] == i), [i])
     made = _fallback(beat, script, " ".join(script.beats[k].text for k in group))
-    if not tag and made.template == "sketch" and made.sketch and made.sketch.marks:
+    # The opening wants footage (D159): a drawing standing in for it isn't kept, so the next build looks again (D161).
+    stand_in = beat.visual.kind == "stock" and _opening(i, script)
+    if not tag and made.template == "sketch" and made.sketch and made.sketch.marks and not stand_in:
         chosen[i] = {"drawn": made}
     return made
+
+
+def _opening(i: int, script: Script) -> bool:
+    """Whether sentence i is said before the first drawing may come (the hook)."""
+    return sum(len(b.text.split()) for b in script.beats[:i]) < FIRST_DIAGRAM_WORDS
+
+
+def retry_opening_footage(script: Script) -> Script:
+    """Opening sentences back to footage where an earlier build kept a drawing that stood in for it
+    (a sketch with the searches still on it and no idea of its own, D161). The user's own picks stay."""
+    beats = []
+    for i, b in enumerate(script.beats):
+        v = b.visual
+        if _opening(i, script) and v.kind == "diagram" and v.template == "sketch" and v.queries and not v.idea and not v.manual:
+            b = b.model_copy(update={"visual": v.model_copy(update={"kind": "stock", "template": "", "sketch": None})})
+        beats.append(b)
+    return script.model_copy(update={"beats": beats})
 
 
 #: The judge's score footage needs when the user asked for footage on that sentence themselves:
@@ -758,6 +777,7 @@ def _build(video_id: int, progress) -> int:
     if not row["voice"] or not row["timings"]:
         raise CreateError("drop the voiceover in first")
     script, timings = Script.model_validate(row["script"]), Timings.model_validate(row["timings"])
+    script = retry_opening_footage(script)
     channel, config = channels.load(), Config.load()
     diagrams.use_palette(channel.board)   # the channel's board colours, for the sketches' review too (D156)
     notes: list[str] = []
