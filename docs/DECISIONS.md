@@ -2927,3 +2927,16 @@ corner as the character, for the first 2 s of its sentence, never over the start
 presenting picture (D157) steps aside when a pose overlaps it. Each sentence has a pose picker on the video page
 (automatic by default, manual always, D120). The cost is a few extra output tokens per script. Physics prompt
 fixtures are unchanged: the pose request is added only when a channel has poses.
+
+## D159. The Professor stays on screen, bigger; real footage first (2026-10-08)
+
+Marc's first video with D156-D158 opened on a drawing and the Professor only popped up for moments, small. He wants
+him on screen the whole time, as CodeBullet's character is, and 2 to 3 times bigger. `build.character_plan` now gives
+one picture per sentence for the whole video: the channel's picture over the opening sentence, the writer's pose for a
+tagged sentence, the presenting picture where the first drawing appears, else the channel's "talking-*" poses in turn
+(Marc is making these), else the channel's picture, and a reaction from the punchline. He is 520 px tall (sized by
+height, so his head is the same size whatever his arms do), bottom left, his top just under the captions. With him
+always there, the writer may tag 6 sentences and two in a row. The opening drew because no footage scored 7 for
+"metal handle shock" and the no-footage fallback draws, skipping D155's "no drawing in the first 4 seconds"; the
+opening words now take footage scoring 5 (`OPENING_GOOD_ENOUGH`), and draw only when even that finds nothing.
+Also: a test read Marc's own Settings (he gave the footage judge to his Claude plan) and failed; it uses test data now.

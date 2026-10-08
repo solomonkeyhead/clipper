@@ -60,7 +60,7 @@ def test_a_square_picture_becomes_a_round_badge(tmp_path):
     Image.new("RGB", (400, 400), (90, 140, 200)).save(tmp_path / "pfp.png")
     out = build._character(tmp_path / "pfp.png", tmp_path / "badge.png")
     badge = Image.open(out)
-    assert badge.width == build.CHARACTER_WIDTH and badge.getpixel((0, 0))[3] == 0     # round: the corner is clear
+    assert badge.height == build.CHARACTER_HEIGHT and badge.getpixel((0, 0))[3] == 0     # round: the corner is clear
     assert badge.getpixel((badge.width // 2, badge.height // 2))[3] == 255
 
 
@@ -72,6 +72,22 @@ def test_poses_are_kept_only_where_they_fit(data_root):
     poses = ["shocked", "aha", "aha", "SHOCKED", "wave", "aha"]
     beats = [Beat(text=t, pose=p) for t, p in zip(texts, poses, strict=True)]
     got = [b.pose for b in script._poses(Script(title="t", beats=beats), ch)]
-    # not on the opening sentence (too few words said), not two in a row, not an unknown one, not on the last sentence
-    assert got == ["", "aha", "", "shocked", "", ""]
+    # not on the opening sentence (too few words said), not an unknown one, not on the last sentence
+    assert got == ["", "aha", "aha", "shocked", "", ""]
     assert "shocked (a surprising fact)" in script.pose_note(ch) and script.pose_note(channel.make("physics", "P")) == ""
+
+
+def test_the_character_stays_on_screen_the_whole_video(tmp_path):
+    names = ["base", "shocked", "point", "talk1", "talk2", "react"]
+    for n in names:
+        (tmp_path / f"{n}.png").write_bytes(b"x")
+    f = {n: tmp_path / f"{n}.png" for n in names}
+    ch = channel.make("physics", "Prof").model_copy(update={
+        "character": str(f["base"]), "presenter": str(f["point"]), "reactions": [str(f["react"])],
+        "poses": {"shocked": str(f["shocked"]), "talking-1": str(f["talk1"]), "talking-2": str(f["talk2"])}})
+    beats = [Beat(text="a"), Beat(text="b", pose="shocked"), Beat(text="c"), Beat(text="d"), Beat(text="e"), Beat(text="f")]
+    timing = Timings(words=[], beats=[(0.3, 3), (3, 6), (6, 9), (9, 12), (12, 15), (15, 17)], duration=17.0, matched=1.0)
+    build.picture_times[:] = [(7.0, "drawing")]
+    plan = dict(build.character_plan(Script(title="t", beats=beats), timing, ch, 15.0, seed=0))
+    assert plan == {f["base"]: [(0.0, 3)], f["shocked"]: [(3, 6)], f["point"]: [(6, 9)], f["talk1"]: [(9, 12)],
+                    f["talk2"]: [(12, 15.0)], f["react"]: [(15.0, 18.0)]}

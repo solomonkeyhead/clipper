@@ -224,7 +224,7 @@ POSE_USE = {
     "whisper": "a fun fact, an aside", "laugh": "right after his own joke", "coffee": "the coffee bit",
     "grudge": "the grudge bit", "proud": "the sign-off",
 }
-MAX_POSES = 4
+MAX_POSES = 6   # he is on screen all the time now (D159): more changes keep him alive
 POSE_AFTER_WORDS = 7   # the character already shows at the start (D156): no pose in the first sentence or so
 
 
@@ -232,19 +232,22 @@ def pose_note(channel: channels.Channel) -> str:
     """The poses the writer may tag sentences with, for its request; nothing when the channel has none."""
     if not channel.poses:
         return ""
-    names = "; ".join(f"{n} ({POSE_USE[n]})" if n in POSE_USE else n for n in channel.poses)
+    names = "; ".join(f"{n} ({POSE_USE[n]})" if n in POSE_USE else n for n in channel.poses if not n.startswith("talking"))
+    if not names:
+        return ""
     return (f"Poses for the on-screen presenter: set a beat's pose to one of these on at most {MAX_POSES} sentences "
-            f"where it fits what is said, never on the first sentence or two beats in a row, and leave it empty "
+            f"where it fits what is said, never on the first sentence, and leave it empty "
             f"elsewhere. The last sentence needs none. Poses: {names}.\n")
 
 
 def _poses(script: Script, channel: channels.Channel) -> list[Beat]:
-    """The poses kept: known ones, not on the opening words, the last sentence or two beats running, at most MAX_POSES."""
+    """The poses kept: known ones, not on the opening words or the last sentence, at most MAX_POSES. The "talking"
+    poses are the build's own, for the sentences in between (D159)."""
     beats, kept, before = [], 0, 0
     for i, beat in enumerate(script.beats):
         pose = beat.pose.strip().lower() if beat.pose else ""
-        ok = (pose in channel.poses and before >= POSE_AFTER_WORDS and i < len(script.beats) - 1 and kept < MAX_POSES
-              and not (beats and beats[-1].pose))
+        ok = (pose in channel.poses and not pose.startswith("talking") and before >= POSE_AFTER_WORDS
+              and i < len(script.beats) - 1 and kept < MAX_POSES)
         beats.append(beat.model_copy(update={"pose": pose if ok else ""}))
         kept += bool(ok)
         before += len(beat.text.split())

@@ -14,6 +14,7 @@ seconds, the voice evened to the platform loudness; then the cover frame
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import math
 import shutil
@@ -32,7 +33,7 @@ from ..utils.logging import get_logger
 from . import channel as channels
 from . import diagrams, stock, store, userclips
 from .ai import CreateError
-from .script import Script, Visual, spans
+from .script import FIRST_DIAGRAM_WORDS, Script, Visual, spans
 from .sketch import draw_all
 from .voice import Timings, folder
 
@@ -52,11 +53,14 @@ MOTIONS = ("push", "still", "pull", "pan")
 PUNCH, PUNCH_FRAMES, PUNCHES, PUNCH_GAP = 0.12, 4, 2, 8.0
 #: One look for footage from every library (D156): a little less colour, a little warmer, a faint grain.
 LOOK = "eq=saturation=0.85:contrast=1.05,colorbalance=rm=0.03:bm=-0.03,noise=alls=5:allf=t"
-#: The channel's character (D156): this wide, bottom left under the captions, at the start and at the punchline.
-CHARACTER_WIDTH = 194
+#: The channel's character (D156), on screen the whole video (D159): this tall, bottom left, his top just under
+#: the captions. 520 is about 2.5 times the first size: at 194 wide he read as a sticker, not a presenter.
+CHARACTER_HEIGHT = 520
+CHARACTER_X, CHARACTER_BOTTOM = 24, 1790
 CHARACTER_START = 2.5
-PRESENT_SECONDS = 1.5   # the character presenting the first drawing (D157)
-POSE_SECONDS = 2.0      # a tagged sentence's pose, from its first word (D158)
+#: The judge's score footage needs on the opening words (D159): a looser real clip beats a drawing there, as the
+#: viewer's own moment, moving, holds them first (D155); a drawing only when even this finds nothing.
+OPENING_GOOD_ENOUGH = 5
 
 
 def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> float:
@@ -309,7 +313,7 @@ def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, 
     group = next((g for g in spans(script) if g[0] == i), [i])
     text = " ".join(script.beats[k].text for k in group)
     widened = asked or bool(visual.wish)
-    good = ASKED_GOOD_ENOUGH if asked else stock.GOOD_ENOUGH
+    good = ASKED_GOOD_ENOUGH if asked else OPENING_GOOD_ENOUGH if said_before < FIRST_DIAGRAM_WORDS else stock.GOOD_ENOUGH
 
     def widen() -> list[str]:
         written = stock.plan_searches(text, script.text, wish=visual.wish, tried=queries if asked else None)
@@ -582,9 +586,53 @@ def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], scr
     return [*made[:starts[-1]], out]
 
 
+def character_plan(script: Script, timings: Timings, channel: channels.Channel, punchline: float,
+                   seed: int) -> list[tuple[Path, list[tuple[float, float]]]]:
+    """Which picture of the character shows when (D159), each with its times; together they cover the whole video.
+    The opening sentence: the channel's picture. Then per sentence: the writer's pose for it (D158), else the presenting
+    picture where the first drawing appears (D157), else the "talking" poses in turn, else the channel's picture.
+    From the punchline: a reaction (D156). He stays, as CodeBullet's does: popping in for 2 s read as a glitch."""
+    def found(*paths: str) -> list[Path]:
+        return [Path(p) for p in paths if p and Path(p).is_file()]
+
+    base = found(channel.character)
+    if not base:
+        return []
+    talking = found(*(p for n, p in channel.poses.items() if n.startswith("talking")))
+    moods = found(*channel.reactions)
+    point = found(channel.presenter)
+    first = next((t for t, kind in picture_times if kind == "drawing" and CHARACTER_START <= t < punchline - 0.5), None)
+    starts = [0.0] + [s for s, _ in timings.beats[1:]] if len(timings.beats) == len(script.beats) else [0.0]
+    starts = [s for s in starts if s < punchline] + [punchline]
+    shows, idle = [], 0
+    for i, (a, b) in enumerate(itertools.pairwise(starts)):
+        pose = found(channel.poses.get(script.beats[i].pose, "")) if i and script.beats[i].pose else []
+        if i == 0:
+            pic = base[0]
+        elif pose:
+            pic = pose[0]
+        elif point and first is not None and a <= first < b:
+            pic = point[0]
+        elif talking:
+            pic, idle = talking[idle % len(talking)], idle + 1
+        else:
+            pic = base[0]
+        shows.append((pic, a, b))
+    shows.append((moods[seed % len(moods)] if moods else base[0], punchline, timings.duration + 1))
+    plan: dict[Path, list[tuple[float, float]]] = {}
+    for pic, a, b in shows:
+        times = plan.setdefault(pic, [])
+        if times and abs(times[-1][1] - a) < 1e-6:   # the same picture running on: one stretch
+            times[-1] = (times[-1][0], b)
+        else:
+            times.append((a, b))
+    return list(plan.items())
+
+
 def _character(src: Path, out: Path) -> Path | None:
-    """The channel's character as a small overlay (D156): an image with a transparent background as it is, trimmed;
-    any other (a square profile picture) cut to a circle on its upper middle, with a white ring."""
+    """The channel's character as an overlay CHARACTER_HEIGHT tall (D156, D159): an image with a transparent background
+    as it is, trimmed; any other (a square profile picture) cut to a circle on its upper middle, with a white ring.
+    Sized by height, so the head is the same size whichever way the arms go."""
     from PIL import Image, ImageDraw
 
     try:
@@ -603,7 +651,7 @@ def _character(src: Path, out: Path) -> Path | None:
         ring = max(4, side // 40)
         ImageDraw.Draw(img).ellipse((ring // 2, ring // 2, side - ring // 2, side - ring // 2),
                                     outline=(255, 255, 255, 255), width=ring)
-    img = img.resize((CHARACTER_WIDTH, max(1, round(img.height * CHARACTER_WIDTH / img.width))), Image.LANCZOS)
+    img = img.resize((max(1, round(img.width * CHARACTER_HEIGHT / img.height)), CHARACTER_HEIGHT), Image.LANCZOS)
     img.save(out)
     return out
 
@@ -646,30 +694,11 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     mark = Path(channel.watermark) if channel.watermark else None
     if mark and mark.is_file():
         overlay(mark, f"scale={WATERMARK_WIDTH}:-1,format=rgba,colorchannelmixer=aa=0.85", "W-w-48:170")
-    # The character at the start and, reacting, at the punchline (D156); bottom left, under the captions.
-    face = Path(channel.character) if channel.character else None
-    if face and face.is_file() and (base := _character(face, out.with_name("character.png"))):
-        spot = f"48:{H - rc.safe_area.bottom + 20}"
-        overlay(base, "format=rgba", spot, f"lt(t,{CHARACTER_START})")
-        moods = [Path(r) for r in channel.reactions if Path(r).is_file()]
-        react = _character(moods[seed % len(moods)], out.with_name("reaction.png")) if moods else base
-        if react:
-            overlay(react, "format=rgba", spot, f"gte(t,{punchline:.3f})")
-        # The writer's poses (D158): each for its sentence's first POSE_SECONDS, in the same corner.
-        posed = []
-        for i, beat in enumerate(script.beats):
-            path = Path(channel.poses.get(beat.pose, "")) if beat.pose and i < len(timings.beats) else None
-            start = timings.beats[i][0] if path else 0.0
-            if path and path.is_file() and CHARACTER_START <= start < punchline - 0.3 and (
-                    shown := _character(path, out.with_name(f"pose-{i}.png"))):
-                end = min(start + POSE_SECONDS, punchline)
-                posed.append((start, end))
-                overlay(shown, "format=rgba", spot, f"between(t,{start:.3f},{end:.3f})")
-        # Presenting the first drawing as it appears (D157), never over the start or the punchline.
-        first = next((t for t, kind in picture_times if kind == "drawing" and CHARACTER_START <= t < punchline - 0.5), None)
-        point = Path(channel.presenter) if channel.presenter else None
-        if first is not None and point and point.is_file() and not any(a - PRESENT_SECONDS < first < b for a, b in posed) and (shown := _character(point, out.with_name("presenter.png"))):
-            overlay(shown, "format=rgba", spot, f"between(t,{first:.3f},{min(first + PRESENT_SECONDS, punchline):.3f})")
+    # The character, on screen the whole video like a presenter (D159), one picture per sentence.
+    for k, (path, times) in enumerate(character_plan(script, timings, channel, punchline, seed)):
+        if shown := _character(path, out.with_name(f"character-{k}.png")):
+            on = "+".join(f"gte(t,{a:.3f})*lt(t,{b:.3f})" for a, b in times)
+            overlay(shown, "format=rgba", f"{CHARACTER_X}:{CHARACTER_BOTTOM}-h", on)
     graph += (f";{video}ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(bundled_fonts_dir())}'[v]"
               f";[{n}:a]loudnorm=I={rc.loudness_lufs}:TP={rc.true_peak_dbtp}:LRA=11,"
               f"aresample={rc.audio_rate},apad[vo]")

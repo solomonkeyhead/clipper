@@ -255,7 +255,7 @@ def test_the_judge_sees_the_script_and_searches_again_with_its_own_words(monkeyp
     assert "A video about sound." in prompts[0] and all(k.get("job") == "footage" for k in seen_kw)
 
 
-def test_footage_goes_to_gemini_first_and_isnt_stopped_by_claude_only(monkeypatch):
+def test_footage_goes_to_gemini_first_and_isnt_stopped_by_claude_only(monkeypatch, data_root):
     from clipper.create import ai
 
     class B:
