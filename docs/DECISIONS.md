@@ -2940,3 +2940,13 @@ always there, the writer may tag 6 sentences and two in a row. The opening drew 
 "metal handle shock" and the no-footage fallback draws, skipping D155's "no drawing in the first 4 seconds"; the
 opening words now take footage scoring 5 (`OPENING_GOOD_ENOUGH`), and draw only when even that finds nothing.
 Also: a test read Marc's own Settings (he gave the footage judge to his Claude plan) and failed; it uses test data now.
+
+## D160. No "pull out" camera move (2026-10-08)
+
+Marc's video 20 failed at "ffmpeg exited 3221225477" (0xC0000005, ffmpeg crashed). Running every recent stock clip through
+every move showed the "pull out" move (zoom shrinking each frame) crashing ffmpeg on 11 of 40 clips whenever any
+colour filter followed it (the D156 look), reproducibly, while push, still and pan, and pull with a punch-in, never did.
+Cause: a frame size that shrinks every frame, then a filter after the crop. The move is dropped (`MOTIONS` is push, still,
+pan, in turn); 66 renders over the 11 crashing clips now all pass. The same video builds again as it is.
+Marc also asked for a deep research prompt on Claude skills for websites that do not look machine-made; it is in his
+Youtube Shorts German Professor folder, not in this repo.

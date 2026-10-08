@@ -49,7 +49,7 @@ WATERMARK_WIDTH = 150
 #: PUNCHES sentences, PUNCH_GAP seconds apart.
 HOOK_SHOT = 2.5
 HOOK_WORDS = 11
-MOTIONS = ("push", "still", "pull", "pan")
+MOTIONS = ("push", "still", "pan")   # no "pull out": a shrinking frame crashed ffmpeg on some clips (D160)
 PUNCH, PUNCH_FRAMES, PUNCHES, PUNCH_GAP = 0.12, 4, 2, 8.0
 #: One look for footage from every library (D156): a little less colour, a little warmer, a faint grain.
 LOOK = "eq=saturation=0.85:contrast=1.05,colorbalance=rm=0.03:bm=-0.03,noise=alls=5:allf=t"
