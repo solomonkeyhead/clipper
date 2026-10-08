@@ -36,7 +36,6 @@ def _chosen(config, model: str | None, job: str) -> list:
     when it's automatic or can't be set up (then the usual order answers)."""
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
-    from ..runner import _correction_backends
 
     pick = config.llm.job_providers.get(job, "") if job else ""
     model = model or config.llm.create_model
@@ -47,12 +46,33 @@ def _chosen(config, model: str | None, job: str) -> list:
         if pick == "claude_plan" and cli():
             return [create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=CLAUDE_TIMEOUT + 60)]
         if pick == "gemini":
-            return _correction_backends(config, "gemini")
+            return free_backends(config, "gemini")
         if pick == "ollama":
             return [create_backend("ollama", max_retries=1, requests_per_minute=60, timeout=CLAUDE_TIMEOUT)]
     except Exception as exc:  # not set up: the usual order answers
         log.warning("create: the %s you chose for %s isn't available (%s)", pick, job, exc)
     return []
+
+
+def free_backends(config, override: str | None = None) -> list:
+    """The free models Create asks: on Gemini, `llm.create_gemini_models` in turn, best first (D162); else
+    (or with that list empty) the clipping ones, the correction model then the scoring model."""
+    from ..llm.base import create as create_backend
+    from ..runner import _correction_backends
+
+    if (override or config.llm.backend) == "gemini" and config.llm.create_gemini_models:
+        out = []
+        for model in config.llm.create_gemini_models:
+            try:
+                out.append(create_backend("gemini", model=model, max_retries=0,
+                                          requests_per_minute=config.llm.requests_per_minute,
+                                          timeout=config.llm.correction_timeout))
+            except Exception as exc:  # no key: the usual ones say why
+                log.debug("create: %s not set up (%s)", model, exc)
+                break
+        if out:
+            return out
+    return _correction_backends(config, override)
 
 
 def backends(config, model: str | None = None, job: str = "") -> list:
@@ -66,7 +86,6 @@ def backends(config, model: str | None = None, job: str = "") -> list:
 def _default_backends(config, model: str | None = None, job: str = "") -> list:
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
-    from ..runner import _correction_backends
 
     chosen = []
     model = model or config.llm.create_model
@@ -86,7 +105,7 @@ def _default_backends(config, model: str | None = None, job: str = "") -> list:
         misses["claude_code"] = "Claude Code isn't installed here, or `claude` isn't on this window's PATH"
         missed_at["claude_code"] = time.time()
     try:
-        chosen += _correction_backends(config, None)
+        chosen += free_backends(config)
     except Exception as exc:
         if not chosen:
             raise CreateError(f"no AI model is set up: {exc}") from exc

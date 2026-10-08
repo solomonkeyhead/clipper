@@ -53,6 +53,9 @@ class Visual(BaseModel):
     # as the explanation goes on ("two routes... route one is air... route two is bone"), its
     # parts arriving on the words of all those sentences, instead of a new shot each sentence.
     hold: bool = False
+    # The camera on this sentence's footage (D162): "" lets the build choose (moves taken in turn), else "push",
+    # "pull", "drift" or "still". The user's pick, never the writer's.
+    camera: str = ""
     # What the last build used, kept so a rebuild keeps what the user liked (D125): the stock
     # clip(s) picked, the clips turned down ("new footage"), a change waiting for the next build,
     # and the picture before that change, for undo. Set by the app, never by the writer.
@@ -97,7 +100,8 @@ class Script(BaseModel):
 
 #: The fields of a picture only the app sets (the user's clips, what a build picked): left out of
 #: the writer's schema, so it isn't shown ~12 fields it can't use and can't invent them.
-APP_ONLY = {"sketch", "clip", "clip_start", "fill", "manual", "picked", "avoid", "redo", "previous", "wish", "notice"}
+APP_ONLY = {"sketch", "clip", "clip_start", "fill", "manual", "picked", "avoid", "redo", "previous", "wish", "notice",
+            "camera"}
 _WriterVisual = create_model("WriterVisual", **{k: (f.annotation, f) for k, f in Visual.model_fields.items()
                                                 if k not in APP_ONLY})
 _WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""), pose=(str, ""),

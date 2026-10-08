@@ -204,6 +204,11 @@ class LLMConfig(StrictModel):
     # the rest stay with Claude. create_claude_only doesn't apply to these jobs.
     create_gemini_jobs: list[Literal["script", "check", "review", "footage"]] = Field(
         default_factory=lambda: ["script", "check", "review", "footage"])
+    # The Gemini models Create asks, best first (D162): each one tried in turn when the one before is busy
+    # or out of quota. The lite models are left out: a drawing from one came back as a single endless number.
+    # Empty = the clipping models above (correction_model, then the scoring model).
+    create_gemini_models: list[str] = Field(
+        default_factory=lambda: ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"])
     # The jobs the PAID Claude API (ANTHROPIC_API_KEY, billed per use) may do (D142). Any job not
     # listed never touches the key: it runs on Claude Code on your plan (no per-use charge), or
     # Gemini. Default: only drawing the sketches. Add "judge" for clip judging, or script, check,

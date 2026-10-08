@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 from clipper.create import build, channel, script, sound, store
 from clipper.create.script import Beat, Script, Visual
 from clipper.create.voice import TimedWord, Timings
@@ -23,9 +25,10 @@ def test_punch_ins_land_on_the_highlighted_word_away_from_the_hook_and_punchline
             at += 1.0
     timing = Timings(words=words, beats=[(0, 1)] * 5, duration=at, matched=1.0)
     got = build.choose_punches(Script(title="t", beats=beats), timing)
-    assert list(got) == [1, 3]                       # not the hook, not the punchline, 8 s apart at most twice
-    times = [v[0] for v in got.values()]
-    assert times[1] - times[0] >= build.PUNCH_GAP
+    assert got and 0 not in got and 4 not in got    # not the hook, not the punchline
+    assert len(got) <= build.PUNCHES
+    times = sorted(v[0] for v in got.values())
+    assert all(b - a >= build.PUNCH_GAP for a, b in itertools.pairwise(times))
 
 
 def test_a_running_bit_comes_at_most_every_third_script_and_counts_its_uses(data_root):
@@ -57,11 +60,13 @@ def test_shapes_and_endings_never_repeat_the_last_scripts(data_root):
 def test_a_square_picture_becomes_a_round_badge(tmp_path):
     from PIL import Image
 
+    from clipper.create import compose
+
     Image.new("RGB", (400, 400), (90, 140, 200)).save(tmp_path / "pfp.png")
-    out = build._character(tmp_path / "pfp.png", tmp_path / "badge.png")
-    badge = Image.open(out)
-    assert badge.height == build.CHARACTER_HEIGHT and badge.getpixel((0, 0))[3] == 0     # round: the corner is clear
-    assert badge.getpixel((badge.width // 2, badge.height // 2))[3] == 255
+    badge = compose.load_sprite(tmp_path / "pfp.png", build.CHARACTER_HEIGHT)
+    w, h = badge.size
+    assert h == build.CHARACTER_HEIGHT and badge.alpha[0, 0] == 0      # round: the corner is clear
+    assert badge.alpha[h // 2, w // 2] == 1
 
 
 def test_poses_are_kept_only_where_they_fit(data_root):

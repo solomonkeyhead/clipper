@@ -3,11 +3,15 @@ head in profile with sound going two ways, an ear, a straw in a glass -- rather 
 the fixed templates filled in. Template diagrams were judged "off": three boxes saying
 "vocal cords / skull bone / inner ear" don't show sound travelling through a skull.
 
-The model draws with a few chalk marks (lines, arrows, smooth curves and closed outlines,
-circles, dots, boxes, words, waves, a dot that travels along a path) on a 1000 x 600 grid,
-the diagram band of the frame (create/diagrams.py draws and animates them). Then it looks
-at its own drawing, rendered, and fixes what it sees: overlapping words, a shape nobody
+The model draws with a few chalk marks (ready-drawn icons for the objects, lines, arrows, smooth
+curves and closed outlines, circles, dots, boxes, words, waves, sparks, shading, a dot that travels
+along a path) on a 1000 x 900 grid, the picture panel (create/diagrams.py draws and animates them).
+Then it looks at its own drawing, rendered, and fixes what it sees: overlapping words, a shape nobody
 would recognise, physics the picture gets wrong.
+
+D162: the objects come from an icon set (create/icons.py) instead of being plotted point by point (a
+plotted magnet read as a bent line), and the prompt asks for one big, simple picture of the mechanism,
+built up as the voice explains it.
 """
 
 from __future__ import annotations
@@ -27,9 +31,10 @@ log = get_logger(__name__)
 
 
 class Mark(BaseModel):
-    kind: Literal["line", "arrow", "curve", "loop", "circle", "dot", "box", "text", "wave", "mover"]
+    kind: Literal["line", "arrow", "curve", "loop", "circle", "dot", "box", "text", "wave", "mover", "icon", "zigzag",
+                  "hatch"]
     xy: list[float] = Field(default_factory=list)
-    text: str = ""
+    text: str = ""                # text: the words; icon: the icon's name
     color: Literal["chalk", "yellow", "blue", "red", "dim"] = "chalk"
     size: int = 2                 # text: 1 small, 2 medium, 3 big; wave: its height, 1-3
     dashed: bool = False
@@ -40,65 +45,104 @@ class Mark(BaseModel):
 class Sketch(BaseModel):
     title: str = ""
     marks: list[Mark] = Field(default_factory=list)
+    # The grid's height it was drawn on (1000 wide): 600 before D162, when drawings had a 640 px band of the
+    # frame; 900 since, on the taller picture panel. A sketch saved without it is an old one.
+    grid: int = 600
 
 
-DRAW = """You draw quick, clear chalkboard sketches for a 45-second {subject} video on a phone, in
-the style of a good lecturer: the real thing, simply drawn, a few labels, motion where things
-move. One sketch shows what its sentence says, so a viewer gets it in two seconds. When it
-stays up for several sentences, it builds as they go: the object first, then each part on the
-word where the voice explains it, so the picture grows with the explanation and is never
-finished before the voice gets there.
+DRAW = """You draw the chalkboard sketches for a 45-second {subject} video watched on a phone.
+A good sketch shows how the thing works, not what it is called: the real objects, big and simple,
+and the one thing happening between them (the path, the push, the flow, the spark), labelled with a
+word or two. A viewer gets it in two seconds with the sound off.
 
-The board is a grid 1000 wide, 600 tall; x right, y DOWN; (0, 0) top left. Keep everything
-inside x 30-970, y 30-570. Keep the bottom-right corner (x > 740 and y > 400) EMPTY: the
-app's buttons cover it. With a title, keep y < 90 free for it.
+THE BOARD. A grid 1000 wide, 900 tall; x right, y DOWN; (0, 0) top left. Use the whole board: the
+drawing should fill most of it, nothing smaller than a thumb on a phone (no icon under 120 wide, no
+circle under r 30). Keep everything inside x 30-970, y 30-870. Keep the bottom-right corner
+(x > 880 and y > 760) EMPTY: the app's buttons cover it. With a title, keep y < 90 free for it.
 
-Marks (xy is a flat list of numbers):
+HOW TO BUILD IT.
+1. One idea. The sentence makes one point; draw that and nothing else. Two to four things, not ten.
+2. Objects are icons. Anything on the icon list below (a person, an ear, a speaker, the sun, a magnet,
+   a car, a cloud, a battery...) is placed as an icon, never drawn by points. Draw your own outlines
+   only for what has no icon or where the shape is the point: a cross-section, a lens, a pipe, a
+   wave front, a graph line.
+3. The action is the hero. What moves or happens gets the colour and the motion: a yellow arrow, a
+   mover on a dashed path, a wave, a zigzag spark. Cause on the left or top, effect on the right or
+   bottom, so the eye reads it in order.
+4. It builds with the voice. Order the marks as they should appear: the objects first, then what
+   happens to them, then the labels. Give a mark cue = one word of the sentence(s), copied exactly,
+   to appear as the voice says it: a path on the word that names it ("air", "bone"), a label on its
+   own word. Every mark after the first two or three has a cue, so the picture is never finished
+   before the voice gets there.
+5. Few words. Labels name parts the picture can't show by itself, 1-3 words each, at most 4 labels.
+   Put each label BESIDE what it names, never on a line, an icon or another label; leave room: a
+   label is about 26 px wide per letter at size 2, 75 px tall.
+6. True. Proportions right (a head bigger than an ear canal), arrows the way things really go,
+   nothing the {subject} gets wrong.
+
+MARKS (xy is a flat list of numbers):
+- icon: a ready-drawn object. text = its name from the list; xy = [cx, cy, width], width 120-420
+  (the main object 260-420). Icons are line drawings about as tall as they are wide.
 - line / arrow: straight segments through the points [x1,y1, x2,y2, ...]; arrow ends in a head.
 - curve: a smooth curve through the points (a sound path bending round the head, a lens edge).
-- loop: a smooth CLOSED outline through the points, in order round the shape: a head in
-  profile, an ear, a lung, a bubble. 8-16 points, spaced evenly round it.
+- loop: a smooth CLOSED outline through the points, in order round the shape: a lung, a bubble, a
+  drop of water. 8-16 points, spaced evenly round it.
+- hatch: shading inside a closed outline (points in order round it, as for loop): a filled region,
+  the dense part of a gas, the water in a glass. Usually dim or blue, under a loop with the same points.
 - circle: [cx, cy, r]. dot: [cx, cy]. box: [x1, y1, x2, y2].
-- text: [x, y] = the centre of the words; size 1 (small), 2 (label), 3 (headline). At most 3
-  words. Put labels BESIDE what they name, never on top of a line or another label; a label
-  is about 26 px wide per letter at size 2, 75 px tall.
-- wave: a wiggly line from [x1,y1] to [x2,y2], cycles = how many wiggles (more = higher
-  pitch), size = how tall (1-3, louder = taller). It moves along by itself.
-- mover: a bright dot that keeps travelling along the points [x1,y1, x2,y2, ...]: sound
-  going through bone, blood flowing, a ball rolling. Draw its path separately (a dashed
-  curve) if the path itself matters.
-Colours: chalk (white, the default), yellow (the main idea, the path that matters), blue
-(the other path or thing being compared), red (only for danger or heat), dim (guides,
-outlines of background things). dashed for paths and guides.
-Order the marks as they should appear: the object first, then what happens to it. Give a
-mark cue = one word of the sentence(s), copied exactly, to appear when the voice says it: a
-path on the word that names it ("air", "bone"), a label on its own word. Every mark after the
-first few should have a cue.
+- text: [x, y] = the centre of the words; size 1 (small), 2 (label), 3 (headline).
+- wave: a wiggly line from [x1,y1] to [x2,y2], cycles = how many wiggles (more = higher pitch),
+  size = how tall (1-3, louder = taller). It moves along by itself.
+- zigzag: a crackling spark or lightning from [x1,y1] to [x2,y2].
+- mover: a bright dot that keeps travelling along the points [x1,y1, x2,y2, ...]: sound going
+  through bone, blood flowing, a ball rolling, a charge jumping. Draw its path separately (a dashed
+  curve) when the path itself matters.
+Colours: chalk (white, the default, for the objects), yellow (the main idea: the path or action that
+matters), blue (the other path, or the thing being compared; water, cold), red (only for danger or
+heat), dim (guides, background things, shading). dashed for paths and guides. At most three colours.
 
-Rules: 4-14 marks. Draw the physical thing, not a flow chart -- never boxes with words in
-them unless the sentence is about a list. Every label short and true. Proportions right
-(a head bigger than an ear canal). Physics right: arrows point the way things really go."""
+ICONS (use these exact names): {icons}
 
-REVIEW = """You see your chalk sketch rendered as it will appear on the phone (the diagram band
-only). Judge it as a viewer seeing it for two seconds, against what it must show. Problems
-to fix: words overlapping lines or other words, or cut off; a shape nobody would recognise
-(fix the outline points); things crowded into one corner or too small; empty or cluttered;
-anything in the bottom-right corner (x > 740 and y > 400 on the grid); {subject} the picture
-gets wrong. If it already works, answer ok = true and return it unchanged. Otherwise ok =
-false, list the problems, and return the whole corrected sketch."""
+EXAMPLE, for "A speaker shoves the air, and that shove travels all the way to your ear.":
+{"title": "", "marks": [
+ {"kind": "icon", "text": "speaker", "xy": [190, 450, 320]},
+ {"kind": "icon", "text": "ear", "xy": [820, 450, 300], "cue": "ear"},
+ {"kind": "wave", "xy": [360, 450, 650, 450], "color": "yellow", "cycles": 4, "size": 2, "cue": "shoves"},
+ {"kind": "arrow", "xy": [380, 640, 630, 640], "color": "yellow", "dashed": true, "cue": "travels"},
+ {"kind": "text", "xy": [505, 320], "text": "air", "color": "dim", "cue": "air"}]}
+Two icons for the things, the yellow wave and arrow for what happens, one label: that is the size and
+the spirit. Yours shows its own sentence, laid out its own way.
+
+Rules: 4-14 marks. Never a flow chart: boxes with words in them only when the sentence is a list."""
+
+REVIEW = """You see your chalk sketch rendered as it will appear on the phone (the picture panel
+only). Judge it as a viewer seeing it for two seconds, against what it must show. Problems to fix:
+words overlapping lines, icons or other words, or cut off; a shape nobody would recognise (use an
+icon, or fix the outline points); the drawing small, or crowded into one part of the board; too many
+things or words; the main action not standing out; anything in the bottom-right corner (x > 880 and
+y > 760 on the grid); {subject} the picture gets wrong. If it already works, answer ok = true and
+return it unchanged. Otherwise ok = false, list the problems, and return the whole corrected sketch."""
+
+
+class _Drawn(BaseModel):
+    """A sketch as the model gives it: without the grid, which is ours to set (a model asked for it filled it
+    with one endless number, D162)."""
+    title: str = ""
+    marks: list[Mark] = Field(default_factory=list)
 
 
 class _Review(BaseModel):
     ok: bool
     problems: list[str] = Field(default_factory=list)
-    sketch: Sketch
+    sketch: _Drawn
 
 
 #: Where a sketch is fitted on the grid: clear of the edges, the title, the button corner.
-FIT_X, FIT_Y = (30, 970), (25, 590)
+FIT_X, FIT_Y = (30, 970), (25, 880)
 TEXT_W, TEXT_H = {1: 22, 2: 28, 3: 40}, {1: 60, 2: 75, 3: 105}
 POINTS = {"line": 4, "arrow": 4, "curve": 4, "loop": 6, "circle": 3, "dot": 2, "box": 4, "text": 2, "wave": 4,
-          "mover": 4}
+          "mover": 4, "icon": 2, "zigzag": 4, "hatch": 6}
+ICON_SIZE = 160   # an icon's width on the grid when the model gives none
 
 
 def _extent(m: Mark) -> list[tuple[float, float]]:
@@ -107,6 +151,10 @@ def _extent(m: Mark) -> list[tuple[float, float]]:
     if m.kind == "circle":
         x, y, r = xy[:3]
         return [(x - r, y - r), (x + r, y + r)]
+    if m.kind == "icon":
+        x, y = xy[:2]
+        half = (xy[2] if len(xy) >= 3 else ICON_SIZE) / 2
+        return [(x - half, y - half), (x + half, y + half)]
     if m.kind == "text":
         half = len(m.text) * TEXT_W.get(m.size, 28) / 2
         return [(xy[0] - half, xy[1] - TEXT_H.get(m.size, 75) / 2), (xy[0] + half, xy[1] + TEXT_H.get(m.size, 75) / 2)]
@@ -117,7 +165,12 @@ def fit(sketch: Sketch, title: bool = False) -> Sketch:
     """The sketch scaled and centred to fill the board (D112): drawings came back tiny in a
     corner, or in another scale altogether (0-1, or off the grid) and so invisible. Marks
     without the numbers their kind needs are dropped; too little left is a failure."""
-    marks = [m for m in sketch.marks if len(m.xy) >= POINTS[m.kind] and (m.kind != "text" or m.text.strip())]
+    from . import icons
+
+    # An icon there's no such drawing of: its name written instead, so the board still says it.
+    marks = [m.model_copy(update={"kind": "text", "xy": m.xy[:2], "text": " ".join(m.text.replace("-", " ").split()[:3])})
+             if m.kind == "icon" and not icons.name_for(m.text) else m for m in sketch.marks]
+    marks = [m for m in marks if len(m.xy) >= POINTS[m.kind] and (m.kind not in ("text", "icon") or m.text.strip())]
     if len(marks) < 3 or all(m.kind == "text" for m in marks):
         raise CreateError("the sketch had too little in it to draw")
     # Scaled by its shapes: the words keep their size and move with what they label.
@@ -132,8 +185,8 @@ def fit(sketch: Sketch, title: bool = False) -> Sketch:
 
     def move(m: Mark) -> Mark:
         xy = list(m.xy)
-        if m.kind == "circle":
-            xy = [ox + (xy[0] - x0) * scale, oy + (xy[1] - y0) * scale, xy[2] * scale]
+        if m.kind in ("circle", "icon"):
+            xy = [ox + (xy[0] - x0) * scale, oy + (xy[1] - y0) * scale, (xy[2] if len(xy) >= 3 else ICON_SIZE) * scale]
         else:
             xy = [ox + (v - x0) * scale if k % 2 == 0 else oy + (v - y0) * scale for k, v in enumerate(xy)]
         if m.kind == "text":  # kept whole on the board
@@ -141,19 +194,25 @@ def fit(sketch: Sketch, title: bool = False) -> Sketch:
             xy = [min(max(xy[0], FIT_X[0] + half_w), FIT_X[1] - half_w), min(max(xy[1], top + half_h), FIT_Y[1] - half_h)]
         return m.model_copy(update={"xy": xy})
 
-    return sketch.model_copy(update={"marks": [move(m) for m in marks]})
+    return sketch.model_copy(update={"marks": [move(m) for m in marks], "grid": 900})
 
 
 def _png(sketch: Sketch, title: str = "") -> bytes:
-    """The finished sketch, the diagram band only, small: what the reviewer looks at."""
-    from .diagrams import BOTTOM, TOP, W, frame
+    """The finished sketch, the picture panel, small: what the reviewer looks at."""
+    from .diagrams import H, W, frame
     from .script import Visual
 
     img = frame(Visual(kind="diagram", template="sketch", title=title or sketch.title, sketch=sketch), 99.0, 4.0)
-    band = img.crop((0, TOP - 20, W, BOTTOM + 20)).resize((W // 2, (BOTTOM - TOP + 40) // 2))
+    band = img.resize((W // 2, H // 2))
     buf = io.BytesIO()
     band.save(buf, "PNG")
     return buf.getvalue()
+
+
+def _prompt(text: str) -> str:
+    from . import icons
+
+    return channels.fill(text).replace("{icons}", ", ".join(icons.OFFERED))
 
 
 def draw(sentence: str, idea: str, script_text: str = "", title: str = "", rounds: int = 2) -> Sketch:
@@ -161,13 +220,13 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
     user = (f"The video's script, for context:\n{script_text}\n\n" if script_text else "") + \
         f"Sentence: {sentence}\nWhat to draw: {idea}\n" + (f"Title over it: {title}\n" if title else "")
     try:
-        sketch = Sketch.model_validate(json.loads(ask(channels.fill(DRAW), user, Sketch, temperature=0.4, job="sketch")))
+        sketch = Sketch.model_validate(json.loads(ask(_prompt(DRAW), user, _Drawn, temperature=0.4, job="sketch")))
     except (ValueError, TypeError) as exc:
         raise CreateError("the sketch came back unreadable") from exc
     sketch = fit(sketch, bool(title or sketch.title))
     for _ in range(rounds):
         try:
-            answer = ask(channels.fill(DRAW + "\n\n" + REVIEW), user + "\nYour sketch:\n" + sketch.model_dump_json(),
+            answer = ask(_prompt(DRAW + "\n\n" + REVIEW), user + "\nYour sketch:\n" + sketch.model_dump_json(exclude={"grid"}),
                          _Review, temperature=0.0, media=[(_png(sketch, title), "image/png")],
                          job="review", keep=True)
             review = _Review.model_validate(json.loads(answer))
@@ -178,7 +237,7 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
             break
         log.info("create: sketch fixed: %s", "; ".join(review.problems)[:200])
         try:
-            sketch = fit(review.sketch, bool(title or review.sketch.title))
+            sketch = fit(Sketch(**review.sketch.model_dump()), bool(title or review.sketch.title))
         except CreateError:  # the "fix" broke it: keep the one we had
             break
     return sketch

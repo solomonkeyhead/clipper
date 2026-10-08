@@ -379,7 +379,7 @@ def test_shots_made_before_are_reused_not_made_again(tmp_path, monkeypatch):
 
     made = []
 
-    def render(v, seconds, out, words=None):
+    def render(v, seconds, out, words=None, frames=None):
         made.append(seconds)
         out.write_bytes(b"shot")
         return out
@@ -407,7 +407,7 @@ def test_asked_for_footage_and_none_fits_keeps_what_it_had(tmp_path, monkeypatch
     levels = []
     monkeypatch.setattr(stock, "choose", lambda *a, good_enough=7, **k: levels.append(good_enough))
     monkeypatch.setattr(build, "_fallback", lambda *a, **k: (_ for _ in ()).throw(AssertionError("drew instead")))
-    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None: out)
+    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None, frames=None: out)
     build.chosen.clear()
     build.picture_notes.clear()
     build._planned(0, beat, asked, 2.0, [], s, tmp_path, set())
@@ -543,7 +543,7 @@ def test_asked_footage_that_doesnt_fit_says_so_on_the_part(tmp_path, monkeypatch
     monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, *a, **k: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
-    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None: out)
+    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None, frames=None: out)
     build.chosen.clear()
     build._planned(0, beat, asked, 2.0, [], s, tmp_path, set())
     assert seen[0] == ({1}, 6)                                        # the old clip is never chosen again; 6 to pass
@@ -723,9 +723,9 @@ def test_a_clip_used_twice_in_a_row_carries_on(tmp_path, monkeypatch):
     from clipper.create import build
 
     starts = []
-    monkeypatch.setattr(build, "probe", lambda p: type("I", (), {"duration": 20.0})())
+    monkeypatch.setattr(build, "probe", lambda p: type("I", (), {"duration": 20.0, "width": 1920, "height": 1080})())
     monkeypatch.setattr(build, "_subject_x", lambda *a: 0.5)
-    monkeypatch.setattr(build, "run", lambda args: starts.append(float(args[args.index("-ss") + 1])))
+    monkeypatch.setattr(build.compose, "video_panel", lambda *a, start, **k: starts.append(start))
     build._stock_shot(tmp_path / "c.mp4", 4.0, tmp_path / "a.mp4", 0.5)
     build._stock_shot(tmp_path / "c.mp4", 4.0, tmp_path / "b.mp4", 0.5, skip=4.0)
     assert starts == [3.0, 7.0]

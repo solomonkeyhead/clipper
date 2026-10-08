@@ -69,6 +69,9 @@ llm:
   # and re-planning), check (physics), review (sketch look-and-fix), footage (judging stock clips).
   # Drawing the sketches stays with Claude. Remove a name to give that job back to Claude.
   create_gemini_jobs: [script, check, review, footage]
+  # The Gemini models Create asks, best first, each tried when the one before is busy (D162). All free on a
+  # Gemini key (checked 2026-10-08). The lite models are left out: their drawings came back broken.
+  create_gemini_models: [gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash, gemini-flash-latest]
   # Jobs the paid Claude API key (ANTHROPIC_API_KEY, billed per use) may do (D142): only drawing
   # the sketches. Every other job runs on your Claude plan through Claude Code, or on Gemini,
   # even with a key set. Add names (judge, script, check, review, footage, place, topics) to allow more.

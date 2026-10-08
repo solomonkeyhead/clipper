@@ -5,9 +5,10 @@ equation, compare, chain, graph, wave, particles, ray, number; and the card, a
 phrase chalked big when no footage fits. Each is drawn frame by frame with Pillow and
 encoded to a clip exactly as long as its sentence: the pieces arrive over the
 first 60% of it, one after another, then hold, with the moving parts (a dot
-on its circle, a graph's tip) still moving. Everything sits between y 400 and
-1040 on the 1080x1920 frame: below the hook line, above the captions (about
-y 1100-1200), clear of the platform's buttons.
+on its circle, a graph's tip) still moving. A drawing fills the picture panel
+at the top of the frame (create/compose.py, D162: 1080x1120, the captions and
+the Professor on the board below it), between y TOP and BOTTOM: under the
+platform's top bar, clear of the panel's edge.
 """
 
 from __future__ import annotations
@@ -19,18 +20,18 @@ import math
 import random
 import re
 import string
-import subprocess
 from functools import cache
 from pathlib import Path
 
+import cv2
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from ..paths import REPO_ROOT
-from ..render.ffmpeg import ffmpeg_path
 from .script import Visual
 
-W, H, FPS = 1080, 1920, 30
-TOP, BOTTOM = 400, 1040
+W, H, FPS = 1080, 1120, 30   # the picture panel (D162); was the whole 1080x1920 frame, drawings in y 400-1040
+TOP, BOTTOM = 150, 1075
 BOARD = (28, 44, 40)
 CHALK = (238, 236, 226)
 YELLOW = (255, 210, 70)
@@ -78,6 +79,7 @@ def font(size: int, bold: bool = True, plain: bool = False) -> ImageFont.FreeTyp
     if bold:
         with contextlib.suppress(OSError, ValueError):
             f.set_variation_by_name("Bold")
+    f.made = (size, bold, plain)   # so the ink layer can make it bigger (D162)
     return f
 
 
@@ -87,19 +89,23 @@ def font_for(s: str, size: int) -> ImageFont.FreeTypeFont:
 
 
 @cache
-def board() -> Image.Image:
-    """The chalkboard: slate with grain and faint smudges of old lessons."""
+def board(size: tuple[int, int] = (W, H)) -> Image.Image:
+    """The chalkboard: slate with grain, faint smudges of old lessons and a soft vignette."""
+    w, h = size
     rnd = random.Random(7)
-    img = Image.new("RGB", (W, H), BOARD)
-    noise = Image.effect_noise((W, H), 18).convert("L")
-    img = Image.composite(Image.new("RGB", (W, H), tuple(c + 10 for c in BOARD)), img, noise.point(lambda v: v // 6))
-    smudge = Image.new("L", (W, H), 0)
+    img = Image.new("RGB", (w, h), BOARD)
+    noise = Image.effect_noise((w, h), 18).convert("L")
+    img = Image.composite(Image.new("RGB", (w, h), tuple(c + 10 for c in BOARD)), img, noise.point(lambda v: v // 6))
+    smudge = Image.new("L", (w, h), 0)
     d = ImageDraw.Draw(smudge)
-    for _ in range(9):
-        x, y, r = rnd.randint(0, W), rnd.randint(0, H), rnd.randint(120, 380)
+    for _ in range(round(9 * h / 1920) + 4):
+        x, y, r = rnd.randint(0, w), rnd.randint(0, h), rnd.randint(120, 380)
         d.ellipse((x - r, y - r * 0.6, x + r, y + r * 0.6), fill=rnd.randint(10, 22))
     smudge = smudge.filter(ImageFilter.GaussianBlur(60))
-    return Image.composite(Image.new("RGB", (W, H), SMUDGE), img, smudge)
+    img = Image.composite(Image.new("RGB", (w, h), SMUDGE), img, smudge)
+    # Darker toward the corners, so the eye goes to the middle (D162).
+    vignette = Image.radial_gradient("L").resize((w, h)).point(lambda v: min(255, int(v * 0.55)))
+    return Image.composite(Image.new("RGB", (w, h), tuple(max(0, c - 14) for c in BOARD)), img, vignette)
 
 
 def ease(x: float) -> float:
@@ -254,7 +260,7 @@ def circle(draw, v: Visual, t: float, d: float) -> None:
                                            strict=True)):
         q = (pv, pi)[i]
         if q > 0.3:
-            y0 = BOTTOM - 85 + i * 66
+            y0 = cy + r + 120 + i * 66   # just under the orbit: at the bottom it kept the drawing small (D162)
             draw.line([(250, y0), (330, y0)], fill=color, width=10)
             text(draw, (360, y0), label, 62, color, anchor="lm", max_width=600, reveal=q)
 
@@ -494,11 +500,14 @@ def number(draw, v: Visual, t: float, d: float) -> None:
 
 
 COLORS = {"chalk": CHALK, "yellow": YELLOW, "blue": BLUE, "red": (255, 120, 100), "dim": DIM}
-SK_X, SK_Y = 40, TOP + 20     # where the sketch grid's (0, 0) lands on the frame
+SK_X, SK_Y = 40, TOP + 20     # where the sketch grid's (0, 0) lands on the panel
+#: How far down a sketch drawn on the old 1000x600 grid moves, to sit in the middle of the taller one (D162).
+GRID_DY: contextvars.ContextVar[float] = contextvars.ContextVar("grid_dy", default=0.0)
 
 
 def _pts(xy: list[float]) -> list[tuple[float, float]]:
-    return [(SK_X + xy[k], SK_Y + xy[k + 1]) for k in range(0, len(xy) - 1, 2)]
+    dy = GRID_DY.get()
+    return [(SK_X + xy[k], SK_Y + dy + xy[k + 1]) for k in range(0, len(xy) - 1, 2)]
 
 
 def _smooth(pts: list[tuple[float, float]], closed: bool) -> list[tuple[float, float]]:
@@ -558,11 +567,66 @@ def _polyline(draw, pts, color, width: int = 9, dashed: bool = False) -> None:
         draw.line(dense[j:j + 8], fill=color, width=width - 2, joint="curve")
 
 
+def _hatch(poly: list[tuple[float, float]], spacing: float = 22) -> list[tuple[tuple[float, float], ...]]:
+    """Chalk shading inside a closed outline: lines at 45 degrees, `spacing` px apart, cut to the outline."""
+    r2 = math.sqrt(2)
+    uv = [((x + y) / r2, (y - x) / r2) for x, y in poly]
+    edges = list(zip(uv, uv[1:] + uv[:1], strict=True))
+    vs = [v for _, v in uv]
+    out = []
+    c = min(vs) + spacing / 2
+    while c < max(vs):
+        cuts = sorted(u1 + (c - v1) * (u2 - u1) / (v2 - v1) for (u1, v1), (u2, v2) in edges
+                      if (v1 <= c < v2) or (v2 <= c < v1))
+        for a, b in zip(cuts[0::2], cuts[1::2], strict=False):
+            if b - a > 8:
+                a, b = a + 3, b - 3   # chalk stops short of the outline
+                out.append((((a - c) / r2, (a + c) / r2), ((b - c) / r2, (b + c) / r2)))
+        c += spacing
+    return out
+
+
+def _zigzag(a: tuple[float, float], b: tuple[float, float], t: float) -> list[tuple[float, float]]:
+    """A spark from a to b: a jagged line that crackles, a new shape eight times a second."""
+    length = math.dist(a, b) or 1
+    ux, uy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+    n = max(3, round(length / 40))
+    rnd = random.Random(int(t * 8))
+    pts = [a]
+    for k in range(1, n):
+        side = (1 if k % 2 else -1) * rnd.uniform(12, 26)
+        along = length * (k + rnd.uniform(-0.25, 0.25)) / n
+        pts.append((a[0] + ux * along - uy * side, a[1] + uy * along + ux * side))
+    return [*pts, b]
+
+
+def _strokes_upto(strokes: list[list[tuple[float, float]]], frac: float) -> list[list[tuple[float, float]]]:
+    """The first `frac` of a drawing made of several strokes, by length: one stroke after another."""
+    lengths = [sum(math.dist(a, b) for a, b in itertools.pairwise(st)) for st in strokes]
+    want, out = sum(lengths) * frac, []
+    for st, length in zip(strokes, lengths, strict=True):
+        if want <= 0:
+            break
+        out.append(_upto(st, want / length) if length and want < length else st)
+        want -= length
+    return out
+
+
+def _tip(draw, at: tuple[float, float], color, p: float) -> None:
+    """The chalk's tip on a line still being drawn: the eye follows the hand."""
+    if 0 < p < 1:
+        draw.ellipse((at[0] - 7, at[1] - 7, at[0] + 7, at[1] + 7), fill=color)
+
+
 def sketch(draw, v: Visual, t: float, d: float) -> None:
     """A chalk sketch made for this sentence (create/sketch.py): its marks arrive in order,
     or as the voice says their cue word; lines are drawn on, words written, waves and
-    travelling dots keep moving."""
+    travelling dots keep moving. Things with an icon (create/icons.py) are drawn from it, stroke
+    by stroke, a spark crackles, shading is hatched in (D162)."""
+    from . import icons
+
     marks = v.sketch.marks if v.sketch else []
+    GRID_DY.set((GRID_H - v.sketch.grid) / 2 if v.sketch else 0.0)
     title(draw, v, stage(t, d, 0, len(marks) + 1))
     # Words after the lines, so no line runs through a word ("vibration" was struck out);
     # the first mark straight away, whatever its cue, so the board is never empty.
@@ -578,7 +642,29 @@ def sketch(draw, v: Visual, t: float, d: float) -> None:
             part = _upto(line, p)
             _polyline(draw, part, color, dashed=m.dashed)
             if m.kind == "arrow" and p > 0.9 and len(part) >= 2:
-                arrow(draw, part[-2], part[-1], color, width=9, head=40)
+                tail = _dense(part)   # the head on the last bit only: from part[-2] it redrew a dashed shaft solid
+                arrow(draw, tail[max(0, len(tail) - 16)], tail[-1], color, width=9, head=40)
+            elif part:
+                _tip(draw, part[-1], color, p)
+        elif m.kind == "icon" and pts:
+            name = icons.name_for(m.text)
+            size = m.xy[2] if len(m.xy) >= 3 else 160
+            if not name:   # no such thing drawn: its name, so the board still says it
+                text(draw, pts[0], m.text, 70, color, max_width=640, reveal=p, halo=True)
+                continue
+            drawn = _strokes_upto(icons.placed(name, pts[0][0], pts[0][1], size), p)
+            width = round(min(11, max(6, size / 22)))
+            for st in drawn:
+                _polyline(draw, st, color, width=width)
+            if drawn and drawn[-1]:
+                _tip(draw, drawn[-1][-1], color, p)
+        elif m.kind == "zigzag" and len(pts) >= 2:
+            part = _upto(_zigzag(pts[0], pts[-1], t), p)
+            _polyline(draw, part, color, width=8)
+        elif m.kind == "hatch" and len(pts) >= 3:
+            lines = _hatch(_smooth(pts, closed=True))
+            for a, b in lines[:round(len(lines) * p)]:
+                draw.line((a, b), fill=color, width=4)
         elif m.kind == "circle" and len(m.xy) >= 3:
             (cx, cy), r = pts[0], m.xy[2]
             draw.arc((cx - r, cy - r, cx + r, cy + r), -90, -90 + 360 * p, fill=color, width=9)
@@ -613,27 +699,232 @@ DRAW = {"sketch": sketch, "forces": forces, "circle": circle, "equation": equati
         "wave": wave, "particles": particles, "ray": ray, "number": number, "card": card}
 
 
-def frame(v: Visual, t: float, d: float) -> Image.Image:
-    img = board().copy()
-    DRAW.get(v.template, chain)(ImageDraw.Draw(img), v, t, d)
+#: Drawn at this many times the size, then shrunk: smooth chalk lines, where Pillow's own lines are jagged (D162).
+SS = 2
+
+
+class _Paster:
+    """`draw._image.paste` for a template that pastes a picture (the graph's upright label), at the ink's size."""
+
+    def __init__(self, image: Image.Image, scale: int):
+        self.image, self.scale = image, scale
+
+    def paste(self, im: Image.Image, box: tuple[int, int], mask=None) -> None:
+        big = im.resize((im.width * self.scale, im.height * self.scale), Image.LANCZOS)
+        self.image.paste(big, (box[0] * self.scale, box[1] * self.scale), big if mask is not None else None)
+
+
+class Ink:
+    """An ImageDraw that draws on the ink layer at SS times the size: the templates keep their panel
+    coordinates, widths and font sizes, and every one is scaled here."""
+
+    def __init__(self, image: Image.Image, scale: int = SS):
+        self._d = ImageDraw.Draw(image)
+        self.s = scale
+        self._image = _Paster(image, scale)
+
+    def _xy(self, xy):
+        flat = []
+        for item in xy:
+            if isinstance(item, (tuple, list)):
+                flat.append((item[0] * self.s, item[1] * self.s))
+            else:
+                flat.append(item * self.s)
+        return flat
+
+    def _w(self, width) -> int:
+        return max(1, round((width or 1) * self.s))
+
+    def line(self, xy, fill=None, width=1, joint=None):
+        self._d.line(self._xy(xy), fill=fill, width=self._w(width), joint=joint)
+
+    def polygon(self, xy, fill=None, outline=None, width=1):
+        self._d.polygon(self._xy(xy), fill=fill, outline=outline, width=self._w(width))
+
+    def ellipse(self, xy, fill=None, outline=None, width=1):
+        self._d.ellipse(self._xy(xy), fill=fill, outline=outline, width=self._w(width))
+
+    def arc(self, xy, start, end, fill=None, width=1):
+        self._d.arc(self._xy(xy), start, end, fill=fill, width=self._w(width))
+
+    def rectangle(self, xy, fill=None, outline=None, width=1):
+        self._d.rectangle(self._xy(xy), fill=fill, outline=outline, width=self._w(width))
+
+    def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1):
+        self._d.rounded_rectangle(self._xy(xy), radius=radius * self.s, fill=fill, outline=outline, width=self._w(width))
+
+    def text(self, xy, text, fill=None, font=None, anchor=None, stroke_width=0, stroke_fill=None):
+        big = _bigger(font, self.s) if font is not None else None
+        self._d.text((xy[0] * self.s, xy[1] * self.s), text, fill=fill, font=big, anchor=anchor,
+                     stroke_width=round(stroke_width * self.s), stroke_fill=stroke_fill)
+
+    def textlength(self, text, font=None):
+        return self._d.textlength(text, font=font)
+
+
+def _bigger(f: ImageFont.FreeTypeFont, scale: int) -> ImageFont.FreeTypeFont:
+    """The same face `scale` times the size, its weight kept (made by font(), which notes how it made it)."""
+    made = getattr(f, "made", None)
+    return font(made[0] * scale, made[1], made[2]) if made else f.font_variant(size=f.size * scale)
+
+
+@cache
+def _grain(w: int, h: int) -> np.ndarray:
+    """Chalk's dry texture: the same grain every frame (lines don't flicker), 0.55 to 1."""
+    n = np.random.default_rng(11).random((h, w)).astype(np.float32)
+    n = cv2.GaussianBlur(n, (0, 0), 0.9)
+    n = (n - n.min()) / max(1e-6, n.max() - n.min())
+    return (0.55 + 0.45 * n ** 0.6)[..., None]
+
+
+@cache
+def _board_array(w: int, h: int) -> np.ndarray:
+    return np.asarray(board((w, h)))
+
+
+#: How far the chalk dust reaches past a line, in pixels.
+DUST = 24
+_last: list = [None, None]   # the last ink layer and its chalked frame: a finished drawing holds still
+
+
+def chalk(ink: np.ndarray) -> Image.Image:
+    """The ink layer (RGBA, its colour premultiplied, as shrinking it leaves it) put on the board as chalk:
+    its edges grainy, a faint dust of its own colour around it. Only the part with ink is worked on, the
+    dust is made at a quarter size, and a frame the same as the last is not done again: about 10 ms a frame,
+    where the plain way took 350."""
+    a8 = ink
+    if _last[0] is not None and _last[0].shape == a8.shape and np.array_equal(_last[0], a8):
+        return _last[1]
+    h, w = a8.shape[:2]
+    base = _board_array(w, h)
+    rows, cols = np.flatnonzero(a8[..., 3].max(1)), np.flatnonzero(a8[..., 3].max(0))
+    if not len(rows):
+        _last[:] = [a8, board((w, h))]
+        return _last[1]
+    x0, y0 = max(0, cols[0] - DUST), max(0, rows[0] - DUST)
+    x1, y1 = min(w, cols[-1] + 1 + DUST), min(h, rows[-1] + 1 + DUST)
+    size = (x1 - x0, y1 - y0)
+    crop = np.ascontiguousarray(a8[y0:y1, x0:x1])
+    raw = crop[..., 3].astype(np.float32) / 255
+    alpha = raw * _grain(w, h)[y0:y1, x0:x1, 0]
+    colour = cv2.divide(np.ascontiguousarray(crop[..., :3]), cv2.merge([crop[..., 3]] * 3), scale=255)
+    part = cv2.blendLinear(np.ascontiguousarray(base[y0:y1, x0:x1]), colour, 1 - alpha, alpha)
+    # The dust: the ink's colour, spread a little past it, faint.
+    small = cv2.resize(crop, (max(1, size[0] // 4), max(1, size[1] // 4)), interpolation=cv2.INTER_AREA)
+    small = cv2.GaussianBlur(small.astype(np.float32), (0, 0), 1.5)
+    soft = small[..., 3] / 255
+    colour = np.clip(small[..., :3] / np.maximum(soft, 1e-3)[..., None], 0, 255).astype(np.uint8)
+    dust = cv2.resize(soft * 0.16, size) * (1 - raw)
+    part = cv2.blendLinear(part, cv2.resize(colour, size), 1 - dust, dust)
+    out = base.copy()
+    out[y0:y1, x0:x1] = part
+    img = Image.fromarray(out)
+    _last[:] = [a8, img]
     return img
 
 
-def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] | None = None) -> Path:
-    """The diagram as a silent 1080x1920 clip of exactly `seconds`; with the shot's spoken
-    `words` ((start, text), seconds into the shot), each label arrives as it's said."""
-    CUES.set(tuple(cues(v, words or [])))
-    frames = max(1, round(seconds * FPS))
-    proc = subprocess.Popen(
-        [str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-         "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16",
-         "-pix_fmt", "yuv420p", str(out)], stdin=subprocess.PIPE)
-    try:
-        for k in range(frames):
-            proc.stdin.write(frame(v, k / FPS, seconds).tobytes())
-    finally:
-        proc.stdin.close()
-        proc.wait()
-    if proc.returncode:
-        raise RuntimeError(f"couldn't encode the {v.template} diagram")
+def _ink(v: Visual, t: float, d: float) -> np.ndarray:
+    ink = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
+    DRAW.get(v.template, chain)(Ink(ink), v, t, d)
+    return np.asarray(ink)
+
+
+#: Where a template's drawing is fitted on the panel (D162), and how far it may grow: the templates were
+#: laid out for the old 640 px band and sat small at the top of the taller board.
+FILL_X, FILL_Y, FILL_MAX = (50, W - 50), (TOP + 10, BOTTOM - 15), 1.5
+
+
+@cache
+def _placement(key: str, d: float) -> tuple[tuple[int, int, int, int], tuple[int, int], tuple[int, int]] | None:
+    """For a template: the finished drawing's box on the big ink layer, the size it's shrunk to and where it
+    goes on the panel, the same for every frame so nothing jumps while it's drawn. None: leave it as it is."""
+    v = Visual.model_validate_json(key)
+    # Finished, at a few moments: what keeps moving (an orbit's arrows, travelling dots) is in the box too.
+    a = np.maximum.reduce([_ink(v, d + 99 + k * 0.65, d)[..., 3] for k in range(4)])
+    rows, cols = np.flatnonzero(a.max(1)), np.flatnonzero(a.max(0))
+    if not len(rows):
+        return None
+    pad = 12 * SS   # the chalk dust and the arrowheads' tips
+    x0, x1 = max(0, cols[0] - pad), min(a.shape[1], cols[-1] + 1 + pad)
+    y0, y1 = max(0, rows[0] - pad), min(a.shape[0], rows[-1] + 1 + pad)
+    room_w, room_h = FILL_X[1] - FILL_X[0], FILL_Y[1] - FILL_Y[0]
+    k = min(room_w / ((x1 - x0) / SS), room_h / ((y1 - y0) / SS), FILL_MAX)
+    w, h = max(1, round((x1 - x0) / SS * k)), max(1, round((y1 - y0) / SS * k))
+    at = (FILL_X[0] + (room_w - w) // 2, FILL_Y[0] + (room_h - h) // 2)
+    return (x0, y0, x1, y1), (w, h), at
+
+
+def _fitted(big: np.ndarray, place) -> np.ndarray:
+    """The big ink layer shrunk onto the panel: as drawn, or (a template) its drawing scaled to fill the board."""
+    if place is None:
+        return cv2.resize(big, (W, H), interpolation=cv2.INTER_AREA)
+    (x0, y0, x1, y1), (w, h), (ax, ay) = place
+    crop = big[y0:y1, x0:x1]
+    small = cv2.resize(crop, (w, h), interpolation=cv2.INTER_AREA if w < crop.shape[1] else cv2.INTER_LINEAR)
+    out = np.zeros((H, W, 4), np.uint8)
+    sx, sy = max(0, -ax), max(0, -ay)
+    ex, ey = min(w, W - ax), min(h, H - ay)
+    out[ay + sy:ay + ey, ax + sx:ax + ex] = small[sy:ey, sx:ex]
     return out
+
+
+def frame(v: Visual, t: float, d: float) -> Image.Image:
+    """The drawing at `t` of `d` seconds: drawn big on a clear layer, shrunk (a template's drawing scaled
+    to fill the board, D162), then chalked onto the board. A sketch is fitted already (sketch.fit)."""
+    place = None if v.template == "sketch" else _placement(v.model_dump_json(), round(d, 2))
+    return chalk(_fitted(_ink(v, t, d), place))
+
+
+#: The sketch grid's height now (1000 wide); sketches made before D162 were drawn on a 1000x600 one.
+GRID_H = 900
+
+
+def _box(m, dy: float) -> tuple[float, float, float, float]:
+    from .sketch import _extent
+
+    pts = [(SK_X + x, SK_Y + dy + y) for x, y in _extent(m)]
+    return min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts)
+
+
+def focus_plan(v: Visual, words: list[tuple[float, str]], seconds: float) -> list:
+    """Where the camera moves in while the voice explains a sketch (D162): on a part said a while after the
+    drawing starts, with the labels said with it, for about 1.6 s, then back out to the whole. At most one
+    such move per 4 seconds of drawing (3 at most), never in the last second, never on a part that is most of
+    the drawing anyway."""
+    from .compose import Focus
+
+    if v.template != "sketch" or not v.sketch or len(v.sketch.marks) < 4 or seconds < 3.5:
+        return []
+    marks, said = v.sketch.marks, cues(v, words)
+    dy = (GRID_H - v.sketch.grid) / 2
+    whole = [_box(m, dy) for m in marks]
+    area = (max(b[2] for b in whole) - min(b[0] for b in whole)) * (max(b[3] for b in whole) - min(b[1] for b in whole))
+    out: list = []
+    for i, m in enumerate(marks):
+        at = said[i] if i < len(said) else None
+        if m.kind == "text" or at is None or at < 1.2 or at > seconds - 1.8:
+            continue
+        if out and at - out[-1].a < 2.4:
+            continue
+        near = [_box(marks[j], dy) for j in range(len(marks))
+                if j == i or (marks[j].kind == "text" and said[j] is not None and abs(said[j] - at) < 0.9)]
+        x0, y0 = min(b[0] for b in near) - 70, min(b[1] for b in near) - 70
+        x1, y1 = max(b[2] for b in near) + 70, max(b[3] for b in near) + 70
+        if (x1 - x0) * (y1 - y0) > 0.45 * area:
+            continue
+        out.append(Focus(a=at - 0.15, b=min(at + 1.6, seconds - 1.0), box=(x0, y0, x1, y1)))
+        if len(out) >= min(3, max(1, int(seconds // 4))):
+            break
+    return out
+
+
+def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] | None = None,
+           frames: int | None = None) -> Path:
+    """The diagram as a silent clip of the picture panel, `frames` long (else `seconds`); with the shot's
+    spoken `words` ((start, text), seconds into the shot), each label arrives as it's said, and the camera
+    moves in on the parts as they're explained (D162)."""
+    from .compose import drawing_panel
+
+    CUES.set(tuple(cues(v, words or [])))
+    n = frames or max(1, round(seconds * FPS))
+    return drawing_panel(lambda t, d: frame(v, t, d), out, n, focus_plan(v, words or [], n / FPS))

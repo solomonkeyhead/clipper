@@ -2973,3 +2973,34 @@ Marc asked for every page to be tried as a user, the small fixes made at once an
 - The "Class dismissed" sign-off was half the caption size and hard to read on a phone; it is 0.8.
 - Settings: "Claude, paid API key" read as two things in a list; it is "Claude API key (paid)". The dashboard's
   "Last Short: Why ...?." is quoted. The clipping report's lines lost their em dashes.
+
+## D162. Create overhaul, parts 1 and 2: a new edit engine and new drawings (2026-10-08)
+
+Marc: the AI parts are weak, and the editing worst of all, above all the zooms and the Professor's animation. Asked
+for everything to be redone. The editing was ffmpeg filter chains: `zoompan` jitters (it rounds to whole pixels each
+frame), a punch-in could only be a step, the Professor was a still picture that slid in, and every overlay was a
+separate filter with its own idea of timing.
+- **The edit engine** (`create/compose.py`): every frame is composited in numpy/OpenCV and piped to ffmpeg. The camera
+  is a float affine warp with eased moves (smootherstep, overshoot on punch-ins, a little motion blur on the fast part),
+  so zooms are smooth to the sub-pixel. One frame clock for the whole video (`frames_between`), so shots, captions and
+  cuts can't drift a frame apart. Layout: the picture in a 1080x1120 panel on top, the board below it, captions under
+  the panel, the Professor bottom left, 2.5x the old size.
+- **The Professor** is a sprite on springs: he bobs on every word (harder on the emphasis word), pops when he changes
+  pose, slides in, breathes, tilts, and casts a soft shadow. On a reaction pose and on the punchline's last word the
+  camera cuts in on his face (hard cut in and out, as comedy edits do).
+- **Captions**: one line of up to 4 words, Anton, the spoken word lit in the accent colour, each line popping in. The
+  hook in big type at the start; the sign-off chalk-written. Transitions (cut, whip, zoom) only where the kind of
+  picture changes.
+- **Drawings**: drawn at twice the size and shrunk (Pillow's lines are jagged), then chalked onto the board: grainy
+  edges and a faint dust of their own colour. About 40 ms a frame. A finished template is measured and scaled to fill
+  the board (`_placement`): the templates were laid out for the old 640 px band and sat small at the top.
+- **Sketches** get an icon set (Lucide, ISC licence, 234 physical things offered, `create/icons.py`): a plotted
+  "magnet" read as a bent line. New marks: icon, zigzag (a crackling spark), hatch (shading). The line being drawn has
+  a chalk tip. The prompt is rewritten around one idea, objects as icons, the action as the hero in colour and motion,
+  building with the voice, few words, with one worked example. The grid is 1000x900 (the panel); old 600-grid
+  sketches are centred. The model no longer sees the grid field: one filled it with an endless number.
+- **Free AI**: Create's Gemini models are `llm.create_gemini_models`, best first: gemini-3.8-flash, 3.7, 3.5,
+  flash-latest (all free on a Gemini key, listed 2026-10-08). The lite models are no longer used for Create.
+- Fixed on the way: a dashed arrow was drawn solid (its head redrew the shaft).
+Why one engine in Python, not more ffmpeg filters: the moves that make an edit feel alive (springs, overshoot, cut-ins
+timed to a word) need per-frame logic, and ffmpeg filters can't hold state between frames.

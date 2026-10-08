@@ -124,8 +124,8 @@ def test_every_diagram_draws_through_its_whole_sentence(v):
     for t in (0.0, 1.0, 2.5, 3.9):
         img = frame(v, t, 4.0)
         assert img.size == (W, H)
-    # Nothing drawn in the caption band.
-    band = img.crop((0, BOTTOM + 60, W, BOTTOM + 160)).convert("L")
+    # Nothing drawn at the panel's bottom edge, where the captions begin.
+    band = img.crop((0, BOTTOM + 5, W, H)).convert("L")
     assert max(band.getdata()) < 120
 
 
@@ -157,7 +157,7 @@ def test_the_ray_bends_by_snells_law():
 
     into_water = Visual(kind="diagram", template="ray", labels=["air", "water"], values=[1.0, 1.33])
     out_of_water = Visual(kind="diagram", template="ray", labels=["water", "air"], values=[1.33, 1.0])
-    below_right, above_right = (620, 760, 1000, 1040), (620, 400, 1000, 700)
+    below_right, above_right = (620, 580, 1000, 900), (620, 260, 1000, 520)   # the surface is at y ~540 (D162)
     assert lit(into_water, below_right) > 500 and lit(into_water, above_right) < 50
     assert lit(out_of_water, above_right) > 500 and lit(out_of_water, below_right) < 50
 
@@ -292,16 +292,17 @@ def test_wide_footage_is_cropped_tall_around_its_subject(tmp_path):
 
     from PIL import Image
 
-    from clipper.create.build import H, W, _stock_shot
+    from clipper.create.build import W, _stock_shot
+    from clipper.create.compose import PANEL_H as H
     from clipper.ingest.probe import probe
 
     if not shutil.which("ffmpeg"):
         pytest.skip("no ffmpeg")
-    # A wide black clip with a white block near its right edge: the subject.
+    # A wide black clip with a white block right of its middle: the subject.
     src = tmp_path / "wide.mp4"
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=black:size=1920x1080:rate=30",
-                    "-vf", "drawbox=x=1500:y=400:w=200:h=280:color=white:t=fill", "-t", "2", str(src)], check=True)
-    out = _stock_shot(src, 1.5, tmp_path / "out.mp4", center=1600 / 1920)
+                    "-vf", "drawbox=x=1100:y=400:w=200:h=280:color=white:t=fill", "-t", "2", str(src)], check=True)
+    out = _stock_shot(src, 1.5, tmp_path / "out.mp4", center=1200 / 1920)
     info = probe(out)
     assert (info.width, info.height) == (W, H) and info.duration == pytest.approx(1.5, abs=0.1)
     still = tmp_path / "still.png"
@@ -331,7 +332,7 @@ class TestSketch:
         v = Visual(kind="diagram", template="sketch", title="Two ways", sketch=Sketch.model_validate({"marks": self.MARKS}))
         for t in (0.0, 1.0, 2.5, 3.9):
             img = frame(v, t, 4.0)
-        band = img.crop((0, BOTTOM + 60, W, BOTTOM + 160)).convert("L")
+        band = img.crop((0, BOTTOM + 5, W, img.height)).convert("L")   # the panel's bottom edge stays clear
         assert max(band.getdata()) < 120
 
     def test_marks_arrive_when_their_word_is_said(self):
@@ -353,7 +354,7 @@ class TestSketch:
 
         def ask(system, user, schema, *, temperature, media=None, **_):
             seen.append(bool(media))
-            if schema is sketch.Sketch:
+            if schema is sketch._Drawn:
                 return json.dumps(first)
             return json.dumps({"ok": len(seen) > 2, "problems": ["the head is unrecognisable"], "sketch": fixed})
 
@@ -519,3 +520,43 @@ def test_an_opening_drawing_that_stood_in_for_footage_goes_back_to_footage():
     assert out[1].visual.kind == "diagram"            # a drawing the writer planned stays
     assert out[2].visual.kind == "diagram"            # past the opening, the kept drawing stays
     assert retry_opening_footage(Script(title="t", beats=[Beat(text="a", visual=picked)])).beats[0].visual.kind == "diagram"
+
+
+def test_icons_shading_and_sparks_draw_and_an_unknown_icon_is_written_instead():
+    """D162: things are drawn from the icon set; a name it doesn't have is written as words, not lost."""
+    from clipper.create import diagrams, icons
+    from clipper.create.sketch import Sketch, fit
+
+    assert all(icons.strokes(n) for n in icons.OFFERED) and icons.name_for("lightning") == "zap"
+    sk = fit(Sketch(marks=[{"kind": "icon", "text": "speaker", "xy": [200, 450, 300]},
+                           {"kind": "icon", "text": "flux-capacitor", "xy": [800, 450]},
+                           {"kind": "zigzag", "xy": [350, 450, 650, 450], "color": "yellow"},
+                           {"kind": "hatch", "xy": [300, 600, 700, 600, 700, 800, 300, 800], "color": "blue"}]))
+    assert [m.kind for m in sk.marks] == ["icon", "text", "zigzag", "hatch"] and sk.marks[1].text == "flux capacitor"
+    img = diagrams.frame(Visual(kind="diagram", template="sketch", sketch=sk), 9.0, 4.0)
+    assert img.size == (diagrams.W, diagrams.H)
+    square = [(100, 100), (300, 100), (300, 300), (100, 300)]
+    lines = diagrams._hatch(square)
+    assert len(lines) > 5 and all(95 <= x <= 305 and 95 <= y <= 305 for seg in lines for x, y in seg)
+
+
+def test_a_template_drawing_is_scaled_to_fill_the_board():
+    """D162: the templates were laid out for the old 640 px band and sat small at the top of the panel."""
+    from clipper.create.diagrams import FILL_MAX, FILL_X, FILL_Y, _placement
+
+    v = Visual(kind="diagram", template="forces", subject="you", labels=["gravity"], directions=["down"])
+    (x0, _, x1, _), (w, h), (ax, ay) = _placement(v.model_dump_json(), 4.0)
+    assert FILL_X[0] <= ax and ax + w <= FILL_X[1] and FILL_Y[0] <= ay and ay + h <= FILL_Y[1]
+    assert h == FILL_Y[1] - FILL_Y[0] or w == FILL_X[1] - FILL_X[0] or w > (x1 - x0) / 2 * (FILL_MAX - 0.01)
+
+
+def test_create_asks_the_best_free_gemini_first_and_skips_the_lite_ones(monkeypatch):
+    from clipper.config import Config
+    from clipper.create import ai
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test")
+    config = Config.load()
+    config = config.model_copy(update={"llm": config.llm.model_copy(update={"backend": "gemini"})})
+    got = [b.model for b in ai.free_backends(config)]
+    assert got == config.llm.create_gemini_models and got[0] == "gemini-3.8-flash"
+    assert not any("lite" in m for m in got)
