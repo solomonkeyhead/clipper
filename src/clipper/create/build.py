@@ -56,6 +56,7 @@ LOOK = "eq=saturation=0.85:contrast=1.05,colorbalance=rm=0.03:bm=-0.03,noise=all
 CHARACTER_WIDTH = 194
 CHARACTER_START = 2.5
 PRESENT_SECONDS = 1.5   # the character presenting the first drawing (D157)
+POSE_SECONDS = 2.0      # a tagged sentence's pose, from its first word (D158)
 
 
 def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> float:
@@ -654,10 +655,20 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
         react = _character(moods[seed % len(moods)], out.with_name("reaction.png")) if moods else base
         if react:
             overlay(react, "format=rgba", spot, f"gte(t,{punchline:.3f})")
+        # The writer's poses (D158): each for its sentence's first POSE_SECONDS, in the same corner.
+        posed = []
+        for i, beat in enumerate(script.beats):
+            path = Path(channel.poses.get(beat.pose, "")) if beat.pose and i < len(timings.beats) else None
+            start = timings.beats[i][0] if path else 0.0
+            if path and path.is_file() and CHARACTER_START <= start < punchline - 0.3 and (
+                    shown := _character(path, out.with_name(f"pose-{i}.png"))):
+                end = min(start + POSE_SECONDS, punchline)
+                posed.append((start, end))
+                overlay(shown, "format=rgba", spot, f"between(t,{start:.3f},{end:.3f})")
         # Presenting the first drawing as it appears (D157), never over the start or the punchline.
         first = next((t for t, kind in picture_times if kind == "drawing" and CHARACTER_START <= t < punchline - 0.5), None)
         point = Path(channel.presenter) if channel.presenter else None
-        if first is not None and point and point.is_file() and (shown := _character(point, out.with_name("presenter.png"))):
+        if first is not None and point and point.is_file() and not any(a - PRESENT_SECONDS < first < b for a, b in posed) and (shown := _character(point, out.with_name("presenter.png"))):
             overlay(shown, "format=rgba", spot, f"between(t,{first:.3f},{min(first + PRESENT_SECONDS, punchline):.3f})")
     graph += (f";{video}ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(bundled_fonts_dir())}'[v]"
               f";[{n}:a]loudnorm=I={rc.loudness_lufs}:TP={rc.true_peak_dbtp}:LRA=11,"

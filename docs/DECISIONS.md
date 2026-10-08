@@ -2914,3 +2914,16 @@ folder). A channel can now have a "presenting" picture, shown bottom left for 1.
 never over the start or the punchline. Marc's watermark is now a round badge made from the drawn Professor on the
 blackboard colour (`Watermark-drawn.png`), so the corner logo matches the drawings; the old one is kept. His board is
 "blackboard" (D156).
+
+## D158. Poses on sentences (2026-10-07)
+
+Marc made 14 more Professor poses (shocked, facepalm, aha, thinking, smug, shrug, deadpan, confused, nervous,
+whisper, laugh, coffee, grudge, proud) with Gemini on a flat magenta background; the background was keyed out
+(flood from the edges plus any large magenta area, a soft edge with the pink tint removed) and saved as transparent
+PNGs next to the others. A channel has `poses` (name to picture). When it has any, the writer may tag at most 4
+sentences with one (`Beat.pose`; what each is for is told to it, `script.POSE_USE`). `tidy` keeps only known poses,
+never on the opening words, the last sentence or two sentences running. The build shows a pose bottom left, the same
+corner as the character, for the first 2 s of its sentence, never over the start or the punchline; the
+presenting picture (D157) steps aside when a pose overlaps it. Each sentence has a pose picker on the video page
+(automatic by default, manual always, D120). The cost is a few extra output tokens per script. Physics prompt
+fixtures are unchanged: the pose request is added only when a channel has poses.

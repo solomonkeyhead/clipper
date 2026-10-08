@@ -70,6 +70,7 @@ class Channel(BaseModel):
     character: str = ""
     reactions: list[str] = Field(default_factory=list)
     presenter: str = ""                  # the character presenting the first drawing, for a moment (D157)
+    poses: dict[str, str] = Field(default_factory=dict)   # name -> picture: the writer tags sentences with these (D158)
     signoff: str = ""
     board: str = "slate"
     music: bool = False

@@ -35,6 +35,7 @@ is the order I'd build them.
 | Last shot | The opening footage again under the last sentence, so it loops (D155) | Pick the last picture yourself (any manual pick stops it) | Done | - |
 | Camera moves and punch-ins | Moves in turn; punch-in on two highlighted words (D156) | Choose the move per shot; turn punch-ins off | Gap | S |
 | Character, sign-off, board colours | Channel settings (D156) | Per video on or off | Partial | S |
+| Poses on sentences | The writer tags up to 4 sentences (D158) | Pose picker on every sentence; poses per channel | Done | - |
 | Music and chalk sounds | Off; Clipper's own tune or your tracks folder (D156) | On, off or channel default per video | Done | - |
 | Cover frame | Best still picked automatically | Scrub and choose the frame | Gap | S |
 | Watermark | Channel setting | On/off and corner per video | Gap | S |

@@ -635,7 +635,7 @@ export interface FootageOffer {
   candidates: { id: string; tags: string; duration: number; tall: boolean; score: number | null; query: string; preview: string; source: string }[];
 }
 export interface Mine { auto: boolean; fill: ClipFill; clips: MineClip[] }
-export interface CreateBeat { text: string; emphasis: string; visual: CreateVisual }
+export interface CreateBeat { text: string; emphasis: string; pose?: string; visual: CreateVisual }
 export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number;
   /** On-screen words at the start; the shape and ending it was asked for; the idea's series (D155). */
   hook?: string; shape?: string; ending?: string; series?: string;
@@ -659,7 +659,7 @@ export interface ReadyScript {
 }
 export interface CreateView {
   channel: { slug: string; name: string; handle: string; voice: string; campaign: string; words_per_second: number;
-             pack: string; drawings: boolean; check_name: string; niche: string; subject: string; music?: boolean; sfx?: boolean };
+             pack: string; drawings: boolean; check_name: string; niche: string; subject: string; music?: boolean; sfx?: boolean; poses?: string[] };
   channels: { slug: string; name: string; handle: string; pack: string }[];
   packs: { key: string; label: string; about: string; drawings: boolean }[];
   topics: CreateTopic[]; videos: CreateVideo[];
@@ -697,7 +697,7 @@ export interface ChannelEdit {
   name?: string; handle?: string; niche?: string; persona?: string; voice?: string; subject?: string; expert?: string;
   areas?: string; idea_focus?: string; idea_avoid?: string; script_focus?: string; script_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
   /** D156: the character and its reactions, the sign-off, the board's colours, music and chalk sounds by default. */
-  character?: string; reactions?: string[]; presenter?: string; signoff?: string; board?: string; music?: boolean; sfx?: boolean;
+  character?: string; reactions?: string[]; presenter?: string; poses?: Record<string, string> | string; signoff?: string; board?: string; music?: boolean; sfx?: boolean;
 }
 export const createApi = {
   channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>

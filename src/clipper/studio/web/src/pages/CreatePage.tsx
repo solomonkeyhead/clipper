@@ -632,6 +632,7 @@ function PictureChoice({ visual, emphasis, onChange, canHold }: {
 const ENDING_NAME: Record<string, string> = { loop: "a loop back to the start", send: "a \"send this to\" line", poll: "a one-word question" };
 
 function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
+  const poses = useCreate().data?.channel.poses ?? [];
   const qc = useQueryClient();
   const s = video.script;
   const [beats, setBeats] = useState(s.beats);
@@ -693,6 +694,15 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                          onBlur={(e) => e.target.value.trim() !== b.emphasis && patch(i, { emphasis: e.target.value.trim() })}
                          className="h-8 w-32 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
                 </Tip>
+                {poses.length > 0 && i < beats.length - 1 && (
+                  <Tip label="The presenter's pose while this sentence is said (about 2 seconds, bottom left)">
+                    <select aria-label={`Pose, sentence ${i + 1}`} value={b.pose ?? ""} onChange={(e) => patch(i, { pose: e.target.value })}
+                            className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none">
+                      <option value="">no pose</option>
+                      {poses.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </Tip>
+                )}
                 <span className="ml-auto flex items-center">
                   <Tip label="Move up"><Button size="icon" variant="ghost" className={small} aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="size-3.5" /></Button></Tip>
                   <Tip label="Move down"><Button size="icon" variant="ghost" className={small} aria-label="Move down" disabled={i === beats.length - 1} onClick={() => move(i, 1)}><ArrowDown className="size-3.5" /></Button></Tip>

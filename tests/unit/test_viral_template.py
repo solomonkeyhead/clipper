@@ -62,3 +62,16 @@ def test_a_square_picture_becomes_a_round_badge(tmp_path):
     badge = Image.open(out)
     assert badge.width == build.CHARACTER_WIDTH and badge.getpixel((0, 0))[3] == 0     # round: the corner is clear
     assert badge.getpixel((badge.width // 2, badge.height // 2))[3] == 255
+
+
+def test_poses_are_kept_only_where_they_fit(data_root):
+    ch = channel.make("physics", "Prof")
+    ch.poses = {"shocked": "a.png", "aha": "b.png"}
+    texts = ["Why do you feel heavier in a lift?", "The floor pushes harder on you.", "Gravity stays the same.",
+             "So the floor wins.", "Briefly, you are cargo.", "Class."]
+    poses = ["shocked", "aha", "aha", "SHOCKED", "wave", "aha"]
+    beats = [Beat(text=t, pose=p) for t, p in zip(texts, poses, strict=True)]
+    got = [b.pose for b in script._poses(Script(title="t", beats=beats), ch)]
+    # not on the opening sentence (too few words said), not two in a row, not an unknown one, not on the last sentence
+    assert got == ["", "aha", "", "shocked", "", ""]
+    assert "shocked (a surprising fact)" in script.pose_note(ch) and script.pose_note(channel.make("physics", "P")) == ""

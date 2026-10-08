@@ -78,7 +78,7 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
 interface FullChannel {
   slug: string; name: string; handle: string; niche: string; persona: string; rules: string[]; voice: string;
   subject: string; expert: string; areas: string; idea_focus: string; idea_avoid: string; script_focus: string; script_avoid: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
-  watermark: string; character: string; reactions: string[]; presenter: string; signoff: string; board: string; music: boolean; sfx: boolean;
+  watermark: string; character: string; reactions: string[]; presenter: string; poses: Record<string, string>; signoff: string; board: string; music: boolean; sfx: boolean;
 }
 
 /** The board's colours (create/diagrams.PALETTES, D156). */
@@ -92,15 +92,16 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
     if (!res.ok) throw new Error(res.statusText);
     return res.json() as Promise<FullChannel>;
   } });
-  const [edit, setEdit] = useState<ChannelEdit & { rulesText?: string; reactionsText?: string }>({});
+  const [edit, setEdit] = useState<ChannelEdit & { rulesText?: string; reactionsText?: string; posesText?: string }>({});
   if (!data) return null;
   const val = <K extends keyof FullChannel>(k: K) => (edit as Partial<FullChannel>)[k] ?? data[k];
-  const set = (changes: Partial<ChannelEdit & { rulesText: string; reactionsText: string }>) => setEdit({ ...edit, ...changes });
+  const set = (changes: Partial<ChannelEdit & { rulesText: string; reactionsText: string; posesText: string }>) => setEdit({ ...edit, ...changes });
   const save = async () => {
-    const { rulesText, reactionsText, ...rest } = edit;
+    const { rulesText, reactionsText, posesText, ...rest } = edit;
     try {
       await createApi.channelEdit(slug, { ...rest, ...(rulesText !== undefined ? { rules: rulesText.split("\n") } : {}),
-                                          ...(reactionsText !== undefined ? { reactions: reactionsText.split("\n") } : {}) });
+                                          ...(reactionsText !== undefined ? { reactions: reactionsText.split("\n") } : {}),
+                                          ...(posesText !== undefined ? { poses: posesText } : {}) });
       await qc.invalidateQueries({ queryKey: ["create"] });
       toast.success("Channel saved", { description: "New scripts and ideas follow it." });
       onClose();
@@ -159,6 +160,9 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
           <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\professor.png" onChange={(e) => set({ character: e.target.value })} /></Field>
         <Field label="Reaction pictures (one per line)" hint="One of these at the punchline, a different one each video. Empty: the character picture.">
           <textarea className={area} rows={3} value={edit.reactionsText ?? data.reactions.join("\n")} onChange={(e) => set({ reactionsText: e.target.value })} /></Field>
+        <Field label="Poses (name = file, one per line)" hint="Clipper tags up to 4 sentences a video with one of these, shown bottom left for about 2 seconds. Names it knows: shocked, facepalm, aha, thinking, smug, shrug, deadpan, confused, nervous, whisper, laugh, coffee, grudge, proud.">
+          <textarea className={area} rows={5} value={edit.posesText ?? Object.entries(data.poses ?? {}).map(([n, p]) => `${n} = ${p}`).join("\n")}
+                    placeholder="shocked = C:\Pictures\professor-shocked.png" onChange={(e) => set({ posesText: e.target.value })} /></Field>
         <Field label="Presenting picture" hint="Shown for a moment as the first drawing appears. Empty: none.">
           <input className={input} value={val("presenter") as string} placeholder="e.g. C:\Pictures\professor-pointing.png" onChange={(e) => set({ presenter: e.target.value })} /></Field>
         <Field label="Watermark" hint="A small logo in the top right. Empty: none."><input className={input} value={val("watermark") as string} onChange={(e) => set({ watermark: e.target.value })} /></Field>

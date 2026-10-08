@@ -67,6 +67,7 @@ class Visual(BaseModel):
 class Beat(BaseModel):
     text: str
     emphasis: str = ""              # the one word to highlight
+    pose: str = ""                  # one of the channel's `poses`, shown for this sentence (D158)
     visual: Visual = Field(default_factory=Visual)
 
 
@@ -99,7 +100,7 @@ class Script(BaseModel):
 APP_ONLY = {"sketch", "clip", "clip_start", "fill", "manual", "picked", "avoid", "redo", "previous", "wish", "notice"}
 _WriterVisual = create_model("WriterVisual", **{k: (f.annotation, f) for k, f in Visual.model_fields.items()
                                                 if k not in APP_ONLY})
-_WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""),
+_WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""), pose=(str, ""),
                            visual=(_WriterVisual, Field(default_factory=_WriterVisual)))
 _WriterScript = create_model("WriterScript", title=(str, ...), hook=(str, ""), beats=(list[_WriterBeat], ...), description=(str, ""),
                              hashtags=(list[str], Field(default_factory=list)))
@@ -214,6 +215,42 @@ def visuals(channel: channels.Channel) -> str:
 
 
 
+#: What each pose is for (D158), told to the writer for the poses a channel has; a pose of its own name is
+#: still offered, by name alone.
+POSE_USE = {
+    "shocked": "a surprising fact", "facepalm": "the common mistake", "aha": "the key insight, the click",
+    "thinking": "setting up the question", "smug": "a point the viewer should concede", "shrug": "nobody fully knows",
+    "deadpan": "the dry joke, then silence", "confused": "a viewer's question", "nervous": "where it gets bad",
+    "whisper": "a fun fact, an aside", "laugh": "right after his own joke", "coffee": "the coffee bit",
+    "grudge": "the grudge bit", "proud": "the sign-off",
+}
+MAX_POSES = 4
+POSE_AFTER_WORDS = 7   # the character already shows at the start (D156): no pose in the first sentence or so
+
+
+def pose_note(channel: channels.Channel) -> str:
+    """The poses the writer may tag sentences with, for its request; nothing when the channel has none."""
+    if not channel.poses:
+        return ""
+    names = "; ".join(f"{n} ({POSE_USE[n]})" if n in POSE_USE else n for n in channel.poses)
+    return (f"Poses for the on-screen presenter: set a beat's pose to one of these on at most {MAX_POSES} sentences "
+            f"where it fits what is said, never on the first sentence or two beats in a row, and leave it empty "
+            f"elsewhere. The last sentence needs none. Poses: {names}.\n")
+
+
+def _poses(script: Script, channel: channels.Channel) -> list[Beat]:
+    """The poses kept: known ones, not on the opening words, the last sentence or two beats running, at most MAX_POSES."""
+    beats, kept, before = [], 0, 0
+    for i, beat in enumerate(script.beats):
+        pose = beat.pose.strip().lower() if beat.pose else ""
+        ok = (pose in channel.poses and before >= POSE_AFTER_WORDS and i < len(script.beats) - 1 and kept < MAX_POSES
+              and not (beats and beats[-1].pose))
+        beats.append(beat.model_copy(update={"pose": pose if ok else ""}))
+        kept += bool(ok)
+        before += len(beat.text.split())
+    return beats
+
+
 def _system(channel: channels.Channel) -> str:
     rules = "\n".join(f"- {r}" for r in channel.rules)
     jokes = ("\n\nJoke shapes to follow (shapes, never lines to copy):\n" + "\n".join(f"- {j}" for j in channel.jokes)
@@ -298,7 +335,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
     endings = recent_endings()
     user = (guide + f"The channel's best scripts:\n\n{channels.examples_block(channel)}\n\n"
             f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
-            + (f"Shape: {shape}\n" if shape else "")
+            + (f"Shape: {shape}\n" if shape else "") + pose_note(channel)
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
             + ("The channel's latest endings; reuse none of their jokes or their shape:\n"
@@ -490,7 +527,8 @@ def tidy(script: Script) -> Script:
         beats.append(beat.model_copy(update={"visual": v, "emphasis": _emphasis(beat)}))
         pictures.append(v.kind)
     tags = [("#" + t.lstrip("#")).replace(" ", "") for t in script.hashtags if t.strip("# ")][:5]
-    return script.model_copy(update={"beats": beats, "hashtags": tags})
+    kept = script.model_copy(update={"beats": beats, "hashtags": tags})
+    return kept.model_copy(update={"beats": _poses(kept, channels.load())})
 
 
 def _query_from(text: str) -> str:
@@ -652,7 +690,7 @@ def replan(script: Script) -> tuple[Script, str]:
         fresh = tidy(script.model_copy(update={"beats": [
             b.model_copy(update={"visual": b.visual if b.visual.manual else p.visual.model_copy(update={
                 "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
-                "emphasis": p.emphasis or b.emphasis})
+                "emphasis": p.emphasis or b.emphasis, "pose": b.pose or p.pose})
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
         review = check(fresh)
         if review.ok or not review.problems:
