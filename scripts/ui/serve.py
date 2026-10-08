@@ -10,6 +10,9 @@ app = create_app()
 from fastapi.testclient import TestClient
 c = TestClient(app)
 if not store.videos():
+    # Channels live in the data folder since D145: the Professor's, as Marc has it.
+    from clipper.create import channel as _channel
+    _channel.save(_channel.make("physics", "German Professor"))
     vid = c.post("/api/create/ready/voice-on-a-recording").json()["id"]
     n = len(store.video(vid)["script"]["beats"])
     rel = "german-professor/001_voice.mp4"
@@ -79,7 +82,17 @@ def _fake_ask(system, user, schema, **kw):
     raise _stock.CreateError("no model in the test setup")
 
 
+def _fake_photos(query):
+    """One photo per search (D162), to see the picker label it."""
+    cid = f"photo-pixabay-{abs(hash(query)) % 1000}"
+    if not (_thumbs / f"{cid}.jpg").exists():
+        _Image.new("RGB", (320, 213), (200, 120, 60)).save(_thumbs / f"{cid}.jpg")
+    return [{"id": cid, "duration": 0, "tags": f"{query}, photo", "url": "https://example.invalid/p.jpg",
+             "width": 1280, "height": 853, "thumb": "x", "preview": ""}]
+
+
 _stock.search = _fake_search
+_stock.photos = _fake_photos
 _stock.ask = _fake_ask
 
 import uvicorn

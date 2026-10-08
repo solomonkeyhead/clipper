@@ -560,3 +560,16 @@ def test_create_asks_the_best_free_gemini_first_and_skips_the_lite_ones(monkeypa
     got = [b.model for b in ai.free_backends(config)]
     assert got == config.llm.create_gemini_models and got[0] == "gemini-3.8-flash"
     assert not any("lite" in m for m in got)
+
+
+def test_a_few_photos_come_after_the_videos_and_download_as_pictures():
+    """D162: photos are offered with the footage, after the videos that are long enough."""
+    from clipper.create import stock
+
+    vid = lambda i, d: {"id": f"pexels-{i}", "duration": d, "width": 1920, "height": 1080}  # noqa: E731
+    photo = lambda i: {"id": f"photo-pixabay-{i}", "duration": 0, "width": 1280, "height": 853}  # noqa: E731
+    pool = [vid(1, 2), photo(1), vid(2, 9), photo(2), photo(3), photo(4), *[vid(k, 9) for k in range(3, 20)]]
+    got = stock._shortlist(pool, 5.0, 12)
+    assert len(got) == 12 and [stock.is_photo(h) for h in got] == [False] * 9 + [True] * 3
+    assert got[0]["id"] == "pexels-2" and got[-3]["id"] == "photo-pixabay-1"     # long enough first; photos in order
+    assert stock.is_photo({"id": "photo-pexels-5"}) and not stock.is_photo({"id": 5})

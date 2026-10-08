@@ -118,10 +118,10 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
                 return (
                   <button key={c.id} type="button" onClick={() => toggle(c.id)} aria-pressed={n >= 0} title={c.tags}
                           className={cn("flex flex-col gap-1 rounded-md border p-1 text-left", n >= 0 ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong")}>
-                    <span className="relative block aspect-[9/16] w-full overflow-hidden rounded-sm bg-black">
+                    <span className="relative block aspect-[27/28] w-full overflow-hidden rounded-sm bg-black">
                       <Preview thumb={`/api/create/stock-thumb/${encodeURIComponent(c.id)}`} src={c.preview} />
                       <span className="absolute bottom-1 left-1 rounded-sm bg-black/70 px-1 text-[10px] text-white/80">
-                        {c.source === "pexels" ? "Pexels" : c.source === "coverr" ? "Coverr" : c.source === "nasa" ? "NASA" : "Pixabay"} · {Math.round(c.duration)}s
+                        {c.source === "photo" ? `Photo · ${c.id.split("-")[1] === "pexels" ? "Pexels" : "Pixabay"}` : <>{c.source === "pexels" ? "Pexels" : c.source === "coverr" ? "Coverr" : c.source === "nasa" ? "NASA" : "Pixabay"} · {Math.round(c.duration)}s</>}
                       </span>
                       {n >= 0 && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-accent-fg">{offer.clips > 1 ? n + 1 : <Check className="size-3" />}</span>}
                     </span>

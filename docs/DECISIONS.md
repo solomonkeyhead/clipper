@@ -3004,3 +3004,19 @@ separate filter with its own idea of timing.
 - Fixed on the way: a dashed arrow was drawn solid (its head redrew the shaft).
 Why one engine in Python, not more ffmpeg filters: the moves that make an edit feel alive (springs, overshoot, cut-ins
 timed to a word) need per-frame logic, and ffmpeg filters can't hold state between frames.
+
+## D163. Create overhaul, part 3: photos with the footage, a sharper judge (2026-10-08)
+
+The video libraries are thin on specific things (a horseshoe magnet, an ear close up), and below the judge's 7 a
+sentence got a drawing even when a good still of the exact thing existed. Pexels and Pixabay have far more photos
+than clips, under the same keys and licence.
+- Each search now brings its first two photos too; a sentence's candidates are the videos (long enough first),
+  then up to 3 photos (`stock.PHOTOS`). A photo plays with the same camera moves as footage (a slow push, drift or
+  pull, and a punch-in), from `compose.photo_panel`. Picked photos are saved like clips; the id says it's a photo.
+- The judge and the scorer are told which candidates are photos and that the picture is a near-square panel now, not
+  a tall strip; they prefer the subject big in frame, motion that matches the sentence, a video over a photo when both
+  fit as well, a photo of exactly the thing over a video of something near it; a watermark or a posed stock smile
+  scores low.
+- The footage picker labels photos ("Photo · Pixabay") and its thumbnails have the panel's shape.
+Found on the way: PEXELS_API_KEY isn't set on Marc's machine, so Pexels (the better people footage, D109) has not
+been searched at all. A free key from pexels.com/api fixes it, for videos and photos.

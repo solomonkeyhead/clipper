@@ -12,6 +12,10 @@ sentence into chalk made a video all diagrams.
 Green-screen and transparent-background clips are left out. Long enough and unused
 in the video first. A library without a key is skipped. Searches are cached for a
 day and downloads for good (both ask API users to cache), under data/create/stock/.
+
+D162: a few photos from the same two libraries (same keys, same licence) are offered with the
+videos, shown with a slow camera move: a still of exactly the thing beats a loose video of
+something near it, and the libraries have far more photos than clips.
 """
 
 from __future__ import annotations
@@ -42,6 +46,8 @@ API = "https://pixabay.com/api/videos/"
 PEXELS = "https://api.pexels.com/videos/search"
 COVERR = "https://api.coverr.co/videos"
 NASA = "https://images-api.nasa.gov/search"
+PEXELS_PHOTOS = "https://api.pexels.com/v1/search"
+PIXABAY_PHOTOS = "https://pixabay.com/api/"
 SEARCH_HOURS = 24
 #: Footage that looks cheap on a phone: an unkeyed green screen, a transparent background, a matte.
 CHEAP = ("green screen", "greenscreen", "chroma", "blue screen", "alpha channel", "transparent",
@@ -100,6 +106,24 @@ def search(query: str) -> list[dict]:
     for k in range(max((len(x) for x in lists), default=0)):
         merged += [x[k] for x in lists if k < len(x)]
     return merged
+
+
+def is_photo(hit: dict) -> bool:
+    """A still photo, not a video clip (D162): its id says so, as the picks saved in a script keep only the id."""
+    return str(hit.get("id", "")).startswith("photo-")
+
+
+def photos(query: str) -> list[dict]:
+    """Both libraries' photos for `query`, taking turns, most relevant first; [] when neither answers
+    (photos are extra: footage is chosen without them)."""
+    lists = []
+    for source, key in ((pexels_photos, _pexels_key()), (pixabay_photos, _key())):
+        if key:
+            try:
+                lists.append(source(query))
+            except CreateError as exc:
+                log.info("create: no photos (%s)", exc)
+    return [x[k] for k in range(max((len(x) for x in lists), default=0)) for x in lists if k < len(x)]
 
 
 def _save(path: Path, data: bytes) -> None:
@@ -201,6 +225,48 @@ def coverr(q: str) -> list[dict]:
     return hits
 
 
+@_cached("pexels-photo")
+def pexels_photos(q: str) -> list[dict]:
+    """Pexels' photos for `query` (cached a day), asked for 2000 px wide: the original can be 6000."""
+    try:
+        r = httpx.get(PEXELS_PHOTOS, params={"query": q, "per_page": 8}, headers={"Authorization": _pexels_key()},
+                      timeout=20)
+        r.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise CreateError(f"Pexels didn't answer: {exc}") from exc
+    hits = []
+    for p in r.json().get("photos", []):
+        src, w, h = p.get("src") or {}, p.get("width") or 0, p.get("height") or 0
+        if not src.get("original") or not w or not h:
+            continue
+        k = min(1.0, 2000 / w)
+        hits.append({"id": f"photo-pexels-{p['id']}", "duration": 0, "tags": p.get("alt") or "",
+                     "url": f"{src['original']}?auto=compress&cs=tinysrgb&w=2000", "width": round(w * k),
+                     "height": round(h * k), "thumb": src.get("medium") or "", "preview": ""})
+    return hits
+
+
+@_cached("pixabay-photo")
+def pixabay_photos(q: str) -> list[dict]:
+    """Pixabay's photos for `query` (cached a day), its large size (1280 px on the long side)."""
+    try:
+        r = httpx.get(PIXABAY_PHOTOS, params={"key": _key(), "q": q, "image_type": "photo", "per_page": 8,
+                                              "safesearch": "true"}, timeout=20)
+        r.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise CreateError(f"Pixabay didn't answer: {exc}") from exc
+    hits = []
+    for p in r.json().get("hits", []):
+        w, h = p.get("imageWidth") or 0, p.get("imageHeight") or 0
+        if not p.get("largeImageURL") or not w or not h or any(c in p.get("tags", "").lower() for c in CHEAP):
+            continue
+        k = min(1.0, 1280 / max(w, h))
+        hits.append({"id": f"photo-pixabay-{p['id']}", "duration": 0, "tags": p.get("tags", ""),
+                     "url": p["largeImageURL"], "width": round(w * k), "height": round(h * k),
+                     "thumb": p.get("webformatURL") or "", "preview": ""})
+    return hits
+
+
 def _rendition_named(files: list[str], *names: str) -> str | None:
     """The first of NASA's files named "~<name>." for the names in order of preference."""
     return next((f for n in names for f in files if f"~{n}." in f), None)
@@ -244,23 +310,30 @@ def nasa(q: str) -> list[dict]:
 
 CANDIDATES = 12
 PER_QUERY = 8
+#: Photos among a sentence's candidates (D162): after the videos, a few, as a video that fits is better.
+PHOTOS = 3
 
-PICK = """You choose stock footage for one sentence of a short educational video, shown on a
-phone. You see numbered thumbnails of candidate clips, each with what its library says it
+PICK = """You choose the picture for one sentence of a short educational video, shown on a
+phone in a square-ish panel above the captions. You see numbered thumbnails of candidates, each
+a video clip or a photo (a photo is shown with a slow camera move), with what its library says it
 shows. Find the one a viewer would instantly connect with what the sentence says: the thing
-itself, or a person plainly experiencing it, clear and close enough to read on a phone. A
-close, everyday match counts (headphones for hearing, a microphone for recording).
+itself, or a person plainly experiencing it, big, clear and close enough to read on a phone. A
+close, everyday match counts (headphones for hearing, a microphone for recording). Prefer:
+the subject filling much of the frame; real motion that matches the sentence (water pouring for
+"pours"); a video over a photo when both fit as well; a photo of exactly the thing over a video
+of something near it.
 Then score how well that best one fits, honestly:
   9-10 it shows exactly what the sentence says;
   7-8  a clear, natural match a viewer gets at once;
-  4-6  related, but loose, generic or needs explaining (a lab for "your voice");
+  4-6  related, but loose, generic or needs explaining (a lab for "your voice"); or the right
+       thing but tiny, far away or half hidden;
   0-3  unrelated, confusing, or cheap-looking (cartoonish, a glossy 3D render or CGI, neon
-       audio-visualiser rings, a green background, text or a logo burned in, mostly black or
-       too dark to read on a phone, a stock-footage cliche).
-Below 7 a chalkboard card is shown instead, which is better than a loose match, so don't
+       audio-visualiser rings, a green background, text, a watermark or a logo burned in,
+       mostly black or too dark to read on a phone, a posed stock-photo smile at the camera).
+Below 7 a chalkboard drawing is shown instead, which is better than a loose match, so don't
 round up. Answer pick = its number (0 if none), score, and center: where across that
-thumbnail the subject is, 0 = left edge, 0.5 = middle, 1 = right edge (the video is cropped
-to a tall strip around it, so put it on the thing the sentence is about).
+thumbnail the subject is, 0 = left edge, 0.5 = middle, 1 = right edge (a wide picture is cropped
+to the panel around it, so put it on the thing the sentence is about).
 You also get the whole script, so you know what the video is about and what the sentence
 means in it (a "wall" in a video about sound is a wall music comes through, not a climbing
 wall). If nothing scores 7 or more, give better: up to 2 new searches, 2 to 4 plain words each,
@@ -302,8 +375,8 @@ def _thumb(hit: dict) -> bytes | None:
 
 def _listing(shown: list[tuple[dict, bytes]]) -> str:
     """The thumbnails' numbers, shape and library tags, as the judge is told them."""
-    listed = "\n".join(f"{i}. {'tall' if h['height'] > h['width'] else 'wide'}, {h.get('tags') or 'no tags'}"
-                       for i, (h, _) in enumerate(shown, start=1))
+    listed = "\n".join(f"{i}. {'photo' if is_photo(h) else 'video'}, {'tall' if h['height'] > h['width'] else 'wide'}, "
+                       f"{h.get('tags') or 'no tags'}" for i, (h, _) in enumerate(shown, start=1))
     return f"Thumbnails 1 to {len(shown)}, in order:\n{listed}"
 
 
@@ -366,19 +439,27 @@ def by_words(queries: list[str], ranked: list[dict]) -> dict | None:
 
 
 def _gather(queries: list[str], exclude: set) -> list[dict]:
-    """Every search's best results, each once, in the libraries' own order, minus `exclude`."""
+    """Every search's best results, each once, in the libraries' own order, minus `exclude`: the videos,
+    and each search's first two photos (D162)."""
     pool: list[dict] = []
     for q in queries:
-        for h in search(q)[:PER_QUERY]:
+        for h in [*search(q)[:PER_QUERY], *photos(q)[:2]]:
             if h["id"] not in exclude and all(h["id"] != p["id"] for p in pool):
                 pool.append({**h, "query": q})  # preview: a small file to play on hover (D130)
     return pool
 
 
+def _shortlist(pool: list[dict], seconds: float, limit: int) -> list[dict]:
+    """The videos long enough first, then the vertical ones, keeping the search order within each; then up
+    to PHOTOS photos, in the search order (a photo is any length)."""
+    stills = [h for h in pool if is_photo(h)][:PHOTOS]
+    clips = sorted((h for h in pool if not is_photo(h)), key=lambda h: (h["duration"] < seconds + 0.3,
+                                                                       h["height"] <= h["width"]))
+    return clips[:limit - len(stills)] + stills
+
+
 def _pool(queries: list[str], used: set, seconds: float) -> list[dict]:
-    pool = _gather(queries, used)
-    # Long enough first, then vertical, keeping the search order within each.
-    return sorted(pool, key=lambda h: (h["duration"] < seconds + 0.3, h["height"] <= h["width"]))[:CANDIDATES]
+    return _shortlist(_gather(queries, used), seconds, CANDIDATES)
 
 
 def choose(queries: list[str], seconds: float, used: set, sentence: str = "", context: str = "",
@@ -413,7 +494,7 @@ def choose(queries: list[str], seconds: float, used: set, sentence: str = "", co
 # ---------- better searches, and every candidate scored, for choosing footage (D129) ----------
 
 SEARCHES = """You write stock-footage searches for one sentence of a short narrated {subject} video for
-phones. The footage libraries are Pexels and Pixabay: real filmed clips, searched by plain words.
+phones. The footage libraries are Pexels and Pixabay: real filmed clips and photos, searched by plain words.
 Write searches for things those libraries really film, that a viewer would connect with what the
 sentence says AT THAT POINT in the script (you get the whole script; a "wall" in a video about
 sound is a wall music comes through). 2 to 4 concrete words each: objects, places, nature, and
@@ -449,13 +530,15 @@ def plan_searches(sentence: str, context: str = "", wish: str = "", tried: list[
 
 
 RANK = """You score stock footage for one sentence of a short educational video shown on a phone.
-You see numbered thumbnails of candidate clips, each with what its library says it shows, and the
-whole script for context. Score EVERY candidate for how well it shows what the sentence says:
+You see numbered thumbnails of candidates, each a video clip or a photo (shown with a slow camera
+move), with what its library says it shows, and the whole script for context. Score EVERY
+candidate for how well it shows what the sentence says:
   9-10 exactly what the sentence says; 7-8 a clear, natural match a viewer gets at once;
-  4-6 related but loose or generic; 0-3 unrelated, confusing or cheap-looking (cartoonish, CGI,
-  neon visualiser rings, green background, burned-in text or logo, too dark to read on a phone).
+  4-6 related but loose or generic, or the right thing but tiny or far away; 0-3 unrelated,
+  confusing or cheap-looking (cartoonish, CGI, neon visualiser rings, green background, burned-in
+  text, watermark or logo, too dark to read on a phone, a posed stock smile at the camera).
 Don't round up. Also give center for each: where across its thumbnail the subject is, 0 = left,
-0.5 = middle, 1 = right (the video is cropped to a tall strip around it)."""
+0.5 = middle, 1 = right (a wide picture is cropped to the square-ish panel around it)."""
 
 
 class _Ranks(BaseModel):
@@ -491,8 +574,7 @@ def candidates(queries: list[str], seconds: float, exclude: set, sentence: str, 
     """Footage to choose from for a sentence: every search's results from both libraries, minus
     `exclude` (the clip being replaced, clips used elsewhere in the video), long enough first,
     then scored, best first (D129)."""
-    pool = sorted(_gather(queries, exclude), key=lambda h: (h["duration"] < min(seconds, 6.0), h["height"] <= h["width"]))[:limit]
-    return rank(sentence, pool, context)
+    return rank(sentence, _shortlist(_gather(queries, exclude), min(seconds, 6.0) - 0.3, limit), context)
 
 
 def thumb_file(clip_id: str) -> Path | None:
@@ -504,8 +586,8 @@ def thumb_file(clip_id: str) -> Path | None:
 
 
 def fetch(hit: dict) -> Path:
-    """The clip on disk, downloaded once."""
-    path = _dir() / f"{hit['id']}_{hit['width']}x{hit['height']}.mp4"
+    """The clip (or photo) on disk, downloaded once."""
+    path = _dir() / f"{hit['id']}_{hit['width']}x{hit['height']}.{'jpg' if is_photo(hit) else 'mp4'}"
     if path.is_file() and path.stat().st_size > 0:
         return path
     part = path.with_suffix(".part")

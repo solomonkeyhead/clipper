@@ -113,8 +113,16 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
     placed on its subject (D111): a wide shot cut to its middle lost the speaker cone to one side and the skull to
     the other. The camera keeps the subject's spot and never leaves the picture. `skip`: seconds already shown of
     this clip in the shot before, so a clip used twice in a row carries on (D132)."""
-    info = probe(src)
     n = frames or max(1, round(seconds * FPS))
+    if src.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):   # a photo: the camera moves over it (D162)
+        from PIL import Image
+
+        x = 0.5 if center is None else min(1.0, max(0.0, center))
+        with Image.open(src) as img:
+            compose.photo_panel(img, out, n, compose.Move(kind=motion if motion != "still" else "push", u=x, punch=punch),
+                                look=LOOK)
+        return out
+    info = probe(src)
     seconds = n / FPS
     length = info.duration or seconds
     offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
