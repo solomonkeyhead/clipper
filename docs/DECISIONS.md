@@ -2906,3 +2906,11 @@ at most 6, 5 s apart, on drawings, plus a two-note tap at the punchline. A chann
 - "Viewed vs swiped away" is typed in per YouTube Short on Stats (no API gives it) and is an experiment metric.
 - Experiments take a smallest winning gap (default 4 points) and the report's rule (3 of every 4 pairs, at least
   4) beside the sign test.
+
+## D157. The Professor presents the first drawing; a hand-drawn watermark (2026-10-07)
+
+Marc's hand-drawn Professor set came in (base, eyebrow, sigh, smile, pointing; transparent PNGs in his Profile Pic
+folder). A channel can now have a "presenting" picture, shown bottom left for 1.5 s as the first drawing appears,
+never over the start or the punchline. Marc's watermark is now a round badge made from the drawn Professor on the
+blackboard colour (`Watermark-drawn.png`), so the corner logo matches the drawings; the old one is kept. His board is
+"blackboard" (D156).

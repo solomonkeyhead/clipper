@@ -69,6 +69,7 @@ class Channel(BaseModel):
     # the chalkboard's colours (create/diagrams.PALETTES); music and chalk sounds by default (each video can differ).
     character: str = ""
     reactions: list[str] = Field(default_factory=list)
+    presenter: str = ""                  # the character presenting the first drawing, for a moment (D157)
     signoff: str = ""
     board: str = "slate"
     music: bool = False

@@ -697,7 +697,7 @@ export interface ChannelEdit {
   name?: string; handle?: string; niche?: string; persona?: string; voice?: string; subject?: string; expert?: string;
   areas?: string; idea_focus?: string; idea_avoid?: string; script_focus?: string; script_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
   /** D156: the character and its reactions, the sign-off, the board's colours, music and chalk sounds by default. */
-  character?: string; reactions?: string[]; signoff?: string; board?: string; music?: boolean; sfx?: boolean;
+  character?: string; reactions?: string[]; presenter?: string; signoff?: string; board?: string; music?: boolean; sfx?: boolean;
 }
 export const createApi = {
   channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>

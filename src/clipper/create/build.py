@@ -55,6 +55,7 @@ LOOK = "eq=saturation=0.85:contrast=1.05,colorbalance=rm=0.03:bm=-0.03,noise=all
 #: The channel's character (D156): this wide, bottom left under the captions, at the start and at the punchline.
 CHARACTER_WIDTH = 194
 CHARACTER_START = 2.5
+PRESENT_SECONDS = 1.5   # the character presenting the first drawing (D157)
 
 
 def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> float:
@@ -653,6 +654,11 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
         react = _character(moods[seed % len(moods)], out.with_name("reaction.png")) if moods else base
         if react:
             overlay(react, "format=rgba", spot, f"gte(t,{punchline:.3f})")
+        # Presenting the first drawing as it appears (D157), never over the start or the punchline.
+        first = next((t for t, kind in picture_times if kind == "drawing" and CHARACTER_START <= t < punchline - 0.5), None)
+        point = Path(channel.presenter) if channel.presenter else None
+        if first is not None and point and point.is_file() and (shown := _character(point, out.with_name("presenter.png"))):
+            overlay(shown, "format=rgba", spot, f"between(t,{first:.3f},{min(first + PRESENT_SECONDS, punchline):.3f})")
     graph += (f";{video}ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(bundled_fonts_dir())}'[v]"
               f";[{n}:a]loudnorm=I={rc.loudness_lufs}:TP={rc.true_peak_dbtp}:LRA=11,"
               f"aresample={rc.audio_rate},apad[vo]")

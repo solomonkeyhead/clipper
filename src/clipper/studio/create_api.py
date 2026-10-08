@@ -338,7 +338,7 @@ def routes(app: FastAPI, publish) -> None:
         if found is None:
             raise HTTPException(404, "no such channel")
         texts = ("name", "handle", "niche", "persona", "voice", "subject", "expert", "areas", "watermark",
-                 "idea_focus", "idea_avoid", "script_focus", "script_avoid", "character", "signoff")
+                 "idea_focus", "idea_avoid", "script_focus", "script_avoid", "character", "signoff", "presenter")
         updates = {k: str(body[k]).strip() for k in texts if k in body}
         if "rules" in body:
             updates["rules"] = [str(r).strip() for r in body["rules"] if str(r).strip()]

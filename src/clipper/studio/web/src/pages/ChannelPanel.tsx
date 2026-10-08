@@ -78,7 +78,7 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
 interface FullChannel {
   slug: string; name: string; handle: string; niche: string; persona: string; rules: string[]; voice: string;
   subject: string; expert: string; areas: string; idea_focus: string; idea_avoid: string; script_focus: string; script_avoid: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
-  watermark: string; character: string; reactions: string[]; signoff: string; board: string; music: boolean; sfx: boolean;
+  watermark: string; character: string; reactions: string[]; presenter: string; signoff: string; board: string; music: boolean; sfx: boolean;
 }
 
 /** The board's colours (create/diagrams.PALETTES, D156). */
@@ -159,6 +159,8 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
           <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\professor.png" onChange={(e) => set({ character: e.target.value })} /></Field>
         <Field label="Reaction pictures (one per line)" hint="One of these at the punchline, a different one each video. Empty: the character picture.">
           <textarea className={area} rows={3} value={edit.reactionsText ?? data.reactions.join("\n")} onChange={(e) => set({ reactionsText: e.target.value })} /></Field>
+        <Field label="Presenting picture" hint="Shown for a moment as the first drawing appears. Empty: none.">
+          <input className={input} value={val("presenter") as string} placeholder="e.g. C:\Pictures\professor-pointing.png" onChange={(e) => set({ presenter: e.target.value })} /></Field>
         <Field label="Watermark" hint="A small logo in the top right. Empty: none."><input className={input} value={val("watermark") as string} onChange={(e) => set({ watermark: e.target.value })} /></Field>
       </div>
       <label className="flex items-center gap-2 text-sm">
