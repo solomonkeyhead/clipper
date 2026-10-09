@@ -22,7 +22,7 @@ shots, assembly, cover" log line), the Adjust panel on Shot review, captions and
 
 **Proposed, not done (bigger or riskier):** draw a build's shots in parallel processes (shots are 58 of 85 s, each
 frame drawn in Pillow on one core); put the cover first without re-encoding the whole video (6.6 s a Short and a
-clip); a Pexels key when Pexels gives them (165 "no footage good enough" against 42 picks in the log).
+clip); a Pexels key when Pexels gives them (the current log has 165 "no footage good enough" verdicts; more candidates would mean fewer chalk cards).
 
 ## Check these first, on the real machine
 
