@@ -18,6 +18,7 @@ import itertools
 import json
 import math
 import shutil
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import NamedTuple
@@ -810,6 +811,12 @@ def _build(video_id: int, progress) -> int:
     from ..studio import db, library
     from ..utils.recycle import recycle
 
+    started = time.monotonic()
+    took: list[tuple[str, float]] = []   # each stage's seconds, for the log (D174)
+
+    def lap(stage: str) -> None:
+        took.append((stage, time.monotonic() - started - sum(t for _, t in took)))
+
     row = store.video(video_id)
     if row is None:
         raise CreateError("no such video")
@@ -842,21 +849,25 @@ def _build(video_id: int, progress) -> int:
         script = drawn
         store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     notes += failed
+    lap("sketches")
     work = folder(video_id) / "work"
     if work.exists():
         shutil.rmtree(work, ignore_errors=True)  # scratch, deleted outright: it's rebuilt each time (D133)
     work.mkdir(parents=True, exist_ok=True)
     parts = shots(script, timings, work, progress, own=own, notes=notes,
                   default_fill=userclips.load(video_id)["fill"])
+    lap("shots")
     if progress:
         progress("Putting it together", 75)
     out = assemble(parts, Path(row["voice"]), script, timings, work / "final.mp4", channel, config)
+    lap("assembly")
     if progress:
         progress("Choosing the cover", 90)
     # The moment the user chose for the cover, else the best still (D171).
     cover_at = script.cover if script.cover is not None and 0 <= script.cover < timings.duration else pick(out, timings.duration)
     if cover_at is not None:
         put_first(out, cover_at, hook=script.title, config=config, work_dir=work, fps=FPS)
+    lap("cover")
     _campaign(channel)
     rel = f"{channel.campaign}/{video_id:03d}_{slugify(script.title, max_length=50)}.mp4"
     dest = library.clip_path(rel)
@@ -877,8 +888,8 @@ def _build(video_id: int, progress) -> int:
     notes += picture_notes
     if stock.unjudged:
         n = len(stock.unjudged)
-        notes.append(f"Footage for {n} sentence{'s' if n != 1 else ''} was picked by its search words only, as Claude "
-                     "couldn't look at it: check those shots, or press Build again once Claude is back.")
+        notes.append(f"Footage for {n} sentence{'s' if n != 1 else ''} was picked by its search words only, as no AI "
+                     "could look at it: check those shots, or press Build again later.")
     placed = {b.visual.clip for b in script.beats if b.visual.clip}
     idle = [name for cid, (_, _, name) in own.items() if cid not in placed]
     if idle:
@@ -891,6 +902,7 @@ def _build(video_id: int, progress) -> int:
     for old in (shot_cache.glob("*.mp4") if shot_cache.is_dir() else []):
         if old not in used_shots:  # shots of pictures no longer in the video
             old.unlink(missing_ok=True)
-    log.info("create: video %s built as clip %s (%s)", video_id, clip_id, rel)
+    log.info("create: video %s built as clip %s (%s) in %.0fs: %s", video_id, clip_id, rel, time.monotonic() - started,
+             ", ".join(f"{stage} {t:.0f}s" for stage, t in took))
     return clip_id
 

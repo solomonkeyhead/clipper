@@ -103,12 +103,19 @@ def frames(clip: Path, duration: float, *, ass_text: str = "") -> list[Frame]:
         detector = None
     spoken = caption_times(ass_text)
     cap = cv2.VideoCapture(str(clip))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     out: list[Frame] = []
     try:
-        t = EDGE
+        t, n = EDGE, 0
         while t < duration - EDGE:
-            cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
-            ok, frame = cap.read()
+            # Read straight through, decoding only the frames scored (D174): a seek a sample cost
+            # 0.12 s, 12 s on a 40 s video, against under 1 s to read all of it.
+            if not cap.grab():
+                break
+            n += 1
+            if (n - 1) / fps + 0.5 / fps < t:
+                continue
+            ok, frame = cap.retrieve()
             if not ok:
                 break
             small = cv2.resize(frame, (SAMPLE_WIDTH, int(frame.shape[0] * SAMPLE_WIDTH / frame.shape[1])))

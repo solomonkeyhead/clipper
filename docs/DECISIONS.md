@@ -3154,5 +3154,20 @@ the API schema is unchanged: `accounts_api` (accounts, connecting, setup keys, s
 `editor_api` (the clip editor). server.py is now 1,559 lines. Helpers that tests replace on `server` are called
 through it, so the tests see what they always did.
 `/api/create/ai` took 0.47 s on Marc's PC and runs each time a video changes (every build step): each of its 8
-lookups searched a PATH of ~1,300 folders for `claude`. `claude_code.cli` now looks once a minute: 1 ms.
+lookups searched a PATH of ~1,300 folders for `claude`. `claude_code.cli` now looks once a minute: the call takes 0.03 s.
 Gone: `claude_code.spent_usd` and its `/api/create/ai` field, which nothing showed.
+
+## D174: a Create build a quarter faster, and every clip's cover 10 s sooner
+Measured on Marc's PC, the ready-made voice script built with no footage and no AI (a silent voice, 42.5 s, 9
+sentences): 119 s, of which shots 71 s, assembly 26 s and choosing the cover 22 s. A profile showed:
+- The cover picker seeked to each of ~100 frames it scores, 0.12 s a seek; reading the whole video straight
+  through takes under 1 s. It now reads through and decodes only the frames it scores: 15.0 s to 3.1 s on that
+  Short, 13.9 s to 2.8 s on a 38 s campaign clip, the same frame chosen. Clipping runs it for every clip.
+- Pillow hands an image to numpy in 64 KB blocks: 17 ms for each frame's 2160x2240 drawing layer. `compose.as_array`
+  does it in one, 6 ms, and the drawing panel no longer copies a picture that is RGB already.
+- Pasting the captions blended in numpy floats, 12 ms a frame; OpenCV's blend takes 3 ms (pixels differ by at most
+  1 of 255). Frames go to ffmpeg without another copy.
+Now 85 s: shots 58 s, assembly 17 s, cover 10 s. Each build logs its stage times ("built ... in 85s: sketches 0s,
+shots 58s, assembly 17s, cover 10s"), so a slow one can be read from the log. The note on footage picked by its
+search words no longer says Claude couldn't look at it when Gemini does the footage: "no AI could".
+Not done: drawing the shots in parallel processes (each frame is drawn in Pillow on one core); see the proposals.

@@ -826,7 +826,9 @@ def chalk(ink: np.ndarray) -> Image.Image:
 def _ink(v: Visual, t: float, d: float) -> np.ndarray:
     ink = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
     DRAW.get(v.template, chain)(Ink(ink), v, t, d)
-    return np.asarray(ink)
+    from .compose import as_array
+
+    return as_array(ink)
 
 
 #: Where a template's drawing is fitted on the panel (D162), and how far it may grow: the templates were

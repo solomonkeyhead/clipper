@@ -29,7 +29,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFile, ImageFilter, ImageFont
 
 from ..paths import REPO_ROOT
 from ..render.ffmpeg import ffmpeg_path
@@ -59,6 +59,19 @@ MARGIN = 1.2
 
 
 # ---------- easing ----------
+
+def as_array(img: Image.Image) -> np.ndarray:
+    """`np.asarray(img)`, handed over in one piece: Pillow does it in 64 KB blocks, 17 ms for a drawing's
+    2160x2240 layer against 6 ms in one, and a build does it twice a frame (D174).
+    ponytail: swaps a Pillow module setting for the call; another thread converting at that moment
+    only gets the blocks back, the old speed."""
+    keep = ImageFile.MAXBLOCK
+    ImageFile.MAXBLOCK = max(keep, img.width * img.height * len(img.getbands()))
+    try:
+        return np.asarray(img)
+    finally:
+        ImageFile.MAXBLOCK = keep
+
 
 def clamp01(x: float) -> float:
     return 0.0 if x < 0 else 1.0 if x > 1 else x
@@ -135,7 +148,7 @@ class Writer:
              "-pix_fmt", "yuv420p", str(out)], stdin=subprocess.PIPE)
 
     def write(self, frame: np.ndarray) -> None:
-        self.proc.stdin.write(np.ascontiguousarray(frame, dtype=np.uint8).tobytes())
+        self.proc.stdin.write(np.ascontiguousarray(frame, dtype=np.uint8).data)   # no copy (D174)
 
     def __enter__(self) -> Writer:
         return self
@@ -295,7 +308,8 @@ def drawing_panel(render_frame, out: Path, n: int, focus: list[Focus] | None = N
                         v, vv = pos, vel
                     else:
                         z, vz = pos, vel
-            img = np.asarray(render_frame(t, d).convert("RGB"))
+            pic = render_frame(t, d)
+            img = as_array(pic if pic.mode == "RGB" else pic.convert("RGB"))
             zoom = z * (1 + push * smooth(t / max(d, 1e-3)))
             wr.write(img if zoom < 1.0005 and abs(u - 0.5) < 1e-3 and abs(v - 0.5) < 1e-3
                      else view(img, zoom, u, v))
@@ -321,9 +335,10 @@ def paste(frame: np.ndarray, rgba: np.ndarray, x: int, y: int, alpha: float = 1.
     if x1 <= x0 or y1 <= y0:
         return
     src = rgba[y0 - y:y1 - y, x0 - x:x1 - x]
-    a = src[..., 3:4].astype(np.float32) * (alpha / 255.0)
+    a = src[..., 3].astype(np.float32) * (alpha / 255.0)
     region = frame[y0:y1, x0:x1]
-    region[:] = (src[..., :3].astype(np.float32) * a + region.astype(np.float32) * (1 - a)).astype(np.uint8)
+    # OpenCV's blend: 3 ms for a caption where numpy's took 12, every frame (D174).
+    region[:] = cv2.blendLinear(np.ascontiguousarray(src[..., :3]), np.ascontiguousarray(region), a, 1 - a)
 
 
 def paste_scaled(frame: np.ndarray, rgba: np.ndarray, cx: float, cy: float, scale: float = 1.0,
@@ -762,7 +777,7 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
             if edit.watermark is not None and k >= edit.hook_frames:   # after the hook, which it covered
                 paste(frame, edit.watermark, W - edit.watermark.shape[1] - 48, 170,
                       0.85 * min(1.0, (k - edit.hook_frames + 1) / 6))
-            proc.stdin.write(frame.tobytes())
+            proc.stdin.write(np.ascontiguousarray(frame).data)
     finally:
         proc.stdin.close()
         proc.wait()
