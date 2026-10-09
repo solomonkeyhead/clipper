@@ -54,10 +54,12 @@ class Channel(BaseModel):
     voice: str = "Your own voice: record it in the page, or upload an audio file"
     words_per_second: float = 2.3
     # What scripts are held to in code, the shapes they take in turn, and what ideas may be about (D155).
-    words: list[int] = Field(default_factory=lambda: list(_EXPLAINER.words))
-    sentence_max: int = _EXPLAINER.sentence_max
-    hook_max: int = _EXPLAINER.hook_max
-    hook_you: bool = _EXPLAINER.hook_you
+    # The plain limits, for a channel whose owner wrote its own rules (a made channel takes its pack's): the
+    # lenient ones every pack had before D164 tightened the starter packs.
+    words: list[int] = Field(default_factory=lambda: [80, 125])
+    sentence_max: int = 16
+    hook_max: int = 14
+    hook_you: bool = False
     shapes: list[str] = Field(default_factory=list)
     scope: str = ""
     # Real scripts of the channel's own, imitated for voice and rhythm, never copied.

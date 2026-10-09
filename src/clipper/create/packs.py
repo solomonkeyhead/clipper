@@ -115,6 +115,12 @@ PHYSICS_SHAPES = [
 ]
 
 
+#: The habits every pack bans (D164, from the physics rules of D155): they mark a script as machine-written.
+PLAIN = ("No lists, no lists of three, no emojis, no hashtags, no em dashes, no \"it's not X, it's Y\", no \"ever "
+         "wondered\", no \"here's the thing\", no \"in this video\", no \"let's dive in\", no greeting, no call to "
+         "subscribe.")
+
+
 class Pack(BaseModel):
     key: str
     label: str
@@ -148,21 +154,27 @@ EXPLAINER = Pack(
     persona="""You write as {name}: a friendly, curious expert who explains one everyday question at a
 time. Warm, precise and a little funny. Gentle shade at common misconceptions, never mean. Spoken
 English, short sentences, the rhythm of someone explaining with a raised eyebrow.""",
+    # D164: the physics channel's tested rules (D155, D156), made general.
     rules=[
-        "80 to 125 words in all: it is read aloud at about 2.3 words a second, 35 to 55 seconds.",
-        "Open with ONE question about something the viewer has met in daily life (at most 14 words).",
-        "Second: a myth-bust or a dry framing of what people think.",
+        "85 to 115 words in all: it is read aloud at about 2.3 words a second, 37 to 50 seconds.",
+        "Open with ONE question of at most 10 words, said to the viewer (\"you\" or \"your\"), about a "
+        "concrete moment they have met in daily life.",
+        "Give the first reason within 20 words of the opening question. The answer is complete by three "
+        "quarters of the way through; what follows only lands it.",
         "Then the explanation as a short chain of causes, 3 to 5 steps, each its own short sentence.",
         "At most one formula or rule, said in words.",
-        "One vivid everyday analogy.",
-        "End on a dry two-beat punchline that ties back to the opening.",
-        "Every sentence at most 16 words. No lists, no emojis, no hashtags, no \"in this video\", "
-        "no \"let's dive in\", no greeting, no call to subscribe.",
+        "One everyday comparison, from something the viewer touched this week, that explains one thing only.",
+        "Two jokes at most: a small one in the middle, then the ending. None in the opening question. Every "
+        "joke carries a fact.",
+        "End on a dry two-beat line that ties back to the opening.",
+        "Every sentence at most 13 words. " + PLAIN,
+        "Explain how it works and stop there: no health, money or legal advice.",
         "Every claim must be true. Simplify, never misstate: name the real reason.",
     ],
     subject="everyday science and how things work", expert="a teacher who knows the subject well",
     areas="the body, the home, food, money, technology, nature, travel, work",
-    abstract='"concept", "idea",\n  "theory"', hashtags="#learn,\n#howitworks and one specific")
+    abstract='"concept", "idea",\n  "theory"', hashtags="#learn,\n#howitworks and one specific",
+    words=[85, 115], sentence_max=13, hook_max=10, hook_you=True)
 
 STORIES = Pack(
     key="stories", label="History and true stories",
@@ -172,18 +184,19 @@ You open in the middle of the most striking moment, then rewind to how it came t
 short sentences, nothing that sounds like a textbook.""",
     rules=[
         "90 to 130 words in all: it is read aloud at about 2.3 words a second, 40 to 58 seconds.",
-        "Open on the most striking moment itself, in the middle of it (at most 14 words).",
-        "Then rewind: how it came to that, as a short chain of events, 3 to 5 sentences.",
+        "Open on the most striking moment itself, in the middle of it, in the present tense (at most 12 words).",
+        "Then rewind: how it came to that, as a short chain of events, 3 to 5 sentences, one thing happening "
+        "in each.",
         "One vivid concrete detail that makes it real: a number, an object, a name.",
+        "Keep one question open until near the end: what happened next, or why.",
         "End on the twist or the consequence, in one short last line.",
-        "Every sentence at most 16 words. No lists, no emojis, no hashtags, no \"in this video\", "
-        "no greeting, no call to subscribe.",
+        "Every sentence at most 14 words. " + PLAIN,
         "Every fact must be true. If you are not sure of a date, name or number, leave it out.",
     ],
     subject="history and true stories", expert="a historian",
     areas="ancient history, inventions, wars, crimes, people, disasters, science history, mysteries",
     abstract='"history", "past",\n  "era"', hashtags="#history,\n#story and one specific",
-    templates=["sketch", "number", "compare", "chain", "graph"], words=[90, 130])
+    templates=["sketch", "number", "compare", "chain", "graph"], words=[90, 130], sentence_max=14, hook_max=12)
 
 FOOTAGE = Pack(
     key="footage", label="Facts with footage only",
@@ -192,19 +205,18 @@ FOOTAGE = Pack(
 dry aside now and then, no hype. Spoken English.""",
     rules=[
         "70 to 110 words in all: it is read aloud at about 2.3 words a second, 30 to 48 seconds.",
-        "Open with ONE surprising fact or question (at most 14 words).",
+        "Open with ONE surprising fact or question of at most 10 words.",
         "Every sentence must be something a camera could show: places, animals, objects, people doing "
         "ordinary things. Nothing abstract.",
         "Give the explanation in 3 to 5 short sentences, each its own picture.",
         "End on a dry one-line punchline.",
-        "Every sentence at most 16 words. No lists, no emojis, no hashtags, no \"in this video\", "
-        "no greeting, no call to subscribe.",
+        "Every sentence at most 13 words. " + PLAIN,
         "Every fact must be true. If you are not sure, leave it out.",
     ],
     subject="surprising facts", expert="a fact checker",
     areas="animals, space, the human body, food, technology, places, everyday life",
     abstract='"fact", "idea",\n  "concept"', hashtags="#facts,\n#didyouknow and one specific",
-    drawings=False, templates=[], words=[70, 110])
+    drawings=False, templates=[], words=[70, 110], sentence_max=13, hook_max=10)
 
 PHYSICS = Pack(
     key="physics", label="Everyday physics (the German Professor's)",

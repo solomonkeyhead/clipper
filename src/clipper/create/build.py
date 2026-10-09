@@ -456,7 +456,7 @@ def remember(script: Script) -> Script:
     marked done: the next build makes the same pictures unless the user asks for new ones."""
     beats = []
     for i, b in enumerate(script.beats):
-        v = b.visual.model_copy(update={"redo": False, "previous": None, "notice": "", "wish": ""})
+        v = b.visual.model_copy(update={"redo": False, "previous": None, "notice": "", "wish": "", "restyle": False})
         got = chosen.get(i)
         if got and "restore" in got:  # asked for footage, none fit: back to what it had (D126)
             v = got["restore"].model_copy(update={"redo": False, "previous": None, "notice": got.get("notice", ""),

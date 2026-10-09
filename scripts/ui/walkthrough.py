@@ -46,6 +46,7 @@ with sync_playwright() as p:
     page.mouse.move(5, 5)
     page.wait_for_function("el => el.paused", arg=clip.element_handle(), timeout=5000)
     print("hover preview: paused when the pointer left")
+    expect(picker.get_by_text("Photo · Pixabay").first).to_be_visible()   # photos among the footage (D163)
     picker.scroll_into_view_if_needed()
     picker.screenshot(path=f"{OUT}/1b_picker.png")
     offered.first.click()
@@ -58,7 +59,10 @@ with sync_playwright() as p:
     expect(page.get_by_text("new drawing on the next build")).to_be_visible()
     print("after new drawing: review", review.get_attribute("aria-expanded"), "parts", footage.count())
     assert footage.count() == 7, "the parts list vanished after asking for a new drawing"
-    rebuild = page.get_by_role("button", name="Rebuild with 2 changes")
+    # the camera on a part's footage (D164): only that shot is made again, and it counts as a change
+    page.get_by_label("Camera, part 1").select_option("still")
+    expect(page.get_by_text("new camera on the next build")).to_be_visible()
+    rebuild = page.get_by_role("button", name="Rebuild with 3 changes")
     expect(rebuild).to_be_visible()
     page.screenshot(path=f"{OUT}/2_changes.png", full_page=True)
 

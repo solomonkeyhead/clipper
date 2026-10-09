@@ -56,23 +56,35 @@ def _chosen(config, model: str | None, job: str) -> list:
 
 def free_backends(config, override: str | None = None) -> list:
     """The free models Create asks: on Gemini, `llm.create_gemini_models` in turn, best first (D162); else
-    (or with that list empty) the clipping ones, the correction model then the scoring model."""
+    (or with that list empty) the clipping ones, the correction model then the scoring model. Then, unless
+    one provider was asked for, the other free ones with a key in .env (`llm.create_free_models`, D164)."""
     from ..llm.base import create as create_backend
+    from ..llm.openai_compat import has_key
     from ..runner import _correction_backends
 
+    out = []
     if (override or config.llm.backend) == "gemini" and config.llm.create_gemini_models:
-        out = []
-        for model in config.llm.create_gemini_models:
+        for k, model in enumerate(config.llm.create_gemini_models):
             try:
-                out.append(create_backend("gemini", model=model, max_retries=0,
+                # The best one gets a second try: a lone 503 sent it resting for 15 minutes (D164).
+                out.append(create_backend("gemini", model=model, max_retries=0 if k else 1,
                                           requests_per_minute=config.llm.requests_per_minute,
                                           timeout=config.llm.correction_timeout))
             except Exception as exc:  # no key: the usual ones say why
                 log.debug("create: %s not set up (%s)", model, exc)
                 break
-        if out:
-            return out
-    return _correction_backends(config, override)
+    if not out:
+        try:
+            out = _correction_backends(config, override)
+        except Exception:
+            if override or not any(has_key(p) for p in config.llm.create_free_models):
+                raise
+    if not override:
+        for provider, model in config.llm.create_free_models.items():
+            if has_key(provider):
+                out.append(create_backend("openai_compat", provider=provider, model=model, max_retries=0,
+                                          requests_per_minute=10, timeout=config.llm.correction_timeout))
+    return out
 
 
 def backends(config, model: str | None = None, job: str = "") -> list:

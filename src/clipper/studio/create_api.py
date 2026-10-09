@@ -909,6 +909,28 @@ def routes(app: FastAPI, publish) -> None:
         publish("create.changed", {"id": video_id})
         return {"ok": True}
 
+    @app.post("/api/create/videos/{video_id}/camera")
+    def create_camera(video_id: int, body: dict) -> dict:
+        """The camera on a part's footage (D164): "" lets the build choose, else push, pull, drift or still.
+        Only that shot is made again on the next build; the footage stays."""
+        from ..create.build import MOTIONS
+
+        row = video_or_404(video_id)
+        _editable(row)
+        script = _script(row)
+        beat = _beat(body, len(script.beats))
+        camera = str(body.get("camera") or "")
+        if camera and camera not in MOTIONS:
+            raise HTTPException(400, f"camera is one of {', '.join(MOTIONS)}, or empty for automatic")
+        group, _ = _part(row, script, beat)
+        beats = list(script.beats)
+        b = beats[group[0]]
+        beats[group[0]] = b.model_copy(update={"visual": b.visual.model_copy(
+            update={"camera": camera, "restyle": camera != b.visual.camera or b.visual.restyle})})
+        _put_script(row, script.model_copy(update={"beats": beats}))
+        publish("create.changed", {"id": video_id})
+        return {"ok": True}
+
     @app.get("/api/create/stock-thumb/{clip_id}")
     def create_stock_thumb(clip_id: str):
         from fastapi.responses import FileResponse

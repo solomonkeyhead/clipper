@@ -70,7 +70,7 @@ def test_a_manual_pick_survives_tidy_and_replanning(monkeypatch):
     plan = Script(title="t", beats=[Beat(text=b.text, visual=Visual(kind="stock", query=f"new {i}", queries=[f"new {i}"]))
                                     for i, b in enumerate(s.beats)])
     monkeypatch.setattr(scripts, "ask", lambda *a, **k: plan.model_dump_json())
-    monkeypatch.setattr(scripts, "check", lambda sc: scripts.Review(ok=True, problems=[]))
+    monkeypatch.setattr(scripts, "check", lambda sc, **k: scripts.Review(ok=True, problems=[]))
     fresh, _ = scripts.replan(s)
     assert fresh.beats[0].visual.template == "card" and fresh.beats[1].visual.manual
     assert fresh.beats[2].visual.query == "new 2"        # the unchosen one is planned
@@ -729,3 +729,20 @@ def test_a_clip_used_twice_in_a_row_carries_on(tmp_path, monkeypatch):
     build._stock_shot(tmp_path / "c.mp4", 4.0, tmp_path / "a.mp4", 0.5)
     build._stock_shot(tmp_path / "c.mp4", 4.0, tmp_path / "b.mp4", 0.5, skip=4.0)
     assert starts == [3.0, 7.0]
+
+
+def test_a_parts_camera_is_set_from_the_page_and_the_build_clears_the_change(client):
+    """D164: the camera move per part; only that shot changes, and a build clears the pending change."""
+    from clipper.create import build, store
+
+    s = Script(title="t", beats=[Beat(text="Your skull flatters you.", visual=Visual(kind="stock", query="mirror",
+                                                                                  picked=[{"id": 5, "url": "u"}]))])
+    vid = store.add_video(None, s.model_dump())
+    store.update_video(vid, status="built", clip_id=1, timings={"words": [], "beats": [(0.0, 3.0)], "duration": 3.0, "matched": 1.0})
+    assert client.post(f"/api/create/videos/{vid}/camera", json={"beat": 1, "camera": "spin"}).status_code == 400
+    assert client.post(f"/api/create/videos/{vid}/camera", json={"beat": 1, "camera": "drift"}).status_code == 200
+    v = Script.model_validate(store.video(vid)["script"]).beats[0].visual
+    assert v.camera == "drift" and v.restyle and not v.redo and v.picked == [{"id": 5, "url": "u"}]   # the footage stays
+    build.chosen.clear()
+    after = build.remember(Script.model_validate(store.video(vid)["script"])).beats[0].visual
+    assert after.camera == "drift" and not after.restyle

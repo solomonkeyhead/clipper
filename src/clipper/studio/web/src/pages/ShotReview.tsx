@@ -6,6 +6,9 @@ import { createApi, useCreate, type CreateVideo, type CreateVisual, type Footage
 import { Button, Chip, Tip } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
+/** The camera on a sentence's footage (D164): automatic, or one move. */
+export const CAMERAS: [string, string][] = [["", "camera: auto"], ["push", "push in"], ["pull", "pull out"], ["drift", "drift across"], ["still", "hold still"]];
+
 /** What a picture is, in a few words. */
 function describe(v: CreateVisual): string {
   if (v.clip) return "Your own clip";
@@ -157,7 +160,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [picking, setPicking] = useState<number | null>(null);
   const beats = video.script.beats;
-  const pending = beats.filter((b) => b.visual.redo).length;
+  const pending = beats.filter((b) => b.visual.redo || b.visual.restyle).length;
   // Built before Clipper kept its footage (D126): the next build picks every part's footage again.
   const unsaved = (video.shots ?? []).some((shot) => {
     const v = beats[shot.beats[0] - 1]?.visual;
@@ -170,6 +173,19 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
       await createApi.redo(video.id, { beat, want, note: want === "undo" ? "" : notes[beat] ?? "" });
       setNotes((n) => ({ ...n, [beat]: "" }));
       await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const setCamera = async (beat: number, camera: string) => {
+    setBusy(`${beat}-camera`);
+    try {
+      await createApi.camera(video.id, { beat, camera });
+      await qc.invalidateQueries({ queryKey: ["create"] });
+      toast.success("Camera set", { description: "Rebuild to see it: only this shot is made again." });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -226,6 +242,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                   {v.redo && (
                     <Chip tone="accent">{v.kind !== "stock" ? "new drawing" : v.picked?.length ? "your footage" : "new footage"} on the next build</Chip>
                   )}
+                  {v.restyle && !v.redo && <Chip tone="accent">new camera on the next build</Chip>}
                 </div>
                 {v.notice && <p className="text-xs text-warning">{v.notice}</p>}
                 <p className="line-clamp-2 text-sm">{text}</p>
@@ -246,6 +263,15 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                       {busy === `${first}-drawing` ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} New drawing
                     </Button>
                   </Tip>}
+                  {v.kind === "stock" && !v.clip && (
+                    <Tip label="How the camera moves on this part's footage. Automatic takes the moves in turn.">
+                      <select aria-label={`Camera, part ${first}`} value={v.camera ?? ""} disabled={busy !== null || rebuilding}
+                              onChange={(e) => void setCamera(first, e.target.value)}
+                              className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none">
+                        {CAMERAS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </Tip>
+                  )}
                   {v.previous && (
                     <Tip label="Keep what this part had">
                       <Button size="sm" variant="ghost" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "undo")}>

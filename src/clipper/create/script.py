@@ -2,6 +2,11 @@
 then checked for physics by a second, stricter pass (a wrong fact is the fastest
 way to lose an educational channel's trust).
 
+D164: two passes, as a writer and a director work. The writer writes the words only (its prompt is the
+persona, the rules and the joke shapes, not 5 KB of picture planning); when the words have passed the
+checks, the director plans the pictures, the highlighted words and the poses on the final text, and the
+diagrams are checked against it. A rewrite after the checks no longer plans every picture twice.
+
 A beat is one spoken sentence, or two very short ones: one shot. Each gets either
 stock footage that literally shows what's said, or an animated diagram when it
 explains a mechanism -- about half the beats, never the first, never three in a
@@ -56,6 +61,9 @@ class Visual(BaseModel):
     # The camera on this sentence's footage (D162): "" lets the build choose (moves taken in turn), else "push",
     # "pull", "drift" or "still". The user's pick, never the writer's.
     camera: str = ""
+    # A change the next build makes to this shot without choosing new footage (a camera move, D164); the page
+    # counts it as a change to rebuild for. Cleared by the build.
+    restyle: bool = False
     # What the last build used, kept so a rebuild keeps what the user liked (D125): the stock
     # clip(s) picked, the clips turned down ("new footage"), a change waiting for the next build,
     # and the picture before that change, for undo. Set by the app, never by the writer.
@@ -101,22 +109,24 @@ class Script(BaseModel):
 #: The fields of a picture only the app sets (the user's clips, what a build picked): left out of
 #: the writer's schema, so it isn't shown ~12 fields it can't use and can't invent them.
 APP_ONLY = {"sketch", "clip", "clip_start", "fill", "manual", "picked", "avoid", "redo", "previous", "wish", "notice",
-            "camera"}
+            "camera", "restyle"}
 _WriterVisual = create_model("WriterVisual", **{k: (f.annotation, f) for k, f in Visual.model_fields.items()
                                                 if k not in APP_ONLY})
 _WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""), pose=(str, ""),
                            visual=(_WriterVisual, Field(default_factory=_WriterVisual)))
-_WriterScript = create_model("WriterScript", title=(str, ...), hook=(str, ""), beats=(list[_WriterBeat], ...), description=(str, ""),
-                             hashtags=(list[str], Field(default_factory=list)))
+#: The writer's answer (D164): the words, a sentence a line, and what goes with them; no pictures.
+_WordsScript = create_model("WordsScript", lines=(list[str], ...), title=(str, ...), hook=(str, ""),
+                            description=(str, ""), hashtags=(list[str], Field(default_factory=list)))
+#: The director's answer: a picture, a highlighted word and a pose for each sentence.
+_Plan = create_model("Plan", beats=(list[_WriterBeat], ...))
 
 
 def _parse(answer: str) -> Script:
-    """The writer's answer as a Script: only what the writer's schema holds is taken."""
-    return Script.model_validate(_WriterScript.model_validate(json.loads(answer)).model_dump())
+    """The director's answer as a Script: only what its schema holds is taken."""
+    return Script.model_validate({"title": "", **_Plan.model_validate(json.loads(answer)).model_dump()})
 
 
-VISUALS_HEAD = """Split the script into beats: one spoken sentence each (two only if both are very
-short), 5 to 14 words. For every beat plan ONE picture:
+VISUALS_HEAD = """For every numbered sentence (a beat) plan ONE picture:
 - kind "stock": real footage that literally shows what is said. Give queries: three searches
   of a free stock-footage library, most specific first, then broader, 1-3 words each, naming
   subjects such libraries really have: objects, places, nature, everyday scenes, and people
@@ -144,11 +154,13 @@ short), 5 to 14 words. For every beat plan ONE picture:
 #: The diagram templates, by name; a channel's pack lists the ones it uses (create/packs.py).
 TEMPLATES = {
     "sketch": """  * sketch (the default for HOW something works): a chalk drawing of the real thing, made
-    by an illustrator after you. idea = one or two sentences saying exactly what to draw:
-    the objects, where things go, the 2-4 labels ("A head in profile. Sound leaves the mouth
-    and curves round through the air to the ear, dashed blue, labelled 'air'. A second
-    yellow path goes from the throat straight through the skull to the inner ear,
-    labelled 'bone'."). Concrete and physical, never a flow chart. Leave sketch empty.
+    by an illustrator after you, who has ready drawings of everyday objects (a person, an ear,
+    a speaker, the sun, a magnet, a car, a glass of water...). idea = one or two sentences
+    saying exactly what to draw: the 2-3 objects by their plain names, where they sit, the one
+    thing that happens between them and its colour, the 2-4 labels ("A speaker on the left, an
+    ear on the right. A yellow wave travels from the speaker to the ear, labelled 'air'. Under
+    it, a dashed arrow labelled 'pressure'."). Concrete and physical, never a flow chart.
+    Leave sketch empty.
 """,
     "forces": """  * forces: an object with labelled arrows. subject = the object, 1-2 words ("you",
     "car"), labels = the forces ("gravity", "floor pushes up"), directions =
@@ -190,12 +202,28 @@ TEMPLATES = {
 }
 
 VISUALS_TAIL = """  Keep every label under 4 words.
-For each beat also give emphasis: the single most important word in it, copied exactly.
+For each beat also give emphasis: the single most important word in it, copied exactly. It is
+lit in the captions and the camera punches in on it, so pick the word that carries the point
+(the number, the surprising verb, the thing named), never a small word."""
 
-Also write: title (the question, at most 60 characters), hook (the words shown on screen for
-the first second and a half: at most 6 words, the question's core, "Why elevators make you
-heavier"), description (the script's idea in
-3-5 short lines, in the same voice, ending on its punchline), hashtags (3: {hashtags})."""
+#: The writer's closing instructions (D164): the words only; the director plans the pictures after.
+WRITER_TAIL = """Every sentence gets its own picture under it (real footage, or a chalk drawing that shows
+the mechanism), so write concrete sentences a picture can show, and let the explanation go one
+step a sentence. The lines quoted in the rules show the kind of line; never use them.
+
+Answer with: lines (the script, one spoken sentence a line, two only if both are very short, in
+order), title (the question, at most 60 characters), hook (the words shown on screen for the first
+second and a half: at most 6 words, the question's core, "Why elevators make you heavier"),
+description (the script's idea in 3-5 short lines, in the same voice, ending on its punchline),
+hashtags (3: {hashtags})."""
+
+#: The director's brief (D164), before the picture rules.
+DIRECTOR = """You are the director of the YouTube Shorts channel {name} ({niche}). The script is written
+and recorded; you plan what the viewer sees under each sentence, on a phone. The picture carries
+half the explanation: with the sound off, a viewer should still follow it. One clear subject per
+picture, big in the frame. Keep it moving: a real moment, then a drawing that shows how, then a
+close-up; never the same kind of picture for long. Plan the drawings where the words explain HOW,
+and footage where they name a thing or a moment the viewer knows."""
 
 
 def channel_visuals_head(channel: channels.Channel) -> str:
@@ -259,13 +287,20 @@ def _poses(script: Script, channel: channels.Channel) -> list[Beat]:
 
 
 def _system(channel: channels.Channel) -> str:
+    """The writer's brief (D164): the persona, the rules and joke shapes, what to answer; no picture planning."""
     rules = "\n".join(f"- {r}" for r in channel.rules)
     jokes = ("\n\nJoke shapes to follow (shapes, never lines to copy):\n" + "\n".join(f"- {j}" for j in channel.jokes)
              if channel.jokes else "")
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
-            f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{channels.fill(visuals(channel), channel)}\n\n"
+            f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{channels.fill(WRITER_TAIL, channel)}\n\n"
             "The examples are the channel's own scripts, for voice and rhythm only: some break today's "
             "rules (length, sentence length, structure), and the rules win. Never reuse their jokes or lines.")
+
+
+def _director(channel: channels.Channel) -> str:
+    """The director's brief (D164): what the pictures are for, then the channel's picture rules."""
+    head = DIRECTOR.replace("{name}", channel.name).replace("{niche}", channel.niche)
+    return f"{head}\n\n{channels.fill(visuals(channel), channel)}"
 
 
 #: How a script ends, one per script in turn (D155): a loop back to the start (rewatches), a "send this
@@ -274,7 +309,8 @@ ENDINGS = {
     "loop": "a last line that leads straight back into the opening question, so the video loops",
     "send": 'a dry "send this to..." line naming who needs it ("Send this to the friend who blames '
             'centrifugal force.")',
-    "poll": 'a question the viewer can answer in one word in the comments ("Metal or wood: which wins?")',
+    "poll": 'a question about this video\'s own moment the viewer can answer in one word in the comments ("Metal '
+            'or wood: which wins?")',
 }
 
 
@@ -342,19 +378,23 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
     endings = recent_endings()
     user = (guide + f"The channel's best scripts:\n\n{channels.examples_block(channel)}\n\n"
             f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
-            + (f"Shape: {shape}\n" if shape else "") + pose_note(channel)
+            + (f"Shape: {shape}\n" if shape else "")
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
             + ("The channel's latest endings; reuse none of their jokes or their shape:\n"
                + "\n".join(f"- {e}" for e in endings) + "\n" if endings else "")
             + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
-    answer = ask(_system(channel), user, _WriterScript, temperature=0.85, job="script")
+    answer = ask(_system(channel), user, _WordsScript, temperature=0.85, job="script")
     try:
-        made = tidy(_parse(answer))
+        got = _WordsScript.model_validate(json.loads(answer))
     except (ValueError, TypeError) as exc:
         raise CreateError("the script came back unreadable; try again") from exc
-    return made.model_copy(update={"shape": shape, "ending": ending, "bit": bit[0]})
+    lines = [" ".join(str(x).split()) for x in got.lines if str(x).strip()]
+    if not lines:
+        raise CreateError("the script came back empty; try again")
+    return Script(title=got.title, hook=got.hook, description=got.description, hashtags=got.hashtags,
+                  beats=[Beat(text=t) for t in lines], shape=shape, ending=ending, bit=bit[0])
 
 
 #: Habits that mark a script as machine-written (D155), found in code before anyone reads it.
@@ -540,6 +580,9 @@ def tidy(script: Script) -> Script:
 
 #: Long words that say nothing a search can show ("float water does" found nothing useful, D161).
 _FILLER = {"about", "above", "after", "again", "also", "around", "because", "been", "before", "being", "could",
+           # the adverbs a sentence leans on (D164: "actually benches exactly" was a search)
+           "actually", "exactly", "basically", "literally", "simply", "always", "never", "often", "still", "even",
+           "quite", "rather", "almost", "nearly", "already", "slowly", "quickly", "suddenly", "certainly", "probably",
            "does", "doesn", "didn", "every", "from", "have", "here", "into", "just", "like", "many", "more", "most",
            "much", "only", "other", "over", "really", "same", "should", "some", "than", "that", "their", "them",
            "then", "there", "these", "they", "thing", "things", "this", "those", "through", "under", "very", "were",
@@ -571,14 +614,16 @@ mechanism. Return ok=true with no problems if it is correct. Otherwise list each
 
 CRITIC = """You are a short-form video editor reviewing a script for a {subject} Shorts channel before
 it is recorded. Judge only these, each pass or fail:
-1. Hook: the first line is about a concrete moment the viewer knows, short enough to read in two seconds.
+1. Hook: the first line is about a concrete moment the viewer knows, short enough to read in two seconds
+   (when the channel opens with a question, it stays a question).
 2. First cause early: the real reason starts within about 20 words of the opening line.
 3. Ear: every sentence says one thing and is easy to say and hear aloud.
 4. Comparison: one everyday comparison that explains the mechanism, not decoration.
 5. Payoff: the question is fully answered by three quarters of the way through.
 6. Ending: it ends the way it was asked to end, in two short beats.
 7. No AI habits: no stock phrases, no lists of three, no "it's not X, it's Y", no over-explaining.
-Do not judge whether the jokes are funny, and do not check the facts: others do that. Return ok=true
+Do not judge whether the jokes are funny, and do not check the facts: others do that. Never ask to remove
+what the script was asked to include (its shape, its ending, a running bit). Return ok=true
 with no problems if all pass. Otherwise, for each failure, one sentence saying exactly what to change."""
 
 
@@ -601,9 +646,15 @@ def _diagrams(script: Script) -> str:
     return "\n".join(lines)
 
 
-def check(script: Script) -> Review:
+def check(script: Script, diagrams_only: bool = False) -> Review:
+    """The fact check; `diagrams_only` when the words passed it already (D164): only the pictures are new."""
     diagrams = _diagrams(script)
+    if diagrams_only and not diagrams:
+        return Review(ok=True)
     user = f"Title: {script.title}\nScript:\n{script.text}" + (f"\n\nDiagrams shown:\n{diagrams}" if diagrams else "")
+    if diagrams_only:
+        user += ("\n\nThe words were checked already and stay as they are: check only the diagrams, against "
+                 "their sentences and the facts.")
     answer = ask(channels.fill(CHECK), user, Review, temperature=0.0, job="check", keep=True)
     try:
         return Review.model_validate(json.loads(answer))
@@ -620,7 +671,12 @@ def _videos() -> list[dict]:
 def critique(script: Script, writer: str = "") -> list[str]:
     """What an editor would change (D155), asked of a different AI from the one that wrote it: a model
     goes easy on its own work. Nothing when no other AI answers; the script still goes on."""
-    user = (f"It was asked to end with {ENDINGS.get(script.ending, 'a deadpan two-beat line')}.\n\n"
+    channel = channels.load()
+    shape = script.shape if script.shape in channel.shapes else ""
+    bit = next((b["how"].replace("{n}", "N") for b in channel.bits if b["name"] == script.bit), "")
+    user = (f"It was asked to end with {ENDINGS.get(script.ending, 'a deadpan two-beat line')}.\n"
+            + (f"Its shape, as asked: {shape}\n" if shape else "") + (f"It was asked to include: {bit}\n" if bit else "")
+            + "\n"
             f"Title: {script.title}\nScript:\n" + "\n".join(b.text for b in script.beats))
     try:
         answer = ask(channels.fill(CRITIC), user, Review, temperature=0.0, job="critic", keep=True, unlike=writer)
@@ -639,10 +695,10 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     channel = channels.load()
     script = write(question, angle, take=take, steer=steer)
     writer = ai.last_used
-    review = check(script)
+    notes: list[str] = []
+    review = _check_or_note(script, notes)
     facts = review.problems if not review.ok else []
     rules, edits = lint(script, channel), critique(script, writer)
-    notes = []
     if facts or rules or edits:
         feedback = "\n".join(f"- {p}" for p in [*facts, *rules, *edits])
         bit = next(((b["name"], b["how"]) for b in channel.bits if b["name"] == script.bit), ("", ""))
@@ -650,65 +706,93 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
             bit = (bit[0], bit[1].replace("{n}", str(1 + sum(v["script"].get("bit") == bit[0] for v in _videos()))))
         script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
                        ending=script.ending, bit=bit)
-        second = check(script)
+        writer = ai.last_used
+        second = _check_or_note(script, notes)
         if not second.ok and second.problems:
             notes.append(f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems))
         elif facts:
             notes.append(f"{channels.check_name()}: fixed after a first draft got this wrong:\n"
                          + "\n".join(f"- {p}" for p in facts))
-        else:
+        elif not notes:   # a note already says the check couldn't be done
             notes.append(f"{channels.check_name()}: no problems found.")
         if edits:
             notes.append("Editor's read, fixed in the rewrite:\n" + "\n".join(f"- {p}" for p in edits))
-    else:
+    elif not notes:
         notes.append(f"{channels.check_name()}: no problems found.")
     left = lint(script, channel)
     if left:
         notes.append("Still off the channel's rules:\n" + "\n".join(f"- {p}" for p in left))
-    return _signed(script, "\n".join(notes))
+    try:
+        script, pictures = plan_pictures(script)
+        notes.append(pictures)
+    except CreateError as exc:   # the words stand; the pictures can be planned again from the page
+        notes.append(f"Pictures not planned ({exc}): plain footage searches for now; press Plan pictures.")
+    return _signed(script, "\n".join(notes), writer)
 
 
-def _signed(script: Script, note: str) -> tuple[Script, str]:
+def _check_or_note(script: Script, notes: list[str]) -> Review:
+    """The fact check; when no model can do it, a note saying so (the words aren't lost, and aren't
+    rewritten for it)."""
+    try:
+        return check(script)
+    except CreateError as exc:
+        notes.append(f"{channels.check_name()}: not done ({exc}); press Check physics later.")
+        return Review(ok=True)
+
+
+def _signed(script: Script, note: str, writer: str = "") -> tuple[Script, str]:
     """The script, with the check's note and who wrote it. The sketches are drawn when the video is
     built, not now (D136): a script that is rewritten, edited or dropped would waste every drawing."""
     from . import ai
 
-    who = ai.last_used.split(":", 1)[-1] if ai.last_used else "unknown"
+    writer = writer or ai.last_used
+    who = writer.split(":", 1)[-1] if writer else "unknown"
     missed = [f"{name.split(':', 1)[0]} didn't answer: {why}" for name, why in ai.misses.items()
-              if name != ai.last_used]
+              if name not in (ai.last_used, writer)]
     return tidy(script), "\n".join([note, f"Written by: {who}.", *missed])
 
 
-def replan(script: Script) -> tuple[Script, str]:
-    """New pictures for an approved script, every word kept (its voice is already made):
-    the visuals planned again, then checked, once more if the check finds a problem."""
-    from . import ai
-
-    ai.misses.clear()
+def plan_pictures(script: Script) -> tuple[Script, str]:
+    """The director's pass (D164): a picture, a highlighted word and a pose for every sentence, every word
+    kept, then the diagrams checked against the words, once more if the check finds a problem. The
+    user's own clips and pictures stay where they are (D119, D120)."""
     channel = channels.load()
-    beats = "\n".join(f"{i}. {b.text}" for i, b in enumerate(script.beats, start=1))
+    # How far in each sentence starts, so the director can keep the rules timed in words (no drawing in the
+    # first ~9 words: one planned there was turned into footage with a search made of its leftover words).
+    starts = [sum(len(b.text.split()) for b in script.beats[:i]) for i in range(len(script.beats))]
+    beats = "\n".join(f"{i}. ({w} words in) {b.text}" for i, (b, w) in enumerate(zip(script.beats, starts, strict=True), start=1))
     feedback = ""
     for _ in range(2):
-        user = (f"This approved script is already recorded, sentence by sentence. Keep every sentence "
-                f"exactly as written, in order, one beat each, and plan the pictures again.\n\n"
-                f"Title: {script.title}\n{beats}\n" + (f"\nFix these problems:\n{feedback}\n" if feedback else ""))
-        answer = ask(_system(channel), user, _WriterScript, temperature=0.4, job="script")
+        user = (pose_note(channel) + f"Plan the pictures for this script: one beat for each numbered sentence, "
+                f"every sentence kept exactly as written, in order.\n\nTitle: {script.title}\n{beats}\n"
+                + (f"\nFix these problems:\n{feedback}\n" if feedback else ""))
+        answer = ask(_director(channel), user, _Plan, temperature=0.4, job="script")
         try:
             planned = _parse(answer)
         except (ValueError, TypeError) as exc:
-            raise CreateError("the new pictures came back unreadable; try again") from exc
+            raise CreateError("the pictures came back unreadable; try again") from exc
         if len(planned.beats) != len(script.beats):
-            raise CreateError("the new plan changed the sentences; try again")
-        # The words are the recording's: only the pictures are taken from the new plan.
-        # ...and the user's own clips stay where they were put (D119).
-        # ...and so do the pictures the user chose themselves (D120).
+            raise CreateError("the picture plan changed the sentences; try again")
+        # The words are the recording's: only the pictures are taken from the plan.
         fresh = tidy(script.model_copy(update={"beats": [
             b.model_copy(update={"visual": b.visual if b.visual.manual else p.visual.model_copy(update={
                 "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
                 "emphasis": p.emphasis or b.emphasis, "pose": b.pose or p.pose})
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
-        review = check(fresh)
+        try:
+            review = check(fresh, diagrams_only=True)
+        except CreateError as exc:   # the plan stands; the diagrams can be checked from the page
+            return fresh, f"Pictures planned; the diagrams weren't checked ({exc})."
         if review.ok or not review.problems:
-            return _signed(fresh, f"Pictures planned again. {channels.check_name()}: no problems found.")
+            return fresh, f"Pictures: {channels.check_name()} found no problems in the diagrams."
         feedback = "\n".join(f"- {p}" for p in review.problems)
-    return _signed(fresh, f"Pictures planned again. {channels.check_name()}, still unsure:\n" + feedback)
+    return fresh, f"Pictures: {channels.check_name()}, still unsure about the diagrams:\n" + feedback
+
+
+def replan(script: Script) -> tuple[Script, str]:
+    """New pictures for an approved script, every word kept (its voice is already made)."""
+    from . import ai
+
+    ai.misses.clear()
+    planned, note = plan_pictures(script)
+    return _signed(planned, "Pictures planned again. " + note.removeprefix("Pictures: "))

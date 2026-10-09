@@ -3020,3 +3020,34 @@ than clips, under the same keys and licence.
 - The footage picker labels photos ("Photo · Pixabay") and its thumbnails have the panel's shape.
 Found on the way: PEXELS_API_KEY isn't set on Marc's machine, so Pexels (the better people footage, D109) has not
 been searched at all. A free key from pexels.com/api fixes it, for videos and photos.
+
+## D164. Create overhaul, parts 4 and 5: a writer and a director, more free AI, the camera by hand (2026-10-08)
+
+The writer was one call asked for the words and every picture at once: persona, rules and joke shapes, then about
+5 KB of picture planning in the same prompt, and a rewrite after the checks planned every picture again.
+- **Writer and director.** The writer writes only the words (lines, title, hook, description, hashtags), told that
+  every sentence gets a picture so it writes showable sentences, one step a sentence, and never the lines quoted in
+  the rules (a test script used the rules' "thief sprinting off with your wallet" word for word). When the words
+  have passed the fact check, the rules and the editor's read, the director plans the pictures, highlighted words
+  and poses on the final text, each sentence given with how many words in it starts (so "no drawing in the first
+  ~9 words" can be kept), and the diagrams are checked on their own. "Plan pictures" and New pictures use the same
+  director. The physics fixture for the picture rules changed on purpose: they open "For every numbered sentence",
+  the sketch idea names plain objects (the sketcher has icons for them), the highlighted word is the one that
+  carries the point (the camera punches in on it).
+- **Nothing lost to a busy AI.** A fact check that can't run leaves the words as written with a note; a diagram
+  check that can't run keeps the picture plan; pictures that can't be planned leave plain searches and a note.
+  Seen on 2026-10-08, when every Gemini model answered 503, 500, 429 or 504 in turn for an afternoon.
+- **The editor's read** is told the shape, ending and running bit the script was asked for, and never to ask for
+  them to go (it had asked to drop "Professor's Law No. 1"); an opening question stays a question.
+- **More free AI** (`llm/openai_compat.py`): Mistral, Groq, NVIDIA and OpenRouter, after Gemini, each only with its
+  free key in .env (`llm.create_free_models`, provider to model). The best Gemini model gets one retry before it
+  rests 15 minutes.
+- **Starter packs** (explainer, stories, footage only) get the rules the physics channel tested in D155 and D156:
+  shorter hooks said to "you", the first reason early, sentences of 13-14 words, jokes that carry a fact, the
+  machine-written habits banned. Existing channels keep their own rules; a channel with rules of its own keeps the
+  old lenient limits.
+- **The camera by hand**: a camera choice on each footage sentence in the script editor and on each part of a built
+  video (auto, push in, pull out, drift across, hold still). Only that shot is made again; it counts as a change for
+  Rebuild.
+- **Tests never run the real Claude Code**: a test reaching the AI without a stand-in (the script flow's critic and
+  director would have) gets no `claude` command.

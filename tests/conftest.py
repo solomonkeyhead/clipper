@@ -28,6 +28,15 @@ def data_root(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.fixture(autouse=True)
+def _no_real_claude_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test that reaches the AI without a stand-in must never run the real `claude` on the user's plan
+    (D164: the script flow's critic and director would have). Tests of the backend set `cli` themselves."""
+    from clipper.llm import claude_code
+
+    monkeypatch.setattr(claude_code, "cli", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def _no_ratings_from_the_real_library(monkeypatch: pytest.MonkeyPatch) -> None:
     """Runs learn from the user's ratings in data/clipper.db; tests must not."""
     from clipper import runner

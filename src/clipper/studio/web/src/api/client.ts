@@ -627,6 +627,7 @@ export interface CreateVisual {
   manual?: boolean; idea?: string; sketch?: unknown;            // a picture the user chose (D120)
   wish?: string; notice?: string;                                // D129
   hold?: boolean;                                                // keep the drawing before on screen (D124)
+  camera?: string; restyle?: boolean;                            // "" automatic, push, pull, drift, still (D164)
   picked?: Record<string, unknown>[]; avoid?: string[]; redo?: boolean; previous?: Record<string, unknown> | null;   // D125
 }
 export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
@@ -714,6 +715,7 @@ export const createApi = {
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
   footage: (video: number, body: { beat: number; wish: string }) => send<FootageOffer>("POST", `/api/create/videos/${video}/footage`, body),
   footageUse: (video: number, body: { beat: number; ids: string[] }) => send("POST", `/api/create/videos/${video}/footage/use`, body),
+  camera: (video: number, body: { beat: number; camera: string }) => send("POST", `/api/create/videos/${video}/camera`, body),
   redo: (video: number, body: { beat: number; want: "footage" | "drawing" | "undo"; note: string }) =>
     send("POST", `/api/create/videos/${video}/redo`, body),
   cancel: (video: number) => send<{ stopping: boolean }>("POST", `/api/create/videos/${video}/cancel`),

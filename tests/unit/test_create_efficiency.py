@@ -71,7 +71,7 @@ def test_writing_a_script_draws_no_sketches_that_waste_if_it_is_dropped(data_roo
     sketchy = Visual(kind="diagram", template="sketch", idea="a head with two sound paths")
     written = Script(title="Why?", beats=[Beat(text="Why does your voice sound odd?"), Beat(text="Two routes, air and bone.", visual=sketchy)])
     monkeypatch.setattr(scripts, "write", lambda *a, **k: written)
-    monkeypatch.setattr(scripts, "check", lambda s: scripts.Review(ok=True))
+    monkeypatch.setattr(scripts, "check", lambda s, **k: scripts.Review(ok=True))
     monkeypatch.setattr(sketch, "draw", lambda *a, **k: pytest.fail("drew while writing"))
     out, note = scripts.write_checked("Why?")
     assert out.beats[1].visual.template == "sketch" and not out.beats[1].visual.sketch and "Written by" in note

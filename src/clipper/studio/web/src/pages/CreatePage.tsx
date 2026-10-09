@@ -14,7 +14,7 @@ import { useUI } from "@/lib/store";
 import { cn, copyText } from "@/lib/utils";
 import { ChannelBar, NewChannel } from "./ChannelPanel";
 import { MyClips } from "./MyClips";
-import { ShotReview } from "./ShotReview";
+import { CAMERAS, ShotReview } from "./ShotReview";
 
 /** Create (D108): original Shorts for your own channel -- idea, script, your voice, built. */
 /** "physics" on a physics channel, "facts" on any other: what the fact check is called in the buttons (D146). */
@@ -694,6 +694,15 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                          onBlur={(e) => e.target.value.trim() !== b.emphasis && patch(i, { emphasis: e.target.value.trim() })}
                          className="h-8 w-32 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
                 </Tip>
+                {b.visual.kind === "stock" && !b.visual.hold && (
+                  <Tip label="How the camera moves on this sentence's footage. Automatic takes the moves in turn.">
+                    <select aria-label={`Camera, sentence ${i + 1}`} value={b.visual.camera ?? ""}
+                            onChange={(e) => patch(i, { visual: { ...b.visual, camera: e.target.value } })}
+                            className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none">
+                      {CAMERAS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </Tip>
+                )}
                 {poses.length > 0 && i < beats.length - 1 && (
                   <Tip label="The presenter's pose while this sentence is said (about 2 seconds, bottom left)">
                     <select aria-label={`Pose, sentence ${i + 1}`} value={b.pose ?? ""} onChange={(e) => patch(i, { pose: e.target.value })}

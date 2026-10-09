@@ -573,3 +573,55 @@ def test_a_few_photos_come_after_the_videos_and_download_as_pictures():
     assert len(got) == 12 and [stock.is_photo(h) for h in got] == [False] * 9 + [True] * 3
     assert got[0]["id"] == "pexels-2" and got[-3]["id"] == "photo-pixabay-1"     # long enough first; photos in order
     assert stock.is_photo({"id": "photo-pexels-5"}) and not stock.is_photo({"id": 5})
+
+
+def test_the_writer_writes_words_and_the_director_plans_the_pictures_after(data_root, monkeypatch):
+    """D164: the writer's prompt has no picture rules; the director plans on the final words, once."""
+    import json
+
+    from clipper.create import script as scripts
+
+    asked = []
+
+    def ask(system, user, schema, **kw):
+        asked.append((schema.__name__, system, user))
+        if schema.__name__ == "WordsScript":
+            return json.dumps({"lines": ["Why does the lift make you heavier?", "The floor pushes up harder.",
+                                         "Gravity stays the same, so the floor wins today."],
+                               "title": "Why lifts make you heavier", "hook": "Heavier in a lift", "hashtags": ["#a"]})
+        if schema.__name__ == "Plan":
+            return json.dumps({"beats": [
+                {"text": "x", "emphasis": "heavier", "visual": {"kind": "stock", "queries": ["elevator doors"]}},
+                {"text": "x", "emphasis": "harder", "visual": {"kind": "stock", "queries": ["feet on floor"]}},
+                {"text": "x", "emphasis": "floor", "visual": {"kind": "diagram", "template": "forces", "subject": "you",
+                                                             "labels": ["gravity", "floor"], "directions": ["down", "up"],
+                                                             "values": [1, 2]}}]})
+        return json.dumps({"ok": True, "problems": []})
+
+    monkeypatch.setattr(scripts, "ask", ask)
+    out, note = scripts.write_checked("Why does the lift make you heavier?")
+    kinds = [a[0] for a in asked]
+    # A rewrite (the short test script breaks the word count) is words again; the pictures are planned once, after.
+    assert kinds.count("Plan") == 1 and kinds.index("Plan") > len(kinds) - 1 - kinds[::-1].index("WordsScript")
+    writer_system = next(a[1] for a in asked if a[0] == "WordsScript")
+    director_system = next(a[1] for a in asked if a[0] == "Plan")
+    assert 'kind "stock"' not in writer_system and 'kind "stock"' in director_system and "director" in director_system
+    assert [b.text for b in out.beats][1] == "The floor pushes up harder."           # the words are the writer's
+    assert out.beats[2].visual.template == "forces" and out.beats[0].emphasis == "heavier"
+    assert "Pictures:" in note
+
+
+def test_the_free_providers_with_a_key_come_after_gemini(monkeypatch):
+    from clipper.config import Config
+    from clipper.create import ai
+
+    for env in ("MISTRAL_API_KEY", "NVIDIA_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test")
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    config = Config.load()
+    config = config.model_copy(update={"llm": config.llm.model_copy(update={"backend": "gemini"})})
+    got = [b.describe() for b in ai.free_backends(config)]
+    assert got[:len(config.llm.create_gemini_models)] == [f"gemini:{m}" for m in config.llm.create_gemini_models]
+    assert got[len(config.llm.create_gemini_models):] == ["groq:openai/gpt-oss-120b"]
+    assert [b.describe() for b in ai.free_backends(config, "gemini")][-1].startswith("gemini:")   # Gemini asked for: only it

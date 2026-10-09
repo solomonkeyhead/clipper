@@ -33,7 +33,14 @@ is the order I'd build them.
 | Editor's read of a script | Another AI lists fixes and the script is rewritten once (D155); shown in the notes | Edit the script; skip the editor | Gap | S |
 | Pauses in the voice | Pauses over 0.25 s cut, 0.6 s kept before the last sentence (D155) | Off, or the pause lengths | Gap | S |
 | Last shot | The opening footage again under the last sentence, so it loops (D155) | Pick the last picture yourself (any manual pick stops it) | Done | - |
-| Camera moves and punch-ins | Moves in turn; punch-in on two highlighted words (D156) | Choose the move per shot; turn punch-ins off | Gap | S |
+| Camera moves and punch-ins | Moves in turn; punch-ins on highlighted words (D156, D162) | The move per sentence in the script editor, and per part on a built video (D164); turn punch-ins off | Partial (punch-ins: Gap) | S |
+| Cut-ins on the presenter | The camera cuts in on his face on reaction poses and the punchline's last word (D162) | Off per video; pick the sentences | Gap | S |
+| Transitions | Cut, whip or zoom where the kind of picture changes (D162) | Pick per cut, or cuts only | Gap | S |
+| Photos among the footage | Up to 3 photos offered with each part's clips, shown with a camera move (D163) | Pick or pass over them in the footage picker | Done | - |
+| Drawing size on the board | A template's drawing scaled to fill the board (D162) | A size or position per drawing | Gap | S |
+| Things in a sketch | The sketcher places icons from a set of 234 (D162) | "Drawing I describe", naming the things to draw | Partial | - |
+| Pictures, highlights and poses | The director, a second AI pass on the final words, plans them (D164) | Each one per sentence; Plan pictures fills only the ones left alone | Done | - |
+| Which free AI answers | Gemini 3.8 Flash, older Gemini, then Mistral, Groq, NVIDIA, OpenRouter with a key (D162, D164) | Model names in config (`llm.create_gemini_models`, `llm.create_free_models`) | Gap (config only) | S |
 | Character, sign-off, board colours | Channel settings (D156) | Per video on or off | Partial | S |
 | Poses on sentences | The writer tags up to 4 sentences (D158) | Pose picker on every sentence; poses per channel | Done | - |
 | Music and chalk sounds | Off; Clipper's own tune or your tracks folder (D156) | On, off or channel default per video | Done | - |

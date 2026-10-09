@@ -366,7 +366,7 @@ def available_backends() -> list[str]:
 
 def _load_builtins() -> None:
     """Import backend modules lazily, so a missing optional SDK is not fatal."""
-    from . import claude_code, gemini, ollama  # noqa: F401
+    from . import claude_code, gemini, ollama, openai_compat  # noqa: F401
 
     try:
         from . import anthropic_backend  # noqa: F401

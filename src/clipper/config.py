@@ -209,6 +209,11 @@ class LLMConfig(StrictModel):
     # Empty = the clipping models above (correction_model, then the scoring model).
     create_gemini_models: list[str] = Field(
         default_factory=lambda: ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"])
+    # More free models Create asks after Gemini, in this order, each only with its key in .env (D164):
+    # provider -> model. MISTRAL_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY.
+    create_free_models: dict[str, str] = Field(default_factory=lambda: {
+        "mistral": "mistral-medium-latest", "groq": "openai/gpt-oss-120b", "nvidia": "openai/gpt-oss-120b",
+        "openrouter": "openrouter/free"})
     # The jobs the PAID Claude API (ANTHROPIC_API_KEY, billed per use) may do (D142). Any job not
     # listed never touches the key: it runs on Claude Code on your plan (no per-use charge), or
     # Gemini. Default: only drawing the sketches. Add "judge" for clip judging, or script, check,
