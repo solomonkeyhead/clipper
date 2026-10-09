@@ -175,7 +175,7 @@ function ChannelCard() {
 }
 
 const STEPS: { key: string; title: string; body: string; to: string; action: string }[] = [
-  { key: "ai", title: "Add your free Gemini key", body: "Clipping uses it to find the best moments and write captions. Takes a minute. (Create uses your Claude plan instead.)",
+  { key: "ai", title: "Add your free Gemini key", body: "Clipping uses it to watch the video and write captions, and Create to write and check scripts. Takes a minute.",
     to: "/settings", action: "Add key" },
   { key: "campaign", title: "Add a campaign", body: "Paste the brief of a campaign you've joined; Clipper fills in its rules.",
     to: "/campaigns/new", action: "Add campaign" },
