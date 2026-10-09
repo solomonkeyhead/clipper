@@ -545,7 +545,7 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
     ahead = _prefetch(script, timings, groups, progress)
     _moves[0] = 0
     punches.clear()
-    punches.update(choose_punches(script, timings))
+    punches.update(choose_punches(script, timings) if script.zooms else {})
     picture_times.clear()
     starts = []   # where each picture's shots begin in `made`
     for n, group in enumerate(groups):
@@ -688,7 +688,7 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
         n, kind = shot_info.get(path) or (max(1, round((probe(path).duration or 0.0) * FPS)), "footage")
         shots.append(compose.Shot(path=path, start=at, frames=n, kind=kind))
         at += n
-    compose.transitions(shots, seed)
+    compose.transitions(shots, seed, script.transitions)
     palette = diagrams.PALETTES.get(channel.board) or diagrams.PALETTES["slate"]
     edit = compose.Edit(shots=shots, total=total, board=compose.base_board(palette["board"], palette["chalk"]))
     plan = character_plan(script, timings, channel, punchline, seed)
@@ -698,7 +698,7 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
                   for w in _words_of(timings, script, i)
                   if w.text.strip(".,!?;:'\"").lower() == beat.emphasis.strip(".,!?;:'\"").lower()}
         edit.presenter = compose.Presenter(shows, timings.words, strong, total)
-        edit.cutaways = cutaways(script, timings, punchline, total)
+        edit.cutaways = cutaways(script, timings, punchline, total) if script.cut_ins else []
     edit.captions = compose.Captions(timings.words, accent=palette["yellow"])
     hook = (script.hook or script.title) if rc.show_hook_text else ""
     if hook:

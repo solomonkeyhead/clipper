@@ -634,10 +634,13 @@ class Cutaway:
     y: float
 
 
-def transitions(shots: list[Shot], seed: int) -> None:
+def transitions(shots: list[Shot], seed: int, mode: str = "auto") -> None:
     """How each shot comes in (D162): a cut, except where the picture changes kind (footage to drawing or
     back), where every other such change is a whip or a zoom, in turn. Never the first shot, never a shot
-    under 0.5 s, never two in a row."""
+    under 0.5 s, never two in a row. `mode` (D165) is the user's pick: "cut" has none, "whip" or "zoom" uses
+    that one at every such change, "auto" is the above."""
+    if mode == "cut":
+        return
     turn = seed % 2
     last = -9
     for i in range(1, len(shots)):
@@ -645,9 +648,9 @@ def transitions(shots: list[Shot], seed: int) -> None:
         if a.kind == b.kind or b.frames < FPS // 2 or a.frames < FPS // 2 or i - last < 2:
             continue
         turn += 1
-        if turn % 2:
+        if mode == "auto" and turn % 2:
             continue
-        b.enter = "whip" if (turn // 2) % 2 else "zoom"
+        b.enter = mode if mode != "auto" else "whip" if (turn // 2) % 2 else "zoom"
         last = i
 
 

@@ -96,3 +96,18 @@ def test_the_character_stays_on_screen_the_whole_video(tmp_path):
     plan = dict(build.character_plan(Script(title="t", beats=beats), timing, ch, 15.0, seed=0))
     assert plan == {f["base"]: [(0.0, 3)], f["shocked"]: [(3, 6)], f["point"]: [(6, 9)], f["talk1"]: [(9, 12)],
                     f["talk2"]: [(12, 15.0)], f["react"]: [(15.0, 18.0)]}
+
+
+def test_transition_modes():
+    """D165: plain cuts have none, whip or zoom is used at every change of kind, auto alternates."""
+    from clipper.create import compose
+
+    def run(mode):
+        shots = [compose.Shot(path=None, start=i * 30, frames=30, kind="footage" if i % 2 == 0 else "drawing")
+                 for i in range(7)]
+        compose.transitions(shots, 0, mode)
+        return {s.enter for s in shots[1:]}
+
+    assert run("cut") == {"cut"}
+    assert run("whip") == {"whip", "cut"} and run("zoom") == {"zoom", "cut"}
+    assert {"whip", "zoom"} <= run("auto") | {"whip", "zoom"}

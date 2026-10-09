@@ -466,6 +466,23 @@ def routes(app: FastAPI, publish) -> None:
         store.update_video(video_id, script=script)
         return {"ok": True}
 
+    @app.put("/api/create/videos/{video_id}/edit")
+    def create_edit_style(video_id: int, body: dict) -> dict:
+        """The edit's flourishes for one video (D165): zooms and cut-ins on or off, and the transition
+        (auto, cut, whip, zoom). The next build uses them."""
+        row = video_or_404(video_id)
+        _editable(row)
+        script = dict(row["script"])
+        for k in ("zooms", "cut_ins"):
+            if k in body:
+                script[k] = bool(body[k])
+        if "transitions" in body:
+            if body["transitions"] not in ("auto", "cut", "whip", "zoom"):
+                raise HTTPException(400, "transitions are auto, cut, whip or zoom")
+            script["transitions"] = body["transitions"]
+        store.update_video(video_id, script=script)
+        return {"ok": True}
+
     @app.put("/api/create/videos/{video_id}/script")
     def create_edit(video_id: int, body: dict) -> dict:
         """The script as edited on the page. A voice made for the old words no longer fits."""

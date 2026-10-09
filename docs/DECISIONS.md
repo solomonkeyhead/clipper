@@ -3054,3 +3054,11 @@ The writer was one call asked for the words and every picture at once: persona, 
 - Added after: Settings has a "More free AI for Create" card to paste those four keys (kept in .env, like the
   footage keys), and the Pexels hint says what its key brings. On a channel with no presenter the captions sit in
   the middle of the board under the picture, not at its top edge with the board empty below.
+
+## D165: zooms, cut-ins and transitions can be set per video
+Marc asked for a way to turn off the punch-in zooms and the Professor cut-ins, and to choose the transitions.
+- `Script.zooms`, `Script.cut_ins` (both default on) and `Script.transitions` (auto, cut, whip, zoom) sit with
+  music and chalk sounds, set from the same row on a built video (`PUT /api/create/videos/{id}/edit`). They only
+  change the edit, so Build again is enough; the voice and timings stay.
+- Whip and zoom use that one transition at every change of picture kind, under the same limits as automatic
+  (not the first shot, none under 0.5 s, never two in a row). Plain cuts have none.

@@ -96,6 +96,11 @@ class Script(BaseModel):
     # Music and chalk sounds for this video: None = the channel's setting (D156), so two videos can differ.
     music: bool | None = None
     sfx: bool | None = None
+    # The edit's flourishes for this video (D165): punch-in zooms on footage, camera cut-ins on the Professor,
+    # and how shots change: auto (cut, with a whip or zoom where the picture changes kind), cut, whip or zoom.
+    zooms: bool = True
+    cut_ins: bool = True
+    transitions: str = "auto"
 
     @property
     def text(self) -> str:

@@ -824,6 +824,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/create/videos/{video_id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create Edit Style
+         * @description The edit's flourishes for one video (D165): zooms and cut-ins on or off, and the transition
+         *     (auto, cut, whip, zoom). The next build uses them.
+         */
+        put: operations["create_edit_style_api_create_videos__video_id__edit_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/create/videos/{video_id}/script": {
         parameters: {
             query?: never;
@@ -5406,6 +5427,45 @@ export interface operations {
         };
     };
     create_sound_api_create_videos__video_id__sound_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_edit_style_api_create_videos__video_id__edit_put: {
         parameters: {
             query?: never;
             header?: never;

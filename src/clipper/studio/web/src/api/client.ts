@@ -641,7 +641,9 @@ export interface CreateScript { title: string; beats: CreateBeat[]; description:
   /** On-screen words at the start; the shape and ending it was asked for; the idea's series (D155). */
   hook?: string; shape?: string; ending?: string; series?: string;
   /** Music and chalk sounds for this video; null or missing: the channel's setting (D156). */
-  music?: boolean | null; sfx?: boolean | null; bit?: string }
+  music?: boolean | null; sfx?: boolean | null; bit?: string;
+  /** Zooms on footage, cut-ins on the Professor, and the transition (D165). */
+  zooms?: boolean; cut_ins?: boolean; transitions?: string }
 export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string;
   /** The planner's score of 21, and the series it belongs to (D155). */
   score?: number | null; series?: string }
@@ -711,6 +713,7 @@ export const createApi = {
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
   rewrite: (video: number, steer = "") => send("POST", `/api/create/videos/${video}/rewrite`, { steer }),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
+  editStyle: (video: number, body: { zooms?: boolean; cut_ins?: boolean; transitions?: string }) => send("PUT", `/api/create/videos/${video}/edit`, body),
   sound: (video: number, body: { music?: boolean | null; sfx?: boolean | null }) => send("PUT", `/api/create/videos/${video}/sound`, body),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
   footage: (video: number, body: { beat: number; wish: string }) => send<FootageOffer>("POST", `/api/create/videos/${video}/footage`, body),

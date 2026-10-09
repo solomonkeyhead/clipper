@@ -946,9 +946,29 @@ function SoundChoice({ video }: { video: CreateVideo }) {
       </label>
     );
   };
+  const style = (key: "zooms" | "cut_ins", label: string) => (
+    <label className="flex items-center gap-1.5">
+      <input type="checkbox" className="accent-[var(--color-accent)]" checked={video.script[key] ?? true}
+             disabled={video.status === "building"}
+             onChange={(e) => void createApi.editStyle(video.id, { [key]: e.target.checked })
+               .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))} />
+      {label}
+    </label>
+  );
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
       {pick("music", "Music")}{pick("sfx", "Chalk sounds")}
+      {style("zooms", "Zoom-ins")}{style("cut_ins", "Cut-ins on the Professor")}
+      <label className="flex items-center gap-1.5">
+        Transitions
+        <select value={video.script.transitions ?? "auto"} aria-label="Transitions" disabled={video.status === "building"}
+                className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                onChange={(e) => void createApi.editStyle(video.id, { transitions: e.target.value })
+                  .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
+          <option value="auto">Automatic</option><option value="cut">Plain cuts</option>
+          <option value="whip">Whip</option><option value="zoom">Zoom</option>
+        </select>
+      </label>
       <span className="text-subtle">Changes show on Build again.</span>
     </div>
   );

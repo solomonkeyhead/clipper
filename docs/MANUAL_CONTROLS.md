@@ -33,9 +33,9 @@ is the order I'd build them.
 | Editor's read of a script | Another AI lists fixes and the script is rewritten once (D155); shown in the notes | Edit the script; skip the editor | Gap | S |
 | Pauses in the voice | Pauses over 0.25 s cut, 0.6 s kept before the last sentence (D155) | Off, or the pause lengths | Gap | S |
 | Last shot | The opening footage again under the last sentence, so it loops (D155) | Pick the last picture yourself (any manual pick stops it) | Done | - |
-| Camera moves and punch-ins | Moves in turn; punch-ins on highlighted words (D156, D162) | The move per sentence in the script editor, and per part on a built video (D164); turn punch-ins off | Partial (punch-ins: Gap) | S |
-| Cut-ins on the presenter | The camera cuts in on his face on reaction poses and the punchline's last word (D162) | Off per video; pick the sentences | Gap | S |
-| Transitions | Cut, whip or zoom where the kind of picture changes (D162) | Pick per cut, or cuts only | Gap | S |
+| Camera moves and punch-ins | Moves in turn; punch-ins on highlighted words (D156, D162) | The move per sentence in the script editor, and per part on a built video (D164); punch-ins (Zoom-ins) off per video (D165) | Done | - |
+| Cut-ins on the presenter | The camera cuts in on his face on reaction poses and the punchline's last word (D162) | Off per video (D165); pick the sentences | Partial | S |
+| Transitions | Cut, whip or zoom where the kind of picture changes (D162) | Per video: automatic, plain cuts, whip or zoom (D165); pick per cut | Partial | S |
 | Photos among the footage | Up to 3 photos offered with each part's clips, shown with a camera move (D163) | Pick or pass over them in the footage picker | Done | - |
 | Drawing size on the board | A template's drawing scaled to fill the board (D162) | A size or position per drawing | Gap | S |
 | Things in a sketch | The sketcher places icons from a set of 234 (D162) | "Drawing I describe", naming the things to draw | Partial | - |
