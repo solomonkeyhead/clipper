@@ -3245,3 +3245,19 @@ sentences that failed the first round still ended in a drawing. Now:
   (`plan_searches`) stay for a wish, asked-for footage and the picker. Nothing good enough: a drawing, as before.
 Per stock sentence: 1 call, 2 when the judge sends it searching (was 4 a part, up to 7). The rubric and the bar
 (7, or 6 when asked for) are unchanged.
+
+## D182: a sketch's layout done in code, so the reviewer looks only at the drawing
+Of the 26 fixes the sketch reviewer made in the log, about half were layout: a label on a line or another label,
+or something "in the button corner" (several by an old rule, y > 400, that the reviewer made up). Each fix cost a
+second review. Now `fit` does the layout after every drawing and every fix:
+- **The button corner.** When a shape reaches into x > 880 and y > 760, the drawing shrinks towards the top middle
+  just enough to clear it (at most to 0.6).
+- **Labels.** A label whose letters (the real glyph box from the font, and the board rim `diagrams.text` writes
+  round them) sit on a line, an icon, another label or the corner moves to the nearest clear spot, at most 120 px
+  away: further, it would leave what it names, and the reviewer sees it. Words inside a box stay (the box is their
+  frame). On Marc's 21 saved sketches: 35 of 70 labels moved, a median 48 px, none away from what it named.
+- **REVIEW** no longer lists the corner and words on lines, and says the board is tidied after it. An ok review
+  answers `ok` alone instead of echoing the whole sketch back (most of its output).
+- A drawing the build doesn't save in the script (standing in for the opening's footage, D161, or the rest after
+  the user's own clip) is remembered by its question (`draw(keep=True)`): a rebuild where footage still doesn't fit
+  draws the same one for free. A drawing the user asks for is always new.

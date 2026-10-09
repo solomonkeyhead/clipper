@@ -123,6 +123,18 @@ def test_footage_chosen_ahead_is_used_unless_an_earlier_sentence_took_that_clip(
     assert live == [1]                                              # clashed: chosen again, in turn
 
 
+def test_a_drawing_the_script_doesnt_keep_is_remembered_by_its_question(monkeypatch):
+    """D182: a stand-in for the opening's footage, or the rest after the user's clip, was drawn anew every build."""
+    kept = []
+    monkeypatch.setattr(build, "_fallback", lambda *a, keep=False, **k: kept.append(keep) or Visual(kind="diagram", template="card"))
+    s = Script(title="t", beats=[Beat(text="Why does ice float on water?", visual=Visual(queries=["ice"])),
+                                 Beat(text="Water is odd.", visual=Visual(kind="diagram", template="sketch", idea="ice"))])
+    build._drawn(0, s.beats[0], s, "")          # standing in for the opening's footage
+    build._drawn(1, s.beats[1], s, "b")         # after the user's own clip
+    build._drawn(1, s.beats[1], s, "")          # asked for: a new one every time
+    assert kept == [True, True, False]
+
+
 def test_every_stock_sentence_is_chosen_ahead_together(monkeypatch):
     from clipper.create.voice import Timings
 

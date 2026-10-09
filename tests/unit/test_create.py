@@ -416,6 +416,25 @@ def test_a_small_icon_is_drawn_bigger_but_never_into_its_neighbour():
     assert a.xy[2] / 2 + b.xy[2] / 2 < abs(a.xy[0] - b.xy[0])     # grown, but they don't touch
 
 
+def test_a_sketch_is_kept_out_of_the_button_corner_and_its_labels_off_its_lines():
+    """D182: half the reviewer's fixes were these, each one another call."""
+    from clipper.create import sketch
+    from clipper.create.sketch import CORNER, Mark, Sketch, fit
+
+    got = fit(Sketch(marks=[Mark(kind="icon", text="speaker", xy=[100, 100, 200]), Mark(kind="icon", text="ear", xy=[900, 800, 200]),
+                            Mark(kind="arrow", xy=[200, 100, 900, 700]), Mark(kind="text", xy=[550, 400], text="air"),
+                            Mark(kind="box", xy=[150, 650, 350, 750]), Mark(kind="text", xy=[250, 700], text="list")]))
+    discs, boxes = sketch._covered(got.marks)
+    assert not any(x + r > CORNER[0] and y + r > CORNER[1] for x, y, r in discs)
+    assert not any(b[2] > CORNER[0] and b[3] > CORNER[1] for b in boxes)
+    air, listed = [m for m in got.marks if m.kind == "text"]
+    x0, y0, x1, y1 = sketch._letters(air)
+    assert not sketch._hits((air.xy[0] + x0, air.xy[1] + y0, air.xy[0] + x1, air.xy[1] + y1), discs, boxes)   # off the arrow
+    frame = next(m for m in got.marks if m.kind == "box").xy
+    assert frame[0] < listed.xy[0] < frame[2] and frame[1] < listed.xy[1] < frame[3]   # words in a box stay in it
+    assert sketch._Review.model_validate({"ok": True}).sketch.marks == []   # an ok review sends no sketch back
+
+
 def test_a_black_shot_is_caught(tmp_path):
     import shutil
     import subprocess

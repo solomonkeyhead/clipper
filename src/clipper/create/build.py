@@ -176,7 +176,7 @@ def _too_dark(shot: Path) -> bool:
     return stat.mean[0] < 28 and stat.stddev[0] < 22
 
 
-def _fallback(beat, script: Script, text: str = "") -> Visual:
+def _fallback(beat, script: Script, text: str = "", keep: bool = False) -> Visual:
     """For a sentence no footage fits: a sketch of it, else its phrase chalked on the board
     (a single word like "stranger" on an empty board opened a video once, D111)."""
     from .sketch import draw
@@ -184,7 +184,7 @@ def _fallback(beat, script: Script, text: str = "") -> Visual:
     try:
         idea = beat.visual.idea.strip() or (f"A simple, striking sketch of what this sentence shows; the key idea: "
                                             f"{beat.visual.card or beat.emphasis}.")  # the user's own idea, if they gave one (D120)
-        drawn = draw(text or beat.text, idea, script.text)
+        drawn = draw(text or beat.text, idea, script.text, keep=keep)
         if drawn.marks:
             return Visual(kind="diagram", template="sketch", sketch=drawn)
     except CreateError as exc:
@@ -353,9 +353,11 @@ def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
     a real drawing; a chalk card isn't kept, so the next build tries footage again."""
     # A drawing held over the next sentences is drawn for all of them (D124).
     group = next((g for g in spans(script) if g[0] == i), [i])
-    made = _fallback(beat, script, " ".join(script.beats[k].text for k in group))
     # The opening wants footage (D159): a drawing standing in for it isn't kept, so the next build looks again (D161).
+    # Neither is one after the user's own clip: both are remembered by their question instead, so a rebuild
+    # where footage still doesn't fit draws the same one for free (D182).
     stand_in = beat.visual.kind == "stock" and _opening(i, script)
+    made = _fallback(beat, script, " ".join(script.beats[k].text for k in group), keep=stand_in or bool(tag))
     if not tag and made.template == "sketch" and made.sketch and made.sketch.marks and not stand_in:
         chosen[i] = {"drawn": made}
     return made
