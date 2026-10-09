@@ -8,6 +8,7 @@ checking them (Claude takes no temperature; its thinking does the job)."""
 from __future__ import annotations
 
 import os
+import re
 import time
 
 from ..utils.logging import get_logger
@@ -151,7 +152,7 @@ def _valid(schema, text: str) -> bool:
     if schema is None:
         return bool(text.strip())
     try:
-        TypeAdapter(schema).validate_json(text)
+        TypeAdapter(schema).validate_json(re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text))
     except (ValidationError, ValueError):
         return False
     return True
@@ -210,15 +211,25 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
         for b in order:
             if b not in claude and job != "footage":
                 b.timeout = max(b.timeout, GEMINI_PATIENCE)
+    unread = None   # the first answer that didn't fit its schema, handed back if no other does (D167)
     for backend in order:
         if config.llm.create_claude_only and claude and backend not in claude and not gemini_first and not picked and not unlike:
             # Claude was there but didn't answer: stop rather than let Gemini draw (D117).
+            if unread:
+                break
             why = misses.get(claude[0].describe(), "it didn't answer")
             raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "
                               "later, or set llm.create_claude_only: false to let Gemini do it")
         try:
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text
+            if schema is not None and not _valid(schema, text):
+                # A weaker model's answer that can't be read: ask the next one rather than fail (D167).
+                unread = unread or (text, backend.describe())
+                log.warning("create: %s answered in a shape that can't be read; asking the next", backend.describe())
+                misses[backend.describe()] = "its answer wasn't in the shape asked for"
+                missed_at[backend.describe()] = time.time()
+                continue
             last_used = backend.describe()
             misses.pop(last_used, None)  # it answers again: that problem is over
             if keep and _valid(schema, text):
@@ -228,4 +239,7 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             log.log(miss_level(exc), "create: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             misses[backend.describe()] = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
             missed_at[backend.describe()] = time.time()
+    if unread:
+        last_used = unread[1]
+        return unread[0]
     raise CreateError("no AI model answered; try again in a minute")

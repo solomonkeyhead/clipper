@@ -3066,3 +3066,14 @@ Marc asked for a way to turn off the punch-in zooms and the Professor cut-ins, a
 ## D166: the "Professor's Law" running bit is gone
 Marc finds it annoying and not funny. It is out of the physics pack's running bits (the coffee cup and the grudge
 stay) and out of his channel file. The bit rotation, `next_bit`, is unchanged.
+
+## D167: free models re-chosen, and an unreadable answer goes on to the next model
+Marc: gpt-oss-120b writes very badly, and a build ended with "the pictures came back unreadable" because the one
+model that answered (it) returned JSON the director couldn't read, and nothing else was asked.
+- `ai.ask` now treats an answer that doesn't fit its schema as a miss and asks the next model; if none fits, the
+  first unreadable answer is returned so the caller reports it as before.
+- Free models, checked against each provider's own model list on 2026-10-08: NVIDIA `moonshotai/kimi-k3`, Groq
+  `qwen/qwen3.8-27b` (its only non-gpt-oss chat model), Mistral and OpenRouter as before; order Mistral, NVIDIA,
+  Groq, OpenRouter. NVIDIA's own list also has `nvidia/nemotron-3-ultra-550b-a55b`, `z-ai/glm-5.3` and
+  `deepseek-ai/deepseek-v4.1-flash`.
+- NVIDIA answered 401 "Invalid JWT": the key in .env is not an `nvapi-` key (they start with that).

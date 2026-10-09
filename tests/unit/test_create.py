@@ -623,5 +623,28 @@ def test_the_free_providers_with_a_key_come_after_gemini(monkeypatch):
     config = config.model_copy(update={"llm": config.llm.model_copy(update={"backend": "gemini"})})
     got = [b.describe() for b in ai.free_backends(config)]
     assert got[:len(config.llm.create_gemini_models)] == [f"gemini:{m}" for m in config.llm.create_gemini_models]
-    assert got[len(config.llm.create_gemini_models):] == ["groq:openai/gpt-oss-120b"]
+    assert got[len(config.llm.create_gemini_models):] == ["groq:qwen/qwen3.8-27b"]
     assert [b.describe() for b in ai.free_backends(config, "gemini")][-1].startswith("gemini:")   # Gemini asked for: only it
+
+
+def test_an_unreadable_answer_goes_on_to_the_next_model(monkeypatch):
+    """D167: a weak model's answer that doesn't fit the schema isn't the end; the next model is asked."""
+    from clipper.create import ai
+    from clipper.llm.base import LLMResponse
+
+    class Fake:
+        def __init__(self, name, text):
+            self.name, self.text, self.timeout = name, text, 30
+
+        def describe(self):
+            return self.name
+
+        def complete(self, req):
+            return LLMResponse(text=self.text, model=self.name)
+
+    bad, good = Fake("a", "not json"), Fake("b", '{"n": 1}')
+    monkeypatch.setattr(ai, "_ordered", lambda *a, **k: ([bad, good], [], False, False))
+    schema = __import__("pydantic").create_model("S", n=(int, ...))
+    assert ai.ask("s", "u", schema, temperature=0) == '{"n": 1}'
+    monkeypatch.setattr(ai, "_ordered", lambda *a, **k: ([bad], [], False, False))
+    assert ai.ask("s", "u", schema, temperature=0) == "not json"     # none fit: the caller reports it

@@ -77,8 +77,8 @@ llm:
   # (build.nvidia.com), OPENROUTER_API_KEY (openrouter.ai). Change a model name here if one is retired.
   create_free_models:
     mistral: mistral-medium-latest
-    groq: openai/gpt-oss-120b
-    nvidia: openai/gpt-oss-120b
+    nvidia: moonshotai/kimi-k3
+    groq: qwen/qwen3.8-27b
     openrouter: openrouter/free
   # Jobs the paid Claude API key (ANTHROPIC_API_KEY, billed per use) may do (D142): only drawing
   # the sketches. Every other job runs on your Claude plan through Claude Code, or on Gemini,

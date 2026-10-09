@@ -212,7 +212,7 @@ class LLMConfig(StrictModel):
     # More free models Create asks after Gemini, in this order, each only with its key in .env (D164):
     # provider -> model. MISTRAL_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY, OPENROUTER_API_KEY.
     create_free_models: dict[str, str] = Field(default_factory=lambda: {
-        "mistral": "mistral-medium-latest", "groq": "openai/gpt-oss-120b", "nvidia": "openai/gpt-oss-120b",
+        "mistral": "mistral-medium-latest", "nvidia": "moonshotai/kimi-k3", "groq": "qwen/qwen3.8-27b",
         "openrouter": "openrouter/free"})
     # The jobs the PAID Claude API (ANTHROPIC_API_KEY, billed per use) may do (D142). Any job not
     # listed never touches the key: it runs on Claude Code on your plan (no per-use charge), or
