@@ -187,7 +187,7 @@ class GeminiBackend(LLMBackend):
         except genai_errors.ClientError as exc:
             message = str(exc)
             if _looks_rate_limited(message):
-                raise RateLimited(f"Gemini quota: {message[:200]}") from exc
+                raise RateLimited(f"Gemini quota: {_quota_line(message)}", retry_after=_retry_delay(message)) from exc
             if "404" in message and self.model:
                 # A configured model that has been retired. Clear it so the next
                 # attempt re-resolves instead of failing identically forever.
@@ -197,7 +197,7 @@ class GeminiBackend(LLMBackend):
             raise LLMError(f"Gemini request failed: {message[:300]}") from exc
         except Exception as exc:
             if _looks_rate_limited(str(exc)):
-                raise RateLimited(f"Gemini quota: {str(exc)[:200]}") from exc
+                raise RateLimited(f"Gemini quota: {_quota_line(str(exc))}", retry_after=_retry_delay(str(exc))) from exc
             raise LLMError(f"Gemini request failed: {str(exc)[:300]}") from exc
 
         latency = time.perf_counter() - started
@@ -224,6 +224,25 @@ class GeminiBackend(LLMBackend):
 def _looks_rate_limited(message: str) -> bool:
     lowered = message.lower()
     return any(marker in lowered for marker in _RATE_LIMIT_MARKERS)
+
+
+def _retry_delay(message: str) -> float | None:
+    """The wait a 429 names ("'retryDelay': '73524s'"): a day's free quota says hours, a minute's says
+    seconds (D168). None when it names none."""
+    import re
+
+    m = re.search(r"retryDelay'?\"?:\s*'?\"?(\d+(?:\.\d+)?)s", message)
+    return float(m.group(1)) if m else None
+
+
+def _quota_line(message: str) -> str:
+    """The part of a 429 that says which quota ran out ("limit: 20, model: gemini-3.8-flash"), not the
+    boilerplate that filled the 200 characters the log kept (D168)."""
+    import re
+
+    m = re.search(r"Quota exceeded for metric: \S+?, (limit: \d+, model: [\w.-]+)", message)
+    day = "a day" if "PerDay" in message else "a minute" if "PerMinute" in message else ""
+    return f"429 {m.group(1)}{' ' + day if day else ''}" if m else message[:200]
 
 
 def _finish_reason(response) -> str:

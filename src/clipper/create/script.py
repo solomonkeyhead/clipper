@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
 from pydantic import BaseModel, Field, create_model
@@ -312,10 +313,11 @@ def _director(channel: channels.Channel) -> str:
 #: to" (shares) or a one-word question (comments). The same deadpan two-beat ending every time became a tic.
 ENDINGS = {
     "loop": "a last line that leads straight back into the opening question, so the video loops",
-    "send": 'a dry "send this to..." line naming who needs it ("Send this to the friend who blames '
-            'centrifugal force.")',
-    "poll": 'a question about this video\'s own moment the viewer can answer in one word in the comments ("Metal '
-            'or wood: which wins?")',
+    # No example lines (D168): two scripts, on a spoon in water and on ears on a plane, both ended "Metal or wood:
+    # which wins?", the example given here.
+    "send": 'a dry "send this to..." line naming, in this video\'s own terms, the person who needs it',
+    "poll": "a question about this video's own moment that the viewer can answer in one word in the comments: an "
+            "either-or between two things this video talks about",
 }
 
 
@@ -367,10 +369,12 @@ def recent_endings(limit: int = 10) -> list[str]:
 
 
 def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "",
-          shape: str | None = None, ending: str | None = None, bit: tuple[str, str] | None = None) -> Script:
-    """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes, `steer` is the
-    owner's note on what to change (D153). The channel's own standing guidance applies every time.
-    `shape` and `ending` default to the channel's next in turn (D155)."""
+          shape: str | None = None, ending: str | None = None, bit: tuple[str, str] | None = None,
+          draft: Script | None = None) -> Script:
+    """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes to `draft`, `steer` is
+    the owner's note on what to change (D153). The channel's own standing guidance applies every time.
+    `shape` and `ending` default to the channel's next in turn (D155). The draft is shown with the fixes (D168):
+    a rewrite was told "the comparison ('coffee cup...') is unclear" about a draft it had never seen."""
     channel = channels.load()
     if shape is None or ending is None:
         next_shape, next_ending = turn(channel)
@@ -388,7 +392,8 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
             + ("The channel's latest endings; reuse none of their jokes or their shape:\n"
                + "\n".join(f"- {e}" for e in endings) + "\n" if endings else "")
-            + (f"\nFix these problems from the last draft:\n{feedback}\n" if feedback else "")
+            + ("\nYour last draft:\n" + "\n".join(b.text for b in draft.beats) + "\n" if feedback and draft else "")
+            + (f"\nFix these problems from the last draft, keeping what works in it:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
     answer = ask(_system(channel), user, _WordsScript, temperature=0.85, job="script")
     try:
@@ -701,18 +706,27 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     script = write(question, angle, take=take, steer=steer)
     writer = ai.last_used
     notes: list[str] = []
-    review = _check_or_note(script, notes)
+    with ThreadPoolExecutor(1) as pool:
+        # The fact check and the editor's read don't wait for each other (D168): two models, asked at once.
+        editor = pool.submit(critique, script, writer)
+        review = _check_or_note(script, notes)
+        edits = editor.result()
     facts = review.problems if not review.ok else []
-    rules, edits = lint(script, channel), critique(script, writer)
+    rules = lint(script, channel)
+    planned = None
     if facts or rules or edits:
         feedback = "\n".join(f"- {p}" for p in [*facts, *rules, *edits])
         bit = next(((b["name"], b["how"]) for b in channel.bits if b["name"] == script.bit), ("", ""))
         if bit[0]:   # the same law number as the first draft was asked for
             bit = (bit[0], bit[1].replace("{n}", str(1 + sum(v["script"].get("bit") == bit[0] for v in _videos()))))
         script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
-                       ending=script.ending, bit=bit)
+                       ending=script.ending, bit=bit, draft=script)
         writer = ai.last_used
-        second = _check_or_note(script, notes)
+        with ThreadPoolExecutor(1) as pool:
+            # The director plans on the final words while they are checked (D168): the check never changes them.
+            director = pool.submit(_planned_or_note, script)
+            second = _check_or_note(script, notes)
+            planned = director.result()
         if not second.ok and second.problems:
             notes.append(f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems))
         elif facts:
@@ -727,12 +741,18 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     left = lint(script, channel)
     if left:
         notes.append("Still off the channel's rules:\n" + "\n".join(f"- {p}" for p in left))
-    try:
-        script, pictures = plan_pictures(script)
-        notes.append(pictures)
-    except CreateError as exc:   # the words stand; the pictures can be planned again from the page
-        notes.append(f"Pictures not planned ({exc}): plain footage searches for now; press Plan pictures.")
+    script, pictures = planned or _planned_or_note(script)
+    notes.append(pictures)
     return _signed(script, "\n".join(notes), writer)
+
+
+def _planned_or_note(script: Script) -> tuple[Script, str]:
+    """The pictures planned, or the words as they are with a note saying why not: the words stand, and the
+    pictures can be planned again from the page."""
+    try:
+        return plan_pictures(script)
+    except CreateError as exc:
+        return script, f"Pictures not planned ({exc}): plain footage searches for now; press Plan pictures."
 
 
 def _check_or_note(script: Script, notes: list[str]) -> Review:
@@ -752,8 +772,12 @@ def _signed(script: Script, note: str, writer: str = "") -> tuple[Script, str]:
 
     writer = writer or ai.last_used
     who = writer.split(":", 1)[-1] if writer else "unknown"
-    missed = [f"{name.split(':', 1)[0]} didn't answer: {why}" for name, why in ai.misses.items()
-              if name not in (ai.last_used, writer)]
+    # One line a provider (D168): four Gemini models out of quota were four lines saying the same thing.
+    first: dict[str, str] = {}
+    for name, why in ai.misses.items():
+        if name not in (ai.last_used, writer):
+            first.setdefault(name.split(":", 1)[0], why)
+    missed = [f"{provider} didn't answer: {why}" for provider, why in first.items()]
     return tidy(script), "\n".join([note, f"Written by: {who}.", *missed])
 
 

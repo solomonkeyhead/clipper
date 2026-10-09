@@ -63,6 +63,13 @@ class RateLimited(LLMError):
         self.retry_after = retry_after
 
 
+#: A quota wait longer than this is a day's limit, not a minute's: the model sits it out and the next one
+#: answers (D168). Gemini's free tier said "retry in 20h25m" and each call asked again, twice.
+LONG_WAIT = 60.0
+#: How long a try-first model sits out a minute's rate limit that names no wait of its own (D168).
+SHORT_REST = 60.0
+
+
 @dataclass
 class LLMRequest:
     """One completion request."""
@@ -174,11 +181,16 @@ class LLMBackend(ABC):
         requests_per_minute: int = 10,
         # A hung request cost 2+ minutes at 120s; calls, video included, take ~5-30s (D75).
         timeout: float = 60.0,
+        # The longest rate-limit wait sat out in place before retrying; a longer one goes to the next model.
+        max_wait: float = LONG_WAIT,
     ):
         self.model = model or ""
         self.max_retries = max_retries
         self.timeout = timeout
-        self.limiter = RateLimiter.shared(self.name, requests_per_minute)
+        self.max_wait = max_wait
+        # One budget per model: a provider's free quotas are per model, and four Gemini models sharing one
+        # 6-second gap made each fall-through wait for the one before (D168).
+        self.limiter = RateLimiter.shared(f"{self.name}:{self.model}" if self.model else self.name, requests_per_minute)
         self.usage = UsageStats()
 
     @abstractmethod
@@ -209,8 +221,11 @@ class LLMBackend(ABC):
         except Exception:  # offline, no key: the key must still be computable
             return self.model or "auto"
 
-    #: (backend, model) -> when a "try first" model may be tried again (D75).
+    #: (backend, model) -> when a "try first" model, or one out of quota, may be tried again (D75, D168).
     _resting: ClassVar[dict[tuple[str, str], float]] = {}
+    #: Why it rests, for the message, and the ones out of quota, which rest for every caller.
+    _why: ClassVar[dict[tuple[str, str], str]] = {}
+    _out: ClassVar[set[tuple[str, str]]] = set()
     #: How long a try-first model that failed sits out.
     REST_SECONDS: ClassVar[float] = 15 * 60
 
@@ -220,17 +235,35 @@ class LLMBackend(ABC):
         A backend with no retries is a "try first, fall back" model (the stronger
         preview models for caption fixes and descriptions). When one fails it
         rests for REST_SECONDS: an overloaded preview model timed out on every
-        clip, costing about a minute a clip before the fallback answered.
+        clip, costing about a minute a clip before the fallback answered. A rate
+        limit rests it only as long as the provider said (D168), and a quota out
+        for hours rests any model that long, so no call asks it again meanwhile.
         """
         key = (self.name, self.model)
-        if self.max_retries == 0 and time.monotonic() < self._resting.get(key, 0.0):
-            raise Resting(f"{self.describe()} is resting after a recent failure")
+        # A failure or a minute's limit rests only the models that fall through rather than wait (the same model
+        # as a run's main one waits it out); a quota out for hours rests every one.
+        falls_through = self.max_retries == 0 or self.max_wait < LONG_WAIT
+        if time.monotonic() < self._resting.get(key, 0.0) and (falls_through or key in self._out):
+            raise Resting(f"{self.describe()} {self._why.get(key, 'is resting after a recent failure')}")
         try:
             return self._complete_with_retries(request)
-        except LLMError:
-            if self.max_retries == 0:
-                self._resting[key] = time.monotonic() + self.REST_SECONDS
+        except LLMError as exc:
+            limited = exc if isinstance(exc, RateLimited) else exc.__cause__
+            wait = (getattr(limited, "retry_after", None) or 0.0) if isinstance(limited, RateLimited) else None
+            if wait is not None and wait > LONG_WAIT:
+                # Asked again after an hour at most, in case the quota comes back sooner than it said.
+                until = time.strftime("%H:%M", time.localtime(time.time() + wait))
+                self._rest(key, min(wait, 3600), f"is out of its quota until {until}", everyone=True)
+            elif wait is not None and (falls_through or wait > self.max_wait):
+                self._rest(key, max(wait, SHORT_REST), "is rate limited for a minute")
+            elif self.max_retries == 0:
+                self._rest(key, self.REST_SECONDS, "is resting after a recent failure")
             raise
+
+    def _rest(self, key: tuple[str, str], seconds: float, why: str, everyone: bool = False) -> None:
+        self._resting[key] = time.monotonic() + seconds
+        self._why[key] = why
+        (self._out.add if everyone else self._out.discard)(key)
 
     def _complete_with_retries(self, request: LLMRequest) -> LLMResponse:
         self.usage.rate_limit_waits += self.limiter.acquire()
@@ -246,6 +279,9 @@ class LLMBackend(ABC):
             except RateLimited as exc:
                 last = exc
                 delay = exc.retry_after if exc.retry_after else self._backoff(attempt)
+                if delay > self.max_wait:
+                    self.usage.failed += 1
+                    raise   # hours, or longer than this model is worth waiting for: complete() rests it (D168)
                 if attempt == self.max_retries:
                     break
                 log.warning(

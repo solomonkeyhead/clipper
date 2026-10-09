@@ -67,10 +67,11 @@ def free_backends(config, override: str | None = None) -> list:
     if (override or config.llm.backend) == "gemini" and config.llm.create_gemini_models:
         for k, model in enumerate(config.llm.create_gemini_models):
             try:
-                # The best one gets a second try: a lone 503 sent it resting for 15 minutes (D164).
+                # The best one gets a second try: a lone 503 sent it resting for 15 minutes (D164). A rate limit
+                # longer than a few seconds goes to the next model instead of being waited out (D168).
                 out.append(create_backend("gemini", model=model, max_retries=0 if k else 1,
                                           requests_per_minute=config.llm.requests_per_minute,
-                                          timeout=config.llm.correction_timeout))
+                                          timeout=config.llm.correction_timeout, max_wait=PATIENCE))
             except Exception as exc:  # no key: the usual ones say why
                 log.debug("create: %s not set up (%s)", model, exc)
                 break
@@ -81,11 +82,17 @@ def free_backends(config, override: str | None = None) -> list:
             if override or not any(has_key(p) for p in config.llm.create_free_models):
                 raise
     if not override:
-        for provider, model in config.llm.create_free_models.items():
+        for provider, models in config.llm.create_free_models.items():
             if has_key(provider):
-                out.append(create_backend("openai_compat", provider=provider, model=model, max_retries=0,
-                                          requests_per_minute=10, timeout=config.llm.correction_timeout))
+                for model in [models] if isinstance(models, str) else models:
+                    out.append(create_backend("openai_compat", provider=provider, model=model, max_retries=0,
+                                              requests_per_minute=10, timeout=config.llm.correction_timeout,
+                                              max_wait=PATIENCE))
     return out
+
+
+#: The longest rate-limit wait a Create model is waited for in place (D168): another model answers sooner.
+PATIENCE = 10.0
 
 
 def backends(config, model: str | None = None, job: str = "") -> list:
@@ -222,6 +229,7 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             if b not in claude and job != "footage":
                 b.timeout = max(b.timeout, GEMINI_PATIENCE)
     unread = None   # the first answer that didn't fit its schema, handed back if no other does (D167)
+    started, missed = time.monotonic(), []   # what each model that didn't answer cost, for the log (D168)
     for backend in order:
         if config.llm.create_claude_only and claude and backend not in claude and not gemini_first and not picked and not unlike:
             # Claude was there but didn't answer: stop rather than let Gemini draw (D117).
@@ -230,6 +238,7 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             why = misses.get(claude[0].describe(), "it didn't answer")
             raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "
                               "later, or set llm.create_claude_only: false to let Gemini do it")
+        asked_at = time.monotonic()
         try:
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text
@@ -242,16 +251,21 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
                     log.warning("create: %s answered in a shape that can't be read (%d characters: %r ... %r); "
                                 "asking the next", backend.describe(), len(text), text[:120], text[-80:])
                     misses[backend.describe()] = "its answer wasn't in the shape asked for"   # no rest: it answered
+                    missed.append(f"{backend.describe()} unreadable {time.monotonic() - asked_at:.1f}s")
                     continue
             last_used = backend.describe()
             misses.pop(last_used, None)  # it answers again: that problem is over
             if keep and _valid(schema, text):
                 cache.put(key, text=text, model=last_used)
+            log.info("create: %s answered by %s in %.1fs%s", job or "a question", last_used,
+                     time.monotonic() - started, f" (before it: {', '.join(missed)})" if missed else "")
             return text
         except Exception as exc:
             log.log(miss_level(exc), "create: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             misses[backend.describe()] = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
             missed_at[backend.describe()] = time.time()
+            if (spent := time.monotonic() - asked_at) >= 0.5:   # a resting model costs nothing: not worth a mention
+                missed.append(f"{backend.describe()} {spent:.1f}s")
     if unread:
         last_used = unread[1]
         return unread[0]

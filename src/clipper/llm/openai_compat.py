@@ -39,6 +39,16 @@ PROVIDERS: dict[str, tuple[str, str, str]] = {
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "openrouter.ai/settings/keys"),
 }
 
+#: Sent with every request to a provider (D168). NVIDIA's Nemotron thinks first unless told not to: a script
+#: took 113 s and 10,102 tokens thinking, 2.6 s and 243 tokens without, and read as well.
+EXTRA: dict[str, dict] = {
+    "nvidia": {"chat_template_kwargs": {"enable_thinking": False}},
+}
+
+#: (provider, model) -> the most output tokens one request may ask for, learnt from a "Request too large" (D168):
+#: Groq's free qwen allows 1,000 a minute and refused every request that didn't say so.
+_caps: dict[tuple[str, str], int] = {}
+
 
 def has_key(provider: str) -> bool:
     return provider in PROVIDERS and bool(os.environ.get(PROVIDERS[provider][1], "").strip())
@@ -75,20 +85,21 @@ class OpenAICompatBackend(LLMBackend):
                 {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64.b64encode(data).decode()}"}}
                 for data, mime in pictures]]
         body = {"model": self.model, "temperature": request.temperature,
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}]}
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}],
+                **EXTRA.get(self.name, {})}
         if schema is not None:
             body["response_format"] = {"type": "json_object"}
-        if request.max_output_tokens:
-            body["max_tokens"] = request.max_output_tokens
+        cap = _caps.get((self.name, self.model))
+        if request.max_output_tokens or cap:
+            body["max_tokens"] = min(x for x in (request.max_output_tokens, cap) if x)
         started = time.perf_counter()
-        try:
-            r = httpx.post(f"{self.base}/chat/completions", json=body, timeout=self.timeout,
-                           headers={"Authorization": f"Bearer {self.api_key}"})
-        except httpx.HTTPError as exc:
-            raise LLMError(f"{self.describe()} didn't answer: {exc}") from exc
+        r = self._post(body)
+        if r.status_code in (413, 429) and (limit := _output_limit(r.text)) and body.get("max_tokens", limit + 1) > limit:
+            # Asked for more output than a minute allows: ask again once, for no more than that (D168).
+            _caps[(self.name, self.model)] = body["max_tokens"] = limit
+            r = self._post(body)
         if r.status_code == 429:
-            after = r.headers.get("retry-after", "")
-            raise RateLimited(f"{self.describe()}: rate limited", retry_after=float(after) if after.isdigit() else None)
+            raise RateLimited(f"{self.describe()}: rate limited ({_reason(r)})", retry_after=_retry_after(r))
         if r.status_code >= 400:
             raise LLMError(f"{self.describe()}: {r.status_code} {r.text[:200]}")
         try:
@@ -104,6 +115,46 @@ class OpenAICompatBackend(LLMBackend):
                            prompt_tokens=int(usage.get("prompt_tokens") or 0),
                            output_tokens=int(usage.get("completion_tokens") or 0),
                            latency=time.perf_counter() - started)
+
+
+    def _post(self, body: dict) -> httpx.Response:
+        try:
+            return httpx.post(f"{self.base}/chat/completions", json=body, timeout=self.timeout,
+                              headers={"Authorization": f"Bearer {self.api_key}"})
+        except httpx.HTTPError as exc:
+            raise LLMError(f"{self.describe()} didn't answer: {exc}") from exc
+
+
+def _output_limit(text: str) -> int | None:
+    """The output tokens a minute allows, from Groq's "Request too large ... (OTPM): Limit 1000, Requested 2048"."""
+    m = re.search(r"Request too large.*?output tokens.*?Limit (\d+), Requested (\d+)", text, re.S)
+    return int(m.group(1)) if m and int(m.group(1)) < int(m.group(2)) else None
+
+
+def _retry_after(r: httpx.Response) -> float | None:
+    """How long a 429 says to wait (D168): the retry-after header ("7.66" too, which isdigit() refused), Groq's
+    "try again in 35.6s" in the body, or an hour for a model the key's plan gives no requests at all (Mistral
+    answered "limit-req-minute: 0" for every model but the smallest, which no wait fixes)."""
+    if r.headers.get("x-ratelimit-limit-req-minute") == "0":
+        return 3600.0
+    try:
+        return float(r.headers.get("retry-after", ""))
+    except ValueError:
+        pass
+    m = re.search(r"try again in (?:(\d+)m)?(\d+(?:\.\d+)?)s", r.text)
+    return 60 * int(m.group(1) or 0) + float(m.group(2)) if m else None
+
+
+def _reason(r: httpx.Response) -> str:
+    """The provider's own words for a 429, short, for the page's notes."""
+    try:
+        err = r.json().get("error") or r.json()
+        message = err.get("message", "") if isinstance(err, dict) else str(err)
+    except ValueError:
+        message = r.text
+    if r.headers.get("x-ratelimit-limit-req-minute") == "0":
+        return "this model isn't in the key's plan"
+    return " ".join(str(message).split())[:120] or "429"
 
 
 def _unfenced(text: str) -> str:

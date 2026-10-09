@@ -86,3 +86,112 @@ def test_two_jobs_run_at_once_and_keep_their_own_progress(monkeypatch, data_root
         time.sleep(0.05)
     assert a.status == b.status == "done"
     assert a.stage == b.stage == "Made 1 clip"
+
+
+class OutOfQuota(LLMBackend):
+    """Gemini's free tier on 2026-10-08: "retry in 20h25m", and each call asked again (D168)."""
+    name = "quota"
+
+    def __init__(self, wait, **kw):
+        super().__init__(**kw)
+        self.calls, self.wait = 0, wait
+
+    def _complete(self, request):
+        from clipper.llm.base import RateLimited
+
+        self.calls += 1
+        raise RateLimited("429", retry_after=self.wait)
+
+
+def test_a_day_out_of_quota_rests_even_the_main_model_and_says_until_when():
+    main = OutOfQuota(73524.0, model="day", max_retries=1, requests_per_minute=100_000)
+    req = LLMRequest(system="s", user="u")
+    with pytest.raises(LLMError):
+        main.complete(req)
+    with pytest.raises(LLMError, match="out of its quota until"):
+        main.complete(req)
+    assert main.calls == 1   # not twice a call, and not again until the quota is back
+
+
+def test_a_minute_rate_limit_rests_a_try_first_model_a_minute_not_fifteen(monkeypatch):
+    first = OutOfQuota(20.0, model="minute", max_retries=0, requests_per_minute=100_000, max_wait=10)
+    with pytest.raises(LLMError):
+        first.complete(LLMRequest(system="s", user="u"))
+    rest = LLMBackend._resting[("quota", "minute")] - time.monotonic()
+    assert 50 < rest <= 60
+
+
+def test_each_model_has_its_own_request_budget():
+    a, b = Fine(model="x", requests_per_minute=7), Fine(model="y", requests_per_minute=7)
+    assert a.limiter is not b.limiter and a.limiter is Fine(model="x", requests_per_minute=7).limiter
+
+
+def test_gemini_reads_how_long_its_quota_is_out():
+    from clipper.llm.gemini import _quota_line, _retry_delay
+
+    msg = ("429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota... \n* Quota "
+           "exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, "
+           "model: gemini-3.8-flash\nPlease retry in 20h25m24.2s.', 'details': [{'quotaId': "
+           "'GenerateRequestsPerDayPerProjectPerModel-FreeTier'}, {'@type': 'type.googleapis.com/google.rpc.RetryInfo', "
+           "'retryDelay': '73524s'}]}}")
+    assert _retry_delay(msg) == 73524.0 and _retry_delay('"retryDelay": "36s"') == 36.0 and _retry_delay("503") is None
+    assert _quota_line(msg) == "429 limit: 20, model: gemini-3.8-flash a day"
+
+
+def test_a_free_provider_asked_for_too_much_output_asks_again_once_for_less(monkeypatch):
+    """Groq's free qwen allows 1,000 output tokens a minute and refused every request that didn't say so (D168)."""
+    import httpx
+
+    from clipper.llm import openai_compat as oc
+
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    oc._caps.clear()
+    sent = []
+
+    def post(url, json, timeout, headers):
+        sent.append(dict(json))
+        if "max_tokens" not in json:
+            return httpx.Response(429, json={"error": {"message": "Request too large for model `q` on output tokens per "
+                                                                  "minute (OTPM): Limit 1000, Requested 2048."}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]})
+
+    monkeypatch.setattr(oc.httpx, "post", post)
+    b = oc.OpenAICompatBackend(provider="groq", model="q", max_retries=0, requests_per_minute=100_000)
+    assert b.complete(LLMRequest(system="s", user="u")).text == '{"ok": true}'
+    assert b.complete(LLMRequest(system="s", user="u")).text == '{"ok": true}'
+    assert [s.get("max_tokens") for s in sent] == [None, 1000, 1000]   # learnt once, then asked within it
+
+
+def test_a_model_the_key_gets_no_requests_on_rests_an_hour_and_nvidia_is_told_not_to_think(monkeypatch):
+    import httpx
+
+    from clipper.llm import openai_compat as oc
+
+    r = httpx.Response(429, headers={"x-ratelimit-limit-req-minute": "0"}, json={"message": "Rate limit exceeded"})
+    assert oc._retry_after(r) == 3600 and "plan" in oc._reason(r)
+    assert oc._retry_after(httpx.Response(429, headers={"retry-after": "7.66"})) == 7.66
+    assert oc._retry_after(httpx.Response(429, text="Please try again in 1m35.5s.")) == 95.5
+    assert oc.EXTRA["nvidia"]["chat_template_kwargs"]["enable_thinking"] is False
+
+
+def test_the_fact_check_and_the_editors_read_are_asked_at_once(data_root, monkeypatch):
+    """D168: two calls that don't need each other no longer wait in line."""
+    import json
+
+    from clipper.create import script as scripts
+
+    both, seen = threading.Barrier(2, timeout=10), set()
+
+    def ask(system, user, schema, **kw):
+        if schema.__name__ == "WordsScript":
+            return json.dumps({"lines": ["Why does your lift make you heavier?"] * 3, "title": "t"})
+        if schema.__name__ == "Plan":
+            return json.dumps({"beats": [{"text": "x"}] * 3})
+        if kw.get("job") in ("check", "critic") and kw.get("job") not in seen:
+            seen.add(kw["job"])
+            both.wait()   # deadlocks unless the first check and the editor's read are asked together
+        return json.dumps({"ok": True, "problems": []})
+
+    monkeypatch.setattr(scripts, "ask", ask)
+    out, _ = scripts.write_checked("Why does the lift make you heavier?")
+    assert len(out.beats) == 3

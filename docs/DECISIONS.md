@@ -3080,3 +3080,26 @@ model that answered (it) returned JSON the director couldn't read, and nothing e
 - Added after: JSON inside prose, a fence or a thinking block is cut out of a weaker model's answer before it counts
   as unreadable, and an unreadable answer no longer rests its model for 15 minutes (it did answer; with Gemini out of
   quota that left nothing). The log line for an unreadable answer shows its first and last characters.
+
+## D168: Create's free AI answers in about a minute, not ten
+With Gemini's free quota out, a script (write, fact check, editor's read, rewrite, check, pictures) took 10+ minutes.
+Measured from the log and by asking each provider directly (2026-10-08):
+- Gemini's 429 said "retry in 20h25m" (20 requests a day a model), but the first model retried every call and the
+  others were asked again every 15 minutes; all four shared one 6-second request gap, so each fall-through waited.
+  ~25 s lost per call. Now a 429 is read for its wait (`retryDelay`): a day's quota rests the model (any model, an
+  hour at most, then one call to see) with "out of its quota until 17:59"; a minute's limit rests a fall-through
+  model that long, not 15 minutes; each model has its own request budget (`RateLimiter.shared` per model).
+- Mistral's free key answered `limit-req-minute: 0` for medium, small and magistral (only ministral-14b gets
+  requests): that rests the model an hour. Groq's qwen allows 1,000 output tokens a minute and refused every request
+  that didn't say so: the limit is read from "Request too large" and asked again once within it. "openrouter/free"
+  sometimes routed to a safety filter that answered "User Safety: safe". NVIDIA's Nemotron thought for 113 s and
+  10,102 tokens on one script; with its thinking off (`chat_template_kwargs`) it took 2.6 s and read as well.
+- `llm.create_free_models` takes a list a provider. Default order: Nemotron, Mistral (medium, then ministral),
+  Groq's qwen, OpenRouter (gemma-4-31b, then the router).
+- The fact check and the editor's read are asked at once, and after a rewrite the director plans the pictures while
+  the words are checked (the check never changes them): 7 calls in 5 steps.
+- Each answer logs one line: the job, who answered, how long, and what each model before it cost.
+- A rewrite now sees its draft: it was told "the comparison is unclear" about a draft it never saw. The "send" and
+  "poll" endings lost their example lines: two scripts on unrelated questions both ended "Metal or wood: which wins?".
+- The notes list one "didn't answer" line a provider, not one a model.
+Result, both runs real, Gemini out of quota, Claude blocked: a full write in 57 s and 69 s.
