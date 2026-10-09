@@ -7,7 +7,7 @@ real videos on his GPU, play real H.264 stock previews, and reach Coverr's and N
 ## Audit, 2026-10-08 (D168 to D178; read this first)
 
 A pass over the whole app on Marc's machine. Done and pushed, Clipper restarted on it:
-- Free AI fallback when Gemini's quota is out: a script in about a minute, not 10+ (D168).
+- Create's AI is Claude and Gemini only (D188): a slow or timed-out Gemini model is rested, not asked again; a script is written in the background with its steps on the page.
 - Edit controls on a built video (D171), old drawings "Redraw all" (D171).
 - A tab left open across an update reloads to the new page; a broken page says so with Reload (D172).
 - server.py split into accounts_api, campaigns_api, alerts_api, editor_api (D173).

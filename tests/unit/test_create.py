@@ -655,22 +655,6 @@ def test_the_writer_writes_words_and_the_director_plans_the_pictures_after(data_
     assert "Pictures:" in note
 
 
-def test_the_free_providers_with_a_key_come_after_gemini(monkeypatch):
-    from clipper.config import Config
-    from clipper.create import ai
-
-    for env in ("MISTRAL_API_KEY", "NVIDIA_API_KEY", "OPENROUTER_API_KEY"):
-        monkeypatch.delenv(env, raising=False)
-    monkeypatch.setenv("GEMINI_API_KEY", "test")
-    monkeypatch.setenv("GROQ_API_KEY", "test")
-    config = Config.load()
-    config = config.model_copy(update={"llm": config.llm.model_copy(update={"backend": "gemini"})})
-    got = [b.describe() for b in ai.free_backends(config)]
-    assert got[:len(config.llm.create_gemini_models)] == [f"gemini:{m}" for m in config.llm.create_gemini_models]
-    assert got[len(config.llm.create_gemini_models):] == ["groq:qwen/qwen3.8-27b"]
-    assert [b.describe() for b in ai.free_backends(config, "gemini")][-1].startswith("gemini:")   # Gemini asked for: only it
-
-
 def test_an_unreadable_answer_goes_on_to_the_next_model(monkeypatch):
     """D167: a weak model's answer that doesn't fit the schema isn't the end; the next model is asked."""
     from clipper.create import ai

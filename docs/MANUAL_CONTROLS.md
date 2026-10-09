@@ -40,7 +40,7 @@ is the order I'd build them.
 | Drawing size on the board | A template's drawing scaled to fill the board (D162) | Size and place per drawing (D171) | Done | - |
 | Things in a sketch | The sketcher places icons from a set of 234 (D162) | "Drawing I describe", naming the things to draw | Partial | - |
 | Pictures, highlights and poses | The director, a second AI pass on the final words, plans them (D164) | Each one per sentence; Plan pictures fills only the ones left alone | Done | - |
-| Which free AI answers | Gemini 3.8 Flash, older Gemini, then Mistral, Groq, NVIDIA, OpenRouter with a key (D162, D164) | Model names in config (`llm.create_gemini_models`, `llm.create_free_models`) | Gap (config only) | S |
+| Which free AI answers | Gemini 3.8 Flash, then older Gemini; no other free providers since D188 (D162, D188) | Model names in config (`llm.create_gemini_models`) | Gap (config only) | S |
 | Character, sign-off, board colours | Channel settings (D156) | Per video on or off | Partial | S |
 | Poses on sentences | The writer tags up to 4 sentences (D158) | Pose picker on every sentence; poses per channel | Done | - |
 | Music and chalk sounds | Off; Clipper's own tune or your tracks folder (D156) | On, off or channel default per video | Done | - |

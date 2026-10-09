@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from clipper.create import channel, packs, script, store, topics
@@ -175,7 +176,45 @@ def test_another_take_passes_the_owners_note_on(data_root, monkeypatch):
     topic = store.topics()[0]
     video = store.add_video(topic["id"], {"title": "t", "text": "x", "beats": [], "description": "", "hashtags": []}, "")
     seen = {}
-    monkeypatch.setattr(script, "write_checked", lambda q, a="", *, take=1, steer="": seen.update(steer=steer, take=take) or (
-        script.Script(title="t", text="y", beats=[], description="", hashtags=[]), "note"))
+    def write(q, a="", *, take=1, steer="", progress=None):
+        progress("Writing the script", 5)
+        seen.update(steer=steer, take=take)
+        return script.Script(title="t", text="y", beats=[script.Beat(text="y")], description="", hashtags=[]), "note"
+
+    monkeypatch.setattr(script, "write_checked", write)
     got = client.post(f"/api/create/videos/{video}/rewrite", json={"steer": "shorter, funnier opening"})
-    assert got.status_code == 200 and seen["steer"] == "shorter, funnier opening" and seen["take"] == 2
+    assert got.status_code == 200
+    # Written in the background (D188): the video says "writing" until it's done, then it's a draft again.
+    for _ in range(100):
+        if store.video(video)["status"] != "writing":
+            break
+        time.sleep(0.05)
+    row = store.video(video)
+    assert row["status"] == "draft" and not row["error"] and row["script"]["take"] == 2
+    assert seen["steer"] == "shorter, funnier opening" and seen["take"] == 2
+
+
+def test_a_script_that_fails_to_write_says_why_on_the_video(data_root, monkeypatch):
+    """D188: the write runs in the background; a failure lands on the video, not only in a page request."""
+    from fastapi.testclient import TestClient
+
+    from clipper.create import script, store
+    from clipper.create.ai import CreateError
+    from clipper.studio import server
+
+    client = TestClient(server.create_app())
+    client.post("/api/create/channels", json={"name": "Physics Lab", "pack": "physics"})
+    store.add_topics([{"question": "Why does a spoon flip you?", "angle": "mirror", "felt": False}])
+
+    def fail(*a, **k):
+        raise CreateError("no AI model answered; try again in a minute")
+
+    monkeypatch.setattr(script, "write_checked", fail)
+    video = client.post(f"/api/create/topics/{store.topics()[0]['id']}/script").json()["id"]
+    for _ in range(100):
+        if store.video(video)["status"] != "writing":
+            break
+        time.sleep(0.05)
+    row = store.video(video)
+    assert row["status"] == "draft" and "no AI model answered" in row["error"]
+    assert client.post(f"/api/create/videos/{video}/approve").status_code == 400   # nothing to approve yet

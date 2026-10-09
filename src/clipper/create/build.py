@@ -262,7 +262,11 @@ def _kept(kind: str, key: object, out: Path, make) -> Path:
     kept = _cache_path(kind, key)
     if kept.is_file() and kept.stat().st_size > 0:
         return kept
-    made = make(out)
+    try:
+        made = make(out)
+    except (RuntimeError, OSError) as exc:   # ffmpeg crashed once (D188): a rebuild of the same shot worked
+        log.warning("create: %s shot failed (%s); making it again", kind, str(exc).splitlines()[0][:160] if str(exc) else exc)
+        made = make(out)
     shot_cache.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(made, kept)
     return kept
@@ -389,6 +393,7 @@ class _Footage(NamedTuple):
     parts: list[float]       # seconds of each shot of the sentence
     hits: list               # the clip for each (None: nothing fit)
     queries: list[str]       # the searches that found them
+    drawn: Visual | None = None   # nothing fit: its drawing, made ahead (D188)
 
 
 def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, avoid: set,
@@ -437,7 +442,12 @@ def _prefetch(script: Script, timings: Timings, groups: list[list[int]], progres
         i, seconds = job
         v = script.beats[i].visual
         try:
-            return i, _pick_footage(i, script.beats[i], v, seconds, script, set(v.avoid), bool(v.redo))
+            got = _pick_footage(i, script.beats[i], v, seconds, script, set(v.avoid), bool(v.redo))
+            if not got.hits[0] and not (v.redo and v.previous):
+                # Nothing fits: its drawing now, beside the other sentences' footage (D188). Drawn in turn in the
+                # shot loop, four of them took 6 of a 7.5-minute build.
+                got = got._replace(drawn=_drawn(i, script.beats[i], script, ""))
+            return i, got
         except Exception as exc:  # chosen again in turn, where the same trouble is reported
             log.info("create: footage for sentence %d not chosen ahead (%s)", i + 1, exc)
             return i, None
@@ -479,8 +489,8 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
                          "Use New footage to pick one yourself, or say what you'd like to see.",
                          **({"picked": rec["picked"]} if "picked" in rec else {})}
             return shot
-        return [_diagram(_drawn(i, beat, script, tag), seconds, work / f"{i:02d}{tag}_sketch.mp4", said,
-                         _frames(at, seconds))]
+        drawn = pre.drawn if pre is not None and pre.drawn is not None and not tag else _drawn(i, beat, script, tag)
+        return [_diagram(drawn, seconds, work / f"{i:02d}{tag}_sketch.mp4", said, _frames(at, seconds))]
 
     # The part's own footage is kept unless another part already uses it; `avoid` only steers new
     # choices (a part that kept its clip when nothing new fit has that clip in both, D129).

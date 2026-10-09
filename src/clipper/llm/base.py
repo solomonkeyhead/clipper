@@ -68,6 +68,14 @@ class RateLimited(LLMError):
 LONG_WAIT = 60.0
 #: How long a try-first model sits out a minute's rate limit that names no wait of its own (D168).
 SHORT_REST = 60.0
+#: How long a try-first model that has a retry of its own sits out a failure (D188).
+FAILED_REST = 5 * 60.0
+
+
+def _timed_out(exc: Exception) -> bool:
+    """Whether a call ran out of time, on our side or the provider's (a 504 came after the full 120 s)."""
+    text = str(exc).lower()
+    return "timed out" in text or "504" in text or "deadline_exceeded" in text
 
 
 @dataclass
@@ -258,6 +266,10 @@ class LLMBackend(ABC):
                 self._rest(key, max(wait, SHORT_REST), "is rate limited for a minute")
             elif self.max_retries == 0:
                 self._rest(key, self.REST_SECONDS, "is resting after a recent failure")
+            elif falls_through:
+                # The try-first model with a retry of its own rested after nothing (D188): an overloaded Gemini 3.8
+                # Flash made every call of a script wait two 120 s timeouts on it again, 20 minutes a script.
+                self._rest(key, FAILED_REST, "is resting after a recent failure")
             raise
 
     def _rest(self, key: tuple[str, str], seconds: float, why: str, everyone: bool = False) -> None:
@@ -292,8 +304,8 @@ class LLMBackend(ABC):
                 self.usage.rate_limit_waits += delay
             except LLMError as exc:
                 last = exc
-                if attempt == self.max_retries:
-                    break
+                if attempt == self.max_retries or _timed_out(exc):
+                    break   # a model that couldn't answer in the time given won't in the next try either (D188)
                 delay = self._backoff(attempt)
                 log.warning(
                     "%s call failed (attempt %d/%d): %s; retrying in %.1fs",
@@ -402,7 +414,7 @@ def available_backends() -> list[str]:
 
 def _load_builtins() -> None:
     """Import backend modules lazily, so a missing optional SDK is not fatal."""
-    from . import claude_code, gemini, ollama, openai_compat  # noqa: F401
+    from . import claude_code, gemini, ollama  # noqa: F401
 
     try:
         from . import anthropic_backend  # noqa: F401

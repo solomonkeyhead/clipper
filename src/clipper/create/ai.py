@@ -56,11 +56,10 @@ def _chosen(config, model: str | None, job: str) -> list:
 
 
 def free_backends(config, override: str | None = None) -> list:
-    """The free models Create asks: on Gemini, `llm.create_gemini_models` in turn, best first (D162); else
-    (or with that list empty) the clipping ones, the correction model then the scoring model. Then, unless
-    one provider was asked for, the other free ones with a key in .env (`llm.create_free_models`, D164)."""
+    """The Gemini models Create asks: `llm.create_gemini_models` in turn, best first (D162); else (or with that
+    list empty) the clipping ones, the correction model then the scoring model. Only Gemini and Claude answer
+    (D188): the other free providers' answers were weak or unreadable, and they kept Claude waiting."""
     from ..llm.base import create as create_backend
-    from ..llm.openai_compat import has_key
     from ..runner import _correction_backends
 
     out = []
@@ -75,20 +74,7 @@ def free_backends(config, override: str | None = None) -> list:
             except Exception as exc:  # no key: the usual ones say why
                 log.debug("create: %s not set up (%s)", model, exc)
                 break
-    if not out:
-        try:
-            out = _correction_backends(config, override)
-        except Exception:
-            if override or not any(has_key(p) for p in config.llm.create_free_models):
-                raise
-    if not override:
-        for provider, models in config.llm.create_free_models.items():
-            if has_key(provider):
-                for model in [models] if isinstance(models, str) else models:
-                    out.append(create_backend("openai_compat", provider=provider, model=model, max_retries=0,
-                                              requests_per_minute=10, timeout=config.llm.correction_timeout,
-                                              max_wait=PATIENCE))
-    return out
+    return out or _correction_backends(config, override)
 
 
 #: The longest rate-limit wait a Create model is waited for in place (D168): another model answers sooner.
@@ -239,6 +225,7 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             raise CreateError(f"Claude isn't available right now ({why}). Nothing was changed; try again "
                               "later, or set llm.create_claude_only: false to let Gemini do it")
         asked_at = time.monotonic()
+        log.debug("create: asking %s for %s", backend.describe(), job or "a question")   # a hang shows where (D188)
         try:
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text

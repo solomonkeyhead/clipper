@@ -156,8 +156,8 @@ function minutesAgo(seconds: number | undefined) {
 }
 
 /** Each AI provider by its own name: a miss on Mistral or NVIDIA was labelled "Claude had a problem" (D171). */
-const PROVIDER: Record<string, string> = { gemini: "Gemini", claude_code: "Claude", anthropic: "Claude", mistral: "Mistral",
-  nvidia: "NVIDIA", groq: "Groq", openrouter: "OpenRouter", ollama: "Ollama" };
+const PROVIDER: Record<string, string> = { gemini: "Gemini", claude_code: "Claude", anthropic: "Claude",
+  ollama: "Ollama" };
 
 /** Which AI does what, always in view: Claude or Gemini was a guess for two videos (D118). */
 function AIStrip() {
@@ -366,7 +366,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
 
 /* ---------- a video, step by step ---------- */
 
-const STEPS = [["Script", ["draft"]], ["Voice", ["approved"]], ["Build", ["voiced", "building", "failed"]], ["Ready", ["built"]]] as const;
+const STEPS = [["Script", ["writing", "draft"]], ["Voice", ["approved"]], ["Build", ["voiced", "building", "failed"]], ["Ready", ["built"]]] as const;
 
 function Steps({ status }: { status: CreateVideo["status"] }) {
   const at = STEPS.findIndex(([, s]) => (s as readonly string[]).includes(status));
@@ -491,6 +491,16 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
   };
   const remove = run("delete", () => createApi.remove(video.id), "Removed from Create");
 
+  if (video.status === "writing") {   // written in the background, step by step (D188)
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-between text-sm"><span>{video.stage ?? "Starting…"}</span><span className="tabular text-muted">{Math.round(video.pct ?? 0)}%</span></div>
+        <div className="h-2 overflow-hidden rounded-full bg-surface-3"><div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(3, video.pct ?? 0)}%` }} /></div>
+        <GeminiStruggling />
+        <p className="text-xs text-muted">Writing the script, then the editor's read, the {fact} check and the pictures. You can leave this page.</p>
+      </div>
+    );
+  }
   if (video.status === "voiced" || video.status === "building") {
     return (
       <div className="flex flex-col gap-2">
@@ -517,6 +527,11 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {video.status === "draft" && video.error && (
+        <div className="flex items-center gap-3 rounded-md border border-danger/40 p-3 text-sm text-danger">
+          <AlertTriangle className="size-4 shrink-0" /> <span className="flex-1">{video.error}</span>
+        </div>
+      )}
       {video.status === "failed" && (
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-danger/40 p-3 text-sm text-danger">
           <AlertTriangle className="size-4 shrink-0" /> <span className="flex-1">{video.error || "The build failed."}</span>

@@ -8,7 +8,7 @@ from ..studio import db
 from . import channel as channels
 
 TOPIC_STATUSES = ("new", "used", "skipped")
-VIDEO_STATUSES = ("draft", "approved", "voiced", "building", "built", "failed")
+VIDEO_STATUSES = ("writing", "draft", "approved", "voiced", "building", "built", "failed")
 
 
 def topics(status: str | None = "new") -> list[dict]:

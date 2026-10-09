@@ -1,8 +1,8 @@
 """The Create page's endpoints (D108): ideas, scripts, the voice drop, the build.
 
-Writing a script or a batch of ideas is one AI call or three, done while the page
-waits (10-40 s). The voice drop and the build run in the background, one video
-at a time, telling the page how far along they are ("create.changed").
+A batch of ideas is written while the page waits. A script is written in the background (D188): it is six AI
+calls or more, and a busy Gemini made the page wait 20 minutes with nothing said. The voice drop and the build
+run in the background too, one video at a time, telling the page how far along they are ("create.changed").
 """
 
 from __future__ import annotations
@@ -72,6 +72,10 @@ def unstick() -> int:
     built again or deleted, never stuck (D123). Run when the server starts; returns how many."""
     from ..create import store
 
+    for v in store.videos(every=True):   # a script being written when Clipper closed (D188)
+        if v["status"] == "writing" and v["id"] not in _running:
+            store.update_video(v["id"], status="draft", error="Clipper was closed while the script was being written. "
+                                                              "Press Another take to write it.")
     stuck = [v for v in store.videos(every=True) if v["status"] in ("voiced", "building") and v["id"] not in _running]
     for v in stuck:
         _stopped(v["id"])
@@ -256,6 +260,38 @@ def _work(video_id: int, publish) -> None:
         publish("clips.changed", {})
 
 
+def _write(video_id: int, publish, question: str, angle: str, take: int = 1, steer: str = "",
+           series: str = "", again: bool = False) -> None:
+    """Write the script for a video in the background (D188), saying each step. A new take that fails keeps the
+    script it had; either way the reason is on the video."""
+    from ..create import script, store
+    from ..create.ai import CreateError
+
+    def step(stage: str, pct: float) -> None:
+        progress[video_id] = (stage, pct)
+        publish("create.changed", {"id": video_id})
+
+    _running.add(video_id)
+    try:
+        row = store.video(video_id)
+        if row is None:
+            return
+        channels.set_current(row["channel"])
+        written, notes = script.write_checked(question, angle, take=take, steer=steer, progress=step)
+        written.series = series   # the idea's series, shown with the video (D155)
+        store.update_video(video_id, script={**written.model_dump(), "take": take}, check_notes=notes,
+                           status="draft", voice="", timings="", error="")
+    except Exception as exc:  # shown on the video
+        log.warning("create: video %s: the script wasn't written: %s", video_id, exc,
+                    exc_info=not isinstance(exc, CreateError))
+        store.update_video(video_id, status="draft", error=("The new take wasn't written" if again else
+                                                            "The script wasn't written") + f": {failure(exc)}")
+    finally:
+        progress.pop(video_id, None)
+        _running.discard(video_id)
+        publish("create.changed", {"id": video_id})
+
+
 def _start(video_id: int, publish) -> None:
     threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
 
@@ -276,6 +312,8 @@ def _editable(row: dict) -> None:
     voice mid-build cleared the voice and timings under the running build (D132)."""
     if row["status"] in ("voiced", "building"):
         raise HTTPException(409, "it's being built: wait until it finishes (or press Cancel), then change it")
+    if row["status"] == "writing":
+        raise HTTPException(409, "its script is being written: wait until it's done")
 
 
 def routes(app: FastAPI, publish) -> None:
@@ -424,20 +462,20 @@ def routes(app: FastAPI, publish) -> None:
 
     @app.post("/api/create/topics/{topic_id}/script")
     async def create_script(topic_id: int) -> dict:
-        from ..create import script
 
         topic = store.topic(topic_id)
         if topic is None:
             raise HTTPException(404, "no such idea")
-        written, notes = await asyncio.to_thread(ai, script.write_checked, topic["question"], topic["angle"])
+        video_id = store.add_video(topic_id, {"title": topic["question"], "beats": []})
+        store.update_video(video_id, status="writing")
         store.set_topic(topic_id, "used")
-        written.series = topic.get("series") or ""   # the idea's series, shown with the video (D155)
-        return {"id": store.add_video(topic_id, written.model_dump(), notes)}
+        threading.Thread(target=_write, args=(video_id, publish, topic["question"], topic["angle"]),
+                         kwargs={"series": topic.get("series") or ""}, name=f"create-write-{video_id}", daemon=True).start()
+        return {"id": video_id}
 
     @app.post("/api/create/videos/{video_id}/rewrite")
     async def create_rewrite(video_id: int, body: dict | None = None) -> dict:
         """Another take on the same question, steered by the owner's note if they gave one (D153)."""
-        from ..create import script
 
         row = video_or_404(video_id)
         _editable(row)
@@ -448,11 +486,10 @@ def routes(app: FastAPI, publish) -> None:
         question = topic["question"] if topic else row["script"].get("title", "")
         take = int(row["script"].get("take", 1)) + 1
         steer = str((body or {}).get("steer") or "").strip()[:400]
-        written, notes = await asyncio.to_thread(ai, script.write_checked, question,
-                                                 topic["angle"] if topic else "", take=take, steer=steer)
-        written.series = (topic or {}).get("series") or ""
-        store.update_video(video_id, script={**written.model_dump(), "take": take}, check_notes=notes,
-                           status="draft", voice="", timings="", error="")
+        store.update_video(video_id, status="writing", error="")
+        threading.Thread(target=_write, args=(video_id, publish, question, topic["angle"] if topic else ""),
+                         kwargs={"take": take, "steer": steer, "series": (topic or {}).get("series") or "", "again": True},
+                         name=f"create-write-{video_id}", daemon=True).start()
         return {"ok": True}
 
     @app.put("/api/create/videos/{video_id}/sound")
@@ -532,6 +569,8 @@ def routes(app: FastAPI, publish) -> None:
         row = video_or_404(video_id)
         if row["status"] not in ("draft", "approved"):  # a built video set back to "approved" lost its place
             raise HTTPException(400, "only a draft script is approved")
+        if not row["script"].get("beats"):
+            raise HTTPException(400, "there's no script yet: press Another take, or write your own")
         store.update_video(video_id, status="approved")
         return {"ok": True}
 

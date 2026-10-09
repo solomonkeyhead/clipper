@@ -97,5 +97,21 @@ if __name__ == "__main__":
     _stock.photos = _fake_photos
     _stock.ask = _fake_ask
 
+    # A slow stand-in for the writer (D188): the page shows "writing" with its steps, then the draft.
+    import time as _time
+    from clipper.create import script as _script
+
+    def _fake_write(question, angle="", *, take=1, steer="", progress=None):
+        for stage, pct in (("Writing the script", 5), ("The editor's read and the physics check", 30), ("Planning the pictures", 70)):
+            if progress:
+                progress(stage, pct)
+            _time.sleep(2)
+        made = _script.Script.model_validate(store.videos(every=True)[-1]["script"])
+        return made.model_copy(update={"title": question}), "note"
+
+    _script.write_checked = _fake_write
+    if not store.topics():   # an idea to write from
+        store.add_topics([{"question": "Why does a spoon flip your reflection?", "angle": "concave mirror", "felt": True}])
+
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8799, log_level="warning")

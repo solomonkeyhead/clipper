@@ -754,49 +754,6 @@ function FootageKeys() {
   );
 }
 
-/** More free AI for Create (D164): asked after Gemini, each when its key is here. */
-function FreeAIKeys() {
-  const { data: setup } = useSetup();
-  const save = useSetKeys();
-  const [values, setValues] = useState<Record<string, string>>({});
-  const providers: [string, string, string, ReactNode][] = [
-    ["MISTRAL_API_KEY", "Mistral", "https://console.mistral.ai/api-keys", "Sign up with a phone number, choose the free plan, then API keys."],
-    ["GROQ_API_KEY", "Groq", "https://console.groq.com/keys", "Sign in, then Create API key."],
-    ["NVIDIA_API_KEY", "NVIDIA", "https://build.nvidia.com", "Sign in, open any model, then Get API key."],
-    ["OPENROUTER_API_KEY", "OpenRouter", "https://openrouter.ai/settings/keys", "Sign in, then Create key. Only its free models are used."],
-  ];
-  const typed = Object.entries(values).filter(([, v]) => v.trim());
-  return (
-    <Card className="flex flex-col gap-4 p-5" id="free-ai">
-      <div>
-        <h2 className="text-md font-semibold">More free AI for Create</h2>
-        <p className="mt-0.5 text-sm text-muted">
-          When Gemini is busy (it sometimes refuses every request for an afternoon), Create asks these instead, in this
-          order, each one you have a key for. All are free, no card needed.
-        </p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {providers.map(([name, title, href, how]) => (
-          <Field key={name} label={title}
-                 hint={<>{setup?.keys[name] ? <span className="text-success">Key saved.</span> : <>No key yet. <Ext href={href}>Get one</Ext>: {how}</>}</>}>
-            {(id) => <SecretInput id={id} value={values[name] ?? ""} onChange={(v) => setValues((x) => ({ ...x, [name]: v }))}
-                                  isSet={setup?.keys[name]} placeholder="Paste the key" />}
-          </Field>
-        ))}
-      </div>
-      <div className="flex justify-end">
-        <Button variant="primary" disabled={!typed.length || save.isPending}
-                onClick={() => save.mutate(Object.fromEntries(typed), {
-                  onSuccess: () => { setValues({}); toast.success("AI keys saved"); },
-                  onError: (e) => toast.error((e as Error).message),
-                })}>
-          <KeyRound className="size-4" /> Save keys
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
 function SystemCheck() {
   const [results, setResults] = useState<CheckResult[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -864,7 +821,6 @@ export function SettingsPage() {
       <Card className="px-5 py-3" id="create-ai"><h2 className="text-md font-semibold">Who does what: Create</h2>
         <p className="mt-0.5 mb-1 text-sm text-muted">For your own channel's Shorts.</p><WhoDoesWhat part="create" /></Card>
       <FootageKeys />
-      <FreeAIKeys />
       <Card className="divide-y divide-line px-5">
         <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />
         <Row title="What you use Clipper for" body="Parts you turn off are hidden everywhere, so the app only shows what you do." control={<Uses />} />

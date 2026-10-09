@@ -19,14 +19,19 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
+from itertools import pairwise
 from typing import Literal
 
 from pydantic import BaseModel, Field, create_model
 
+from ..utils.logging import get_logger
 from . import channel as channels
 from .ai import CreateError, ask
 from .sketch import Sketch
+
+log = get_logger(__name__)
 
 TEMPLATES = ("sketch", "forces", "circle", "equation", "compare", "chain", "graph", "wave", "particles", "ray", "number")
 
@@ -249,6 +254,10 @@ half the explanation: with the sound off, a viewer should still follow it. One c
 picture, big in the frame. Keep it moving: a real moment, then a drawing that shows how, then a
 close-up; never the same kind of picture for long. Plan the drawings where the words explain HOW,
 and footage where they name a thing or a moment the viewer knows."""
+#: For a channel that draws (D188): "Professor's Law No. 1: What cannot punch through simply goes" got footage
+#: searches; nothing scored, and four such lines were drawn one by one at the end of the build.
+UNFILMABLE = """A line with nothing in it a camera could film (a law or rule, a conclusion, a number on its own) gets a
+drawing, never footage: no library has a clip of it."""
 
 
 def channel_visuals_head(channel: channels.Channel) -> str:
@@ -325,6 +334,8 @@ def _system(channel: channels.Channel) -> str:
 def _director(channel: channels.Channel) -> str:
     """The director's brief (D164): what the pictures are for, then the channel's picture rules."""
     head = DIRECTOR.replace("{name}", channel.name).replace("{niche}", channel.niche)
+    if channel.drawings:
+        head += " " + UNFILMABLE.replace("\n", " ")
     return f"{head}\n\n{channels.fill(visuals(channel), channel)}"
 
 
@@ -727,16 +738,27 @@ def critique(script: Script, writer: str = "") -> list[str]:
     return [] if review.ok else review.problems
 
 
-def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str = "") -> tuple[Script, str]:
+def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str = "",
+                  progress=None) -> tuple[Script, str]:
     """A script held to the channel's countable rules, an editor's read and the physics check, rewritten
-    once with everything they found (D155), and what each said, for the page."""
+    once with everything they found (D155), and what each said, for the page. `progress(stage, percent)` hears
+    each step (D188): the page shows it, and the log gets each step's seconds."""
     from . import ai
+
+    started, took = time.monotonic(), []
+
+    def step(stage: str, pct: float) -> None:
+        took.append((stage, time.monotonic()))
+        if progress:
+            progress(stage, pct)
 
     ai.misses.clear()
     channel = channels.load()
+    step("Writing the script", 5)
     script = write(question, angle, take=take, steer=steer)
     writer = ai.last_used
     notes: list[str] = []
+    step(f"The editor's read and the {channels.check_name().lower()}", 30)
     with ThreadPoolExecutor(1) as pool:
         # The fact check and the editor's read don't wait for each other (D168): two models, asked at once.
         editor = pool.submit(critique, script, writer)
@@ -750,9 +772,11 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
         bit = next(((b["name"], b["how"]) for b in channel.bits if b["name"] == script.bit), ("", ""))
         if bit[0]:   # the same law number as the first draft was asked for
             bit = (bit[0], bit[1].replace("{n}", str(1 + sum(v["script"].get("bit") == bit[0] for v in _videos()))))
+        step("Rewriting with the fixes", 50)
         script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
                        ending=script.ending, bit=bit, draft=script)
         writer = ai.last_used
+        step("Planning the pictures", 70)
         # The director plans on the final words, then one check reads the words and the diagrams (D183): the
         # words check used to go beside the director, and the diagrams' check after it took as long.
         *planned, second = _planned_or_note(script, words=True)
@@ -772,8 +796,13 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     left = lint(script, channel)
     if left:
         notes.append("Still off the channel's rules:\n" + "\n".join(f"- {p}" for p in left))
+    if not planned:
+        step("Planning the pictures", 70)
     script, pictures = planned or _planned_or_note(script)[:2]
     notes.append(pictures)
+    took.append(("", time.monotonic()))
+    log.info("create: script for %r written in %.0fs: %s", question[:60], took[-1][1] - started,
+             ", ".join(f"{stage} {t2 - t1:.0f}s" for (stage, t1), (_, t2) in pairwise(took)))
     return _signed(script, "\n".join(notes), writer)
 
 

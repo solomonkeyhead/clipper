@@ -72,15 +72,6 @@ llm:
   # The Gemini models Create asks, best first, each tried when the one before is busy (D162). All free on a
   # Gemini key (checked 2026-10-08). The lite models are left out: their drawings came back broken.
   create_gemini_models: [gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash, gemini-flash-latest]
-  # More free models, asked after Gemini in this order, each only when its free key is in .env (D164):
-  # MISTRAL_API_KEY (console.mistral.ai), GROQ_API_KEY (console.groq.com), NVIDIA_API_KEY
-  # (build.nvidia.com), OPENROUTER_API_KEY (openrouter.ai). Change a model name here if one is retired; a
-  # list is tried in turn. Checked 2026-10-08 (D168): a free Mistral key got requests on ministral only.
-  create_free_models:
-    nvidia: nvidia/nemotron-3-super-120b-a12b
-    mistral: [mistral-medium-latest, ministral-14b-latest]
-    groq: qwen/qwen3.8-27b
-    openrouter: [google/gemma-4-31b-it:free, openrouter/free]
   # Jobs the paid Claude API key (ANTHROPIC_API_KEY, billed per use) may do (D142): only drawing
   # the sketches. Every other job runs on your Claude plan through Claude Code, or on Gemini,
   # even with a key set. Add names (judge, script, check, review, footage, place, topics) to allow more.

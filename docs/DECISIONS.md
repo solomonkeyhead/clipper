@@ -3316,3 +3316,20 @@ to two said just after it while the exchange runs on inside its scene. Code keep
 length from its new start, after its payoff, never on a line whose thought the next line finishes, and only when
 the whole clip is shown (a long one's tail is summarised). No extra call; `opening-v6`. The editor's start and
 end still override it.
+
+## D188: Create's AI is Claude and Gemini only; a script is written in the background
+Marc: script writing took very long and failed often; "remove the other apis except for claude and gemini", he will
+pay for Gemini when it is sold. The log (Oct 8 to 9): gemini-3.8-flash timed out at 120 s, was asked again and timed
+out again (a 504), then the next request started the same wait; on Oct 8 the free fallbacks answered badly (Nemotron
+in the wrong shape, "openrouter/free" with "User Safety: safe", NVIDIA a 401). No video was saved after Oct 8 08:36.
+- Mistral, Groq, NVIDIA and OpenRouter are gone (`llm/openai_compat.py`, `llm.create_free_models`, their Settings
+  card and keys). Gemini's own models remain, then Claude; Ollama stays (local, no key).
+- A timeout or 504 is not asked again, and a model that fails a call it can fall through is rested 5 minutes
+  (`FAILED_REST`), so the next request goes straight to the next model instead of waiting 2 minutes again.
+- The script is written in a background thread: the video shows "writing" with its step (writing, the editor's read
+  and the check, a rewrite, the pictures) and a bar; a failure lands on the video as its error, and Clipper closed
+  mid-write leaves a draft that says to press Another take. Each step's seconds go to the log.
+- Build: a sentence no footage fits gets its drawing in the footage threads, not one by one in the shot loop (four
+  took 6 of 7.5 minutes on video 20). A shot whose ffmpeg run crashes is made once more before the build fails.
+- The director is told, on a channel that draws, that a line with nothing to film (a law, a conclusion, a number)
+  gets a drawing, not footage. The physics fixtures don't hold the director's prompt; they are unchanged.

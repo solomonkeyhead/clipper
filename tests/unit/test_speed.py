@@ -161,42 +161,6 @@ def test_gemini_reads_how_long_its_quota_is_out():
     assert _quota_line(msg) == "429 limit: 20, model: gemini-3.8-flash a day"
 
 
-def test_a_free_provider_asked_for_too_much_output_asks_again_once_for_less(monkeypatch):
-    """Groq's free qwen allows 1,000 output tokens a minute and refused every request that didn't say so (D168)."""
-    import httpx
-
-    from clipper.llm import openai_compat as oc
-
-    monkeypatch.setenv("GROQ_API_KEY", "k")
-    oc._caps.clear()
-    sent = []
-
-    def post(url, json, timeout, headers):
-        sent.append(dict(json))
-        if "max_tokens" not in json:
-            return httpx.Response(429, json={"error": {"message": "Request too large for model `q` on output tokens per "
-                                                                  "minute (OTPM): Limit 1000, Requested 2048."}})
-        return httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]})
-
-    monkeypatch.setattr(oc.httpx, "post", post)
-    b = oc.OpenAICompatBackend(provider="groq", model="q", max_retries=0, requests_per_minute=100_000)
-    assert b.complete(LLMRequest(system="s", user="u")).text == '{"ok": true}'
-    assert b.complete(LLMRequest(system="s", user="u")).text == '{"ok": true}'
-    assert [s.get("max_tokens") for s in sent] == [None, 1000, 1000]   # learnt once, then asked within it
-
-
-def test_a_model_the_key_gets_no_requests_on_rests_an_hour_and_nvidia_is_told_not_to_think(monkeypatch):
-    import httpx
-
-    from clipper.llm import openai_compat as oc
-
-    r = httpx.Response(429, headers={"x-ratelimit-limit-req-minute": "0"}, json={"message": "Rate limit exceeded"})
-    assert oc._retry_after(r) == 3600 and "plan" in oc._reason(r)
-    assert oc._retry_after(httpx.Response(429, headers={"retry-after": "7.66"})) == 7.66
-    assert oc._retry_after(httpx.Response(429, text="Please try again in 1m35.5s.")) == 95.5
-    assert oc.EXTRA["nvidia"]["chat_template_kwargs"]["enable_thinking"] is False
-
-
 def test_the_fact_check_and_the_editors_read_are_asked_at_once(data_root, monkeypatch):
     """D168: two calls that don't need each other no longer wait in line."""
     import json
@@ -240,3 +204,27 @@ def test_a_setting_this_version_does_not_know_is_ignored_not_fatal(data_root, ca
     config = Config.load()
     assert config.llm.create_claude_only is True
     assert "not_a_setting_yet" in caplog.text and "made_up" in caplog.text
+
+
+def test_the_best_model_is_not_asked_twice_after_a_timeout_and_then_rests():
+    """D188: an overloaded Gemini 3.8 Flash (one retry of its own) made every call of a script wait two 120 s
+    timeouts on it again; it now gives up after one and sits out the next calls."""
+    from clipper.llm.base import Resting
+
+    calls = []
+
+    class Slow(LLMBackend):
+        name = "slow-d188"
+
+        def _complete(self, request):
+            calls.append(1)
+            raise LLMError("Gemini request failed: The read operation timed out")
+
+    b = Slow(model="m", max_retries=1, max_wait=10.0, requests_per_minute=100_000)
+    with pytest.raises(LLMError):
+        b.complete(LLMRequest(system="s", user="u"))
+    assert len(calls) == 1                     # no second 120 s wait on the same model
+    with pytest.raises(Resting):
+        b.complete(LLMRequest(system="s", user="u"))
+    assert len(calls) == 1                     # resting: the next model is asked at once
+    Slow._resting.pop(("slow-d188", "m"), None)
