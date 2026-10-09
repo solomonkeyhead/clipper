@@ -4,6 +4,26 @@ Written 2026-10-04 at the end of a long cloud session (D118 to D131), for the ne
 Marc plans to run locally on his own machine. A local session can do what this one couldn't: build
 real videos on his GPU, play real H.264 stock previews, and reach Coverr's and NASA's servers.
 
+## Audit, 2026-10-08 (D168 to D178; read this first)
+
+A pass over the whole app on Marc's machine. Done and pushed, Clipper restarted on it:
+- Free AI fallback when Gemini's quota is out: a script in about a minute, not 10+ (D168).
+- Edit controls on a built video (D171), old drawings "Redraw all" (D171).
+- A tab left open across an update reloads to the new page; a broken page says so with Reload (D172).
+- server.py split into accounts_api, campaigns_api, alerts_api, editor_api (D173).
+- Build 119 s to 85 s on the ready-made script with no footage; the cover picker 5x faster, for every clip too
+  (D174). Each build logs its stage times: read them on a real build with footage.
+- A clip job cut off by a restart shows as Stopped (D175); a full disk is said plainly (D176); an unknown setting
+  in config.yaml is ignored with a warning instead of failing every job (D177).
+
+**Check on the real machine:** a real build with footage and Marc's voice (look at the "built ... in Ns: sketches,
+shots, assembly, cover" log line), the Adjust panel on Shot review, captions and the cover on a real video.
+`scripts/ui/walkthrough.py` has steps for D171 but needs Playwright (a cloud session); they were done by hand here.
+
+**Proposed, not done (bigger or riskier):** draw a build's shots in parallel processes (shots are 58 of 85 s, each
+frame drawn in Pillow on one core); put the cover first without re-encoding the whole video (6.6 s a Short and a
+clip); a Pexels key when Pexels gives them (165 "no footage good enough" against 42 picks in the log).
+
 ## Check these first, on the real machine
 
 Everything below passed the unit tests and the headless-browser walkthrough
@@ -25,10 +45,10 @@ data, keys or GPU.
 
 ## Smaller things offered and not done
 
-From `docs/MANUAL_CONTROLS.md`, in the order I'd build them: captions per video (style, position,
-off, edit text), framing override for footage, the AI choice in Settings, a cover frame picker, cut
-and voice timing nudges, diagram label editing. Also: the "Plan (preview)" setting gates writing your
-own post captions behind a tier, which breaks the design rule (D120); Marc was asked before removing it.
+Done since: per-part way in, cut nudges, drawing size and place, drawing words, captions off and written per
+sentence, the cover frame (D171); the plan gate on post captions is gone (D169). Still open in
+`docs/MANUAL_CONTROLS.md`: caption style and position, framing override for footage, diagram arrows and colours,
+the longest a shot may last, script shape and ending before writing, skipping the editor's read.
 
 ## The big idea: Create for anybody, as a full video editor
 
