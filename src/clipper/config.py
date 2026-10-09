@@ -455,6 +455,27 @@ def _merged(base: dict, over: dict) -> dict:
     return out
 
 
+def _known(model: type[BaseModel], data: dict, where: str = "") -> dict:
+    """`data` without the keys `model` has no setting for, each said in the log (D177). For the user's own files:
+    one written by a newer or older Clipper (or by hand) must not stop every job and every AI call, as a
+    `llm.create_gemini_jobs` the running code didn't know yet did 13 times in a row on 2026-10-04. The shipped
+    default.yaml stays strict, so a typo there is still an error."""
+    import logging
+
+    out = {}
+    for key, value in data.items():
+        field = model.model_fields.get(key)
+        if field is None:
+            logging.getLogger(__name__).warning("config: %s%s isn't a setting in this version of Clipper; ignored",
+                                                where, key)
+            continue
+        kind = field.annotation
+        if isinstance(value, dict) and isinstance(kind, type) and issubclass(kind, BaseModel):
+            value = _known(kind, value, f"{where}{key}.")
+        out[key] = value
+    return out
+
+
 class Config(StrictModel):
     """The whole of `config/default.yaml`."""
 
@@ -483,7 +504,7 @@ class Config(StrictModel):
             for name in ("config.auto.yaml", "config.yaml"):
                 local = data_root() / name
                 if local.is_file():
-                    data = _merged(data, yaml.safe_load(local.read_text(encoding="utf-8")) or {})
+                    data = _merged(data, _known(cls, yaml.safe_load(local.read_text(encoding="utf-8")) or {}))
         return cls.model_validate(data)
 
 

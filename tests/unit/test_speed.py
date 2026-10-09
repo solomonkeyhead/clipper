@@ -229,3 +229,14 @@ def test_a_full_disk_is_said_plainly():
     assert failure(OSError(errno.ENOSPC, "x")).startswith("The disk is full")
     assert failure(RuntimeError("ffmpeg exited -28:\nError writing trailer: No space left on device")).startswith("The disk is full")
     assert failure(RuntimeError("x" * 500)) == "x" * 400
+
+
+def test_a_setting_this_version_does_not_know_is_ignored_not_fatal(data_root, caplog):
+    """D177: a key in the user's config.yaml the running code didn't know failed 13 jobs in a row."""
+    from clipper.config import Config
+
+    (data_root / "config.yaml").write_text("llm:\n  not_a_setting_yet: [a]\n  create_claude_only: true\nmade_up: 1\n",
+                                           encoding="utf-8")
+    config = Config.load()
+    assert config.llm.create_claude_only is True
+    assert "not_a_setting_yet" in caplog.text and "made_up" in caplog.text

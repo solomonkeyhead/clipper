@@ -3187,3 +3187,12 @@ A clip job, a Create build or a clip's re-render that ran out of disk showed ffm
 Error writing trailer: No space left on device") or Windows' own words. `jobs.failure` turns either into "The disk
 is full (1.2 GB free). Free some space, then try again: a long video and its clips can take 5-10 GB." Anything else
 reads as before. (Settings' System check already warns under 20 GB free.)
+
+## D177: a setting this version doesn't know is ignored, not fatal
+On 2026-10-04, 13 clip jobs in a row failed with "1 validation error for Config: llm.create_gemini_jobs, Extra
+inputs are not permitted": the setting was in Marc's `config.yaml` before the running Clipper had the code for it.
+Config rejects unknown keys so a typo is caught (StrictModel); for the user's own files (`config.yaml`,
+`config.auto.yaml`) that turned one new or old key into every job, Create call and page that reads settings
+failing. Their keys are now checked against the settings first: one this version doesn't have is left out with a
+warning in the log ("config: llm.x isn't a setting in this version of Clipper; ignored"). The shipped
+`config/default.yaml` stays strict.
