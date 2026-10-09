@@ -7,8 +7,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import { AppShell } from "./components/AppShell";
-import { MapPinOff } from "lucide-react";
-import { EmptyState, Skeleton } from "./components/ui";
+import { AlertTriangle, MapPinOff } from "lucide-react";
+import { Button, EmptyState, Skeleton } from "./components/ui";
 import { useUI } from "./lib/store";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
@@ -19,6 +19,17 @@ import "./styles.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 } },
+});
+
+// A tab left open across an update asks for page files the new build renamed: load the new build (D172).
+// Once in 10 seconds at most, so a page file that's truly missing shows its error instead of reloading forever.
+window.addEventListener("vite:preloadError", (e) => {
+  try {
+    if (Date.now() - Number(sessionStorage.getItem("clipper.reloaded") ?? 0) < 10_000) return;
+    sessionStorage.setItem("clipper.reloaded", String(Date.now()));
+  } catch { /* storage blocked: reload anyway */ }
+  e.preventDefault();
+  location.reload();
 });
 
 // Pages opened now and then load when first opened, keeping the first screen quick.
@@ -112,6 +123,16 @@ const router = createRouter({
   defaultPendingMs: 100,
   defaultPendingComponent: () => (
     <div className="flex flex-col gap-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-96" /></div>
+  ),
+  // A page that breaks says so in plain words, with a way out, not the router's bare "Something went wrong!" (D172).
+  defaultErrorComponent: ({ error }) => (
+    <EmptyState icon={<AlertTriangle />} title="This page hit a problem"
+                body={<>Reloading usually fixes it. Nothing you saved is lost.
+                  <span className="mt-2 block font-mono text-xs text-subtle">{error instanceof Error ? error.message : String(error)}</span></>}
+                action={<div className="flex items-center gap-4">
+                  <Button variant="primary" size="sm" onClick={() => location.reload()}>Reload</Button>
+                  <a href="/" className="text-sm font-medium text-accent hover:underline">Go to the Dashboard</a>
+                </div>} />
   ),
 });
 

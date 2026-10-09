@@ -520,7 +520,7 @@ function Row({ title, body, control, id }: { title: string; body: ReactNode; con
         <div className="text-sm font-medium">{title}</div>
         <div className="mt-1 text-sm text-muted">{body}</div>
       </div>
-      <div className="shrink-0 pt-0.5">{control}</div>
+      <div className="max-w-full shrink-0 pt-0.5">{control}</div>
     </div>
   );
 }

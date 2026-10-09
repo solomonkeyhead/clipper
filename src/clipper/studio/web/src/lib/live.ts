@@ -15,6 +15,16 @@ export function useLiveUpdates() {
     let source: EventSource | null = null;
     let failures = 0;
     let retry: number | undefined;
+    let code: string | undefined;
+
+    // Clipper restarts itself on new code (D116): a tab open from before runs the old page (D172).
+    const checkCode = () => void fetch("/api/code-version").then((r) => r.json() as Promise<{ version: string }>)
+      .then(({ version }) => {
+        if (code !== undefined && version !== code)
+          toast.info("Clipper was updated", { id: "updated", duration: Infinity,
+            description: "Reload the page to use the new version.", action: { label: "Reload", onClick: () => location.reload() } });
+        code = version;
+      }).catch(() => undefined);
 
     const refreshClips = () =>
       [keys.home, keys.campaigns, keys.clips, keys.posts, ["campaign"]].forEach((queryKey) =>
@@ -25,6 +35,7 @@ export function useLiveUpdates() {
       source.onopen = () => {
         failures = 0;
         setOnline(true);
+        checkCode();
       };
       source.addEventListener("sync.started", () => setSyncing(true));
       source.addEventListener("stats.synced", (e) => {

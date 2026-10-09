@@ -3135,3 +3135,13 @@ script, and none turns anything else off (D120):
 The camera endpoint became `/part` (it still takes `camera`). Choices that don't change a shot's pixels (camera,
 way in, notes) are left out of the shot cache key, so changing them rebuilds nothing; the new size and place are in
 it, so every drawing is drawn once more on the first build after this change.
+
+## D172: a tab left open across an update finds its way to the new page
+Clipper pulls and restarts itself on start (D116), and every page build renames its files. A tab open from before
+kept the old page: its "Lost connection" note went away when the server came back, but opening a page it hadn't
+loaded yet asked for a file that no longer exists (404) and showed the router's bare "Something went wrong!" with
+no menu and no way out. Now a page file that fails to load reloads the tab once (at most every 10 s, so a file
+that's truly missing shows its error instead of looping); on reconnecting, the page compares `/api/code-version`
+with what it started with and offers "Clipper was updated: Reload"; and a page that breaks for any reason shows
+"This page hit a problem" with the message, Reload and the Dashboard, inside the usual menu. Also: Settings rows
+let their right side wrap, so the graphics card line no longer runs off a phone screen.
