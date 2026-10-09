@@ -240,8 +240,9 @@ class TestHookText:
     def test_hook_rules_forbid_inventing_things_in_the_scene(self):
         from clipper.llm.prompts import PROMPT_A, PROMPT_B
 
+        assert "3-8 words" in PROMPT_A.system and "group chat" in PROMPT_A.system
+        assert "hook_text" not in PROMPT_B.system           # B scores only (D184)
         for variant in (PROMPT_A, PROMPT_B):
-            assert "3-8 words" in variant.system and "group chat" in variant.system
             assert "never seen the show" in variant.system
 
 

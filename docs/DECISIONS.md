@@ -3270,3 +3270,12 @@ asks for the words' problems and the diagrams' problems separately (`_Apart`), f
 physics fixture is unchanged; only the user message says to keep them apart). What it finds in the words goes in
 the notes as before; what it finds in a diagram goes back to the director, whose second plan is checked for its
 diagrams alone. A written script: 6 calls instead of 7, and it takes no longer.
+
+## D184: the second rubric voice scores only
+Prompt B (the distracted viewer) wrote a hook, a caption and hashtags for every candidate, the same as prompt A,
+but those were read only when A had no answer for that clip (`values.llm_a or values.llm_b`). That was about half
+of B's output, on 60 candidates a run, for a fallback that almost never ran. B now returns the scores and the flags
+(`RubricVerdict`), its prompt has no hook rules, and the language note is left off it (it writes nothing). Prompt A
+is byte-identical and keeps its cache: each variant carries its own version now (`PromptVariant.version`, B is v6).
+The rare clip whose A batch failed while B's answered has no AI hook line or caption; the watched hook, the
+campaign's hook lines and its caption rules still apply.

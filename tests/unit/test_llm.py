@@ -365,6 +365,16 @@ class TestScoreCandidates:
         # 8 candidates / 4 per batch = 2 calls, times 2 prompts.
         assert backend.usage.calls == 4
 
+    def test_only_prompt_a_writes_the_hook_caption_and_hashtags(self, tmp_path):
+        """D184: B's text was read only when A had no answer for the clip."""
+        from clipper.signals.llm import RubricVerdict
+
+        backend = MockBackend()
+        score_candidates(candidates(2), backend, LLMConfig(language="es"), cache=LLMCache(tmp_path))
+        a, b = backend.calls
+        assert a.response_schema == list[RubricItem] and b.response_schema == list[RubricVerdict]
+        assert "hook_text" in a.system and "Spanish" in a.system and "hook_text" not in b.system and "Spanish" not in b.system
+
     def test_the_second_opinion_can_be_disabled_to_halve_calls(self, tmp_path):
         both = MockBackend()
         score_candidates(candidates(8), both, LLMConfig(batch_size=4),

@@ -41,8 +41,8 @@ from ..utils.logging import get_logger
 log = get_logger(__name__)
 
 
-class RubricItem(BaseModel):
-    """The per-candidate object the model is asked to return.
+class RubricVerdict(BaseModel):
+    """The per-candidate object a variant that writes no text returns (prompt B, D184).
 
     Separate from `RubricScores` because it carries `index`, which is transport
     (matching a response back to its candidate), not a score.
@@ -58,6 +58,11 @@ class RubricItem(BaseModel):
     needs_prior_context: bool = False
     is_sponsor_or_ad: bool = False
     policy_risk: str = "none"
+
+
+class RubricItem(RubricVerdict):
+    """The per-candidate object prompt A returns: the verdict and the clip's text."""
+
     hook_text: str = ""
     suggested_caption: str = ""
     hashtags: list[str] = Field(default_factory=list)
@@ -317,7 +322,7 @@ def _score_batch(
         system=variant.system,
         user=user,
         temperature=cfg.temperature,
-        response_schema=list[RubricItem] if backend.supports_schema else None,
+        response_schema=list[RubricItem if variant.writes else RubricVerdict] if backend.supports_schema else None,
     )
 
     try:

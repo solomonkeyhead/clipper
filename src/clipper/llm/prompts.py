@@ -13,12 +13,14 @@ real variance reduction. That limitation is recorded in docs/PLAN.md (P3).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 PROMPT_VERSION = "v5"
 """Bump on ANY edit below. It is part of the cache key."""
+PROMPT_B_VERSION = "v6"
+"""Prompt B's own version: since D184 it scores without writing a hook, caption or hashtags."""
 
-SCHEMA_DESCRIPTION = """\
+VERDICT_DESCRIPTION = """\
 Each object must contain exactly these keys:
   index                 integer, the clip number you were given
   hook_strength         integer 0-10, would the first 3 seconds stop a scroll
@@ -29,7 +31,10 @@ Each object must contain exactly these keys:
   ending_completeness   integer 0-10, does it end on a finished thought
   needs_prior_context   boolean
   is_sponsor_or_ad      boolean
-  policy_risk           one of "none", "low", "high"
+  policy_risk           one of "none", "low", "high"\
+"""
+
+SCHEMA_DESCRIPTION = VERDICT_DESCRIPTION + """
   hook_text             string
   suggested_caption     string
   hashtags              array of 3-5 strings, each starting with #\
@@ -96,14 +101,12 @@ rubric using integers 0-10, where 0 means you swipe in one second and 10 means
 you watch to the end and send it to a friend. Penalize slow starts, missing
 context, rambling, and endings that cut off mid-thought.
 
-{HOOK_TEXT_RULES}
-
 {SCRIPTED_RULES}
 
 {POLICY_RULES}
 
 Return ONLY a JSON array, one object per candidate, in the order given.
-{SCHEMA_DESCRIPTION}\
+{VERDICT_DESCRIPTION}\
 """
 
 REPAIR_SYSTEM = """\
@@ -115,14 +118,16 @@ object per candidate, in the order given.
 
 @dataclass(frozen=True)
 class PromptVariant:
-    """One of the two scoring voices."""
+    """One of the two scoring voices. `writes`: it writes the hook, caption and hashtags too (prompt A)."""
 
     key: str
     system: str
+    version: str = PROMPT_VERSION
+    writes: bool = True
 
     @property
     def cache_key(self) -> str:
-        return f"{PROMPT_VERSION}:{self.key}"
+        return f"{self.version}:{self.key}"
 
 
 def with_focus(variant: PromptVariant, focus: str) -> PromptVariant:
@@ -133,7 +138,7 @@ def with_focus(variant: PromptVariant, focus: str) -> PromptVariant:
     if not focus:
         return variant
     digest = hashlib.sha256(focus.encode()).hexdigest()[:10]
-    return PromptVariant(f"{variant.key}:focus-{digest}", variant.system + f"""
+    return replace(variant, key=f"{variant.key}:focus-{digest}", system=variant.system + f"""
 
 CAMPAIGN FOCUS -- this overrides the general preferences above:
 {focus}
@@ -150,7 +155,7 @@ def with_taste(variant: PromptVariant, taste: str) -> PromptVariant:
     if not taste:
         return variant
     digest = hashlib.sha256(taste.encode()).hexdigest()[:10]
-    return PromptVariant(f"{variant.key}:taste-{digest}", variant.system + f"""
+    return replace(variant, key=f"{variant.key}:taste-{digest}", system=variant.system + f"""
 
 THE ACCOUNT OWNER'S TASTE -- from clips they rated after posting. Use it to calibrate
 your scores toward what they value; it never overrides a campaign focus, and it is
@@ -160,20 +165,22 @@ not a list of topics to require or avoid:
 
 def with_language(variant: PromptVariant, language: str) -> PromptVariant:
     """`variant` told to write its text in the footage's language (D147), keyed apart in the cache.
-    English and "auto" leave the prompt exactly as it was."""
+    English and "auto" leave the prompt exactly as it was, and so does a variant that writes no text."""
     from ..config import LANGUAGES
 
-    if language in ("", "en", "auto") or language not in LANGUAGES:
+    if language in ("", "en", "auto") or language not in LANGUAGES or not variant.writes:
         return variant
     name = LANGUAGES[language]
-    return PromptVariant(f"{variant.key}:lang-{language}", variant.system + f"""
+    return replace(variant, key=f"{variant.key}:lang-{language}", system=variant.system + f"""
 
 The footage is in {name}. Write every piece of text you produce (hook_text, suggested_caption,
 reasons) in {name}, in the way a native speaker posting on social media would.""")
 
 
 PROMPT_A = PromptVariant("a", PROMPT_A_SYSTEM)
-PROMPT_B = PromptVariant("b", PROMPT_B_SYSTEM)
+# B's hook, caption and hashtags were read only when A had no answer for the clip: half its output for a
+# fallback that almost never ran (D184).
+PROMPT_B = PromptVariant("b", PROMPT_B_SYSTEM, version=PROMPT_B_VERSION, writes=False)
 
 
 def build_user_message(
