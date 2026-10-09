@@ -3072,7 +3072,7 @@ Marc: gpt-oss-120b writes very badly, and a build ended with "the pictures came 
 model that answered (it) returned JSON the director couldn't read, and nothing else was asked.
 - `ai.ask` now treats an answer that doesn't fit its schema as a miss and asks the next model; if none fits, the
   first unreadable answer is returned so the caller reports it as before.
-- Free models, checked against each provider's own model list on 2026-10-08: NVIDIA `moonshotai/kimi-k3`, Groq
+- Free models, checked against each provider's own model list on 2026-10-08: NVIDIA `nvidia/nemotron-3-super-120b-a12b` (Kimi K3 took 69 s for six short lines and timed out on real prompts; Nemotron took 12 s), Groq
   `qwen/qwen3.8-27b` (its only non-gpt-oss chat model), Mistral and OpenRouter as before; order Mistral, NVIDIA,
   Groq, OpenRouter. NVIDIA's own list also has `nvidia/nemotron-3-ultra-550b-a55b`, `z-ai/glm-5.3` and
   `deepseek-ai/deepseek-v4.1-flash`.
