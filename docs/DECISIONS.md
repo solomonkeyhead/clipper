@@ -3051,3 +3051,6 @@ The writer was one call asked for the words and every picture at once: persona, 
   Rebuild.
 - **Tests never run the real Claude Code**: a test reaching the AI without a stand-in (the script flow's critic and
   director would have) gets no `claude` command.
+- Added after: Settings has a "More free AI for Create" card to paste those four keys (kept in .env, like the
+  footage keys), and the Pexels hint says what its key brings. On a channel with no presenter the captions sit in
+  the middle of the board under the picture, not at its top edge with the board empty below.

@@ -749,7 +749,9 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
                 scale = 1.0 if left > 4 else 0.86 + 0.14 * (left / 4)
                 paste_scaled(frame, edit.hook, W / 2, 285, scale, alpha=1.0 if left > 4 else left / 4)
             if edit.captions:   # up out of the way while the camera is in on his face
-                edit.captions.draw(frame, t, CAPTION_Y if cut is None else 620)
+                # With no presenter, in the middle of the board under the picture, not at its top (D164).
+                y = CAPTION_Y if edit.presenter else (PANEL_H + H) // 2
+                edit.captions.draw(frame, t, y if cut is None else 620)
             if edit.signoff and k >= edit.signoff_from:
                 written = chalk_text(edit.signoff, 84, reveal=(k - edit.signoff_from) / (0.5 * FPS))
                 if written is not None:
