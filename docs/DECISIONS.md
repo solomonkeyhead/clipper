@@ -3305,3 +3305,14 @@ out 8 times a run, a build's sketch instructions (about 2,500 tokens with the ic
 review, the footage judge's once a sentence: a cached read is billed at a twentieth of the input price, a write at
 1.25 times. Instructions too short to cache are sent as they are, at no extra cost. Claude Code on the plan caches
 by itself.
+
+## D187: the opening call picks where a clip ends too
+Marc's 44 rated clips: "weak hook" 21 times, "boring" 13, "needs context" 9, "bad ending" 9 (the hardscope run:
+9 of 9 rated 1, most with a bad ending). The opening call (D93) already read each clip's lines to pick its first
+line and payoff; the end was code's alone, a sentence boundary near where the window happened to stop, so a clip
+could run on into a new topic or stop before the laugh. The same call now picks the END line too: where the moment
+lands (the punchline and the reaction to it, the answer, the end of the exchange), from the clip's own lines or up
+to two said just after it while the exchange runs on inside its scene. Code keeps the choice inside the clip's
+length from its new start, after its payoff, never on a line whose thought the next line finishes, and only when
+the whole clip is shown (a long one's tail is summarised). No extra call; `opening-v6`. The editor's start and
+end still override it.

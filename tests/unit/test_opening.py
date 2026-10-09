@@ -115,6 +115,42 @@ def test_a_payoff_too_early_too_long_or_turned_off_is_dropped():
     assert tease({"clip": 1, "start_line": 0, "payoff_line": 4, "payoff_strength": 6}) is None  # not strong enough
 
 
+TALK = _sentences([
+    (0.0, 3.0, "Did you tell her?"),
+    (3.2, 6.0, "I told her everything."),
+    (6.2, 9.0, "And what did she say?"),
+    (9.2, 12.0, "She said she already knew."),
+    (12.2, 14.0, "Ha! Of course she did."),
+    (14.2, 17.0, "Anyway, how was the game?"),   # the window's last line: a new topic
+    (17.2, 18.0, "It was"),                      # after the window; the next line finishes it
+    (18.1, 19.0, "fine."),
+])
+
+
+def test_the_ai_picks_where_the_moment_ends_within_what_code_allows():
+    """D187: "bad ending" was the third most given reason on the clips Marc rated."""
+    clip = Candidate(candidate_id="c1", start=0.0, end=17.0, sentence_indices=(0, 6), text="", scene_end=30.0)
+    assert opening.options(clip, TALK, min_seconds=8, max_seconds=60).ends == [2, 3, 4, 5, 7]   # never mid-thought
+
+    def end(answer, min_seconds=8):
+        found = opening.choose([clip], TALK, [_Backend([{"clip": 1, "start_line": 0, **answer}])],
+                               min_seconds=min_seconds, max_seconds=60)
+        return found.get("c1", opening.Opening(0)).end
+
+    assert end({"end_line": 4}) == 4                  # the laugh, not the new topic after it
+    assert end({"end_line": 7}) == 7                  # a line after the window finishes the exchange
+    assert end({"end_line": 6}) is None               # "It was" -- mid-thought
+    assert end({"end_line": 5}) is None               # where it ends already
+    assert end({"end_line": 2, "payoff_line": 3, "payoff_strength": 9}) is None   # before its payoff
+    assert end({"end_line": 2}, min_seconds=10) is None                            # too short
+    pick = SimpleNamespace(candidate=clip)
+    backend = _Backend([{"clip": 1, "start_line": 0, "end_line": 4}])
+    opening.apply([pick], TALK, [backend], min_seconds=8, max_seconds=60)
+    assert pick.candidate.end == 14.0 and pick.candidate.sentence_indices == (0, 5)
+    assert pick.candidate.text.endswith("Of course she did.")
+    assert "CURRENT END" in backend.asked[0] and "(after the clip) fine." in backend.asked[0]
+
+
 def test_apply_moves_the_pick_in_place():
     pick = SimpleNamespace(candidate=_candidate(2))
     n = opening.apply([pick], SENTS, [_Backend([{"clip": 1, "start_line": 0}])],

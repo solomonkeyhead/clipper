@@ -54,6 +54,7 @@ is the order I'd build them.
 | Step | Automatic today | Manual option | Status | Effort |
 |---|---|---|---|---|
 | Picking the moments | AI ranks candidates | "I'll pick them" and the editor (start, end, split, cut, add pieces) | **Exists** | |
+| Where a clip starts and ends | The opening call picks the first and last line, code bounds both (D93, D187) | The editor's start and end | **Exists** | |
 | How many, how long | `candidates` and `selection` config only | Per job: number of clips, shortest and longest | Gap | S |
 | Ranking style | Fixed weights (AI 50%, audience heat 20%, audio 15%, text 15%) | Sliders or presets (funniest, most informative, most energetic), and the score gate | Gap | M |
 | Promote a runner-up | Only the top picks are kept | See the next-best candidates and add any | Gap | M |
