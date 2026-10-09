@@ -44,15 +44,15 @@ def test_new_hook_takes_the_least_used_other_line(client, data_root):
     assert client.app.state.asked == [(cid, "second line")]
 
 
-def test_showing_its_title_is_free_but_choosing_is_paid(client, data_root):
+def test_choosing_or_writing_lines_is_open_on_every_plan(client, data_root):
+    """D169: a tier never takes a manual step away (D120); this was a Research feature (D90)."""
     cid = add(data_root, "c1", "second line", "first line")
     with db.connect() as con:
         db.set_setting(con, "plan", "free")
     kept = client.post(f"/api/clips/{cid}/rerender", json={"hook": "second line"})
     assert kept.status_code == 200 and kept.json()["hook"] == "second line"  # the hook asked for, not the next line
-    assert client.post(f"/api/clips/{cid}/rerender", json={"hook": "first line"}).json()["hook"] == "first line"
-    assert client.post(f"/api/clips/{cid}/rerender", json={"hook": "my own"}).status_code == 402
-    assert client.put(f"/api/clips/{cid}/caption", json={"caption": "cap b  #x"}).status_code == 402
+    assert client.post(f"/api/clips/{cid}/rerender", json={"hook": "my own"}).json()["hook"] == "my own"
+    assert client.put(f"/api/clips/{cid}/caption", json={"caption": "cap b  #x"}).status_code == 200
 
 
 def test_posted_clips_keep_their_video(client, data_root):

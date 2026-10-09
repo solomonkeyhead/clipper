@@ -631,8 +631,8 @@ export interface paths {
         put?: never;
         /**
          * Rerender Clip
-         * @description Make the clip again with a new on-screen hook (D90): the one given (a paid
-         *     choice), or the brief's line its campaign has used least.
+         * @description Make the clip again with a new on-screen hook (D90): the one given, or the brief's line its
+         *     campaign has used least.
          */
         post: operations["rerender_clip_api_clips__clip_id__rerender_post"];
         delete?: never;
@@ -1547,8 +1547,8 @@ export interface paths {
         get?: never;
         /**
          * Edit Caption
-         * @description The user's own caption for a clip not yet posted; the rules still apply (D81).
-         *     Choosing or writing captions is part of the paid plans (D90).
+         * @description The user's own caption for a clip not yet posted; the rules still apply (D81). Open on every plan:
+         *     nothing manual sits behind one (D120, D169).
          */
         put: operations["edit_caption_api_clips__clip_id__caption_put"];
         post?: never;

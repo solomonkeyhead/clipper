@@ -951,8 +951,8 @@ export function SettingsPage() {
           <Row
             title="Plan (preview)"
             body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats, up to 10 clips
-              a video and 3 videos at a time. <b className="text-fg">Research</b>: adds the Ask chat, choosing a clip's on-screen line,
-              writing your own captions, and 10 videos at a time. <b className="text-fg">Pro</b>: everything, including every clip a video
+              a video and 3 videos at a time. <b className="text-fg">Research</b>: adds the Ask chat and 10 videos at a time. Choosing a clip's
+              lines and writing your own are on every plan. <b className="text-fg">Pro</b>: everything, including every clip a video
               has, several accounts per platform with groups, and auto-posting once it's available. Nothing is billed; switch to see each tier.</>}
             control={settings ? (
               <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">

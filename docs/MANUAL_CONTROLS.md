@@ -63,7 +63,7 @@ is the order I'd build them.
 | On-screen hook | AI line | **Exists** (editor field and suggestions) | **Exists** | |
 | Open on the payoff | Global switch | Per clip, in the editor | Gap | S |
 | Cover | Global switch | Choose the frame per clip | Gap | S |
-| Post caption and hashtags | Generated from the brief | Editable on the clip; the "Plan (preview)" setting gates "writing your own captions" behind a tier. That contradicts the rule above and should come out. | Check | S |
+| Post caption and hashtags | Generated from the brief | Editable on the clip, and the brief's lines to choose from, on every plan (the tier gate came out, D169) | **Done** | |
 | Brief rules | AI reads a pasted brief | **Exists** (the campaign editor) | **Exists** | |
 | Finding campaigns | Automatic discovery | **Exists** ("New campaign" by hand) | **Exists** | |
 | Posting | Auto-post switch (not shipped) | Off by default; every post waits for a click | **Exists** | |

@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   AlertTriangle, Check, CheckCircle2, Download, ThumbsDown, ThumbsUp, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
-  Lock, Pencil, Scissors, ShieldAlert, Upload, X, XCircle,
+  Pencil, Scissors, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
@@ -16,7 +16,7 @@ import { useUI } from "@/lib/store";
 import { NO_STATS } from "@/api/platforms.gen";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney, openTab } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
-import { CaptionChoice, HookControl, usePaid } from "./lines";
+import { CaptionChoice, HookControl } from "./lines";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
@@ -185,7 +185,6 @@ const breaksBrief = (clip: Clip) => Boolean(clip.rules && (clip.rules.failed.len
 function CaptionSection({ clip }: { clip: Clip }) {
   const [draft, setDraft] = useState<string | null>(null);
   const edit = useEditCaption();
-  const paid = usePaid();
   const editable = clip.status === "ready" || clip.status === "skipped";
   const save = () => {
     if (draft === null) return;
@@ -200,9 +199,8 @@ function CaptionSection({ clip }: { clip: Clip }) {
         <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Caption</h3>
         <span className="flex items-center gap-1.5">
           {draft === null && <CaptionChoice clip={clip} />}
-          {editable && draft === null && (paid
-            ? <Button size="sm" variant="ghost" onClick={() => setDraft(clip.caption)}><Pencil className="size-3.5" /> Edit</Button>
-            : <Tip label="Writing your own caption is part of the paid plans"><span className="inline-flex items-center gap-1 text-xs text-subtle"><Lock className="size-3" /> Edit</span></Tip>)}
+          {editable && draft === null &&
+            <Button size="sm" variant="ghost" onClick={() => setDraft(clip.caption)}><Pencil className="size-3.5" /> Edit</Button>}
           {draft === null && !(clip.post_copy?.length && clip.status === "ready") &&
             <CopyButton text={clip.caption} what="Caption" label="Copy caption" keys="C" />}
         </span>

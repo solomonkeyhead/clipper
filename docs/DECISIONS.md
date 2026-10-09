@@ -3103,3 +3103,9 @@ Measured from the log and by asking each provider directly (2026-10-08):
   "poll" endings lost their example lines: two scripts on unrelated questions both ended "Metal or wood: which wins?".
 - The notes list one "didn't answer" line a provider, not one a model.
 Result, both runs real, Gemini out of quota, Claude blocked: a full write in 57 s and 69 s.
+
+## D169: choosing and writing a clip's lines is on every plan
+The "Plan (preview)" setting put choosing a clip's on-screen hook or caption, and writing your own, behind the
+Research tier (D90). That broke the rule that nothing manual sits behind a tier (D120); it was offered before and
+is done now: `choose_lines` is gone from `studio/plans.py`, the two endpoints no longer ask for it, and the page
+shows the Choose and Edit controls on every plan. The tiers keep only volume and the Ask chat.

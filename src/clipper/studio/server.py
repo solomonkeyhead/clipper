@@ -1249,10 +1249,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.post("/api/clips/{clip_id}/rerender")
     def rerender_clip(clip_id: int, body: dict | None = None) -> dict:
-        """Make the clip again with a new on-screen hook (D90): the one given (a paid
-        choice), or the brief's line its campaign has used least."""
+        """Make the clip again with a new on-screen hook (D90): the one given, or the brief's line its
+        campaign has used least."""
         from ..campaign import rotation
-        from . import plans
 
         hook = str((body or {}).get("hook") or "").strip()
         found = next((c for c in Snapshot().clips if c.id == clip_id), None)
@@ -1260,12 +1259,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             raise HTTPException(404, "no such clip")
         if found.posts or found.status in ("posted", "submitted"):
             raise HTTPException(400, "it's posted: its video is what's live")
-        if hook:
-            # The hook asked for is the one used. Its own title or current hook is free
-            # (showing the title fixes a mismatch); any other line is a paid choice.
-            if hook not in (found.title, found.hook):
-                plans.require("choose_lines")
-        else:
+        if not hook:
             campaign = load_campaigns().get(found.campaign)
             lines = [h for h in (campaign.hook_texts if campaign else ()) if h != found.hook]
             if not lines:
@@ -1462,12 +1456,8 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.put("/api/clips/{clip_id}/caption")
     def edit_caption(clip_id: int, body: dict) -> dict:
-        """The user's own caption for a clip not yet posted; the rules still apply (D81).
-        Choosing or writing captions is part of the paid plans (D90)."""
-        from . import plans
-
-        plans.require("choose_lines")
-
+        """The user's own caption for a clip not yet posted; the rules still apply (D81). Open on every plan:
+        nothing manual sits behind one (D120, D169)."""
         text = str(body.get("caption") or "").strip()
         if not text:
             raise HTTPException(400, "the caption is empty")

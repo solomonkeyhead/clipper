@@ -1,7 +1,7 @@
 """Plans: which features an account has.
 
 Planned as paid tiers for a hosted Clipper (D62, D63): Free (clipping, stats),
-Research (adds the Ask chat and choosing a clip's lines, D90), Pro (everything:
+Research (adds the Ask chat, D90), Pro (everything:
 every clip a video has, several accounts per platform, later auto-posting). Nothing
 is billed; a local install is on Pro, and the setting exists so the tiers can
 be tried and the checks sit in the right places.
@@ -18,9 +18,9 @@ PLAN_NAMES = {"free": "Free", "research": "Research", "pro": "Pro"}
 #: feature -> the lowest plan that has it
 FEATURES = {"research": "research", "unlimited_clips": "pro",
             # More than one account per platform, and account groups (D89).
-            "multi_account": "pro",
-            # Choosing a clip's hook or caption, and writing your own (D90).
-            "choose_lines": "research"}
+            "multi_account": "pro"}
+# Choosing a clip's hook or caption, and writing your own, was a Research feature (D90); it is on every plan now
+# (D169): a tier never takes a manual step away (D120).
 #: Clips a video can give below Pro (D71): enough to try, not to mine a 4 GB bank.
 CLIP_CAP = 10
 #: Videos one "Make clips" may queue (D72). A hosted Clipper meters minutes a

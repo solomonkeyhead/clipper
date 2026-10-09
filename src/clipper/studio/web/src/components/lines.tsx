@@ -1,15 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Lock, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useCampaign, useEditCaption, useSettings, type Clip } from "@/api/client";
+import { useCampaign, useEditCaption, type Clip } from "@/api/client";
 import { Button, Tip } from "./ui";
-
-/** Choosing a hook or caption is part of the paid plans (studio/plans.py "choose_lines"). */
-export function usePaid() {
-  const { data: settings } = useSettings();
-  return (settings?.plan ?? "pro") !== "free";
-}
 
 async function rerender(id: number, hook?: string) {
   const res = await fetch(`/api/clips/${id}/rerender`, {
@@ -23,12 +17,11 @@ const SELECT = "h-8 max-w-full rounded-md border border-line bg-surface-1 px-2 t
 
 /**
  * The hook burned into the video (D90). Changing it makes the clip again in the
- * background: "New hook" takes the brief's least-used line (free); choosing a
- * line or typing one is paid.
+ * background: "New hook" takes the brief's least-used line; or choose a line, or
+ * type one. Nothing here sits behind a plan (D120, D169).
  */
 export function HookControl({ clip }: { clip: Clip }) {
   const qc = useQueryClient();
-  const paid = usePaid();
   const { data: detail } = useCampaign(clip.campaign);
   const lines = detail?.brief?.hook_texts ?? [];
   const [custom, setCustom] = useState<string | null>(null);
@@ -65,18 +58,12 @@ export function HookControl({ clip }: { clip: Clip }) {
             </Button>
           </Tip>
         )}
-        {paid ? (
-          <select aria-label="Choose a hook" className={SELECT} value="" disabled={go.isPending}
-                  onChange={(e) => e.target.value === "\u0000" ? setCustom("") : e.target.value && go.mutate(e.target.value)}>
-            <option value="">Choose…</option>
-            {lines.filter((l) => l !== clip.hook).map((l) => <option key={l} value={l}>{l}</option>)}
-            <option value={"\u0000"}>Write my own…</option>
-          </select>
-        ) : (
-          <Tip label="Choosing a hook or writing your own is part of the paid plans">
-            <span className="inline-flex items-center gap-1 text-xs text-subtle"><Lock className="size-3" /> Choose</span>
-          </Tip>
-        )}
+        <select aria-label="Choose a hook" className={SELECT} value="" disabled={go.isPending}
+                onChange={(e) => e.target.value === "\u0000" ? setCustom("") : e.target.value && go.mutate(e.target.value)}>
+          <option value="">Choose…</option>
+          {lines.filter((l) => l !== clip.hook).map((l) => <option key={l} value={l}>{l}</option>)}
+          <option value={"\u0000"}>Write my own…</option>
+        </select>
       </div>
       {custom !== null && (
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (custom.trim()) go.mutate(custom.trim()); }}>
@@ -91,21 +78,13 @@ export function HookControl({ clip }: { clip: Clip }) {
   );
 }
 
-/** The caption's first line, swapped for another of the brief's approved captions (paid). */
+/** The caption's first line, swapped for another of the brief's approved captions. */
 export function CaptionChoice({ clip }: { clip: Clip }) {
-  const paid = usePaid();
   const edit = useEditCaption();
   const { data: detail } = useCampaign(clip.campaign);
   const lines = detail?.brief?.captions ?? [];
   if (lines.length < 2 || (clip.status !== "ready" && clip.status !== "skipped")) return null;
   const current = lines.find((l) => clip.caption.startsWith(l));
-  if (!paid) {
-    return (
-      <Tip label="Choosing or writing captions is part of the paid plans">
-        <span className="inline-flex items-center gap-1 text-xs text-subtle"><Lock className="size-3" /> Choose</span>
-      </Tip>
-    );
-  }
   const choose = (line: string) => {
     // Swap the caption line, keeping the description and hashtags below it.
     const caption = current ? line + clip.caption.slice(current.length)
