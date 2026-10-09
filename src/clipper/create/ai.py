@@ -158,6 +158,16 @@ def _valid(schema, text: str) -> bool:
     return True
 
 
+def _repaired(schema, text: str) -> str | None:
+    """A weaker model's answer with the JSON inside it (prose before or after, a fence, a thinking block) cut
+    out, if that fits the schema (D167)."""
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
+    start, end = text.find("{"), text.rfind("}")
+    if 0 <= start < end and (cut := text[start:end + 1]) != text and _valid(schema, cut):
+        return cut
+    return None
+
+
 def _ordered(config, job: str = "", quick: bool = False):
     """Who answers `job`, in the order asked: (order, the Claude ones, the user's pick, Gemini first?)."""
     order = backends(config, config.llm.create_quick_model if quick else None, job)
@@ -224,12 +234,15 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
                                                response_schema=schema, media=list(media or []))).text
             if schema is not None and not _valid(schema, text):
-                # A weaker model's answer that can't be read: ask the next one rather than fail (D167).
-                unread = unread or (text, backend.describe())
-                log.warning("create: %s answered in a shape that can't be read; asking the next", backend.describe())
-                misses[backend.describe()] = "its answer wasn't in the shape asked for"
-                missed_at[backend.describe()] = time.time()
-                continue
+                if (fixed := _repaired(schema, text)) is not None:
+                    text = fixed
+                else:
+                    # A weaker model's answer that can't be read: ask the next one rather than fail (D167).
+                    unread = unread or (text, backend.describe())
+                    log.warning("create: %s answered in a shape that can't be read (%d characters: %r ... %r); "
+                                "asking the next", backend.describe(), len(text), text[:120], text[-80:])
+                    misses[backend.describe()] = "its answer wasn't in the shape asked for"   # no rest: it answered
+                    continue
             last_used = backend.describe()
             misses.pop(last_used, None)  # it answers again: that problem is over
             if keep and _valid(schema, text):

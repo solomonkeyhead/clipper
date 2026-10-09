@@ -648,3 +648,28 @@ def test_an_unreadable_answer_goes_on_to_the_next_model(monkeypatch):
     assert ai.ask("s", "u", schema, temperature=0) == '{"n": 1}'
     monkeypatch.setattr(ai, "_ordered", lambda *a, **k: ([bad], [], False, False))
     assert ai.ask("s", "u", schema, temperature=0) == "not json"     # none fit: the caller reports it
+
+
+def test_json_inside_prose_is_cut_out_and_an_unreadable_answer_does_not_rest_its_model(monkeypatch):
+    """D167: prose around the JSON is taken off; an unreadable answer isn't a failure that rests the model."""
+    from clipper.create import ai
+    from clipper.llm.base import LLMResponse
+
+    class Fake:
+        name, timeout = "a", 30
+
+        def __init__(self, text):
+            self.text = text
+
+        def describe(self):
+            return "a:m"
+
+        def complete(self, req):
+            return LLMResponse(text=self.text, model="m")
+
+    schema = __import__("pydantic").create_model("S2", n=(int, ...))
+    monkeypatch.setattr(ai, "_ordered", lambda *a, **k: ([Fake('Sure! Here it is: {"n": 2} Hope it helps.')], [], False, False))
+    assert ai.ask("s", "u", schema, temperature=0) == '{"n": 2}'
+    monkeypatch.setattr(ai, "_ordered", lambda *a, **k: ([Fake("nope")], [], False, False))
+    ai.missed_at.pop("a:m", None)
+    assert ai.ask("s", "u", schema, temperature=0) == "nope" and "a:m" not in ai.missed_at

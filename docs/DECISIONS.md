@@ -3077,3 +3077,6 @@ model that answered (it) returned JSON the director couldn't read, and nothing e
   Groq, OpenRouter. NVIDIA's own list also has `nvidia/nemotron-3-ultra-550b-a55b`, `z-ai/glm-5.3` and
   `deepseek-ai/deepseek-v4.1-flash`.
 - NVIDIA answered 401 "Invalid JWT": the key in .env is not an `nvapi-` key (they start with that).
+- Added after: JSON inside prose, a fence or a thinking block is cut out of a weaker model's answer before it counts
+  as unreadable, and an unreadable answer no longer rests its model for 15 minutes (it did answer; with Gemini out of
+  quota that left nothing). The log line for an unreadable answer shows its first and last characters.
