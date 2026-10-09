@@ -164,13 +164,10 @@ def _read_json(path: Path) -> dict:
 
 
 def _ranks(x: np.ndarray) -> np.ndarray:
-    order = x.argsort(kind="mergesort")
-    ranks = np.empty(len(x))
-    ranks[order] = np.arange(len(x), dtype=float)
-    for value in np.unique(x):  # ties share their mean rank
-        tied = x == value
-        ranks[tied] = ranks[tied].mean()
-    return ranks
+    """Ranks from 0, ties sharing their mean rank; in one pass, as the bootstrap asks 2,000 times (D178)."""
+    _, which, counts = np.unique(x, return_inverse=True, return_counts=True)
+    first = np.cumsum(counts) - counts
+    return (first + (counts - 1) / 2)[which].astype(float)
 
 
 def spearman(x: list[float], y: list[float]) -> float:
@@ -183,13 +180,18 @@ def spearman(x: list[float], y: list[float]) -> float:
 def bootstrap_ci(x: list[float], y: list[float], *, reps: int = 2000,
                  seed: int = 7) -> tuple[float, float]:
     """95% interval for Spearman's rho by resampling clips."""
+    from scipy.stats import rankdata
+
     rng = np.random.default_rng(seed)
     xs, ys = np.asarray(x, float), np.asarray(y, float)
     n = len(xs)
-    rhos = []
-    for _ in range(reps):
-        idx = rng.integers(0, n, n)
-        rhos.append(spearman(xs[idx].tolist(), ys[idx].tolist()))
+    # Every resample at once (D178): the same draws, row by row, as one at a time gave.
+    idx = rng.integers(0, n, (reps, n))
+    a, b = rankdata(xs[idx], axis=1), rankdata(ys[idx], axis=1)
+    a -= a.mean(1, keepdims=True)
+    b -= b.mean(1, keepdims=True)
+    spread = np.sqrt((a * a).sum(1) * (b * b).sum(1))
+    rhos = np.where(spread > 0, (a * b).sum(1) / np.where(spread > 0, spread, 1), 0.0)   # no spread: 0, as spearman
     return float(np.percentile(rhos, 2.5)), float(np.percentile(rhos, 97.5))
 
 

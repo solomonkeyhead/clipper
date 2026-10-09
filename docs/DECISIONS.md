@@ -3196,3 +3196,9 @@ Config rejects unknown keys so a typo is caught (StrictModel); for the user's ow
 failing. Their keys are now checked against the settings first: one this version doesn't have is left out with a
 warning in the log ("config: llm.x isn't a setting in this version of Clipper; ignored"). The shipped
 `config/default.yaml` stays strict.
+
+## D178: `clipper learn`'s confidence intervals at once
+The learning analysis bootstraps Spearman's rho 2,000 times per signal and target, one resample at a time, each
+ranking ties in a Python loop: 7 s for 24 clips, and each of three tests paid it. The resamples are now drawn as one
+array and ranked with scipy's `rankdata` (the same draws in the same order, so the same intervals, checked on 20
+random cases); `_ranks` ties are averaged in one pass. Under 3 s, most of it importing scipy.
