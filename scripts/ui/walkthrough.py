@@ -2,7 +2,7 @@
 
 Run scripts/ui/serve.py <empty data dir> in the background first (port 8799), then
 python scripts/ui/walkthrough.py <folder for screenshots>. Needs `pip install playwright`;
-the browser is the pre-installed Chromium in /opt/pw-browsers."""
+the browser is the pre-installed Chromium in /opt/pw-browsers (a cloud session's)."""
 import sys, time
 from playwright.sync_api import sync_playwright, expect
 
@@ -89,6 +89,34 @@ with sync_playwright() as p:
     expect(review).to_be_visible()
     print("after failed rebuild: review", review.get_attribute("aria-expanded"), "parts", footage.count())
     page.screenshot(path=f"{OUT}/3_after_rebuild.png", full_page=True)
+    # a part set by hand (D171): a drawing's way in and size, from its Adjust panel; captions and the cover
+    adjust = page.get_by_role("button", name="Adjust")
+    for k in range(adjust.count()):
+        adjust.nth(k).click()
+        if page.get_by_label("Drawing size, part 3").count():
+            break
+        adjust.nth(k).click()
+    page.get_by_label("Way in, part 3").select_option("whip")
+    page.get_by_label("Drawing size, part 3").select_option(label="size 115%")
+    expect(page.get_by_label("Way in, part 3")).to_have_value("whip")
+    expect(page.get_by_test_id("part-adjust")).to_be_visible()
+    page.get_by_test_id("part-adjust").screenshot(path=f"{OUT}/4b_adjust.png")
+    print("part 3 set by hand: whip in, 115%")
+    page.get_by_text("Captions", exact=True).first.click()
+    caption = page.get_by_label("Caption for sentence 2")
+    caption.fill("You think the recording lies.")
+    caption.blur()
+    for _ in range(20):   # saved when the field loses focus
+        if page.evaluate("async () => (await (await fetch('/api/create')).json()).videos"
+                         ".some(v => (v.script?.beats || []).some(b => b.caption === 'You think the recording lies.'))"):
+            break
+        time.sleep(0.5)
+    else:
+        raise AssertionError("the caption written for sentence 2 wasn't saved")
+    print("caption for sentence 2 saved")
+    page.get_by_role("button", name="Use this frame").first.click()
+    expect(page.get_by_text("Cover: the frame at").first).to_be_visible()
+    print("cover frame chosen")
     # the archive (D131): the posted video is in it by itself, comes back, and goes in again by hand
     expect(page.get_by_text("in the Archive")).to_be_visible()
     expect(page.get_by_role("button", name="Make again")).to_be_visible()
