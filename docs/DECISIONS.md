@@ -3171,3 +3171,13 @@ Now 85 s: shots 58 s, assembly 17 s, cover 10 s. Each build logs its stage times
 shots 58s, assembly 17s, cover 10s"), so a slow one can be read from the log. The note on footage picked by its
 search words no longer says Claude couldn't look at it when Gemini does the footage: "no AI could".
 Not done: drawing the shots in parallel processes (each frame is drawn in Pillow on one core); see the proposals.
+
+## D175: a clip job cut off by a restart is listed as stopped, not gone
+A clipping job was written down only when it finished. One cut off by a crash, a closed window or Windows
+restarting vanished: nothing on New clips said it had ever run. (Clipper's own restart for an update already
+waits for jobs, D116.) Jobs are now kept when queued and when they start too; on the next start one still marked
+queued or running shows as "Stopped": "Clipper closed before this finished. Clip the video again: the steps it had
+finished are reused", with the row's "Clip it again" (D143). It can't block `/api/quit`, which waits for running
+jobs. Clipping a run again whose campaign or video is gone now says which ("the campaign X isn't there any more",
+"episode.mp4 isn't there any more"), where it said "pick a campaign"; a missing video is named only inside the
+source folders, so the message can't tell what exists elsewhere on the PC.

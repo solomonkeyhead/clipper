@@ -137,7 +137,8 @@ def tidy(message: str) -> str:
 KEEP = 30
 
 
-def _load_finished() -> dict[int, dict]:
+def _load_kept() -> dict[int, dict]:
+    """The jobs of earlier sessions. One still queued or running was cut off when Clipper closed (D175)."""
     import json
 
     from . import db
@@ -148,11 +149,16 @@ def _load_finished() -> dict[int, dict]:
     for r in rows:
         job = json.loads(r["data"])
         job["message"] = ". ".join(t for t in (tidy(part) for part in (job.get("message") or "").split(". ")) if t)
+        if job.get("status") in ("queued", "running"):
+            job.update(status="failed", stage="Stopped", message="Clipper closed before this finished. Clip the "
+                       "video again: the steps it had finished are reused, not done twice.")
         out[r["id"]] = job
     return out
 
 
-def _save_finished(job: Job) -> None:
+def _keep(job: Job) -> None:
+    """Kept when it's queued, when it starts and when it ends, so a job Clipper closed on is still listed
+    after a restart, said to have stopped, not gone without a word (D175)."""
     import json
 
     from . import db
@@ -180,7 +186,7 @@ class JobRunner:
         self._configs: dict[int, object] = {}
         self._queue: queue.Queue[Job] = queue.Queue()
         # Finished jobs are kept in the database, so their results outlive a restart.
-        self._done = _load_finished()
+        self._done = _load_kept()
         self._ids = itertools.count(max([0, *self._done]) + 1)
         self._threads: list[threading.Thread] = []
         self._lock = threading.Lock()
@@ -201,6 +207,7 @@ class JobRunner:
                   mode=mode, ranges=list(ranges or []), edits=list(edits or []))
         self.jobs[job.id] = job
         self._configs[job.id] = campaign
+        _keep(job)
         self._queue.put(job)
         with self._lock:
             self._threads = [t for t in self._threads if t.is_alive()]
@@ -251,6 +258,7 @@ class JobRunner:
         if pipeline.getEffectiveLevel() > logging.INFO:  # the progress reads INFO lines
             pipeline.setLevel(logging.INFO)
         job.status, job.stage = "running", "Starting"
+        _keep(job)
         self.publish("job.progress", job.view())
         campaign = self._configs.pop(job.id)
         try:
@@ -288,7 +296,7 @@ class JobRunner:
         finally:
             pipeline.removeHandler(handler)
             job.finished = datetime.now().strftime("%Y-%m-%d %H:%M")
-            _save_finished(job)
+            _keep(job)
             self.publish("job.progress", job.view())
             self.publish("clips.changed")
             if job.clips:  # the AI rule check reads the new clips (D81)

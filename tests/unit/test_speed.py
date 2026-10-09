@@ -88,6 +88,29 @@ def test_two_jobs_run_at_once_and_keep_their_own_progress(monkeypatch, data_root
     assert a.stage == b.stage == "Made 1 clip"
 
 
+def test_a_job_clipper_closed_on_is_listed_as_stopped_after_a_restart(monkeypatch, data_root):
+    """D175: it was kept only when it finished, so one cut off by a crash or a closed window vanished."""
+    from clipper import runner
+    from clipper.studio import jobs
+
+    started, hold = threading.Event(), threading.Event()
+
+    def fake_run(source, **kwargs):
+        started.set()
+        hold.wait(10)
+        return SimpleNamespace(accepted=[], rejected=[], selection_note="", report={})
+
+    monkeypatch.setattr(runner, "run", fake_run)
+    before = jobs.JobRunner(lambda *a, **k: None)
+    job = before.submit(SimpleNamespace(name="c"), "a.mp4", 1)
+    assert started.wait(10)
+    after = jobs.JobRunner(lambda *a, **k: None)     # what a restart finds
+    hold.set()
+    kept = next(j for j in after.list() if j["id"] == job.id)
+    assert kept["status"] == "failed" and kept["stage"] == "Stopped" and "again" in kept["message"]
+    assert not [j for j in after.list() if j["status"] in ("queued", "running")]   # /api/quit isn't blocked by it
+
+
 class OutOfQuota(LLMBackend):
     """Gemini's free tier on 2026-10-08: "retry in 20h25m", and each call asked again (D168)."""
     name = "quota"

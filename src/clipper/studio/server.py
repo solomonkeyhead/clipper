@@ -532,9 +532,12 @@ def list_sources() -> list[dict]:
 def allowed_source(path: str) -> Path:
     """A source path the page may clip: an existing video in one of the source folders."""
     target = Path(path).resolve()
-    if (target.suffix.lower() not in VIDEO_EXTENSIONS or not target.is_file()
-            or not any(folder.resolve() in target.parents for folder in source_folders()
-                       if folder.is_dir())):
+    inside = any(folder.resolve() in target.parents for folder in source_folders() if folder.is_dir())
+    if inside and target.suffix.lower() in VIDEO_EXTENSIONS and not target.is_file():
+        # Clipping again a video moved or deleted since (D175): say which. Only inside the source folders,
+        # so this can't tell anyone what exists elsewhere on the PC.
+        raise HTTPException(400, f"{target.name} isn't there any more (moved or deleted?)")
+    if not inside or target.suffix.lower() not in VIDEO_EXTENSIONS or not target.is_file():
         raise HTTPException(400, "pick a video from the list, or upload one")
     return target
 
@@ -1345,9 +1348,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         """One job per video, queued and run in turn (D72)."""
         from . import footage, plans
 
-        campaign = load_campaigns().get(str(body.get("campaign") or ""))
-        if campaign is None:
-            raise HTTPException(400, "pick a campaign")
+        name = str(body.get("campaign") or "")
+        campaign = load_campaigns().get(name)
+        if campaign is None:   # a run clipped again after its campaign was deleted says so (D175)
+            raise HTTPException(400, f"the campaign {name} isn't there any more" if name else "pick a campaign")
         wanted = [str(s) for s in body.get("sources") or [body.get("source") or ""] if s]
         if not wanted:
             raise HTTPException(400, "pick a video")

@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS research_messages (
 );
 CREATE TABLE IF NOT EXISTS jobs (
     id          INTEGER PRIMARY KEY,      -- studio/jobs.py Job.id
-    data        TEXT NOT NULL,            -- the finished job, with its results report
+    data        TEXT NOT NULL,            -- the job, kept from when it is queued (D175), with its results report
     finished    TEXT NOT NULL
 );
 -- Discord channels the campaign alerts read (studio/alerts.py), in the user's own server.

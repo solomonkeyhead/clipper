@@ -111,7 +111,7 @@ function FinishedRow({ job, runs = 1 }: { job: Job; runs?: number }) {
         <ChevronRight className={cn("size-3.5 shrink-0 text-muted transition-transform", open && "rotate-90")} />
         <span className="min-w-0 flex-1 truncate text-sm">{job.name}</span>
         <span className="hidden shrink-0 text-xs text-muted sm:inline">{title(job.campaign)} · {ago(job.created)}{runs > 1 ? ` · clipped ${runs} times` : ""}</span>
-        {job.status === "failed" ? <Chip tone="danger">Failed</Chip>
+        {job.status === "failed" ? <Chip tone="danger">{job.stage === "Stopped" ? "Stopped" : "Failed"}</Chip>
           : job.clips > 0 ? <Chip tone="success">made {job.clips} clip{job.clips === 1 ? "" : "s"}</Chip>
           : <Chip tone="warning">No clips</Chip>}
       </button>
