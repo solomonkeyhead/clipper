@@ -3109,3 +3109,11 @@ The "Plan (preview)" setting put choosing a clip's on-screen hook or caption, an
 Research tier (D90). That broke the rule that nothing manual sits behind a tier (D120); it was offered before and
 is done now: `choose_lines` is gone from `studio/plans.py`, the two endpoints no longer ask for it, and the page
 shows the Choose and Edit controls on every plan. The tiers keep only volume and the Ask chat.
+
+## D170: the sketcher uses its icons; they are drawn big enough to read
+Checked whether the sketch AI uses the 234 icons (D162). Every sketch Marc has was drawn before D162 (none has an
+icon mark, all on the old 600 grid), so the one test that used none was the only evidence. Three new sketches on
+the free models, Claude blocked, all used them (magnet and paperclip, battery and lightbulb, sun): the prompt
+works and stays as it is. What was wrong was size: asked for 260-420 wide, models gave 120-170, and a magnet and a
+paperclip at either end of a long arrow came out as thumbnails. `sketch.fit` now grows each icon to a third of the
+drawing's span before fitting it to the board (about 210-280 wide), never into the icon beside it.

@@ -391,6 +391,19 @@ def test_a_tiny_or_off_scale_sketch_is_fitted_to_the_board_and_an_empty_one_refu
         fit(Sketch(marks=[Mark(kind="text", xy=[1, 1], text="air"), Mark(kind="text", xy=[2, 2], text="bone")]))
 
 
+def test_a_small_icon_is_drawn_bigger_but_never_into_its_neighbour():
+    """D170: models gave icons 120-170 wide at either end of a long arrow; on a phone they were thumbnails."""
+    from clipper.create.sketch import Mark, Sketch, fit
+
+    far = fit(Sketch(marks=[Mark(kind="icon", text="magnet", xy=[100, 450, 60]), Mark(kind="icon", text="paperclip", xy=[900, 450, 50]),
+                            Mark(kind="arrow", xy=[200, 450, 800, 450])]))
+    assert all(m.xy[2] >= 200 for m in far.marks if m.kind == "icon")
+    near = fit(Sketch(marks=[Mark(kind="icon", text="sun", xy=[100, 100, 30]), Mark(kind="icon", text="cloud", xy=[140, 100, 30]),
+                             Mark(kind="arrow", xy=[100, 400, 900, 400])]))
+    a, b = [m for m in near.marks if m.kind == "icon"]
+    assert a.xy[2] / 2 + b.xy[2] / 2 < abs(a.xy[0] - b.xy[0])     # grown, but they don't touch
+
+
 def test_a_black_shot_is_caught(tmp_path):
     import shutil
     import subprocess

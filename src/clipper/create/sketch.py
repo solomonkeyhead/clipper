@@ -173,6 +173,7 @@ def fit(sketch: Sketch, title: bool = False) -> Sketch:
     marks = [m for m in marks if len(m.xy) >= POINTS[m.kind] and (m.kind not in ("text", "icon") or m.text.strip())]
     if len(marks) < 3 or all(m.kind == "text" for m in marks):
         raise CreateError("the sketch had too little in it to draw")
+    marks = _icons_at_least(marks)
     # Scaled by its shapes: the words keep their size and move with what they label.
     pts = [p for m in marks if m.kind != "text" for p in _extent(m)]
     x0, x1 = min(p[0] for p in pts), max(p[0] for p in pts)
@@ -195,6 +196,27 @@ def fit(sketch: Sketch, title: bool = False) -> Sketch:
         return m.model_copy(update={"xy": xy})
 
     return sketch.model_copy(update={"marks": [move(m) for m in marks], "grid": 900})
+
+
+#: The smallest an icon is drawn, as a share of the drawing's size (D170): asked for 260-420 wide on the 1000
+#: grid, models gave 120-170, and a magnet and a paperclip at either end of a long arrow were thumbnails on a phone.
+ICON_SHARE = 0.34   # 0.34 of the span, before fitting: about 210-280 wide on the board
+
+
+def _icons_at_least(marks: list[Mark]) -> list[Mark]:
+    """Each icon grown to ICON_SHARE of the drawing's span, before it is fitted to the board, and kept clear of the
+    icons beside it (at most 0.9 of the way to the nearest one's centre, so two never meet)."""
+    centres = [(i, m.xy[0], m.xy[1]) for i, m in enumerate(marks) if m.kind == "icon" and len(m.xy) >= 2]
+    if not centres:
+        return marks
+    pts = [p for m in marks if m.kind != "text" for p in _extent(m)]
+    span = max(max(p[0] for p in pts) - min(p[0] for p in pts), max(p[1] for p in pts) - min(p[1] for p in pts))
+    out = list(marks)
+    for i, x, y in centres:
+        w = out[i].xy[2] if len(out[i].xy) >= 3 else ICON_SIZE
+        gap = min((((x - x2) ** 2 + (y - y2) ** 2) ** 0.5 for j, x2, y2 in centres if j != i), default=float("inf"))
+        out[i] = out[i].model_copy(update={"xy": [x, y, max(w, min(ICON_SHARE * span, 0.9 * gap))]})
+    return out
 
 
 def _png(sketch: Sketch, title: str = "") -> bytes:
