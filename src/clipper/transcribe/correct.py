@@ -65,7 +65,7 @@ MIN_FIX_ALLOWANCE = 2
 # Replacements longer than this are rewrites, not a misheard word.
 MAX_REPLACEMENT_WORDS = 3
 
-SYSTEM = """\
+_ABOUT = """\
 You proofread automatic speech-recognition transcripts. The recogniser writes
 what words SOUND like, so it sometimes picks a word that sounds the same or
 nearly the same as what was said but is wrong in context -- "picture" for
@@ -86,16 +86,35 @@ Rules:
   speak informally and some speakers are not native English speakers: "monkey
   every day bananas" is how that person talks, not a transcription error.
 - Never change meaning, add words that were not said, or remove words.
-- Only words in the CLIP section may be flagged; the context is there to help
-  you understand it.
+"""
+_FORM = """\
 - Keep the replacement in the same form: a single word for a single word,
   matching capitalisation. Proper nouns should be spelled correctly.
-
-Return a JSON array (possibly empty). Each element:
-  index        integer, the [n] number of the word in the CLIP
+"""
+_EACH = """\
   original     string, that word exactly as shown
   replacement  string, what the speaker actually said
   reason       string, a few words on the context that shows it"""
+
+SYSTEM = _ABOUT + """\
+- Only words in the CLIP section may be flagged; the context is there to help
+  you understand it.
+""" + _FORM + """
+Return a JSON array (possibly empty). Each element:
+  index        integer, the [n] number of the word in the CLIP
+""" + _EACH
+
+#: Several clips in one call (D185): a run's clips one call each used up the stronger free model's quota.
+BATCH_SYSTEM = _ABOUT + """\
+- There are several clips, each with its own context. Only words in a CLIP
+  section may be flagged, by that clip's own [n] numbers; the context is there
+  to help you understand it.
+""" + _FORM + """
+Return a JSON array (possibly empty), every clip's edits together. Each element:
+  clip         integer, the number of the clip the word is in
+  index        integer, the [n] number of the word in that CLIP
+""" + _EACH
+BATCH = 8   # clips a call
 
 
 class _Edit(BaseModel):
@@ -196,15 +215,16 @@ def names_in(words: list[Word], *, min_count: int = 2) -> frozenset[str]:
 
 def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
          cache: LLMCache | None, prompt_key: str) -> tuple[str, LLMBackend] | None:
-    """The first answer from the backends in order, cached. None if all fail."""
-    for backend in backends:
-        key = None
-        if cache is not None:
-            key = cache.key(backend=backend.name, model=backend.cache_model(),
-                            prompt_key=prompt_key, payload=user)
-            entry = cache.get(key)
-            if entry is not None:
-                return entry.text, backend
+    """The first answer from the backends in order, cached. None if all fail. Any of them's answer
+    kept from before comes first (D185): a re-run waited out the stronger model's time-out again
+    before finding the fallback's answer, and `prefetch` keeps each clip's answer under the model
+    that gave it."""
+    keys = [cache.key(backend=b.name, model=b.cache_model(), prompt_key=prompt_key, payload=user)
+            if cache is not None else None for b in backends]
+    for backend, key in zip(backends, keys, strict=True):
+        if key is not None and (entry := cache.get(key)) is not None:
+            return entry.text, backend
+    for backend, key in zip(backends, keys, strict=True):
         try:
             response = backend.complete(LLMRequest(
                 system=system, user=user, temperature=0.0, response_schema=schema))
@@ -216,6 +236,43 @@ def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
             cache.put(key, text=response.text, model=response.model)
         return response.text, backend
     return None
+
+
+class _ClipEdit(_Edit):
+    clip: int
+
+
+def prefetch(clips: list[tuple[list[Word], list[Word], list[Word]]], backends: list[LLMBackend], *,
+             cache: LLMCache) -> None:
+    """Several clips' misheard words asked in one call, BATCH clips at a time (D185), each clip's answer
+    kept as its own question's would be, under the model that gave it: `correct_words` then finds it and
+    asks nothing, and every fix is still checked in code and by ear. `clips`: (words, before, after) as
+    `correct_words` will be given them. A clip already answered, or alone, is left to its own call."""
+    def answered(prompt: str) -> bool:
+        return any(cache.get(cache.key(backend=b.name, model=b.cache_model(), prompt_key=PROMPT_VERSION,
+                                       payload=prompt)) is not None for b in backends)
+
+    prompts = [_prompt(*c) for c in clips if c[0]]
+    todo = [p for p in dict.fromkeys(prompts) if not answered(p)]
+    for chunk in (todo[i:i + BATCH] for i in range(0, len(todo), BATCH)):
+        if len(chunk) < 2:
+            continue
+        user = "\n\n".join(f"=== CLIP {n} ===\n{p}" for n, p in enumerate(chunk, 1))
+        got = _ask(backends, BATCH_SYSTEM, user, list[_ClipEdit], cache=cache, prompt_key=f"{PROMPT_VERSION}:batch")
+        if got is None:
+            continue
+        text, backend = got
+        try:
+            json.loads(text)
+        except json.JSONDecodeError:   # unreadable: each clip asks on its own
+            continue
+        edits = [e for e in _parse(text, _ClipEdit) if 1 <= e.clip <= len(chunk)]
+        for n, prompt in enumerate(chunk, 1):
+            mine = [e.model_dump(exclude={"clip"}) for e in edits if e.clip == n]
+            cache.put(cache.key(backend=backend.name, model=backend.cache_model(), prompt_key=PROMPT_VERSION,
+                                payload=prompt), text=json.dumps(mine), model=backend.cache_model())
+    if todo:
+        log.info("caption fixes: %d clip(s) asked in %d call(s)", len(todo), -(-len(todo) // BATCH))
 
 
 def apply_edits(words: list[Word], edits: list[_Edit]) -> tuple[list[Word], list[WordFix]]:
@@ -345,7 +402,7 @@ def _prompt(words: list[Word], before: list[Word], after: list[Word]) -> str:
             f"CONTEXT AFTER (do not flag):\n{plain(after)}\n")
 
 
-def _parse(text: str) -> list[_Edit]:
+def _parse(text: str, shape: type[_Edit] = _Edit) -> list:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -353,10 +410,10 @@ def _parse(text: str) -> list[_Edit]:
         return []
     if isinstance(data, dict):
         data = next((v for v in data.values() if isinstance(v, list)), [])
-    edits: list[_Edit] = []
+    edits = []
     for item in data if isinstance(data, list) else []:
         try:
-            edits.append(_Edit.model_validate(item))
+            edits.append(shape.model_validate(item))
         except ValidationError:
             continue
     return edits

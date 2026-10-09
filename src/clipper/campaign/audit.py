@@ -16,6 +16,9 @@ it is shown. A "missing" text that is already there is dropped regardless.
 
 A problem whose fix is adding text comes back with that text, so one click can
 make it a caption rule for every clip (studio/rulecheck.py).
+
+D185: up to AUDIT_BATCH clips are read in one call; a call a clip sent the whole
+brief (up to 30,000 characters) each time.
 """
 
 from __future__ import annotations
@@ -35,15 +38,16 @@ from .rules import NAMES, PostText
 log = get_logger(__name__)
 
 AUDIT_VERSION = "audit-v3"
+AUDIT_BATCH = 6   # clips a call
 
 SYSTEM = """\
-You check a short video's post against the paid campaign brief it is for, before it is \
-posted. A mistake can get the post rejected and unpaid, so be exact.
+You check short videos' posts against the paid campaign brief they are for, before they are \
+posted. A mistake can get a post rejected and unpaid, so be exact.
 
-Find every rule in the brief about the post's TEXT: the caption, the YouTube title, the \
+Find every rule in the brief about a post's TEXT: the caption, the YouTube title, the \
 on-screen text, @mentions and tags, a disclosure, a required phrase or link, banned words \
-or topics, language, emojis. Check each against each platform's post below. A rule that \
-names a platform applies only there.
+or topics, language, emojis. Check each against each clip's post on each platform below, \
+every clip on its own. A rule that names a platform applies only there.
 
 Skip the rules listed under ALREADY CHECKED: code checks those exactly. Skip rules about \
 anything that is not in the text: the footage, editing, length, eligibility, audience, \
@@ -55,9 +59,9 @@ Read exactly: a hashtag starts with #; an @mention is not a hashtag. Quote the r
 for word from the brief. When adding text would fix it, put exactly that text in "add" \
 (e.g. "@JoshThomasChannel"), else "".
 
-Return JSON: {"problems": [{"rule": "...", "platform": "tiktok" | "instagram_reels" | \
-"youtube_shorts" | "all", "where": "caption" | "title" | "on-screen text", \
-"problem": "...", "add": "..."}]} -- an empty list when the post follows every rule."""
+Return JSON: {"problems": [{"clip": <its number>, "rule": "...", "platform": "tiktok" | \
+"instagram_reels" | "youtube_shorts" | "all", "where": "caption" | "title" | "on-screen text", \
+"problem": "...", "add": "..."}]} -- an empty list when every post follows every rule."""
 
 CONFIRM = """\
 A campaign brief has this rule. Does the post text below clearly break it? Answer only \
@@ -80,8 +84,12 @@ class Problem(BaseModel):
     add: str = ""
 
 
+class _Found(Problem):
+    clip: int = 1
+
+
 class _Answer(BaseModel):
-    problems: list[Problem] = Field(default_factory=list)
+    problems: list[_Found] = Field(default_factory=list)
 
 
 class _Verdict(BaseModel):
@@ -121,16 +129,27 @@ def code_checked(campaign: CampaignConfig) -> list[str]:
     return out
 
 
-def build_user(brief: str, posts: list[PostText], hook: str, checked: list[str]) -> str:
-    shown = [f"BRIEF:\n{brief[:30_000]}",
-             "ALREADY CHECKED (skip these):\n" + "\n".join(f"- {c}" for c in checked),
-             f"ON-SCREEN TEXT (all platforms): {hook.strip() or '(none)'}"]
+def _posts(posts: list[PostText], hook: str) -> list[str]:
+    shown = [f"ON-SCREEN TEXT (all platforms): {hook.strip() or '(none)'}"]
     for post in posts:
         part = f"--- {post.platform} ---\n"
         if post.title:
             part += f"TITLE: {post.title}\n"
         part += f"CAPTION:\n{post.caption}"
         shown.append(part)
+    return shown
+
+
+def build_user(brief: str, posts: list[PostText], hook: str, checked: list[str]) -> str:
+    """One clip's texts with the brief: what its stored result is keyed on (`key`)."""
+    return build_batch(brief, [(posts, hook)], checked, numbered=False)
+
+
+def build_batch(brief: str, clips: list[tuple[list[PostText], str]], checked: list[str], numbered: bool = True) -> str:
+    """The brief once, then each clip's (texts, on-screen text)."""
+    shown = [f"BRIEF:\n{brief[:30_000]}", "ALREADY CHECKED (skip these):\n" + "\n".join(f"- {c}" for c in checked)]
+    for n, (posts, hook) in enumerate(clips, 1):
+        shown += ([f"=== CLIP {n} ==="] if numbered else []) + _posts(posts, hook)
     return "\n\n".join(shown)
 
 
@@ -139,16 +158,35 @@ def key(user: str) -> str:
     return hashlib.sha256(f"{AUDIT_VERSION}\n{user}".encode()).hexdigest()[:24]
 
 
-def audit(user: str, posts: list[PostText], backends: list[LLMBackend], *,
-          cache=None, hook: str = "") -> list[Problem] | None:
-    """The problems found and confirmed, [] for none, or None when no model gave a usable
-    answer. Raises Refused when the models' own filters won't read it."""
-    found = _ask(SYSTEM, user, backends, cache, lambda text: _parse(text, posts))
+def audit(clips: list[tuple[list[PostText], str]], brief: str, checked: list[str], backends: list[LLMBackend], *,
+          cache=None) -> list[tuple[list[Problem] | None, bool]]:
+    """For each clip (its texts, its on-screen text): the problems found and confirmed ([] for none, None
+    when no model gave a usable answer), and whether the models' own filters refused to read it. A batch
+    the filters refuse is read in halves, so only the clip they object to goes unread."""
+    out = []
+    for i in range(0, len(clips), AUDIT_BATCH):
+        out += _audit(clips[i:i + AUDIT_BATCH], brief, checked, backends, cache)
+    return out
+
+
+def _audit(chunk, brief, checked, backends, cache) -> list[tuple[list[Problem] | None, bool]]:
+    try:
+        found = _ask(SYSTEM, build_batch(brief, chunk, checked), backends, cache,
+                     lambda text: _parse(text, chunk), _Answer)
+    except Refused:
+        if len(chunk) == 1:
+            return [([], True)]
+        half = len(chunk) // 2
+        return _audit(chunk[:half], brief, checked, backends, cache) + _audit(chunk[half:], brief, checked, backends, cache)
     if found is None:
-        return None
+        return [(None, False)] * len(chunk)
+    return [(_confirmed(problems, posts, hook, backends, cache), False) for problems, (posts, hook) in zip(found, chunk, strict=True)]
+
+
+def _confirmed(found: list[Problem], posts: list[PostText], hook: str, backends, cache) -> list[Problem]:
     confirmed = []
     for problem in found:
-        verdict = _ask(CONFIRM, _confirm_user(problem, posts, hook), backends, cache, _verdict)
+        verdict = _ask(CONFIRM, _confirm_user(problem, posts, hook), backends, cache, _verdict, _Verdict)
         # Unanswered: shown, since a missed rule costs more than a second look.
         if verdict is None or verdict.breaks:
             confirmed.append(problem)
@@ -157,8 +195,7 @@ def audit(user: str, posts: list[PostText], backends: list[LLMBackend], *,
     return confirmed
 
 
-def _ask(system: str, user: str, backends: list[LLMBackend], cache, parse):
-    schema = _Answer if system is SYSTEM else _Verdict
+def _ask(system: str, user: str, backends: list[LLMBackend], cache, parse, schema):
     refused = False
     for backend in backends:
         cache_key = None
@@ -216,21 +253,23 @@ def _confirm_user(problem: Problem, posts: list[PostText], hook: str) -> str:
     return f"RULE: {problem.rule}\n\nPOST TEXT:\n" + "\n\n".join(dict.fromkeys(texts))
 
 
-def _parse(text: str, posts: list[PostText]) -> list[Problem] | None:
+def _parse(text: str, chunk: list[tuple[list[PostText], str]]) -> list[list[Problem]] | None:
+    """Each clip's problems, from an answer about the clips in `chunk`."""
     try:
         answer = _Answer.model_validate(_json(text))
     except (ValueError, TypeError):
         return None
-    platforms = {p.platform for p in posts}
-    out = []
-    for problem in answer.problems:
-        if problem.platform not in platforms:
-            problem.platform = "all"
-        if not problem.rule.strip():
+    out: list[list[Problem]] = [[] for _ in chunk]
+    for found in answer.problems:
+        if not 1 <= found.clip <= len(chunk) or not found.rule.strip():
             continue
+        posts = chunk[found.clip - 1][0]
+        problem = Problem(**found.model_dump(exclude={"clip"}))
+        if problem.platform not in {p.platform for p in posts}:
+            problem.platform = "all"
         if problem.add.strip() and _already_there(problem, posts):
             continue  # the model missed it; the text is there
-        out.append(problem)
+        out[found.clip - 1].append(problem)
     return out
 
 

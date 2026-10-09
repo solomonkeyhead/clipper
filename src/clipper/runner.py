@@ -39,7 +39,7 @@ from .render.clip import render_clip
 from .render.faces import plan_layout_for
 from .render.graph import output_size
 from .select.pick import Pick
-from .transcribe.correct import WordFix, correct_words, names_in
+from .transcribe.correct import WordFix, correct_words, names_in, prefetch
 from .transcribe.recheck import AudioRecheck
 from .utils.cache import slugify
 from .utils.logging import get_logger
@@ -680,6 +680,8 @@ def _render_with_replacement(
     idle. A wave starts only as many as the quota still needs, so nothing extra
     is rendered; a rejection queues a reserve for the next wave.
     """
+    _ask_corrections_ahead(picks[:limit], outcome, config=config, campaign=campaign,
+                           corrector=corrector, recheck=recheck)
     queue = list(picks)
     spare = list(reserves)
     attempted: set[str] = set()
@@ -705,6 +707,22 @@ def _render_with_replacement(
                     rank=rank, attempt=attempt, corrector=corrector, recheck=recheck))
             for future in wave:
                 _settle(future.result(), queue, spare, result, rejected_dir, config)
+
+
+def _ask_corrections_ahead(picks: list[Pick], outcome: ScoreOutcome, *, config: Config, campaign: CampaignConfig,
+                           corrector: list[LLMBackend] | None, recheck: AudioRecheck | None) -> None:
+    """The picks' misheard words asked together before any of them renders (D185), so each clip's own
+    caption fix finds its answer kept; a reserve that comes in later asks on its own."""
+    if corrector is None or recheck is None:
+        return
+    words = outcome.transcript.words
+    cuts = [_cut(p, outcome, config=config, campaign=campaign, quiet=True) for p in picks]
+    spans = [_clip_span(words, c[0].start, c[1]) for c in cuts if c is not None]
+    clips = [_correction_window(words, *s) for s in spans if s]
+    try:
+        prefetch(clips, corrector, cache=LLMCache())
+    except Exception as exc:  # only a look ahead: each clip still asks for itself
+        log.warning("caption fixes weren't asked ahead (%s)", exc)
 
 
 def _settle(record, queue: list[Pick], spare: list[Pick], result: RunResult,
@@ -1022,64 +1040,15 @@ def _build_plan(
     attempt: int,
 ) -> ClipPlan | None:
     """Refine a selected candidate's boundaries into a renderable plan."""
-    sentences: Sentences = outcome.sentences
+    cut = _cut(pick, outcome, config=config, campaign=campaign)
+    if cut is None:
+        return None
+    bounds, end, teaser = cut
     transcript: Transcript = outcome.transcript
     candidate = pick.candidate
-
-    if candidate.quiet:
-        # Found by its silence and judged by watching (D68): refinement snaps to
-        # sentences and trims wordless edges, which would cut the moment itself.
-        end = min(candidate.end, candidate.start + campaign.duration.max_seconds)
-        bounds = RefinedBounds(candidate.start, end, notes=["no dialogue: cut as found"])
-        if end - candidate.start < campaign.duration.min_seconds:
-            return None
-    else:
-        bounds = refine(
-            candidate.start, candidate.end,
-            transcript=transcript,
-            sentences=sentences.sentences,
-            cfg=config.refine,
-            min_duration=campaign.duration.min_seconds,
-            max_duration=campaign.duration.max_seconds,
-            source_duration=outcome.info.media.duration,
-        )
-    if bounds.dropped:
-        log.info("%s dropped during refinement: %s", candidate.candidate_id,
-                 bounds.drop_reason)
-        return None
-    if (not candidate.quiet and candidate.scene_start is not None
-            and candidate.scene_end is not None):
-        # Refinement pads and snaps edges; for scripted TV that must never
-        # reach into the neighbouring scene -- the "unrelated scene at the
-        # beginning or end" reported on real clips.
-        start = max(bounds.start, candidate.scene_start)
-        end = min(bounds.end, candidate.scene_end)
-        # A window that opens or closes with its scene keeps the scene's cut.
-        # Refinement trims wordless lead-ins, which here cut 2.3s off a scene
-        # opening on a sign reading "I don't just want to have sex with you",
-        # so the clip began mid-line on "just want to...".
-        if candidate.start <= candidate.scene_start + 0.05:
-            start = candidate.scene_start
-        if candidate.end >= candidate.scene_end - 0.05:
-            end = candidate.scene_end
-        # ...but not a long silent stretch: the first three FX posts all lost
-        # most viewers at 0:01, one opening on a wordless shot of a house.
-        start, end = trim_silent_edges(start, end, transcript.words,
-                                       lead=config.refine.max_lead_in,
-                                       tail=config.refine.max_tail)
-        if end - start < campaign.duration.min_seconds:
-            log.info("%s dropped: only %.1fs once kept inside its scene",
-                     candidate.candidate_id, end - start)
-            return None
-        bounds = dataclasses.replace(bounds, start=start, end=end)
-
     values = next((v for v in outcome.signals.values
                    if v.candidate_id == candidate.candidate_id), None)
     scores = (values.llm_a or values.llm_b) if values else None
-
-    # Opening on its payoff (D97, D107): and when that comes late, ending on it too.
-    teaser = _teaser(candidate.payoff, bounds.start, bounds.end, campaign)
-    end = _end_on_payoff(teaser, bounds.start, bounds.end, campaign)
     notes = bounds.notes if end == bounds.end else [*bounds.notes, "ends on its payoff, to loop into the teaser"]
 
     text = " ".join(
@@ -1108,6 +1077,66 @@ def _build_plan(
         teaser=teaser,
     )
     return compliance.apply_campaign_caption(plan, campaign, pick=rotation.pick)
+
+
+def _cut(pick: Pick, outcome: ScoreOutcome, *, config: Config, campaign: CampaignConfig,
+         quiet: bool = False) -> tuple[RefinedBounds, float, tuple[float, float] | None] | None:
+    """Where a selected candidate's clip runs once refined: its bounds, where it ends (on its payoff,
+    D107) and the payoff it opens on; None if it was dropped. `quiet`: only a look ahead (D185), so a
+    drop isn't logged twice."""
+    sentences: Sentences = outcome.sentences
+    transcript: Transcript = outcome.transcript
+    candidate = pick.candidate
+    say = (lambda *a: None) if quiet else log.info
+
+    if candidate.quiet:
+        # Found by its silence and judged by watching (D68): refinement snaps to
+        # sentences and trims wordless edges, which would cut the moment itself.
+        end = min(candidate.end, candidate.start + campaign.duration.max_seconds)
+        bounds = RefinedBounds(candidate.start, end, notes=["no dialogue: cut as found"])
+        if end - candidate.start < campaign.duration.min_seconds:
+            return None
+    else:
+        bounds = refine(
+            candidate.start, candidate.end,
+            transcript=transcript,
+            sentences=sentences.sentences,
+            cfg=config.refine,
+            min_duration=campaign.duration.min_seconds,
+            max_duration=campaign.duration.max_seconds,
+            source_duration=outcome.info.media.duration,
+        )
+    if bounds.dropped:
+        say("%s dropped during refinement: %s", candidate.candidate_id, bounds.drop_reason)
+        return None
+    if (not candidate.quiet and candidate.scene_start is not None
+            and candidate.scene_end is not None):
+        # Refinement pads and snaps edges; for scripted TV that must never
+        # reach into the neighbouring scene -- the "unrelated scene at the
+        # beginning or end" reported on real clips.
+        start = max(bounds.start, candidate.scene_start)
+        end = min(bounds.end, candidate.scene_end)
+        # A window that opens or closes with its scene keeps the scene's cut.
+        # Refinement trims wordless lead-ins, which here cut 2.3s off a scene
+        # opening on a sign reading "I don't just want to have sex with you",
+        # so the clip began mid-line on "just want to...".
+        if candidate.start <= candidate.scene_start + 0.05:
+            start = candidate.scene_start
+        if candidate.end >= candidate.scene_end - 0.05:
+            end = candidate.scene_end
+        # ...but not a long silent stretch: the first three FX posts all lost
+        # most viewers at 0:01, one opening on a wordless shot of a house.
+        start, end = trim_silent_edges(start, end, transcript.words,
+                                       lead=config.refine.max_lead_in,
+                                       tail=config.refine.max_tail)
+        if end - start < campaign.duration.min_seconds:
+            say("%s dropped: only %.1fs once kept inside its scene", candidate.candidate_id, end - start)
+            return None
+        bounds = dataclasses.replace(bounds, start=start, end=end)
+
+    # Opening on its payoff (D97, D107): and when that comes late, ending on it too.
+    teaser = _teaser(candidate.payoff, bounds.start, bounds.end, campaign)
+    return bounds, _end_on_payoff(teaser, bounds.start, bounds.end, campaign), teaser
 
 
 def _teaser(payoff: tuple[float, float] | None, start: float, end: float,
@@ -1307,17 +1336,27 @@ def _corrected_words(words: list[Word], plan: ClipPlan,
     """
     if corrector is None:
         return words, []
-    inside = [i for i, w in enumerate(words) if plan.start <= (w.start + w.end) / 2 < plan.end]
-    if not inside:
+    span = _clip_span(words, plan.start, plan.end)
+    if span is None:
         return words, []
-    lo, hi = inside[0], inside[-1] + 1
+    lo, hi = span
+    inside, before, after = _correction_window(words, lo, hi)
     fixed, fixes = correct_words(
-        words[lo:hi],
-        before=words[max(0, lo - CORRECTION_CONTEXT_WORDS):lo],
-        after=words[hi:hi + CORRECTION_CONTEXT_WORDS],
+        inside, before=before, after=after,
         backend=corrector, cache=LLMCache(), recheck=recheck,
         rejected=rejected, names=names_in(words),
     )
     if not fixes:
         return words, []
     return [*words[:lo], *fixed, *words[hi:]], fixes
+
+
+def _clip_span(words: list[Word], start: float, end: float) -> tuple[int, int] | None:
+    """Where a clip's words are in `words` (lo, hi), or None if it has none."""
+    inside = [i for i, w in enumerate(words) if start <= (w.start + w.end) / 2 < end]
+    return (inside[0], inside[-1] + 1) if inside else None
+
+
+def _correction_window(words: list[Word], lo: int, hi: int) -> tuple[list[Word], list[Word], list[Word]]:
+    """A clip's words and CORRECTION_CONTEXT_WORDS either side, as the caption fix is given them."""
+    return words[lo:hi], words[max(0, lo - CORRECTION_CONTEXT_WORDS):lo], words[hi:hi + CORRECTION_CONTEXT_WORDS]

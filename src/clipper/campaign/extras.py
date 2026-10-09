@@ -5,9 +5,12 @@ hashtags bring almost no views (0.03% in Metricool's 2026 study); a clip's hook
 line ("the most underrated gay show of the 2010s...") is written to stop a
 scroll, not to be searched. And a pinned comment carries what a viewer asks
 first -- what is this, where do I watch it -- which the Please Like Me brief asks
-for in so many words. Both come from one call per clip, from its transcript,
-the campaign's context and its brief, which outranks everything here. The
-title gets the brief's title rules added by campaign/rules.py afterwards.
+for in so many words. Both come from the clip's transcript, the campaign's
+context and its brief, which outranks everything here. The title gets the
+brief's title rules added by campaign/rules.py afterwards.
+
+D185: up to BATCH clips share one call. One call a clip sent the whole brief
+each time, and a run's clips used up a free model's daily quota on their own.
 """
 
 from __future__ import annotations
@@ -26,10 +29,11 @@ log = get_logger(__name__)
 EXTRAS_VERSION = "e2"
 TITLE_MIN, TITLE_MAX = 25, 80
 PINNED_MAX = 220
+BATCH = 8   # clips a call
 
 SYSTEM = """\
-You write two short texts for a vertical clip from a TV show, posted for a paid \
-campaign: its YouTube Shorts title and a comment the poster pins under it.
+You write two short texts for each vertical clip below, cut from a TV show and posted \
+for a paid campaign: its YouTube Shorts title and a comment the poster pins under it.
 
 THE BRIEF COMES FIRST. The campaign's rules are given below; follow every one of \
 them. If a rule says anything about titles, comments, wording, topics or mentions \
@@ -54,7 +58,10 @@ Never invent anything the transcript, source name, context or brief don't suppor
 no made-up names, plots, seasons or places to watch. If you can't tell who speaks a \
 line, don't name them.
 
-Return JSON: {"youtube_title": "...", "pinned_comment": "..."}\
+Write each clip's texts from its own transcript, and give no two clips the same title.
+
+Return JSON: {"clips": [{"clip": <its number>, "youtube_title": "...", "pinned_comment": "..."}, ...]}, \
+one for every clip.\
 """
 
 
@@ -63,15 +70,25 @@ class Extras(BaseModel):
     pinned_comment: str
 
 
-def build_user(transcript: str, campaign: CampaignConfig, *, hook: str = "", source: str = "",
-               brief: str | None = None) -> str:
+class _Written(Extras):
+    clip: int
+
+
+class _Answer(BaseModel):
+    clips: list[_Written]
+
+
+def build_user(clips: list[tuple[str, str, str]], campaign: CampaignConfig, *, brief: str | None = None) -> str:
+    """The brief and context once, then each clip: (transcript, on-screen hook, source video's name)."""
     from .audit import brief_text
 
-    return (f"THE CAMPAIGN'S BRIEF (follow it over everything):\n{brief_text(campaign, brief) or '(none)'}\n\n"
-            f"Context (the show, the people): {campaign.description_context.strip() or '(none)'}\n"
-            f"The source video's name: {source.strip() or '(unknown)'}\n"
-            f"The clip's on-screen hook: {hook.strip() or '(none)'}\n\n"
-            f"Transcript of the clip:\n{transcript.strip()}")
+    parts = [f"THE CAMPAIGN'S BRIEF (follow it over everything):\n{brief_text(campaign, brief) or '(none)'}\n\n"
+             f"Context (the show, the people): {campaign.description_context.strip() or '(none)'}"]
+    for n, (transcript, hook, source) in enumerate(clips, 1):
+        parts.append(f"=== CLIP {n} ===\nThe source video's name: {source.strip() or '(unknown)'}\n"
+                     f"The clip's on-screen hook: {hook.strip() or '(none)'}\n"
+                     f"Transcript of the clip:\n{transcript.strip()}")
+    return "\n\n".join(parts)
 
 
 def clean(found: Extras, campaign: CampaignConfig | None = None) -> Extras | None:
@@ -95,19 +112,25 @@ def clean(found: Extras, campaign: CampaignConfig | None = None) -> Extras | Non
     return Extras(youtube_title=title, pinned_comment=pinned)
 
 
-def write(transcript: str, campaign: CampaignConfig, backends: list[LLMBackend], *, hook: str = "",
-          source: str = "", brief: str | None = None, cache=None) -> Extras | None:
-    """The title and pinned comment for one clip, or None if no model gave usable ones."""
+def write(clips: list[tuple[str, str, str]], campaign: CampaignConfig, backends: list[LLMBackend], *,
+          brief: str | None = None, cache=None) -> list[Extras | None]:
+    """The title and pinned comment for each clip (transcript, on-screen hook, source video's name), BATCH
+    clips a call; None for a clip without words, or when no model gave usable ones."""
     from ..transcribe.correct import _ask
 
-    if not transcript.strip():
-        return None
-    user = build_user(transcript, campaign, hook=hook, source=source, brief=brief)
-    answered = _ask(backends, SYSTEM, user, Extras, cache=cache, prompt_key=f"extras:{EXTRAS_VERSION}")
-    if answered is None:
-        return None
-    try:
-        return clean(Extras.model_validate(json.loads(answered[0])), campaign)
-    except (ValueError, TypeError) as exc:
-        log.info("extras: unusable answer (%s)", str(exc)[:120])
-        return None
+    out: list[Extras | None] = [None] * len(clips)
+    todo = [k for k, c in enumerate(clips) if c[0].strip()]
+    for chunk in (todo[i:i + BATCH] for i in range(0, len(todo), BATCH)):
+        user = build_user([clips[k] for k in chunk], campaign, brief=brief)
+        answered = _ask(backends, SYSTEM, user, _Answer, cache=cache, prompt_key=f"extras-batch:{EXTRAS_VERSION}")
+        if answered is None:
+            continue
+        try:
+            written = _Answer.model_validate(json.loads(answered[0])).clips
+        except (ValueError, TypeError) as exc:
+            log.info("extras: unusable answer (%s)", str(exc)[:120])
+            continue
+        for found in written:
+            if 1 <= found.clip <= len(chunk):
+                out[chunk[found.clip - 1]] = clean(found, campaign)
+    return out

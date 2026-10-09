@@ -171,27 +171,37 @@ class TestTheAICheck:
     def texts(self, campaign=None):
         return rules.post_texts(HOOK, CAPTION, HOOK, campaign or plm(caption_rules=[]))
 
+    def one(self, backend, brief="b"):
+        """The check on one clip: (its problems, refused)."""
+        return audit.audit([(self.texts(), HOOK)], brief, [], [backend])[0]
+
     def test_it_reads_the_brief_and_reports_a_missing_tag_with_its_fix(self):
-        posts = self.texts()
-        user = audit.build_user("On YouTube, tag @JoshThomasChannel in the title.", posts, HOOK, [])
         problem = {"rule": "On YouTube, tag @JoshThomasChannel in the title.", "platform": "youtube_shorts",
                    "where": "title", "problem": "No tag", "add": "@JoshThomasChannel"}
         backend = MockBackend(responses=answer([problem]))
-        found = audit.audit(user, posts, [backend])
-        assert [p.add for p in found] == ["@JoshThomasChannel"]
+        found, refused = self.one(backend, "On YouTube, tag @JoshThomasChannel in the title.")
+        assert [p.add for p in found] == ["@JoshThomasChannel"] and not refused
         assert "BRIEF:\nOn YouTube" in backend.calls[0].user and "TITLE: " in backend.calls[0].user
+
+    def test_several_clips_are_read_in_one_call_each_with_its_own_problems(self):
+        """D185: a call a clip sent the whole brief each time."""
+        problem = {"clip": 2, "rule": "Use #ad.", "platform": "all", "problem": "no #ad", "add": "#ad"}
+        backend = MockBackend(responses=answer([problem]))
+        got = audit.audit([(self.texts(), HOOK), (self.texts(), HOOK)], "Use #ad.", [], [backend])
+        assert [len(p) for p, _ in got] == [0, 1] and len(backend.calls) == 2   # the read, and one second look
+        assert "=== CLIP 2 ===" in backend.calls[0].user and backend.calls[0].user.count("BRIEF:") == 1
 
     def test_a_problem_not_confirmed_on_a_second_look_is_dropped(self):
         problem = {"rule": "No hashtags other than the required ones.", "platform": "tiktok",
                    "problem": "@chadpowershulu is an extra hashtag"}
-        assert audit.audit("u", self.texts(), [MockBackend(responses=answer([problem], breaks=False))]) == []
+        assert self.one(MockBackend(responses=answer([problem], breaks=False))) == ([], False)
 
     def test_a_missing_text_that_is_there_is_dropped(self):
         problem = {"rule": "Use #lgbtq", "platform": "all", "add": "#lgbtq"}
-        assert audit.audit("u", self.texts(), [MockBackend(responses=answer([problem]))]) == []
+        assert self.one(MockBackend(responses=answer([problem]))) == ([], False)
 
     def test_no_usable_answer_is_unchecked_not_passed(self):
-        assert audit.audit("u", self.texts(), [MockBackend(responses=["not json"])]) is None
+        assert self.one(MockBackend(responses=["not json"])) == (None, False)
 
     def test_the_rules_code_checks_are_listed_for_the_model_to_skip(self):
         checked = audit.code_checked(plm())
@@ -320,7 +330,7 @@ class TestTitlesAndPinnedComments:
         Transcript(source_id="s1", language="en", words=words).save(ensure(work_dir("s1")) / "transcript.json")
 
     def reply(self, title=TITLE, pinned=PINNED):
-        return json.dumps({"youtube_title": title, "pinned_comment": pinned})
+        return json.dumps({"clips": [{"clip": 1, "youtube_title": title, "pinned_comment": pinned}]})
 
     def test_they_are_written_once_and_the_title_goes_to_youtube_with_the_briefs_tag(self, data_root, campaigns):
         self.transcript()
@@ -369,10 +379,13 @@ def test_a_post_the_models_filters_refuse_is_said_so_not_left_pending():
 
     class Refusing(MockBackend):
         def complete(self, request):
-            raise ContentBlocked("Gemini refused the input (PROHIBITED_CONTENT)")
+            if "the refused one" in request.user:
+                raise ContentBlocked("Gemini refused the input (PROHIBITED_CONTENT)")
+            return super().complete(request)
 
-    with pytest.raises(audit.Refused):
-        audit.audit("u", rules.post_texts(HOOK, CAPTION, HOOK, plm()), [Refusing()])
+    posts = rules.post_texts(HOOK, CAPTION, HOOK, plm())
+    got = audit.audit([(posts, HOOK), (posts, "the refused one")], "b", [], [Refusing(responses=answer())])
+    assert got == [([], False), ([], True)]      # read in halves: only the one the filter objects to is unread
 
 
 class TestFixIt:

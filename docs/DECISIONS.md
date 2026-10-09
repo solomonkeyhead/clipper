@@ -3279,3 +3279,22 @@ of B's output, on 60 candidates a run, for a fallback that almost never ran. B n
 is byte-identical and keeps its cache: each variant carries its own version now (`PromptVariant.version`, B is v6).
 The rare clip whose A batch failed while B's answered has no AI hook line or caption; the watched hook, the
 campaign's hook lines and its caption rules still apply.
+
+## D185: a campaign's titles, rule checks and caption fixes asked several clips at a time
+Each clip had its own calls after the clip was cut: its YouTube title and pinned comment, the AI rule check, and
+its caption fix. The first two sent the whole brief each time (up to 30,000 characters for the check), and the
+three together used up the stronger free model's daily quota on one run's clips, so the rest fell to weaker ones.
+- **Titles and pinned comments**: up to 8 clips a call (`extras.BATCH`), the brief once, each clip's texts from its
+  own transcript, and no two titles alike. Stored per clip as before; `EXTRAS_VERSION` is unchanged, so nothing
+  written before is written again.
+- **The rule check**: up to 6 clips a call (`audit.AUDIT_BATCH`), each problem naming its clip. A batch the models'
+  filters refuse is read in halves, so only the clip they object to is marked for a look by hand. Each problem
+  still gets its own yes/no second look. A clip's stored result keeps the same key, so nothing is checked again.
+- **Caption fixes**: before the first clip renders, the picks' words are asked together, 8 clips a call
+  (`correct.prefetch`), and each clip's answer is kept as its own question's would be, under the model that gave
+  it. Each clip's fix then finds it and asks nothing; every fix is still checked in code and by ear. A reserve
+  that comes in later asks on its own. `_cut` (the clip's refined bounds, split out of `_build_plan`) lets the
+  look ahead see the exact words the clip will have, without moving a hook line's rotation.
+- `correct._ask`, which the scene split, the opening and the titles share, now looks for any model's kept answer
+  before asking one: a re-run waited out the stronger model's time-out again before finding the fallback's answer.
+A 10-clip run: about 3 calls for these instead of 30, and the brief sent 3 times instead of 20.

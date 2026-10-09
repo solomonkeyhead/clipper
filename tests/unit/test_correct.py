@@ -236,6 +236,22 @@ class TestCorrectWords:
         assert "[3]picture" in prompt
 
 
+def test_clips_asked_together_each_find_their_own_fixes_and_ask_nothing_more(tmp_path):
+    """D185: one call a clip used up the stronger free model's quota in a run."""
+    from clipper.llm.cache import LLMCache
+    from clipper.transcribe.correct import prefetch
+
+    other = words("We drove up to the beach for a sunny day.")
+    together = mock([{**PROPOSAL[0], "clip": 1}])
+    cache = LLMCache(tmp_path)
+    prefetch([(CLIP, [], []), (other, [], [])], [together], cache=cache)
+    assert len(together.calls) == 1 and "=== CLIP 2 ===" in together.calls[0].user
+    alone = mock([])                       # never asked: each clip's answer is kept
+    first, fixes = correct_words(CLIP, before=[], after=[], backend=[alone, together], recheck=Ears("pitcher"), cache=cache)
+    second, none = correct_words(other, before=[], after=[], backend=[alone, together], recheck=Ears(), cache=cache)
+    assert first[3].text == " pitcher" and len(fixes) == 1 and second == other and none == [] and alone.calls == []
+
+
 class TestRejectedConfig:
     def test_entries_are_parsed_and_normalised(self):
         from clipper.config import LLMConfig

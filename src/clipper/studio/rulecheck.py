@@ -135,20 +135,18 @@ def check_clips(campaign: CampaignConfig, *, backends=None, cache=None, publish=
 
         cache = LLMCache()
     done = 0
-    for clip, user, key in todo:
-        refused = False
-        try:
-            problems = audit.audit(user, texts(clip, campaign), backends, cache=cache, hook=clip["hook"] or "")
-        except audit.Refused:
-            problems, refused = [], True  # said on the clip: check it by hand
-        if problems is None:
-            continue  # unchecked: tried again next time
+    for i in range(0, len(todo), audit.AUDIT_BATCH):   # stored as each batch is read, so the page fills in
+        chunk = todo[i:i + audit.AUDIT_BATCH]
+        found = audit.audit([(texts(clip, campaign), clip["hook"] or "") for clip, _, _ in chunk],
+                            audit.brief_text(campaign, brief), audit.code_checked(campaign), backends, cache=cache)
         with db.connect() as con:
-            db.set_audit(con, clip["id"], {"key": key, "problems": [p.model_dump() for p in problems],
-                                           "refused": refused,
-                                           "at": datetime.now().strftime("%Y-%m-%d %H:%M")})
-        done += 1
-        if publish and done % 5 == 0:
+            for (clip, _, key), (problems, refused) in zip(chunk, found, strict=True):
+                if problems is None:
+                    continue  # unchecked: tried again next time; refused: said on the clip, check it by hand
+                db.set_audit(con, clip["id"], {"key": key, "problems": [p.model_dump() for p in problems],
+                                               "refused": refused, "at": datetime.now().strftime("%Y-%m-%d %H:%M")})
+                done += 1
+        if publish:
             publish("clips.changed")
     log.info("%s: the AI rule check read %d clip(s)", campaign.name, done)
     return done
@@ -182,9 +180,9 @@ def _extras_due(clip: dict, now: datetime) -> bool:
     return not failed or (now - datetime.strptime(failed, "%Y-%m-%d %H:%M")).total_seconds() > EXTRAS_RETRY_HOURS * 3600
 
 
-def fill_extras(campaign: CampaignConfig, *, backends=None, cache=None, publish=None) -> int:
+def fill_extras(campaign: CampaignConfig, *, backends=None, cache=None) -> int:
     """Write the YouTube title and pinned comment for each unposted clip without
-    current ones (D96). Returns how many were written."""
+    current ones (D96), several clips a call (D185). Returns how many were written."""
     from ..campaign import extras as extras_mod
     from ..campaign.description import pasted_brief
     from ..learn import log as perf
@@ -204,20 +202,15 @@ def fill_extras(campaign: CampaignConfig, *, backends=None, cache=None, publish=
         from ..llm.cache import LLMCache
 
         cache = LLMCache()
-    brief = pasted_brief(campaign.name)
-    done = 0
-    for clip in clips:
-        if clip["id"] not in spoken:
-            continue
-        found = extras_mod.write(spoken[clip["id"]], campaign, backends, hook=clip["hook"] or "",
-                                 source=clip.get("source_title") or "", brief=brief, cache=cache)
-        value = ({"v": extras_mod.EXTRAS_VERSION, **found.model_dump()} if found
-                 else {"v": extras_mod.EXTRAS_VERSION, "failed_at": now.strftime("%Y-%m-%d %H:%M")})
-        with db.connect() as con:
+    clips = [c for c in clips if c["id"] in spoken]
+    written = extras_mod.write([(spoken[c["id"]], c["hook"] or "", c.get("source_title") or "") for c in clips],
+                               campaign, backends, brief=pasted_brief(campaign.name), cache=cache)
+    with db.connect() as con:
+        for clip, found in zip(clips, written, strict=True):
+            value = ({"v": extras_mod.EXTRAS_VERSION, **found.model_dump()} if found
+                     else {"v": extras_mod.EXTRAS_VERSION, "failed_at": now.strftime("%Y-%m-%d %H:%M")})
             db.update_clip(con, clip["id"], extras=json.dumps(value))
-        done += bool(found)
-        if publish and done and done % 5 == 0:
-            publish("clips.changed")
+    done = sum(1 for found in written if found)
     log.info("%s: YouTube titles and pinned comments written for %d clip(s)", campaign.name, done)
     return done
 
@@ -239,7 +232,7 @@ def recheck(name: str, *, publish=None, backends=None, cache=None) -> None:
     if reapply(campaign) and publish:
         publish("clips.changed")
     # Titles first: the AI check then reads the texts as they'll be posted.
-    if fill_extras(campaign, backends=backends, cache=cache, publish=publish) and publish:
+    if fill_extras(campaign, backends=backends, cache=cache) and publish:
         publish("clips.changed")
     check_clips(campaign, backends=backends, cache=cache, publish=publish)
     if publish:
