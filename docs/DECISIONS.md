@@ -3145,3 +3145,14 @@ that's truly missing shows its error instead of looping); on reconnecting, the p
 with what it started with and offers "Clipper was updated: Reload"; and a page that breaks for any reason shows
 "This page hit a problem" with the message, Reload and the Dashboard, inside the usual menu. Also: Settings rows
 let their right side wrap, so the graphics card line no longer runs off a phone screen.
+
+## D173: server.py split by area; Create's AI note answers at once
+`studio/server.py` had grown to 2,232 lines in one function. Four areas moved out whole, each wired in by
+`routes(app, publish, ...)` like `create_api` (D108), at the same place, so routes register in the same order and
+the API schema is unchanged: `accounts_api` (accounts, connecting, setup keys, settings), `campaigns_api`
+(campaign pages, payouts, the campaign editor, reading a brief), `alerts_api` (found campaigns and alerts) and
+`editor_api` (the clip editor). server.py is now 1,559 lines. Helpers that tests replace on `server` are called
+through it, so the tests see what they always did.
+`/api/create/ai` took 0.47 s on Marc's PC and runs each time a video changes (every build step): each of its 8
+lookups searched a PATH of ~1,300 folders for `claude`. `claude_code.cli` now looks once a minute: 1 ms.
+Gone: `claude_code.spent_usd` and its `/api/create/ai` field, which nothing showed.

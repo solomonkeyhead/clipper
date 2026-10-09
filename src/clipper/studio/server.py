@@ -21,7 +21,6 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.parse
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -30,8 +29,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
-    HTMLResponse,
-    PlainTextResponse,
     RedirectResponse,
     StreamingResponse,
 )
@@ -39,38 +36,22 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import connect
 from ..campaign import editor
-from ..campaign.editor import CampaignError, CampaignForm
 from ..config import PLATFORM_NAMES, CampaignConfig
 from ..learn import log as perf
-from ..paths import REPO_ROOT
 from ..utils.logging import get_logger
 from . import accounts as account_groups
 from . import alerts, db, evidence, library, rerender, rulecheck, setup, stats
-from . import editor as clip_editor
 from .api_models import (
     Account,
-    AccountGroup,
-    AlertChannel,
-    AlertCheck,
-    Alerts,
     Brief,
     BriefProblem,
     Campaign,
-    CampaignCheck,
     CampaignCounts,
-    CampaignDetail,
     Clip,
-    DiscordBot,
     Duplicate,
-    EditorView,
-    EditorWord,
-    EditRule,
-    Fit,
-    FoundCampaign,
     Home,
     Learning,
     Metrics,
-    Payout,
     Post,
     PostCopy,
     PostPoint,
@@ -80,11 +61,9 @@ from .api_models import (
     ReasonOption,
     RuleCheck,
     Rules,
-    Setup,
     SinceLastVisit,
     Status,
     WhatsWorking,
-    WhopFeed,
 )
 from .events import Broker
 from .imports import VIDEO_EXTENSIONS
@@ -912,310 +891,15 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             db.set_setting(con, "seen_at", now.strftime("%Y-%m-%d %H:%M:%S"))
         return {"ok": True}
 
-    @app.get("/api/campaigns")
-    def campaigns() -> list[Campaign]:
-        snap = Snapshot()
-        return [snap.campaign(n) for n in snap.campaign_names()]
+    # ---------- campaigns ----------
+    from . import campaigns_api
 
-    @app.get("/api/campaigns/{name}")
-    def campaign(name: str) -> CampaignDetail:
-        snap = Snapshot()
-        if name not in snap.campaign_names():
-            raise HTTPException(404, f"no campaign {name!r}")
-        brief = snap.campaigns.get(name)
-        return CampaignDetail(campaign=snap.campaign(name),
-                              brief=brief_of(brief) if brief else None,
-                              clips=[c for c in snap.clips if c.campaign == name])
+    campaigns_api.routes(app, broker.publish)
 
-    @app.patch("/api/campaigns/{name}")
-    def update_campaign(name: str, changes: dict) -> dict:
-        with db.connect() as con:
-            try:
-                db.set_campaign_state(con, name, **changes)
-            except ValueError as exc:
-                raise HTTPException(400, str(exc)) from exc
-        broker.publish("campaigns.changed")
-        return {"ok": True}
+    # ---------- campaigns found, and the alerts that find them ----------
+    from . import alerts_api
 
-    @app.get("/api/payouts")
-    def list_payouts(campaign: str | None = None) -> list[Payout]:
-        with db.connect() as con:
-            return [Payout(**p) for p in db.payouts(con, campaign)]
-
-    @app.post("/api/payouts")
-    def add_payout(body: dict) -> Payout:
-        """A payout a campaign actually made, recorded by hand (D99)."""
-        try:
-            amount = float(body.get("amount"))
-            with db.connect() as con:
-                new = db.add_payout(con, str(body.get("campaign") or ""), amount,
-                                    str(body.get("paid_on") or datetime.now().strftime("%Y-%m-%d")),
-                                    str(body.get("note") or ""))
-                found = next(p for p in db.payouts(con) if p["id"] == new)
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(400, f"couldn't record that payout: {exc}") from exc
-        broker.publish("campaigns.changed")
-        return Payout(**found)
-
-    @app.delete("/api/payouts/{payout_id}")
-    def delete_payout(payout_id: int) -> dict:
-        with db.connect() as con:
-            db.delete_payout(con, payout_id)
-        broker.publish("campaigns.changed")
-        return {"ok": True}
-
-    @app.post("/api/posts/task")
-    def post_task(body: dict) -> dict:
-        """A brief's view-milestone task marked done for a post, or undone (D98)."""
-        try:
-            url, views = str(body["url"]).split("?", 1)[0], int(body["views"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise HTTPException(400, "needs the post's url and the milestone's views") from exc
-        with db.connect() as con:
-            db.set_task_done(con, url, views, bool(body.get("done", True)))
-        broker.publish("clips.changed", {})
-        return {"ok": True}
-
-    @app.get("/api/campaigns/{name}/form")
-    def campaign_form(name: str) -> CampaignForm:
-        campaign = load_campaigns().get(name)
-        if campaign is None:
-            raise HTTPException(404, f"no campaign {name!r}")
-        return editor.to_form(campaign)
-
-    @app.post("/api/campaigns")
-    def create_campaign(form: CampaignForm) -> dict:
-        try:
-            campaign = editor.create(campaigns_dir(), form)
-        except CampaignError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("campaigns.changed")
-        return {"name": campaign.name}
-
-    @app.put("/api/campaigns/{name}")
-    def edit_campaign(name: str, form: CampaignForm) -> dict:
-        try:
-            campaign = editor.update(campaigns_dir(), name, form)
-        except CampaignError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("campaigns.changed")
-        rulecheck.start(name, broker.publish)  # the rules may have changed (D81)
-        return {"name": campaign.name}
-
-    @app.post("/api/campaigns/{name}/recheck")
-    def recheck_campaign(name: str) -> dict:
-        if name not in load_campaigns():
-            raise HTTPException(404, f"no campaign {name!r}")
-        rulecheck.start(name, broker.publish)
-        broker.publish("clips.changed")
-        return {"ok": True}
-
-    @app.put("/api/campaigns/{name}/brief")
-    def save_campaign_brief(name: str, body: dict) -> dict:
-        """Keep the brief as pasted, whole, for Ask (D76)."""
-        if name not in load_campaigns():
-            raise HTTPException(404, f"no campaign {name!r}")
-        text = str(body.get("text") or "").strip()
-        if len(text) < 40:
-            raise HTTPException(400, "that's too short to be a brief")
-        with db.connect() as con:
-            db.save_brief(con, name, text)
-        rulecheck.start(name, broker.publish)  # the AI check reads the brief itself
-        return {"ok": True, "saved_at": db.now()}
-
-    @app.get("/api/campaigns/{name}/brief")
-    def get_campaign_brief(name: str) -> dict:
-        with db.connect() as con:
-            found = db.brief(con, name)
-        return {"saved_at": found["saved_at"] if found else None,
-                "chars": len(found["text"]) if found else 0}
-
-    @app.delete("/api/campaigns/{name}")
-    def delete_campaign(name: str) -> dict:
-        """Only a campaign with no clips; one with clips is archived instead."""
-        from ..utils.recycle import recycle
-
-        with db.connect() as con:
-            if con.execute("SELECT 1 FROM clips WHERE campaign=? LIMIT 1", (name,)).fetchone():
-                raise HTTPException(400, "this campaign has clips; archive it instead")
-        path = editor.path_for(campaigns_dir(), name)
-        if path is None:
-            raise HTTPException(404, f"no campaign {name!r}")
-        if not recycle(path):
-            raise HTTPException(500, "could not move the file to the Recycle Bin")
-        broker.publish("campaigns.changed")
-        return {"ok": True}
-
-    @app.post("/api/campaigns/read-brief")
-    def read_brief(body: dict) -> CampaignForm:
-        """Fill the New campaign form from a pasted brief (the configured AI model)."""
-        from ..config import Config
-        from ..pipeline import build_backend
-
-        try:
-            backend = build_backend(Config.load())
-        except Exception as exc:  # no key, backend not installed
-            raise HTTPException(400, f"AI isn't set up ({str(exc).splitlines()[0]}). "
-                                     "Add your AI key in Settings, or fill the form in "
-                                     "yourself.") from exc
-        try:
-            return editor.read_brief(str(body.get("text") or ""), backend)
-        except CampaignError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except Exception as exc:  # the model is busy / refused
-            log.warning("reading a brief failed: %s", exc)
-            raise HTTPException(503, "the AI model didn't answer (it may be busy). Try again "
-                                     "in a minute, or fill the form in yourself.") from exc
-
-    def check_brief(text: str) -> CampaignCheck:
-        from ..config import Config
-        from ..pipeline import build_backend
-        from . import finder
-
-        try:
-            backend = build_backend(Config.load())
-        except Exception as exc:
-            raise HTTPException(400, "Checking a campaign needs your AI key: add it in Settings.") from exc
-        try:
-            form = editor.read_brief(text, backend)
-        except CampaignError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        except Exception as exc:
-            log.warning("campaign check failed: %s", exc)
-            raise HTTPException(503, "The AI didn't answer (it may be busy). Try again in a minute.") from exc
-        return CampaignCheck(form=form, fit=Fit(**finder.fit(form, Snapshot(), accounts())))
-
-    @app.post("/api/campaigns/check")
-    async def check_campaign(body: dict) -> CampaignCheck:
-        """Read a pasted campaign brief and say how well it fits this user."""
-        return await asyncio.to_thread(check_brief, str(body.get("text") or ""))
-
-    @app.get("/api/found")
-    def found_campaigns() -> list[FoundCampaign]:
-        import threading
-
-        from . import finder
-
-        found = [FoundCampaign(**f) for f in finder.found()]
-        # Campaigns found before niches existed (or when no AI answered) are sorted in the background.
-        if any(not f.niche for f in found):
-            threading.Thread(target=finder.sort_niches, args=(broker.publish,), name="niches", daemon=True).start()
-        return found
-
-    @app.post("/api/found/{key}/check")
-    async def check_found(key: str) -> CampaignCheck:
-        from . import finder
-
-        brief = finder.brief_of(key)
-        if brief is None:
-            raise HTTPException(404, "no such campaign")
-        return await asyncio.to_thread(check_brief, brief)
-
-    @app.get("/api/alerts")
-    def get_alerts() -> Alerts:
-        return Alerts(**alerts.status())
-
-    @app.get("/api/alerts/discord")
-    async def discord_bot() -> DiscordBot:
-        """The bot behind the token, and every channel it can read (asks Discord)."""
-        from ..watch import discord
-
-        if not alerts.token():
-            raise HTTPException(400, "Add your bot's token first")
-        try:
-            bot = await asyncio.to_thread(discord.bot, alerts.token())
-            channels = await asyncio.to_thread(discord.channels, alerts.token())
-        except discord.DiscordError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        return DiscordBot(**bot, channels=[AlertChannel(**c) for c in channels])
-
-    @app.put("/api/alerts/channels")
-    async def watch_channels(body: dict) -> Alerts:
-        from ..watch import discord
-
-        ids = [str(i) for i in body.get("ids") or []]
-        try:
-            available = await asyncio.to_thread(discord.channels, alerts.token()) if ids else []
-            alerts.watch(ids, available)
-        except (discord.DiscordError, ValueError) as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("alerts.changed")
-        return get_alerts()
-
-    @app.put("/api/alerts/prefs")
-    def alert_prefs(body: dict) -> Alerts:
-        try:
-            alerts.set_prefs(str(body.get("profile") or ""), float(body.get("min_rate") or 0))
-        except (TypeError, ValueError) as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("alerts.changed")
-        return get_alerts()
-
-    @app.post("/api/alerts/check")
-    async def check_alerts() -> AlertCheck:
-        """Check the watched channels now, rather than at the next scheduled check."""
-        result = await asyncio.to_thread(alerts.check, publish=broker.publish)
-        broker.publish("alerts.changed")
-        return AlertCheck(**result)
-
-    @app.get("/api/alerts/whop")
-    async def whop_available() -> list[WhopFeed]:
-        """Forum feeds in the Whop communities the user belongs to (asks Whop)."""
-        from ..watch import whop
-
-        try:
-            return [WhopFeed(**f) for f in await asyncio.to_thread(whop.feeds)]
-        except whop.WhopError as exc:
-            raise HTTPException(400, str(exc)) from exc
-
-    @app.put("/api/alerts/whop/feeds")
-    async def watch_whop(body: dict) -> Alerts:
-        from ..watch import whop
-
-        ids = [str(i) for i in body.get("ids") or []]
-        try:
-            available = await asyncio.to_thread(whop.feeds) if ids else []
-            alerts.whop_watch(ids, available)
-        except (whop.WhopError, ValueError) as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("alerts.changed")
-        return get_alerts()
-
-    @app.post("/api/alerts/whop/connect")
-    def whop_connect() -> dict[str, str]:
-        if not setup.key_set("WHOP_CLIENT_ID"):
-            raise HTTPException(400, "Save your Whop app's ID first")
-        return whop_login.start()
-
-    @app.get("/api/alerts/whop/connect")
-    def whop_connect_state() -> dict[str, str]:
-        return whop_login.view()
-
-    @app.post("/api/alerts/whop/disconnect")
-    def whop_disconnect() -> Alerts:
-        from ..watch import whop
-
-        whop.sign_out()
-        alerts.whop_watch([], [])
-        broker.publish("alerts.changed")
-        return get_alerts()
-
-    @app.post("/api/alerts/test-push")
-    async def alert_test_push() -> dict:
-        from ..watch import notify
-
-        try:
-            await asyncio.to_thread(alerts.test_push)
-        except (ValueError, notify.PushError) as exc:
-            raise HTTPException(400, str(exc)) from exc
-        return {"ok": True}
-
-    @app.post("/api/found/{key}/dismiss")
-    def dismiss_found(key: str) -> dict:
-        from . import finder
-
-        finder.dismiss(key)
-        return {"ok": True}
+    alerts_api.routes(app, broker.publish, whop_login=whop_login)
 
     @app.get("/api/clips")
     def clips(campaign: str | None = None, scope: str | None = None) -> list[Clip]:
@@ -1274,185 +958,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     create_api.routes(app, broker.publish)
 
     # ---------- the editor (D103) ----------
+    from . import editor_api
 
-    EDIT_LABELS = {"internal_cuts": "Cuts inside the clip", "visual_effects": "Zooms",
-                   "added_text": "On-screen hook", "captions": "Captions",
-                   "overlays": "B-roll and overlays", "audio_additions": "Music and sound effects",
-                   "re_edit": "Reordering scenes"}
-
-    def editor_campaign(name: str):
-        campaign = load_campaigns().get(name)
-        if campaign is None:
-            raise HTTPException(400, "pick a campaign")
-        return campaign
-
-    def editor_clip(clip_id: int) -> dict:
-        with db.connect() as con:
-            row = db.clip(con, clip_id)
-        if row is None:
-            raise HTTPException(404, "no such clip")
-        return row
-
-    def editor_edit(body: dict, duration: float, campaign):
-        from ..campaign.edits import permissions
-        from ..editing import ClipEdit, problems
-
-        try:
-            edit = ClipEdit.model_validate(body.get("edit") or {}).tidy(duration)
-        except ValueError as exc:
-            raise HTTPException(400, f"that edit can't be read: {exc}") from exc
-        wrong = problems(edit, permissions(campaign), campaign)
-        if wrong:
-            raise HTTPException(400, "; ".join(wrong).capitalize())
-        return edit
-
-    @app.get("/api/editor")
-    def editor_view(campaign: str = "", source: str = "", clip: int | None = None) -> EditorView:
-        """A video to edit: a library clip (`clip`), or a source video and campaign."""
-        from ..campaign.edits import CLASSES, permissions
-        from ..editing import blocked
-        from ..ingest.download import load_info
-        from ..utils.cache import source_id_for_file
-
-        row = editor_clip(clip) if clip is not None else None
-        if row is not None:
-            campaign, sid, path = row["campaign"], row["source_id"], ""
-        else:
-            target = allowed_source(source)
-            sid, path = source_id_for_file(target), str(target)
-        found = editor_campaign(campaign)
-        if not clip_editor.prepared(sid):
-            if row is not None:
-                raise HTTPException(409, "this clip's working files are gone; clip its video again instead")
-            return EditorView(source_id=sid, prepared=False, source=path, name=Path(path).name,
-                              campaign=found.name)
-        info = load_info(sid)
-        if not Path(info.media.path).exists():
-            raise HTTPException(409, f"its video isn't on this PC any more ({Path(info.media.path).name})")
-        clip_editor.make_proxy(sid, broker.publish)
-        perms = permissions(found)
-        no = blocked(perms)
-        edit = None
-        if row is not None:
-            saved = (json.loads(row.get("scores") or "{}") or {}).get("edit")
-            start, end = row.get("start_s"), row.get("end_s")
-            if start is None or end is None:
-                # Clips filed before their range was kept: the start is in the id, the length known.
-                from ..utils.timecode import from_slug_timestamp
-
-                start = from_slug_timestamp(row.get("clip_id") or "")
-                end = start + float(row.get("duration_s") or 30) if start is not None else None
-            pieces = [{"start": start, "end": end, "zoom": 1.0}] if start is not None and end is not None else []
-            edit = saved or {"pieces": pieces, "hook": row.get("hook") or "", "fixes": []}
-        return EditorView(
-            source_id=sid, prepared=True, source=info.media.path, name=info.title or Path(info.media.path).name,
-            campaign=found.name, duration=info.media.duration, fps=info.media.fps or 30.0,
-            has_audio=info.media.has_audio, proxy_ready=clip_editor.proxy_ready(sid),
-            words=[EditorWord(**w) for w in clip_editor.words(sid)],
-            rules=[EditRule(key=c, label=EDIT_LABELS.get(c, c), allowed=perms.allowed[c], blocked=c in no,
-                            why=perms.reasons[c]) for c in CLASSES],
-            min_seconds=found.duration.min_seconds, max_seconds=found.duration.max_seconds,
-            hooks=list(found.hook_texts), clip_id=clip, clip_status=row["status"] if row else None, edit=edit)
-
-    @app.post("/api/editor/prepare")
-    def editor_prepare(body: dict) -> dict:
-        """Read and transcribe a video so the editor can open it: a job, with progress."""
-        found = editor_campaign(str(body.get("campaign") or ""))
-        target = allowed_source(str(body.get("source") or ""))
-        return jobs.submit(found, str(target), None, prepare=True).view()
-
-    @app.get("/api/editor/{source_id}/proxy")
-    def editor_proxy(source_id: str) -> FileResponse:
-        path = clip_editor.proxy_path(source_id)
-        if not path.is_file():
-            raise HTTPException(404, "the editor's copy isn't ready yet")
-        return FileResponse(path, media_type="video/mp4")
-
-    @app.get("/api/editor/{source_id}/peaks")
-    def editor_peaks(source_id: str) -> list[int]:
-        if not clip_editor.prepared(source_id):
-            raise HTTPException(404, "no such video")
-        return clip_editor.peaks(source_id)
-
-    @app.post("/api/editor/tighten")
-    def editor_tighten(body: dict) -> dict:
-        """The edit with its pauses and fillers cut, as ordinary cuts to adjust or undo."""
-        from ..campaign.edits import permissions
-        from ..editing import ClipEdit, blocked, tighten
-        from ..ingest.download import load_info
-        from ..models import Transcript
-        from ..paths import work_dir
-        from ..runner import _loudness
-
-        sid = str(body.get("source_id") or "")
-        if not clip_editor.prepared(sid):
-            raise HTTPException(404, "no such video")
-        found = editor_campaign(str(body.get("campaign") or ""))
-        no = blocked(permissions(found))
-        if "internal_cuts" in no:
-            raise HTTPException(400, f"No cuts inside the clip: {no['internal_cuts']}")
-        info = load_info(sid)
-        edit = ClipEdit.model_validate(body.get("edit") or {}).tidy(info.media.duration)
-        words = Transcript.load(work_dir(sid) / "transcript.json").words
-        tightened, cuts = tighten(edit, words, _loudness(info), min_length=found.duration.min_seconds or 0.0)
-        return {"edit": tightened.model_dump(), "removed": round(edit.length - tightened.length, 2),
-                "cuts": [{"start": c.start, "end": c.end, "why": c.reason} for c in cuts]}
-
-    @app.post("/api/editor/preview")
-    def editor_preview(body: dict) -> dict:
-        """A quick draft render of the edit, through the real pipeline: exactly the
-        framing, captions and hook the clip will have, smaller and faster."""
-        from ..config import Config
-        from ..ingest.download import load_info
-        from ..paths import runs_dir
-        from ..runner import RerenderError
-        from ..runner import rerender as render_again
-
-        sid = str(body.get("source_id") or "")
-        if not clip_editor.prepared(sid):
-            raise HTTPException(404, "no such video")
-        found = editor_campaign(str(body.get("campaign") or ""))
-        info = load_info(sid)
-        edit = editor_edit(body, info.media.duration, found)
-        base = editor_clip(int(body["clip"])) if body.get("clip") is not None else {"scores": "{}"}
-        clip = {**base, "source_id": sid, "clip_id": "preview", "start_s": edit.start, "end_s": edit.end}
-        clip_editor.clear_previews(sid)
-        try:
-            made = render_again(clip, edit.hook, config=Config.load(), campaign=found, out_root=runs_dir(),
-                                edit=edit, draft=True)
-        except RerenderError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        return {"url": f"/api/editor/{sid}/preview/{made.name}", "length": round(edit.length, 2)}
-
-    @app.get("/api/editor/{source_id}/preview/{name}")
-    def editor_preview_file(source_id: str, name: str) -> FileResponse:
-        path = clip_editor.preview_dir(source_id) / Path(name).name
-        if path.suffix != ".mp4" or not path.is_file():
-            raise HTTPException(404, "that preview is gone; make another")
-        return FileResponse(path, media_type="video/mp4")
-
-    @app.post("/api/editor/save")
-    def editor_save(body: dict) -> dict:
-        """Render the edit for real: over its clip (`clip`), or as a new clip."""
-        from ..ingest.download import load_info
-        from . import footage
-
-        sid = str(body.get("source_id") or "")
-        if not clip_editor.prepared(sid):
-            raise HTTPException(404, "no such video")
-        found = editor_campaign(str(body.get("campaign") or ""))
-        info = load_info(sid)
-        edit = editor_edit(body, info.media.duration, found)
-        if body.get("clip") is not None:
-            clip_id = int(body["clip"])
-            row = editor_clip(clip_id)
-            if row["status"] in ("posted", "submitted"):
-                raise HTTPException(400, "it's posted: its video is what's live")
-            rerenders.submit(clip_id, edit.hook, edit.model_dump())
-            return {"queued": True, "clip": clip_id}
-        source = str(allowed_source(info.media.path))
-        footage.remember([source], found.name, "clipped")
-        return {"queued": True, "job": jobs.submit(found, source, None, edits=[edit.model_dump()]).view()}
+    editor_api.routes(app, broker.publish, jobs=jobs, rerenders=rerenders)
 
     @app.put("/api/clips/{clip_id}/caption")
     def edit_caption(clip_id: int, body: dict) -> dict:
@@ -1705,192 +1213,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     async def sync() -> dict:
         return await sync_now()
 
-    @app.get("/api/accounts")
-    def get_accounts() -> list[Account]:
-        found = accounts()
-        posts = Snapshot().posts
-        groups = account_groups.groups()
-        for a in found:
-            a.key = account_groups.key(a.platform, a.handle)
-            mine = [p for p in posts if account_groups.key(p.platform, p.account) == a.key]
-            a.posts, a.views = len(mine), sum(p.views or 0 for p in mine)
-            a.groups = [g["name"] for g in groups if a.key in g["members"]]
-            # The last sync's problem with this account, so a failing one doesn't read "ok" here.
-            label = {"tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "x": "X"}[a.platform]
-            failed = next((p for p in last_problems if p.startswith(f"{label} ")
-                           and p.split(":", 1)[0].removeprefix(f"{label} ").lstrip("@") == a.handle), "")
-            if failed:
-                a.health, a.detail = "error", f"Last sync failed: {failed.split(':', 1)[1].strip()}"
-        return found
+    # ---------- accounts, setup and settings ----------
+    from . import accounts_api
 
-    @app.get("/api/account-groups")
-    def list_groups() -> list[AccountGroup]:
-        return [AccountGroup(**g) for g in account_groups.groups()]
-
-    @app.post("/api/account-groups")
-    def save_group(group: AccountGroup) -> AccountGroup:
-        """Create a group, or rename/re-fill one (its id set). Part of Pro (D89)."""
-        from . import plans
-
-        plans.require("multi_account")
-        try:
-            group.id = account_groups.save_group(group.name, group.members, group.campaigns, group.id)
-        except LookupError as exc:
-            raise HTTPException(404, str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("accounts.changed")
-        return group
-
-    @app.delete("/api/account-groups/{group_id}")
-    def delete_group(group_id: int) -> dict:
-        if not account_groups.delete_group(group_id):
-            raise HTTPException(404, "no such group")
-        broker.publish("accounts.changed")
-        return {"ok": True}
-
-    @app.delete("/api/accounts/{platform}/{account}")
-    def disconnect(platform: str, account: str) -> dict:
-        from ..instagram import api as ig_api
-        from ..tiktok import api as tt_api
-        from ..x import api as x_api
-        from ..youtube import api as yt_api
-
-        module = {"tiktok": tt_api, "instagram": ig_api, "youtube": yt_api, "x": x_api}.get(platform)
-        if module is None or not module.remove(account):
-            raise HTTPException(404, "no such account")
-        broker.publish("accounts.changed")
-        return {"ok": True}
-
-    @app.post("/api/accounts/tiktok/connect")
-    def tiktok_connect() -> dict[str, str]:
-        """Start TikTok's login; the page opens the returned consent link."""
-        return tiktok.start()
-
-    @app.get("/api/accounts/tiktok/connect")
-    def tiktok_connect_state() -> dict[str, str]:
-        return tiktok.view()
-
-    @app.post("/api/accounts/youtube/connect")
-    def youtube_connect() -> dict[str, str]:
-        """Start Google's sign-in; the page opens the returned consent link."""
-        if not yt_has_app() and not connect.enabled():
-            raise HTTPException(400, "Save your Google app's client ID and secret first")
-        return youtube.start()
-
-    @app.get("/api/accounts/youtube/connect")
-    def youtube_connect_state() -> dict[str, str]:
-        return youtube.view()
-
-    @app.post("/api/accounts/broker/return")
-    async def broker_return(request: Request) -> HTMLResponse:
-        """Where the connect service's page posts a finished login (D151). Only a login this Clipper started
-        is accepted: its nonce is checked."""
-        try:    # a plain form post; read by hand so Clipper needs no multipart package
-            body = json.loads(urllib.parse.parse_qs((await request.body()).decode()).get("payload", ["{}"])[0])
-        except ValueError:
-            body = {}
-        ok = connect.deliver(str(body.get("nonce", "")), {"error": body.get("error")} if body.get("error") else body.get("tokens") or {})
-        return HTMLResponse("<p style='font-family:sans-serif;padding:2em'>"
-                            + ("Connected. You can close this tab and go back to Clipper." if ok else "This login wasn't started here. Try again from Clipper.")
-                            + "</p>")
-
-    @app.post("/api/accounts/instagram/connect")
-    def instagram_connect_start() -> dict[str, str]:
-        """Start Instagram's login; the page opens the returned consent link (D150)."""
-        from ..instagram import api as ig_api
-
-        if not ig_api.has_app() and not connect.enabled():
-            raise HTTPException(400, "Save your Meta app's ID and secret first")
-        return instagram.start()
-
-    @app.get("/api/accounts/instagram/connect")
-    def instagram_connect_state() -> dict[str, str]:
-        return instagram.view()
-
-    @app.post("/api/accounts/x")
-    def x_connect(body: dict) -> dict:
-        """An X account by its username, read with the app's Bearer Token (D83)."""
-        from ..x import api as x_api
-
-        before = set(x_api.account_files())
-        try:
-            account = x_api.connect(str(body.get("username") or ""))
-        except x_api.XError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        refused = account_groups.undo_if_over("x", before)
-        if refused:
-            raise HTTPException(402, refused)
-        broker.publish("accounts.changed")
-        return {"username": account["username"]}
-
-    @app.post("/api/accounts/instagram")
-    def instagram_connect(body: dict) -> dict:
-        from ..instagram import api as ig_api
-
-        before = set(ig_api.token_files())
-        try:
-            username = ig_api.login(str(body.get("token") or ""))
-        except ig_api.InstagramError as exc:
-            raise HTTPException(400, f"Instagram refused the token: {exc}") from exc
-        refused = account_groups.undo_if_over("instagram", before)
-        if refused:
-            raise HTTPException(402, refused)
-        broker.publish("accounts.changed")
-        return {"username": username}
-
-    @app.get("/api/setup")
-    def get_setup() -> Setup:
-        ai = setup.ai_status()
-        return Setup(ai_ready=ai["ready"], ai_backend=ai["backend"], ai_detail=ai["detail"],
-                     keys={k: setup.key_set(k) for k in setup.KEYS},
-                     tiktok_app=connect.enabled() or (setup.key_set("TIKTOK_CLIENT_KEY")
-                                                     and setup.key_set("TIKTOK_CLIENT_SECRET")),
-                     tiktok_connect=tiktok.view(),
-                     youtube_app=yt_has_app(),
-                     instagram_app=connect.enabled() or (setup.key_set("INSTAGRAM_APP_ID") and setup.key_set("INSTAGRAM_APP_SECRET")))
-
-    @app.put("/api/setup/keys")
-    def put_keys(values: dict[str, str]) -> Setup:
-        try:
-            setup.set_keys(values)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        broker.publish("settings.changed")
-        return get_setup()
-
-    @app.get("/api/setup/site/{page}")
-    def site_page(page: str) -> PlainTextResponse:
-        """The homepage and privacy policy a Google app needs to be published (docs/site, D79)."""
-        if page not in ("index.html", "privacy.html", "terms.html"):
-            raise HTTPException(404, "no such page")
-        return PlainTextResponse((REPO_ROOT / "docs" / "site" / page).read_text(encoding="utf-8"))
-
-    @app.post("/api/setup/test-ai")
-    async def test_ai() -> dict:
-        ok, detail = await asyncio.to_thread(setup.test_ai)
-        return {"ok": ok, "detail": detail}
-
-    @app.post("/api/setup/check")
-    async def system_check() -> list[dict]:
-        return await asyncio.to_thread(setup.system_check)
-
-    @app.get("/api/settings")
-    def get_settings() -> dict[str, str]:
-        with db.connect() as con:
-            return db.settings(con)
-
-    @app.put("/api/settings")
-    def update_settings(changes: dict) -> dict[str, str]:
-        with db.connect() as con:
-            try:
-                for key, value in changes.items():
-                    db.set_setting(con, key, value)
-            except ValueError as exc:
-                raise HTTPException(400, str(exc)) from exc
-            result = db.settings(con)
-        broker.publish("settings.changed")
-        return result
+    accounts_api.routes(app, broker.publish, tiktok=tiktok, youtube=youtube, instagram=instagram,
+                        last_problems=last_problems)
 
     @app.get("/api/events")
     async def events(request: Request) -> StreamingResponse:

@@ -386,7 +386,6 @@ def routes(app: FastAPI, publish) -> None:
         page can show it at all times: Claude or Gemini was a guess for two videos (D118)."""
         from ..config import Config
         from ..create import ai as create_ai_module
-        from ..llm import claude_code
 
         config = Config.load()
         try:
@@ -406,8 +405,7 @@ def routes(app: FastAPI, publish) -> None:
                 "gemini_jobs": [j for j in ("script", "check", "critic", "review", "footage", "place", "topics")
                                 if create_ai_module.first_choice(config, j) == "gemini"],
                 "paid_api_jobs": list(config.llm.paid_api_jobs),
-                "problem": problem,
-                "spent_usd": round(claude_code.spent_usd, 2)}
+                "problem": problem}
 
     @app.post("/api/create/ideas")
     async def create_ideas(body: dict | None = None) -> dict:

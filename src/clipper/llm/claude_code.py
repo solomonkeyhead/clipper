@@ -34,27 +34,31 @@ from .base import (
 log = get_logger(__name__)
 
 DEFAULT_MODEL = "claude-opus-5-5"
-#: The API-price value of every call made so far (Claude Code reports it; on a plan it is
-#: not billed), for measuring what a video costs per model.
-spent_usd = 0.0
 EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
+
+
+#: When `cli` last looked, and what it found.
+_looked: tuple[float, str | None] = (-60.0, None)
 
 
 def cli() -> str | None:
     """The `claude` command, if Claude Code is installed: on PATH, or where its Windows
-    installers put it (a desktop icon's Clipper may not have the terminal's PATH, D116)."""
+    installers put it (a desktop icon's Clipper may not have the terminal's PATH, D116).
+    Looked for once a minute at most: a long PATH takes ~30 ms a look, and Create's AI note
+    asked for every job each time a video changed (D173)."""
     import os
 
+    global _looked
+    if time.monotonic() - _looked[0] < 60:
+        return _looked[1]
     found = shutil.which("claude")
-    if found:
-        return found
-    home, appdata = Path.home(), os.environ.get("APPDATA", "")
-    for candidate in (home / ".local" / "bin" / "claude.exe", home / ".local" / "bin" / "claude",
-                      Path(appdata) / "npm" / "claude.cmd" if appdata else None,
-                      home / ".claude" / "local" / "claude"):
-        if candidate and candidate.is_file():
-            return str(candidate)
-    return None
+    if not found:
+        home, appdata = Path.home(), os.environ.get("APPDATA", "")
+        found = next((str(c) for c in (home / ".local" / "bin" / "claude.exe", home / ".local" / "bin" / "claude",
+                                       Path(appdata) / "npm" / "claude.cmd" if appdata else None,
+                                       home / ".claude" / "local" / "claude") if c and c.is_file()), None)
+    _looked = (time.monotonic(), found)
+    return found
 
 
 def _shim(command: str) -> bool:
@@ -141,8 +145,6 @@ class ClaudeCodeBackend(LLMBackend):
             text = _json_in(text, "[")
         if not text.strip():
             raise LLMError("Claude Code returned nothing")
-        global spent_usd
-        spent_usd += float(reply.get("total_cost_usd") or 0)  # what the call would cost at API prices
         usage = reply.get("usage") or {}
         return LLMResponse(text=text, model=self.model, prompt_tokens=usage.get("input_tokens", 0),
                            output_tokens=usage.get("output_tokens", 0), latency=time.perf_counter() - started)
