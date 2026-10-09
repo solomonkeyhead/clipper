@@ -111,6 +111,26 @@ PLAIN = {"below the relative composite threshold": "well below this video's best
          "below the absolute quality bar": "below the quality bar"}
 
 
+def failure(exc: BaseException, limit: int = 400) -> str:
+    """Why a job failed, for the page (D176): a full disk said plainly, with how much is free, where it came
+    as ffmpeg's or Windows' own words; anything else as it was."""
+    import errno
+    import shutil
+
+    from ..paths import data_root
+
+    text = str(exc)
+    if (isinstance(exc, OSError) and exc.errno == errno.ENOSPC) or any(
+            s in text for s in ("No space left on device", "not enough space on the disk")):
+        try:
+            free = f" ({shutil.disk_usage(data_root()).free / 1024**3:.1f} GB free)"
+        except OSError:
+            free = ""
+        return (f"The disk is full{free}. Free some space, then try again: a long video and its clips "
+                "can take 5-10 GB.")
+    return text[:limit]
+
+
 def explain_stop(note: str, made: int) -> str:
     """The selection's reason for stopping, in plain words, for an auto job."""
     if note.startswith("reached the requested"):
@@ -291,7 +311,7 @@ class JobRunner:
                 notes.append(f"{len(result.rejected)} failed quality checks and were left out")
             job.message = ". ".join(n for n in notes if n)
         except Exception as exc:  # shown on the page, and in the log for debugging
-            job.status, job.stage, job.message = "failed", "Failed", str(exc)[:400]
+            job.status, job.stage, job.message = "failed", "Failed", failure(exc)
             log.error("clip job %s failed:\n%s", job.id, traceback.format_exc())
         finally:
             pipeline.removeHandler(handler)

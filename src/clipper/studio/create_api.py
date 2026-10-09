@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 
 from ..create import channel as channels
 from ..utils.logging import get_logger
+from .jobs import failure
 
 log = get_logger(__name__)
 
@@ -237,7 +238,7 @@ def _work(video_id: int, publish) -> None:
                 before = store.video(video_id)
                 # A rebuild that fails leaves the video built before in place, with the reason (D127).
                 store.update_video(video_id, status="built" if before and before["clip_id"] else "failed",
-                                   error=str(exc)[:400])
+                                   error=failure(exc))
             finally:
                 progress.pop(video_id, None)
     finally:

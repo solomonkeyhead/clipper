@@ -218,3 +218,14 @@ def test_the_fact_check_and_the_editors_read_are_asked_at_once(data_root, monkey
     monkeypatch.setattr(scripts, "ask", ask)
     out, _ = scripts.write_checked("Why does the lift make you heavier?")
     assert len(out.beats) == 3
+
+
+def test_a_full_disk_is_said_plainly():
+    """D176: ffmpeg's "No space left on device" reached the page as its raw output."""
+    import errno
+
+    from clipper.studio.jobs import failure
+
+    assert failure(OSError(errno.ENOSPC, "x")).startswith("The disk is full")
+    assert failure(RuntimeError("ffmpeg exited -28:\nError writing trailer: No space left on device")).startswith("The disk is full")
+    assert failure(RuntimeError("x" * 500)) == "x" * 400

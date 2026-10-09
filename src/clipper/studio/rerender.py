@@ -16,6 +16,7 @@ import threading
 
 from ..utils.logging import get_logger
 from . import db, library
+from .jobs import failure
 
 log = get_logger(__name__)
 
@@ -56,7 +57,7 @@ class Rerenders:
                 self._one(clip_id, hook, edit)
             except Exception as exc:  # shown on the clip; the old video stays
                 log.warning("re-render of clip %s failed: %s", clip_id, exc)
-                self.failed[clip_id] = str(exc)[:300]
+                self.failed[clip_id] = failure(exc, 300)
             finally:
                 self.state.pop(clip_id, None)
                 self.publish("clips.changed", {"id": clip_id})

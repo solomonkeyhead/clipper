@@ -3181,3 +3181,9 @@ finished are reused", with the row's "Clip it again" (D143). It can't block `/ap
 jobs. Clipping a run again whose campaign or video is gone now says which ("the campaign X isn't there any more",
 "episode.mp4 isn't there any more"), where it said "pick a campaign"; a missing video is named only inside the
 source folders, so the message can't tell what exists elsewhere on the PC.
+
+## D176: a full disk is said plainly
+A clip job, a Create build or a clip's re-render that ran out of disk showed ffmpeg's last lines ("exited -28 ...
+Error writing trailer: No space left on device") or Windows' own words. `jobs.failure` turns either into "The disk
+is full (1.2 GB free). Free some space, then try again: a long video and its clips can take 5-10 GB." Anything else
+reads as before. (Settings' System check already warns under 20 GB free.)
