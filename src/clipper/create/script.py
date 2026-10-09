@@ -629,6 +629,11 @@ class Review(BaseModel):
     problems: list[str] = Field(default_factory=list)
 
 
+class _Apart(Review):
+    """The check of new words and their diagrams in one call (D183), what it found in each kept apart."""
+    diagrams: list[str] = Field(default_factory=list)
+
+
 CHECK = """You are {expert} checking a 45-second educational script for a general
 audience. Simplifying is fine; stating something false is not. Flag only real errors: wrong
 mechanisms, wrong formulas, wrong numbers, misleading claims, or a myth stated as fact. Jokes
@@ -675,8 +680,10 @@ def _diagrams(script: Script) -> str:
     return "\n".join(lines)
 
 
-def check(script: Script, diagrams_only: bool = False) -> Review:
-    """The fact check; `diagrams_only` when the words passed it already (D164): only the pictures are new."""
+def check(script: Script, diagrams_only: bool = False, apart: bool = False) -> Review:
+    """The fact check; `diagrams_only` when the words passed it already (D164): only the pictures are new.
+    `apart`: what is wrong in the words and in the diagrams comes back separately (an _Apart), so one call
+    checks a rewrite and its first picture plan (D183)."""
     diagrams = _diagrams(script)
     if diagrams_only and not diagrams:
         return Review(ok=True)
@@ -684,11 +691,16 @@ def check(script: Script, diagrams_only: bool = False) -> Review:
     if diagrams_only:
         user += ("\n\nThe words were checked already and stay as they are: check only the diagrams, against "
                  "their sentences and the facts.")
-    answer = ask(channels.fill(CHECK), user, Review, temperature=0.0, job="check", keep=True)
+    elif apart and diagrams:
+        user += ("\n\nKeep the two apart: problems in the words go in problems, problems in a diagram (one that "
+                 "disagrees with its sentence or the facts) go in diagrams, each saying which sentence it is over.")
+    schema = _Apart if apart and diagrams else Review
+    answer = ask(channels.fill(CHECK), user, schema, temperature=0.0, job="check", keep=True)
     try:
-        return Review.model_validate(json.loads(answer))
+        review = schema.model_validate(json.loads(answer))
     except (ValueError, TypeError):
-        return Review(ok=False, problems=[f"The {channels.check_name().lower()} came back unreadable; read it carefully yourself."])
+        review = Review(ok=False, problems=[f"The {channels.check_name().lower()} came back unreadable; read it carefully yourself."])
+    return _Apart(**review.model_dump()) if apart else review
 
 
 def _videos() -> list[dict]:
@@ -741,11 +753,11 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
         script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
                        ending=script.ending, bit=bit, draft=script)
         writer = ai.last_used
-        with ThreadPoolExecutor(1) as pool:
-            # The director plans on the final words while they are checked (D168): the check never changes them.
-            director = pool.submit(_planned_or_note, script)
+        # The director plans on the final words, then one check reads the words and the diagrams (D183): the
+        # words check used to go beside the director, and the diagrams' check after it took as long.
+        *planned, second = _planned_or_note(script, words=True)
+        if second is None:   # not checked with the pictures: the words on their own
             second = _check_or_note(script, notes)
-            planned = director.result()
         if not second.ok and second.problems:
             notes.append(f"{channels.check_name()}, still unsure:\n" + "\n".join(f"- {p}" for p in second.problems))
         elif facts:
@@ -760,18 +772,18 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     left = lint(script, channel)
     if left:
         notes.append("Still off the channel's rules:\n" + "\n".join(f"- {p}" for p in left))
-    script, pictures = planned or _planned_or_note(script)
+    script, pictures = planned or _planned_or_note(script)[:2]
     notes.append(pictures)
     return _signed(script, "\n".join(notes), writer)
 
 
-def _planned_or_note(script: Script) -> tuple[Script, str]:
+def _planned_or_note(script: Script, words: bool = False) -> tuple[Script, str, Review | None]:
     """The pictures planned, or the words as they are with a note saying why not: the words stand, and the
-    pictures can be planned again from the page."""
+    pictures can be planned again from the page. With `words`, what the check found in the words (_plan)."""
     try:
-        return plan_pictures(script)
+        return _plan(script, words)
     except CreateError as exc:
-        return script, f"Pictures not planned ({exc}): plain footage searches for now; press Plan pictures."
+        return script, f"Pictures not planned ({exc}): plain footage searches for now; press Plan pictures.", None
 
 
 def _check_or_note(script: Script, notes: list[str]) -> Review:
@@ -804,13 +816,22 @@ def plan_pictures(script: Script) -> tuple[Script, str]:
     """The director's pass (D164): a picture, a highlighted word and a pose for every sentence, every word
     kept, then the diagrams checked against the words, once more if the check finds a problem. The
     user's own clips and pictures stay where they are (D119, D120)."""
+    planned, note, _ = _plan(script)
+    return planned, note
+
+
+def _plan(script: Script, words: bool = False) -> tuple[Script, str, Review | None]:
+    """plan_pictures, and with `words` the new words checked in the same call as the first plan's diagrams
+    (D183): after a rewrite, a words check of its own went beside it. Returns what was wrong in the words,
+    None when they weren't checked."""
     channel = channels.load()
+    said = None
     # How far in each sentence starts, so the director can keep the rules timed in words (no drawing in the
     # first ~9 words: one planned there was turned into footage with a search made of its leftover words).
     starts = [sum(len(b.text.split()) for b in script.beats[:i]) for i in range(len(script.beats))]
     beats = "\n".join(f"{i}. ({w} words in) {b.text}" for i, (b, w) in enumerate(zip(script.beats, starts, strict=True), start=1))
     feedback = ""
-    for _ in range(2):
+    for n in range(2):
         user = (pose_note(channel) + f"Plan the pictures for this script: one beat for each numbered sentence, "
                 f"every sentence kept exactly as written, in order.\n\nTitle: {script.title}\n{beats}\n"
                 + (f"\nFix these problems:\n{feedback}\n" if feedback else ""))
@@ -827,14 +848,18 @@ def plan_pictures(script: Script) -> tuple[Script, str]:
                 "clip": b.visual.clip, "clip_start": b.visual.clip_start, "fill": b.visual.fill}),
                 "emphasis": p.emphasis or b.emphasis, "pose": b.pose or p.pose})
             for b, p in zip(script.beats, planned.beats, strict=True)]}))
+        both = words and n == 0
         try:
-            review = check(fresh, diagrams_only=True)
+            review = check(fresh, diagrams_only=not both, apart=both)
         except CreateError as exc:   # the plan stands; the diagrams can be checked from the page
-            return fresh, f"Pictures planned; the diagrams weren't checked ({exc})."
+            return fresh, f"Pictures planned; the diagrams weren't checked ({exc}).", said
+        if both:
+            said = Review(ok=not review.problems, problems=review.problems)
+            review = Review(ok=not review.diagrams, problems=review.diagrams)
         if review.ok or not review.problems:
-            return fresh, f"Pictures: {channels.check_name()} found no problems in the diagrams."
+            return fresh, f"Pictures: {channels.check_name()} found no problems in the diagrams.", said
         feedback = "\n".join(f"- {p}" for p in review.problems)
-    return fresh, f"Pictures: {channels.check_name()}, still unsure about the diagrams:\n" + feedback
+    return fresh, f"Pictures: {channels.check_name()}, still unsure about the diagrams:\n" + feedback, said
 
 
 def replan(script: Script) -> tuple[Script, str]:

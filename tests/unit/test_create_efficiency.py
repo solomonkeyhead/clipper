@@ -77,6 +77,33 @@ def test_writing_a_script_draws_no_sketches_that_waste_if_it_is_dropped(data_roo
     assert out.beats[1].visual.template == "sketch" and not out.beats[1].visual.sketch and "Written by" in note
 
 
+def test_a_rewrite_and_its_pictures_are_checked_in_one_call(data_root, monkeypatch):
+    """D183: the rewrite's words check went beside the director, and the diagrams' check came after it anyway."""
+    import json
+
+    checks, plans = [], []
+
+    def ask(system, user, schema, **kw):
+        if schema.__name__ == "WordsScript":   # three lines: off the word count, so it is rewritten
+            return json.dumps({"lines": ["Why does the lift make you heavier?", "The floor pushes up harder.",
+                                         "Gravity stays the same."], "title": "t"})
+        if schema.__name__ == "Plan":
+            plans.append(user)
+            return json.dumps({"beats": [{"text": "x"}, {"text": "x"}, {"text": "x", "visual": {
+                "kind": "diagram", "template": "forces", "labels": ["floor"], "directions": ["up"]}}]})
+        if kw.get("job") == "check":
+            checks.append(schema.__name__)
+            if schema.__name__ == "_Apart":
+                return json.dumps({"ok": False, "problems": ["Gravity does change."],
+                                   "diagrams": ["Sentence 3: the floor's arrow is too small."]})
+        return json.dumps({"ok": True, "problems": []})
+
+    monkeypatch.setattr(scripts, "ask", ask)
+    _, note = scripts.write_checked("Why does the lift make you heavier?")
+    assert checks == ["Review", "_Apart", "Review"]       # the draft; the rewrite with its pictures; the pictures fixed
+    assert len(plans) == 2 and "too small" in plans[1] and "still unsure" in note and "Gravity does change." in note
+
+
 def beat_and_script(wish=""):
     s = Script(title="t", beats=[Beat(text="Like music through a wall.", visual=Visual(queries=["wall music"], wish=wish))])
     return s.beats[0], s

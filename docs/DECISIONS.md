@@ -3261,3 +3261,12 @@ second review. Now `fit` does the layout after every drawing and every fix:
 - A drawing the build doesn't save in the script (standing in for the opening's footage, D161, or the rest after
   the user's own clip) is remembered by its question (`draw(keep=True)`): a rebuild where footage still doesn't fit
   draws the same one for free. A drawing the user asks for is always new.
+
+## D183: a rewrite's words and its first picture plan checked in one call
+After a rewrite (almost every script: the countable rules or the editor's read find something), the words were
+checked beside the director while it planned, then the director's diagrams were checked once it finished. The
+diagrams' check waited for the director anyway, so it now reads the words too, in the same call: `check(apart=True)`
+asks for the words' problems and the diagrams' problems separately (`_Apart`), from the same CHECK prompt (the
+physics fixture is unchanged; only the user message says to keep them apart). What it finds in the words goes in
+the notes as before; what it finds in a diagram goes back to the director, whose second plan is checked for its
+diagrams alone. A written script: 6 calls instead of 7, and it takes no longer.
