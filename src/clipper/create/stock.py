@@ -313,42 +313,43 @@ PER_QUERY = 8
 #: Photos among a sentence's candidates (D162): after the videos, a few, as a video that fits is better.
 PHOTOS = 3
 
-PICK = """You choose the picture for one sentence of a short educational video, shown on a
-phone in a square-ish panel above the captions. You see numbered thumbnails of candidates, each
-a video clip or a photo (a photo is shown with a slow camera move), with what its library says it
-shows. Find the one a viewer would instantly connect with what the sentence says: the thing
-itself, or a person plainly experiencing it, big, clear and close enough to read on a phone. A
-close, everyday match counts (headphones for hearing, a microphone for recording). Prefer:
-the subject filling much of the frame; real motion that matches the sentence (water pouring for
-"pours"); a video over a photo when both fit as well; a photo of exactly the thing over a video
-of something near it.
-Then score how well that best one fits, honestly:
-  9-10 it shows exactly what the sentence says;
+#: One judge for the build and for the picker (D181): it scores every candidate, so a sentence long enough
+#: for two clips takes its second from the same scores (it was a call a part), and the picker shows them.
+JUDGE = """You score stock footage for one sentence of a short educational video, shown on a phone in a
+square-ish panel above the captions. You see numbered thumbnails of candidates, each a video clip or a
+photo (a photo is shown with a slow camera move), with what its library says it shows, and the whole
+script, so you know what the sentence means in it (a "wall" in a video about sound is a wall music comes
+through, not a climbing wall).
+Score EVERY candidate for how instantly a viewer would connect it with what the sentence says: the thing
+itself, or a person plainly experiencing it, big, clear and close enough to read on a phone. A close,
+everyday match counts (headphones for hearing, a microphone for recording); so does real motion that
+matches the sentence (water pouring for "pours").
+  9-10 exactly what the sentence says;
   7-8  a clear, natural match a viewer gets at once;
-  4-6  related, but loose, generic or needs explaining (a lab for "your voice"); or the right
-       thing but tiny, far away or half hidden;
-  0-3  unrelated, confusing, or cheap-looking (cartoonish, a glossy 3D render or CGI, neon
-       audio-visualiser rings, a green background, text, a watermark or a logo burned in,
-       mostly black or too dark to read on a phone, a posed stock-photo smile at the camera).
-Below 7 a chalkboard drawing is shown instead, which is better than a loose match, so don't
-round up. Answer pick = its number (0 if none), score, and center: where across that
-thumbnail the subject is, 0 = left edge, 0.5 = middle, 1 = right edge (a wide picture is cropped
-to the panel around it, so put it on the thing the sentence is about).
-You also get the whole script, so you know what the video is about and what the sentence
-means in it (a "wall" in a video about sound is a wall music comes through, not a climbing
-wall). If nothing scores 7 or more, give better: up to 2 new searches, 2 to 4 plain words each,
-for things stock libraries really film ("man listening to headphones", "subwoofer speaker"),
-that would show this sentence."""
+  4-6  related, but loose, generic or needs explaining (a lab for "your voice"); or the right thing but
+       tiny, far away or half hidden;
+  0-3  unrelated, confusing, or cheap-looking (cartoonish, a glossy 3D render or CGI, neon audio-visualiser
+       rings, a green background, text, a watermark or a logo burned in, mostly black or too dark to read on
+       a phone, a posed stock-photo smile at the camera).
+Below 7 a chalkboard drawing is shown instead, which is better than a loose match, so don't round up. Of
+two that fit as well, score the video higher than the photo; a photo of exactly the thing beats a video of
+something near it.
+For each candidate also give center: where across its thumbnail the subject is, 0 = left edge, 0.5 =
+middle, 1 = right edge (a wide picture is cropped to the panel around it, so put it on the thing the
+sentence is about).
+If nothing scores 7 or more, give better: up to 3 new searches, 2 to 4 plain words each, for what stock
+libraries really film (objects, places, nature, people in ordinary situations: "man listening to
+headphones", "subwoofer speaker vibrating") that would show this sentence. Mix the literal thing with a
+person experiencing it; never abstract words or actions nobody films, and none already searched."""
 
 #: The judge's score a clip needs to be used; below it the beat gets a chalk card (D110).
 #: Picks were judged "very poor" when any non-zero pick was taken.
 GOOD_ENOUGH = 7
 
 
-class _Pick(BaseModel):
-    pick: int
-    score: int = 0
-    center: float = 0.5
+class _Ranks(BaseModel):
+    scores: list[int] = []
+    centers: list[float] = []
     better: list[str] = []      # when nothing fits: searches more likely to find it (D124)
 
 
@@ -384,27 +385,41 @@ class _NoAnswer(Exception):
     """The model couldn't look (busy, offline): not the same as "none of these fit"."""
 
 
-def _judge(sentence: str, query: str, hits: list[dict], context: str = "",
-           good_enough: int = GOOD_ENOUGH) -> tuple[dict | None, list[str]]:
-    """The candidate the model says shows the sentence (None if none does), and the better
-    searches it suggests when none does."""
+def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "") -> tuple[list[dict], list[str]]:
+    """Every candidate with a thumbnail, with the judge's score (0-10, None if it gave none) and where its
+    subject sits across the frame, best first (the libraries' order breaks ties), and the better searches it
+    suggests when none is good enough. Raises _NoAnswer when no model could look."""
     shown = [(h, t) for h in hits if (t := _thumb(h))]
     if not shown:
         raise _NoAnswer
     try:
-        prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "")
-                  + f"Sentence: {sentence}\nSearched for: {query}\n{_listing(shown)}")
-        answer = ask(PICK, prompt, _Pick, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True,
+        prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "") + f"Sentence: {sentence}\n"
+                  + (f"Searched for: {query}\n" if query else "") + _listing(shown))
+        answer = ask(JUDGE, prompt, _Ranks, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True,
                      job="footage", keep=True)
-        verdict = _Pick.model_validate(json.loads(answer))
+        got = _Ranks.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
         raise _NoAnswer from exc
-    n = verdict.pick
-    better = [" ".join(q.split()[:5]) for q in verdict.better if q.strip()][:2]
-    if not 1 <= n <= len(shown) or verdict.score < good_enough:
-        log.info("create: no footage good enough for %r (best %s scored %s)", sentence[:60], n, verdict.score)
-        return None, better
-    return {**shown[n - 1][0], "center": min(1.0, max(0.0, verdict.center))}, []
+    out = []
+    for k, (h, _) in enumerate(shown):
+        score = got.scores[k] if k < len(got.scores) else None
+        center = got.centers[k] if k < len(got.centers) else 0.5
+        out.append({**h, "score": None if score is None else max(0, min(10, int(score))),
+                    "center": min(1.0, max(0.0, float(center)))})
+    out.sort(key=lambda h: -(h["score"] if h["score"] is not None else -1))
+    return out, [" ".join(str(q).split()[:5]) for q in got.better if str(q).strip()][:3]
+
+
+def _judge(sentence: str, query: str, hits: list[dict], context: str = "",
+           good_enough: int = GOOD_ENOUGH) -> tuple[list[dict], list[str]]:
+    """The candidates good enough for the sentence, best first ([] if none is), and the better searches the
+    judge suggests when none is."""
+    scored, better = _scored(sentence, hits, context, query)
+    good = [h for h in scored if h["score"] is not None and h["score"] >= good_enough]
+    if not good:
+        log.info("create: no footage good enough for %r (best scored %s)", sentence[:60], scored[0]["score"])
+        return [], better
+    return good, []
 
 
 #: Sentences whose footage was picked by its search words alone, as no model could look (D122).
@@ -463,32 +478,33 @@ def _pool(queries: list[str], used: set, seconds: float) -> list[dict]:
 
 
 def choose(queries: list[str], seconds: float, used: set, sentence: str = "", context: str = "",
-           good_enough: int = GOOD_ENOUGH) -> dict | None:
-    """The best unused clip for a beat of `seconds`, judged against the sentence (and the whole
-    script, `context`) across all its searches at once. When none is good enough the judge's
-    own better searches get one more look (D124). None when nothing fits: the beat gets a
-    chalkboard card instead, never a generic stand-in ("science laboratory" opened a video once).
-    `good_enough` is lower when the user asked for footage on that sentence themselves (D126)."""
+           good_enough: int = GOOD_ENOUGH, count: int = 1) -> list[dict]:
+    """Up to `count` different unused clips for the parts of a beat, each `seconds` long, best first, judged
+    against the sentence (and the whole script, `context`) across all its searches at once. When none is good
+    enough the judge's own better searches get one more look (D124), the last (D181): the build's further
+    rounds, up to five calls a part, almost never found one. [] when nothing fits: the beat gets a chalkboard
+    drawing instead, never a generic stand-in ("science laboratory" opened a video once). `good_enough` is
+    lower when the user asked for footage on that sentence themselves (D126)."""
     ranked = _pool(queries, used, seconds)
     if not ranked:
-        return None
+        return []
     if not sentence:
-        return ranked[0]
+        return ranked[:count]
     try:
-        hit, better = _judge(sentence, " / ".join(queries), ranked, context, good_enough)
-        if hit is None and better:
+        good, better = _judge(sentence, " / ".join(queries), ranked, context, good_enough)
+        if not good and better:
             tried = {q.lower() for q in queries}
             fresh = [q for q in better if q.lower() not in tried]
             again = _pool(fresh, used, seconds) if fresh else []
             if again:
                 log.info("create: footage searched again for %r: %s", sentence[:60], " / ".join(fresh))
-                hit, _ = _judge(sentence, " / ".join(fresh), again, context, good_enough)
-        return hit
+                good, _ = _judge(sentence, " / ".join(fresh), again, context, good_enough)
+        return good[:count]
     except _NoAnswer:
         hit = by_words(queries, ranked)
         if hit:
             unjudged.append(sentence)
-        return hit
+        return [hit] if hit else []
 
 
 # ---------- better searches, and every candidate scored, for choosing footage (D129) ----------
@@ -529,44 +545,14 @@ def plan_searches(sentence: str, context: str = "", wish: str = "", tried: list[
     return out[:5]
 
 
-RANK = """You score stock footage for one sentence of a short educational video shown on a phone.
-You see numbered thumbnails of candidates, each a video clip or a photo (shown with a slow camera
-move), with what its library says it shows, and the whole script for context. Score EVERY
-candidate for how well it shows what the sentence says:
-  9-10 exactly what the sentence says; 7-8 a clear, natural match a viewer gets at once;
-  4-6 related but loose or generic, or the right thing but tiny or far away; 0-3 unrelated,
-  confusing or cheap-looking (cartoonish, CGI, neon visualiser rings, green background, burned-in
-  text, watermark or logo, too dark to read on a phone, a posed stock smile at the camera).
-Don't round up. Also give center for each: where across its thumbnail the subject is, 0 = left,
-0.5 = middle, 1 = right (a wide picture is cropped to the square-ish panel around it)."""
-
-
-class _Ranks(BaseModel):
-    scores: list[int] = []
-    centers: list[float] = []
-
-
 def rank(sentence: str, hits: list[dict], context: str = "") -> list[dict]:
-    """`hits` with a model's score (0-10, or None when no model could look) and the subject's place
+    """`hits` with the judge's score (0-10, or None when no model could look) and the subject's place
     across the frame, best first; candidates without a thumbnail are left out."""
-    shown = [(h, t) for h in hits if (t := _thumb(h))]
-    if not shown:
-        return []
     try:
-        answer = ask(RANK, (f"The whole script:\n{context}\n\n" if context else "") + f"Sentence: {sentence}\n"
-                     + _listing(shown), _Ranks, temperature=0.0,
-                     media=[(t, "image/jpeg") for _, t in shown], quick=True, job="footage", keep=True)
-        got = _Ranks.model_validate(json.loads(answer))
-    except (CreateError, ValueError, TypeError) as exc:
-        log.info("create: candidates not scored (%s)", exc)
-        got = _Ranks()
-    out = []
-    for k, (h, _) in enumerate(shown):
-        score = got.scores[k] if k < len(got.scores) else None
-        center = got.centers[k] if k < len(got.centers) else 0.5
-        out.append({**h, "score": None if score is None else max(0, min(10, int(score))),
-                    "center": min(1.0, max(0.0, float(center)))})
-    return sorted(out, key=lambda h: -(h["score"] if h["score"] is not None else -1))
+        return _scored(sentence, hits, context)[0]
+    except _NoAnswer as exc:
+        log.info("create: candidates not scored (%s)", exc.__cause__ or "no thumbnails")
+        return [{**h, "score": None, "center": 0.5} for h in hits if _thumb(h)]
 
 
 def candidates(queries: list[str], seconds: float, exclude: set, sentence: str, context: str = "",

@@ -391,11 +391,11 @@ class _Footage(NamedTuple):
 
 def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, avoid: set,
                   asked: bool) -> _Footage:
-    """The stock clip(s) for a sentence's picture, a clip per MAX_SHOT seconds, each a different one.
-    The searches the script was written with come first; only when none finds a clip good enough does
-    the footage model write searches of its own for the sentence, in the script's context (D129): it
-    was a call per sentence even when the first searches worked (D136). A wish, or new footage asked
-    for, goes straight to the written searches."""
+    """The stock clip(s) for a sentence's picture, a clip per MAX_SHOT seconds, each a different one while
+    enough are good enough (else a part goes on with the clip before it, D132). One judgement serves every
+    part, and the judge's own better searches are the only second look (D181): a call per part, then the
+    footage model's searches and another judgement, came to about four calls a part. A wish, or new footage
+    asked for, goes straight to searches written for the sentence (D129)."""
     said_before = sum(len(b.text.split()) for b in script.beats[:i])
     longest = HOOK_SHOT if said_before < HOOK_WORDS else MAX_SHOT   # quicker pictures while the hook is said (D156)
     count = max(1, math.ceil(seconds / longest - 1e-6))
@@ -405,23 +405,15 @@ def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, 
     text = " ".join(script.beats[k].text for k in group)
     widened = asked or bool(visual.wish)
     good = ASKED_GOOD_ENOUGH if asked else OPENING_GOOD_ENOUGH if said_before < FIRST_DIAGRAM_WORDS else stock.GOOD_ENOUGH
-
-    def widen() -> list[str]:
+    searches = queries or [beat.text]
+    if widened:
         written = stock.plan_searches(text, script.text, wish=visual.wish, tried=queries if asked else None)
-        return list(dict.fromkeys([*written, *queries]))[:6] or [beat.text]
-
-    searches = widen() if widened else queries or [beat.text]
-    hits: list = []
-    for part in parts:  # one at a time, so each part of a long sentence gets a different clip
-        taken = avoid | {h["id"] for h in hits if h}
-        hit = stock.choose(searches, part, taken, sentence=beat.text, context=script.text, good_enough=good)
-        if hit is None and not widened:
-            searches, widened = widen(), True
-            hit = stock.choose(searches, part, taken, sentence=beat.text, context=script.text, good_enough=good)
-        hits.append(hit)
-    log.info("create: footage for sentence %d: %s", i + 1,
-             "searches written for it" if widened else "the script's own searches were enough")
-    return _Footage(parts, hits, searches)
+        searches = list(dict.fromkeys([*written, *queries]))[:6] or [beat.text]
+    found = stock.choose(searches, parts[0], avoid, sentence=beat.text, context=script.text, good_enough=good,
+                         count=count)
+    log.info("create: footage for sentence %d: %d of %d part(s) found%s", i + 1, len(found), count,
+             ", searches written for it" if widened else "")
+    return _Footage(parts, [found[k] if k < len(found) else None for k in range(count)], searches)
 
 
 FOOTAGE_WORKERS = 4

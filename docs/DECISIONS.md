@@ -3232,3 +3232,16 @@ The last of the audit's proposals (D120's gaps in MANUAL_CONTROLS). On a built v
   round (its points reversed); a forces diagram's arrows can point another way. Templates keep their own colours:
   they are set by position (first arrow yellow, second blue), and nobody asked to change them yet.
 Each counts as a change for the rebuild like the D171 ones, and only that shot is made again.
+
+## D181: one footage judgement scores every candidate, and the parts of a sentence share it
+Marc asked for fewer AI calls without losing quality. The logs showed footage at about four calls a part: the
+footage model's searches, a pick, a rank, then up to five more rounds of written searches and judging, and most
+sentences that failed the first round still ended in a drawing. Now:
+- **One prompt, JUDGE**, replaces PICK and RANK. It scores every candidate on the same 0-10 rubric, gives a crop
+  center for each, and, only when nothing reaches 7, up to three better searches.
+- **The parts share it.** A long sentence's second and third clips are the next best of the same scores
+  (`choose(count=)`), not a new call each.
+- **Two rounds at most**: the script's own searches, then the judge's better ones. Written searches
+  (`plan_searches`) stay for a wish, asked-for footage and the picker. Nothing good enough: a drawing, as before.
+Per stock sentence: 1 call, 2 when the judge sends it searching (was 4 a part, up to 7). The rubric and the bar
+(7, or 6 when asked for) are unchanged.

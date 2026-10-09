@@ -82,31 +82,28 @@ def beat_and_script(wish=""):
     return s.beats[0], s
 
 
-def test_the_scripts_own_searches_are_tried_first_and_the_footage_model_only_when_they_fail(monkeypatch):
+def test_the_scripts_own_searches_are_judged_once_for_every_part_and_no_searches_are_written(monkeypatch):
+    """D181: the footage model's searches and a judgement a part came to about four calls a part."""
     beat, s = beat_and_script()
-    written = []
-    monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: written.append(1) or ["subwoofer speaker"])
+    monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: pytest.fail("wrote searches"))
     asked = []
 
     def choose(queries, seconds, taken, **kw):
-        asked.append(list(queries))
-        return {"id": "a"} if "subwoofer speaker" in queries else None
+        asked.append((list(queries), kw["count"]))
+        return [{"id": "a"}]
 
     monkeypatch.setattr(stock, "choose", choose)
-    got = build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False)
-    assert written == [1] and asked == [["wall music"], ["subwoofer speaker", "wall music"]] and got.hits == [{"id": "a"}]
-    written.clear()
-    asked.clear()
-    monkeypatch.setattr(stock, "choose", lambda q, *a, **k: asked.append(q) or {"id": "b"})
-    build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False)
-    assert written == [] and asked == [["wall music"]]              # the first searches were enough: no extra call
+    got = build._pick_footage(0, beat, beat.visual, 5.0, s, set(), False)   # two parts of 2.5 s (the hook)
+    assert asked == [(["wall music"], 2)] and got.hits == [{"id": "a"}, None]   # the second part goes on with it
+    monkeypatch.setattr(stock, "choose", lambda q, *a, **k: [])
+    assert build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False).hits == [None]   # a drawing instead
 
 
 def test_a_wish_or_new_footage_goes_straight_to_searches_written_for_it(monkeypatch):
     beat, s = beat_and_script(wish="a subwoofer")
     written = []
     monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: written.append(k["wish"]) or ["subwoofer speaker"])
-    monkeypatch.setattr(stock, "choose", lambda q, *a, **k: {"id": "a", "q": list(q)})
+    monkeypatch.setattr(stock, "choose", lambda q, *a, **k: [{"id": "a", "q": list(q)}])
     got = build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False)
     assert written == ["a subwoofer"] and got.hits[0]["q"][0] == "subwoofer speaker"
 

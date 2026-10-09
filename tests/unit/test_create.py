@@ -58,19 +58,30 @@ class TestStock:
         seen = []
         results = {"ear close up": HITS[:2], "headphones": HITS[2:]}
         monkeypatch.setattr(stock, "search", lambda q: results.get(q, []))
-        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="", good=7: (seen.append([h["id"] for h in hits]) or hits[1], []))
-        assert stock.choose(["ear close up", "headphones"], 6.0, used={4}, sentence="Your middle ear")["id"] == 2
+        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="", good=7: (seen.append([h["id"] for h in hits]) or [hits[1]], []))
+        assert stock.choose(["ear close up", "headphones"], 6.0, used={4}, sentence="Your middle ear")[0]["id"] == 2
         assert seen[0] == [3, 2, 1]  # long enough and vertical, long enough, too short; 4 already used
 
     def test_nothing_fitting_or_no_judge_means_a_chalk_card(self, monkeypatch):
         monkeypatch.setattr(stock, "search", lambda q: HITS)
-        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="", good=7: (None, []))
-        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # a chalk card instead
+        monkeypatch.setattr(stock, "_judge", lambda sentence, q, hits, ctx="", good=7: ([], []))
+        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") == []  # a chalk card instead
 
         def busy(sentence, q, hits, ctx="", good=7):
             raise stock._NoAnswer
         monkeypatch.setattr(stock, "_judge", busy)
-        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") is None  # no judge: a card too
+        assert stock.choose(["man yawning airplane"], 2.0, used=set(), sentence="s") == []  # no judge: a card too
+
+    def test_one_judgement_serves_every_part_of_a_long_sentence(self, monkeypatch):
+        """D181: a sentence long enough for two clips was judged once a part."""
+        monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
+        monkeypatch.setattr(stock, "search", lambda q: HITS)
+        calls = []
+        # Shown in the pool's order (long enough and vertical first): 3, 2, 4, then 1 (too short).
+        monkeypatch.setattr(stock, "ask", lambda *a, **k: calls.append(1) or
+                            '{"scores": [9, 4, 8, 7], "centers": [0.5, 0.5, 0.3, 0.5]}')
+        got = stock.choose(["ear"], 6.0, used=set(), sentence="Your ear.", count=2)
+        assert [h["id"] for h in got] == [3, 4] and got[1]["center"] == 0.3 and calls == [1]
 
     def test_green_screen_footage_is_left_out(self, monkeypatch, tmp_path):
         import httpx
@@ -228,11 +239,12 @@ def test_claude_goes_first_only_with_a_key(monkeypatch):
 
 def test_a_loose_match_is_not_good_enough(monkeypatch):
     monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
-    for score, expect in ((6, None), (7, 2)):
-        monkeypatch.setattr(stock, "ask", lambda *a, score=score, **k: f'{{"pick": 2, "score": {score}}}')
-        hit, _ = stock._judge("Your voice sounds deeper inside your head.", "voice", HITS[:3])
-        assert (hit and hit["id"]) == expect
-    assert hit["center"] == 0.5  # where the subject is, for the crop
+    for score, expect in ((6, []), (7, [2])):
+        monkeypatch.setattr(stock, "ask", lambda *a, score=score, **k:
+                            f'{{"scores": [5, {score}, 3], "centers": [0.1, 0.5, 0.9]}}')
+        good, _ = stock._judge("Your voice sounds deeper inside your head.", "voice", HITS[:3])
+        assert [h["id"] for h in good] == expect
+    assert good[0]["center"] == 0.5  # where the subject is, for the crop
 
 
 def test_the_judge_sees_the_script_and_searches_again_with_its_own_words(monkeypatch):
@@ -240,8 +252,8 @@ def test_the_judge_sees_the_script_and_searches_again_with_its_own_words(monkeyp
     monkeypatch.setattr(stock, "_thumb", lambda h: b"jpg")
     results = {"wall music": HITS[:2], "subwoofer speaker": HITS[2:4]}
     monkeypatch.setattr(stock, "search", lambda q: results.get(q, []))
-    prompts, answers = [], iter(['{"pick": 1, "score": 3, "better": ["subwoofer speaker", "wall music"]}',
-                                 '{"pick": 1, "score": 8}'])
+    prompts, answers = [], iter(['{"scores": [3, 2], "better": ["subwoofer speaker", "wall music"]}',
+                                 '{"scores": [8, 4]}'])
     seen_kw = []
 
     def fake(system, user, schema, **kw):
@@ -251,7 +263,7 @@ def test_the_judge_sees_the_script_and_searches_again_with_its_own_words(monkeyp
 
     monkeypatch.setattr(stock, "ask", fake)
     hit = stock.choose(["wall music"], 2.0, set(), sentence="Like music through a wall.", context="A video about sound.")
-    assert hit and hit["id"] in (3, 4) and len(prompts) == 2
+    assert hit and hit[0]["id"] in (3, 4) and len(prompts) == 2
     assert "A video about sound." in prompts[0] and all(k.get("job") == "footage" for k in seen_kw)
 
 
@@ -443,11 +455,11 @@ def test_claude_through_claude_code_on_the_users_plan(monkeypatch):
 
         seen.update(args=args, prompt=input, files=sorted(p.name for p in Path(cwd).iterdir()))
         return subprocess.CompletedProcess(args, 0, json.dumps(
-            {"type": "result", "is_error": False, "result": "", "structured_output": {"pick": 2, "score": 8}}), "")
+            {"type": "result", "is_error": False, "result": "", "structured_output": {"scores": [2, 8]}}), "")
     monkeypatch.setattr(claude_code.subprocess, "run", run)
-    reply = first.complete(LLMRequest(system="judge", user="Sentence: x", response_schema=stock._Pick,
+    reply = first.complete(LLMRequest(system="judge", user="Sentence: x", response_schema=stock._Ranks,
                                       media=[(b"jpg", "image/jpeg"), (b"jpg", "image/jpeg")]))
-    assert json.loads(reply.text) == {"pick": 2, "score": 8}
+    assert json.loads(reply.text) == {"scores": [2, 8]}
     assert seen["files"] == ["1.jpg", "2.jpg", "instructions.txt"] and "1.jpg, 2.jpg" in seen["prompt"]
     args = seen["args"]
     assert args[args.index("--tools") + 1] == "Read" and "--json-schema" in args and "--no-session-persistence" in args
@@ -482,11 +494,11 @@ def test_on_windows_claude_cmd_gets_no_json_or_line_breaks_on_its_command_line(m
     def run(args, input, cwd, **k):
         seen.update(args=args, prompt=input)
         return subprocess.CompletedProcess(args, 0, json.dumps(
-            {"is_error": False, "result": 'Here you go:\n```json\n{"pick": 3, "score": 9}\n```'}), "")
+            {"is_error": False, "result": 'Here you go:\n```json\n{"scores": [3, 9]}\n```'}), "")
     monkeypatch.setattr(claude_code.subprocess, "run", run)
     reply = claude_code.ClaudeCodeBackend().complete(
-        LLMRequest(system="line one\nline two", user="u", response_schema=stock._Pick))
-    assert json.loads(reply.text) == {"pick": 3, "score": 9}
+        LLMRequest(system="line one\nline two", user="u", response_schema=stock._Ranks))
+    assert json.loads(reply.text) == {"scores": [3, 9]}
     assert "--json-schema" not in seen["args"] and "--system-prompt-file" in seen["args"]
     assert not any("\n" in a for a in seen["args"]) and "JSON Schema" in seen["prompt"]
 

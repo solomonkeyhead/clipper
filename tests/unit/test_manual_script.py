@@ -222,11 +222,11 @@ def test_footage_by_search_words_when_no_model_can_look(monkeypatch):
     monkeypatch.setattr(stock, "search", lambda q: hits)
     monkeypatch.setattr(stock, "_judge", no_one)
     stock.unjudged.clear()
-    got = stock.choose(["microphone recording studio"], 3.0, set(), sentence="That is the only route a microphone gets.")
+    got = stock.choose(["microphone recording studio"], 3.0, set(), sentence="That is the only route a microphone gets.")[0]
     assert got["id"] == 2 and got["center"] is None and stock.unjudged == ["That is the only route a microphone gets."]
     # the judge saying "nothing good enough" is still respected: no fallback then
-    monkeypatch.setattr(stock, "_judge", lambda *a, **k: (None, []))
-    assert stock.choose(["microphone recording studio"], 3.0, set(), sentence="x") is None
+    monkeypatch.setattr(stock, "_judge", lambda *a, **k: ([], []))
+    assert stock.choose(["microphone recording studio"], 3.0, set(), sentence="x") == []
 
 
 # ---------- a drawing held over several sentences (D124) ----------
@@ -307,9 +307,9 @@ def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(t
     picks = iter([{"id": "a", "url": "u", "center": 0.3}, {"id": "b", "url": "u", "center": 0.6}])
     asked = []
 
-    def choose(queries, part, used, sentence="", context="", good_enough=7):
+    def choose(queries, part, used, sentence="", context="", good_enough=7, count=1):
         asked.append(set(used))
-        return next(picks)
+        return [next(picks)]
 
     monkeypatch.setattr(stock, "choose", choose)
     build.chosen.clear()
@@ -407,7 +407,7 @@ def test_asked_for_footage_and_none_fits_keeps_what_it_had(tmp_path, monkeypatch
     beat = Beat(text="Everyone else hears the air.", visual=asked)
     s = Script(title="t", beats=[beat])
     levels = []
-    monkeypatch.setattr(stock, "choose", lambda *a, good_enough=7, **k: levels.append(good_enough))
+    monkeypatch.setattr(stock, "choose", lambda *a, good_enough=7, **k: levels.append(good_enough) or [])
     monkeypatch.setattr(build, "_fallback", lambda *a, **k: (_ for _ in ()).throw(AssertionError("drew instead")))
     monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None, frames=None: out)
     build.chosen.clear()
@@ -425,7 +425,7 @@ def test_a_long_sentence_gets_a_different_clip_for_each_part(tmp_path, monkeypat
     monkeypatch.setattr(build, "HOOK_WORDS", 0)   # not about the quicker opening shots (D156)
 
     pool = [{"id": n, "url": "u"} for n in ("a", "b", "c")]
-    monkeypatch.setattr(stock, "choose", lambda q, part, used, **k: next(h for h in pool if h["id"] not in used))
+    monkeypatch.setattr(stock, "choose", lambda q, part, used, count=1, **k: [h for h in pool if h["id"] not in used][:count])
     monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, *a, **k: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
@@ -541,7 +541,7 @@ def test_asked_footage_that_doesnt_fit_says_so_on_the_part(tmp_path, monkeypatch
     s = Script(title="t", beats=[beat])
     seen = []
     monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: [])
-    monkeypatch.setattr(stock, "choose", lambda q, part, used, good_enough=7, **k: seen.append((set(used), good_enough)))
+    monkeypatch.setattr(stock, "choose", lambda q, part, used, good_enough=7, **k: seen.append((set(used), good_enough)) or [])
     monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, *a, **k: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
