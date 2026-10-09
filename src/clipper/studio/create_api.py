@@ -26,6 +26,8 @@ log = get_logger(__name__)
 
 #: video id -> (stage, percent) while it's being timed or built.
 progress: dict[int, tuple[str, float]] = {}
+#: When each video's writing or build began, for the page's time so far and time left (D189).
+_started: dict[int, float] = {}
 _lock = threading.Lock()
 #: Videos with a build waiting or under way, and those the user asked to stop (D122).
 _running: set[int] = set()
@@ -162,6 +164,7 @@ def _view() -> dict:
     for v in videos:
         stage = progress.get(v["id"])
         v["stage"], v["pct"] = (stage if stage else (None, None))
+        v["started"] = _started.get(v["id"])
         timings = v.pop("timings", None)
         v["shots"] = _shots(v, timings)
         v["cancelling"] = v["id"] in cancelled
@@ -214,6 +217,7 @@ def _work(video_id: int, publish) -> None:
     def step(stage: str, pct: float) -> None:
         _check(video_id)  # every step is a place a cancelled build stops
         progress[video_id] = (stage, pct)
+        _started.setdefault(video_id, time.time())
         publish("create.changed", {"id": video_id})
 
     _running.add(video_id)
@@ -246,6 +250,7 @@ def _work(video_id: int, publish) -> None:
                                    error=failure(exc))
             finally:
                 progress.pop(video_id, None)
+                _started.pop(video_id, None)
     finally:
         _running.discard(video_id)
         cancelled.discard(video_id)
@@ -269,6 +274,7 @@ def _write(video_id: int, publish, question: str, angle: str, take: int = 1, ste
 
     def step(stage: str, pct: float) -> None:
         progress[video_id] = (stage, pct)
+        _started.setdefault(video_id, time.time())
         publish("create.changed", {"id": video_id})
 
     _running.add(video_id)
@@ -288,6 +294,7 @@ def _write(video_id: int, publish, question: str, angle: str, take: int = 1, ste
                                                             "The script wasn't written") + f": {failure(exc)}")
     finally:
         progress.pop(video_id, None)
+        _started.pop(video_id, None)
         _running.discard(video_id)
         publish("create.changed", {"id": video_id})
 

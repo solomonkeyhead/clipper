@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   prepareEditor, previewEdit, saveEdit, tightenEdit, useEditor, useJobs, usePeaks, type EditorView, type EditRule,
 } from "@/api/client";
+import { JobProgress } from "@/components/progress";
 import { Button, CaptionTitle, Card, Kbd, Skeleton, Tip } from "@/components/ui";
 import {
   clipTime, clock, cutRange, cuts, emptyEdit, endOf, keepRange, kept, length, nextZoom, pieceAt, setFix, setIn,
@@ -58,9 +59,10 @@ function Preparing({ view }: { view: EditorView }) {
         you can leave this page and come back.
       </p>
       {job && (
-        <div className="w-full">
-          <div className="mb-1 flex justify-between text-xs text-muted"><span>{job.stage}</span><span className="tabular">{Math.round(job.pct)}%</span></div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-3"><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${Math.max(3, job.pct)}%` }} /></div>
+        <div className="w-full text-left">
+          <JobProgress pct={job.status === "queued" ? null : job.pct} size="sm" label="Getting the video ready"
+                       stage={job.status === "queued" ? "Waiting for the video before it" : job.stage} started={job.started || null}
+                       steps={[{ label: "Reading the video", at: 0 }, { label: "Transcribing", at: 10 }]} />
         </div>
       )}
     </div>

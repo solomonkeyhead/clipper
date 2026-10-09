@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateVisual,
 } from "@/api/client";
+import { JobProgress, type Step } from "@/components/progress";
 import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { cn, copyText } from "@/lib/utils";
@@ -25,7 +26,7 @@ function useFactWord() {
 
 export function CreatePage() {
   const { data, isLoading } = useCreate();
-  if (isLoading || !data) return <div className="flex flex-col gap-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-96" /></div>;
+  if (isLoading || !data) return <CreateSkeleton />;
   // The first time: make a channel before anything else (D146).
   if (data.channels.length === 0) {
     return (
@@ -57,11 +58,25 @@ export function CreatePage() {
           <YourOwn wps={data.channel.words_per_second} />
           {work.length === 0 && (
             archived.length ? <p className="text-sm text-muted">Nothing in progress: everything you've made is in the Archive below.</p>
-              : <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (about 20 seconds), or write your own script." />
+              : <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (a minute or two), or write your own script." />
           )}
           {work.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} wps={data.channel.words_per_second} />)}
           {archived.length > 0 && <ArchiveList videos={archived} wps={data.channel.words_per_second} />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** The page's own shape while it loads (D189): the heading, the ideas on the left, the videos on the right, so
+ *  nothing jumps when they arrive. */
+function CreateSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2"><Skeleton className="h-10 w-72" /><Skeleton className="h-4 w-full max-w-xl" /><Skeleton className="h-4 w-56" /></div>
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+        <div className="order-2 flex flex-col gap-2 lg:order-1"><Skeleton className="h-12" />{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}</div>
+        <div className="order-1 flex flex-col gap-4 lg:order-2"><Skeleton className="h-10 w-48" /><Skeleton className="h-28" /><Skeleton className="h-72" /></div>
       </div>
     </div>
   );
@@ -111,6 +126,18 @@ function PostedLine({ video }: { video: CreateVideo }) {
 
 /** While a build waits on an overloaded Gemini, say so and offer Claude for the footage step (D154): a
  *  build stuck at one number for minutes looked dead. Changing it takes effect on the next AI call. */
+/** What writing and building do, in order, at the percent each starts (D189): the page lists them, done and to
+ *  come, so a long wait shows the work. The percents are the ones `write_checked` and the build report. */
+const writeSteps = (fact: string): Step[] => [
+  { label: "Writing the script", at: 0 }, { label: `The editor's read and the ${fact} check`, at: 30 },
+  { label: "Planning the pictures", at: 70 },
+];
+const buildSteps = (drawings: boolean): Step[] => [
+  { label: "Listening to the voice", at: 0 }, ...(drawings ? [{ label: "Drawing the sketches", at: 4 }] : []),
+  { label: "Choosing footage", at: 8 }, { label: "Making the shots", at: 10 },
+  { label: "Putting it together", at: 75 }, { label: "Choosing the cover", at: 90 },
+];
+
 function GeminiStruggling() {
   const { data: ai } = useCreateAI();
   const qc = useQueryClient();
@@ -426,7 +453,7 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           <span className="min-w-0">
             <span className="block truncate font-semibold">{s.title || "Untitled"}</span>
             <span className="text-xs text-muted">
-              {s.beats?.length ?? 0} beats · ~{Math.round(words(s) / wps)}s
+              {video.status === "writing" ? "Being written…" : `${s.beats?.length ?? 0} beats · ~${Math.round(words(s) / wps)}s`}
               {video.archived && video.archived_at ? ` · archived ${video.archived_at.slice(0, 10)}` : ""}
             </span>
           </span>
@@ -474,6 +501,7 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["create"] });
   const fact = useFactWord();
+  const drawings = useCreate().data?.channel.drawings !== false;
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");                     // the owner's note for Another take (D153)
   const again = async () => { await createApi.rewrite(video.id, note); setNote(""); };   // a note is for one take
@@ -493,22 +521,20 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
 
   if (video.status === "writing") {   // written in the background, step by step (D188)
     return (
-      <div className="flex flex-col gap-2">
-        <div className="flex justify-between text-sm"><span>{video.stage ?? "Starting…"}</span><span className="tabular text-muted">{Math.round(video.pct ?? 0)}%</span></div>
-        <div className="h-2 overflow-hidden rounded-full bg-surface-3"><div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(3, video.pct ?? 0)}%` }} /></div>
+      <JobProgress pct={video.pct ?? 0} stage={video.stage} started={video.started} label="Writing the script"
+                   steps={writeSteps(fact)}>
         <GeminiStruggling />
-        <p className="text-xs text-muted">Writing the script, then the editor's read, the {fact} check and the pictures. You can leave this page.</p>
-      </div>
+        <p className="text-xs text-muted">Usually a minute or two. You can leave this page.</p>
+      </JobProgress>
     );
   }
   if (video.status === "voiced" || video.status === "building") {
     return (
-      <div className="flex flex-col gap-2">
-        <div className="flex justify-between text-sm"><span>{video.stage ?? "Starting…"}</span><span className="tabular text-muted">{Math.round(video.pct ?? 0)}%</span></div>
-        <div className="h-2 overflow-hidden rounded-full bg-surface-3"><div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(3, video.pct ?? 0)}%` }} /></div>
+      <JobProgress pct={video.status === "voiced" && video.pct === null ? null : video.pct ?? 0} stage={video.stage ?? (video.status === "voiced" ? "Waiting for the build before it" : null)}
+                   started={video.started} label="Building the Short" steps={buildSteps(drawings)}>
         <GeminiStruggling />
         <div className="flex flex-wrap items-center gap-3">
-          <p className="flex-1 text-xs text-muted">Timing your voice, finding footage, drawing the diagrams. You can leave this page.</p>
+          <p className="flex-1 text-xs text-muted">You can leave this page: it carries on.</p>
           <Tip label="Stops at the next step. A video built before stays as it was.">
             <Button size="sm" variant="ghost" disabled={busy !== null || video.cancelling}
                     onClick={run("cancel", () => createApi.cancel(video.id), "Stopping the build")}>
@@ -517,7 +543,7 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
             </Button>
           </Tip>
         </div>
-      </div>
+      </JobProgress>
     );
   }
   if (video.status === "built" || (video.status === "failed" && video.clip_id)) {

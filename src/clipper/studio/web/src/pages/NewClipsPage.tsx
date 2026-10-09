@@ -9,6 +9,7 @@ import {
 import { JobResults, LinkImport } from "@/components/footage";
 import { Segmented, TextInput } from "@/components/form";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import { JobProgress, ProgressBar, type Step } from "@/components/progress";
 import { Button, Card, Chip, EmptyState, PageHeader, Tip } from "@/components/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { ago, cn } from "@/lib/utils";
@@ -65,9 +66,7 @@ function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; c
       {progress ? (
         <div className="w-full max-w-md">
           <div className="mb-2 truncate text-sm">Uploading {progress.name}…</div>
-          <div className="h-2 overflow-hidden rounded-full bg-surface-3">
-            <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${progress.pct}%` }} />
-          </div>
+          <ProgressBar value={progress.pct} label={`Uploading ${progress.name}`} />
           <div className="tabular mt-1 text-xs text-muted">{Math.round(progress.pct)}%</div>
         </div>
       ) : (
@@ -163,6 +162,12 @@ function FinishedList({ jobs, runs }: { jobs: Job[]; runs: (j: Job) => number })
   );
 }
 
+/** A clipping run's steps, at the percent each starts (studio/jobs.py STAGES), listed done and to come (D189). */
+const CLIP_STEPS: Step[] = [
+  { label: "Reading the video", at: 0 }, { label: "Transcribing", at: 10 }, { label: "Finding scenes", at: 45 },
+  { label: "Scoring the moments", at: 55 }, { label: "Making the clips", at: 68 },
+];
+
 function JobCard({ job }: { job: Job }) {
   const title = useCampaignTitle();
   const running = job.status === "running" || job.status === "queued";
@@ -174,20 +179,15 @@ function JobCard({ job }: { job: Job }) {
           <div className="text-xs text-muted">{title(job.campaign)} · {modeLabel(job)} · started {ago(job.created)}</div>
         </div>
         {job.status === "done" && (job.clips > 0
-          ? <Chip tone="success"><CheckCircle2 className="size-3.5" /> {job.clips} made</Chip>
+          ? <Chip tone="success" className="pop-in"><CheckCircle2 className="size-3.5" /> {job.clips} made</Chip>
           : <Chip tone="warning">No clips</Chip>)}
         {job.status === "failed" && <Chip tone="danger"><AlertTriangle className="size-3.5" /> Failed</Chip>}
         {running && <Chip tone="accent"><Loader2 className="size-3.5 animate-spin" /> {job.status === "queued" ? "Queued" : "Working"}</Chip>}
       </div>
       {running && (
-        <div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
-            <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.max(3, job.pct)}%` }} />
-          </div>
-          <div className="mt-1 flex justify-between text-xs text-muted">
-            <span>{job.stage}</span><span className="tabular">{Math.round(job.pct)}%</span>
-          </div>
-        </div>
+        <JobProgress pct={job.status === "queued" ? null : job.pct} size="sm" label={`Clipping ${job.name}`}
+                     stage={job.status === "queued" ? "Waiting for the video before it" : job.stage}
+                     started={job.started || null} steps={job.mode === "manual" ? undefined : CLIP_STEPS} />
       )}
       {job.message && <p className="text-xs text-muted">{job.message}</p>}
       {job.status === "done" && <JobResults job={job} />}

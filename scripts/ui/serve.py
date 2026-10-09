@@ -5,6 +5,9 @@ from pathlib import Path
 if __name__ == "__main__":
     data = Path(sys.argv[1]); data.mkdir(parents=True, exist_ok=True)
     os.environ["CLIPPER_DATA_DIR"] = str(data)
+    if os.environ.get("CLIPPER_UI_STATIC"):   # a page built elsewhere, to check without touching the live one
+        import clipper.studio.server as _server
+        _server.STATIC = Path(os.environ["CLIPPER_UI_STATIC"])
     from clipper.studio.server import create_app
     from clipper.create import store
     from clipper.studio import db, library
@@ -110,6 +113,18 @@ if __name__ == "__main__":
         return made.model_copy(update={"title": question}), "note"
 
     _script.write_checked = _fake_write
+    from clipper.create import build as _build
+
+    def _fake_build(video_id, progress=None):
+        """A build's steps at their real percents (D189), slowly, ending in a failure: nothing is made here."""
+        steps = [("Drawing the sketches", 4), ("Choosing footage: 3 of 9", 9), ("Shot 2 of 12", 15), ("Shot 7 of 12", 40),
+                 ("Putting it together", 75), ("Choosing the cover", 90)]
+        for stage, pct in steps:
+            progress(stage, pct)
+            _time.sleep(float(os.environ.get("CLIPPER_UI_STEP", "4")))
+        raise RuntimeError("the test server builds nothing")
+
+    _build.build = _fake_build
     if not store.topics():   # an idea to write from
         store.add_topics([{"question": "Why does a spoon flip your reflection?", "angle": "concave mirror", "felt": True}])
 

@@ -10,6 +10,7 @@ import {
 } from "@/api/client";
 import { useUI } from "@/lib/store";
 import { copyText } from "@/lib/utils";
+import { Waited } from "./progress";
 import { Button, Tip } from "./ui";
 
 const SUGGESTIONS = [
@@ -145,6 +146,7 @@ function Conversation({ threadId, onThread }: { threadId?: number; onThread: (id
                 <div className="flex items-center gap-2 text-sm text-muted">
                   <Loader2 className="size-4 animate-spin text-accent" />
                   {(progress && (!threadId || progress.thread_id === threadId) && progress.step) || "Thinking"}…
+                  <Waited after={5} />
                 </div>
               </>
             )}

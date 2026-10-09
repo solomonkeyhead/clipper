@@ -161,6 +161,29 @@ h2, h3 { font-family: var(--font-display); }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 
+/* Waiting (D189). Stripes move backwards inside a running bar's fill: the bar reads as faster. A bar whose end
+   can't be known slides a band across. A step done: one small pop, never a loop. */
+.bar-ribs::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: linear-gradient(-45deg, rgb(0 0 0 / 0.16) 25%, transparent 25% 50%, rgb(0 0 0 / 0.16) 50% 75%, transparent 75%);
+  background-size: 16px 16px;
+  animation: ribs-back 1.1s linear infinite;
+}
+@keyframes ribs-back { to { background-position: -16px 0; } }
+.bar-indeterminate { animation: band 1.5s var(--ease-standard) infinite; }
+@keyframes band { from { left: -33%; } to { left: 100%; } }
+.pop-in { animation: pop-in 240ms var(--ease-decelerate) both; }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.6); } }
+/* An image fades in when it has arrived, over its placeholder colour, instead of popping in. */
+.img-in { opacity: 0; transition: opacity var(--dur-enter) var(--ease-standard); }
+.img-in.loaded { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .bar-ribs::after { animation: none; }
+  .bar-indeterminate { animation: none; left: 0; width: 100%; opacity: 0.5; }
+  .pop-in { animation: none; }
+  .img-in { transition: none; }
+}
+
 .fade-in { animation: fade-in var(--dur-enter) var(--ease-decelerate); }
 @keyframes sheet-in { from { transform: translateX(24px); opacity: 0; } }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }

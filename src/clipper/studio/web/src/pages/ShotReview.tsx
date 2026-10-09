@@ -3,7 +3,8 @@ import { Check, Film, Loader2, Play, RefreshCw, Search, Shapes, SlidersHorizonta
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createApi, useCreate, type CreateVideo, type CreateVisual, type FootageOffer } from "@/api/client";
-import { Button, Chip, Tip } from "@/components/ui";
+import { FadeImg, Waited } from "@/components/progress";
+import { Button, Chip, Skeleton, Tip } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 /** The camera on a sentence's footage (D164): automatic, or one move. */
@@ -64,7 +65,7 @@ function Preview({ thumb, src }: { thumb: string; src: string }) {
   return (
     <span className="absolute inset-0" onMouseEnter={start} onMouseLeave={stop} onTouchStart={start} onTouchEnd={stop}
           data-testid="preview">
-      <img src={thumb} alt="" loading="lazy" className="size-full object-cover" />
+      <FadeImg src={thumb} className="size-full object-cover" />
       {live && (
         <video ref={video} src={src} muted loop playsInline preload="auto" poster={thumb}
                className="absolute inset-0 size-full object-cover" />
@@ -123,7 +124,22 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close"><X className="size-3.5" /></Button>
       </div>
-      {searching && <p className="flex items-center gap-2 text-xs text-muted"><Loader2 className="size-3.5 animate-spin" /> Writing searches, looking in both libraries and scoring what comes back…</p>}
+      {searching && (
+        <>
+          {/* What's being done, how long so far, and where the clips will appear (D189). */}
+          <p className="flex items-center gap-2 text-xs text-muted" role="status">
+            <Loader2 className="size-3.5 shrink-0 animate-spin text-accent" /> Writing searches, looking in both libraries and scoring what comes back
+            <Waited after={4} />
+          </p>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2" aria-hidden>
+            {Array.from({ length: 6 }, (_, k) => (
+              <span key={k} className="flex flex-col gap-1 rounded-md border border-line p-1">
+                <Skeleton className="aspect-[27/28] w-full rounded-sm" /><Skeleton className="h-3 w-2/3 rounded-sm" />
+              </span>
+            ))}
+          </div>
+        </>
+      )}
       {error && <p className="text-xs text-danger">{error}</p>}
       {offer && !searching && (
         <>
@@ -140,7 +156,7 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
                 return (
                   <button key={c.id} type="button" onClick={() => toggle(c.id)} aria-pressed={n >= 0} title={c.tags}
                           className={cn("flex flex-col gap-1 rounded-md border p-1 text-left", n >= 0 ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong")}>
-                    <span className="relative block aspect-[27/28] w-full overflow-hidden rounded-sm bg-black">
+                    <span className="relative block aspect-[27/28] w-full overflow-hidden rounded-sm bg-surface-2">
                       <Preview thumb={`/api/create/stock-thumb/${encodeURIComponent(c.id)}`} src={c.preview} />
                       <span className="absolute bottom-1 left-1 rounded-sm bg-black/70 px-1 text-[10px] text-white/80">
                         {c.source === "photo" ? `Photo · ${c.id.split("-")[1] === "pexels" ? "Pexels" : "Pixabay"}` : <>{c.source === "pexels" ? "Pexels" : c.source === "coverr" ? "Coverr" : c.source === "nasa" ? "NASA" : "Pixabay"} · {Math.round(c.duration)}s</>}
@@ -290,9 +306,9 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
           return (
             <li key={first} className="flex gap-3 py-3">
               <button type="button" onClick={() => seek(shot.start)} aria-label="Play from here"
-                      className="group relative aspect-[9/16] w-14 shrink-0 self-start overflow-hidden rounded-md bg-black">
-                <img src={`/api/create/videos/${video.id}/still?t=${mid.toFixed(2)}&v=${video.clip_id}-${video.updated_at ?? ""}`}
-                     alt="" loading="lazy" className="size-full object-cover" onError={(e) => { e.currentTarget.style.opacity = "0"; }} />
+                      className="group relative aspect-[9/16] w-14 shrink-0 self-start overflow-hidden rounded-md bg-surface-2">
+                <FadeImg src={`/api/create/videos/${video.id}/still?t=${mid.toFixed(2)}&v=${video.clip_id}-${video.updated_at ?? ""}`}
+                         className="size-full object-cover" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
                 <Play className="absolute inset-0 m-auto size-5 text-white opacity-0 drop-shadow group-hover:opacity-100" />
               </button>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">

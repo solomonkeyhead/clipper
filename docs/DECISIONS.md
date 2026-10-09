@@ -3333,3 +3333,21 @@ in the wrong shape, "openrouter/free" with "User Safety: safe", NVIDIA a 401). N
   took 6 of 7.5 minutes on video 20). A shot whose ffmpeg run crashes is made once more before the build fails.
 - The director is told, on a channel that draws, that a line with nothing to film (a law, a conclusion, a number)
   gets a drawing, not footage. The physics fixtures don't hold the director's prompt; they are unchanged.
+
+## D189: waiting, designed
+Marc shared a report on the psychology of waiting and asked for the page to follow it. A bar alone left a long
+wait unexplained: "Writing the script 30%" for two minutes, no sign of what was done or how long was left.
+- One `JobProgress` (components/progress.tsx) for every long job: Create's writing and building, a clipping run,
+  the editor's first read. It lists the job's steps, done (a tick) and to come, with the live stage on the current
+  one (operational transparency: shown work reads as work done for you); time so far and, once there's a pace to
+  go by (15% and 20 s), about how long is left; the percent in the tab's title while you're in another tab.
+- The bar never sits still between real updates: it creeps a few percent, slower and slower, never more than 8
+  past the real figure and never into the next step. Stripes run backwards inside a running fill (perceived as
+  faster); a bar whose end can't be known slides a band. A dot marks the track's end; the bar is a
+  `role="progressbar"` with its stage as text, and a polite live region says each new step. All of it stops
+  moving under reduced motion.
+- Start times come from the server (`started` on a Create video and a job), so a reload keeps the clock.
+- The footage picker shows six placeholder tiles where the clips will come and a seconds counter; Ask counts its
+  seconds after 5. Thumbnails fade in over a grey placeholder instead of popping in on black. Create's loading
+  shape is its own two columns, so nothing jumps.
+- Not done: stopping a script that's being written (the AI call can't be taken back; it is a minute or two).

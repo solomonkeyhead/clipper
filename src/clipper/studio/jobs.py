@@ -17,6 +17,7 @@ import logging
 import queue
 import re
 import threading
+import time
 import traceback
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -46,6 +47,7 @@ class Job:
     report: dict = field(default_factory=dict)
     created: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M"))
     finished: str = ""
+    started: float = 0.0            # epoch seconds it began running: the page's time so far and left (D189)
 
     @property
     def name(self) -> str:
@@ -277,7 +279,7 @@ class JobRunner:
         pipeline.addHandler(handler)
         if pipeline.getEffectiveLevel() > logging.INFO:  # the progress reads INFO lines
             pipeline.setLevel(logging.INFO)
-        job.status, job.stage = "running", "Starting"
+        job.status, job.stage, job.started = "running", "Starting", time.time()
         _keep(job)
         self.publish("job.progress", job.view())
         campaign = self._configs.pop(job.id)

@@ -3,6 +3,7 @@ import { AlertTriangle, Film, Loader2, RefreshCw, Sparkles, Trash2, Upload, Wand
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { createApi, type ClipFill, type CreateVideo, type MineClip } from "@/api/client";
+import { FadeImg } from "@/components/progress";
 import { Button, Chip, Switch, Tip } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -116,9 +117,9 @@ export function MyClips({ video, wps, onRebuild, busyRebuild }: {
 
   const thumb = (c: MineClip) => (
     <a href={`/api/create/videos/${video.id}/clips/${c.id}/file`} target="_blank" rel="noopener noreferrer"
-       className="block aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-black" aria-label={`Play ${c.name}`}>
-      <img src={`/api/create/videos/${video.id}/clips/${c.id}/thumb`} alt="" loading="lazy" className="size-full object-cover"
-           onError={(e) => { e.currentTarget.style.display = "none"; }} />
+       className="block aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-surface-2" aria-label={`Play ${c.name}`}>
+      <FadeImg src={`/api/create/videos/${video.id}/clips/${c.id}/thumb`} className="size-full object-cover"
+               onError={(e) => { e.currentTarget.style.display = "none"; }} />
     </a>
   );
 

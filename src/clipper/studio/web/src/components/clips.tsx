@@ -19,6 +19,7 @@ import { PlatformIcon } from "./PlatformIcon";
 import { CaptionChoice, HookControl } from "./lines";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
+import { FadeImg } from "./progress";
 import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
 
 const STATUS_WORD: Record<ClipStatus, string> = {
@@ -433,13 +434,12 @@ function Preview({ clip, className }: { clip: Clip; className?: string }) {
   const timer = useRef<number | undefined>(undefined);
   return (
     <div
-      className={cn("relative aspect-[9/16] overflow-hidden rounded-md bg-black", className)}
+      className={cn("relative aspect-[9/16] overflow-hidden rounded-md bg-surface-2", className)}
       onPointerEnter={() => { timer.current = window.setTimeout(() => setPlaying(true), 400); }}
       onPointerLeave={() => { window.clearTimeout(timer.current); setPlaying(false); }}
     >
       {clip.file_exists ? (
-        <img src={clip.thumb} alt="" loading="lazy" decoding="async"
-             className="absolute inset-0 size-full object-cover" />
+        <FadeImg src={clip.thumb} className="absolute inset-0 size-full object-cover" />
       ) : (
         <div className="absolute inset-0 grid place-items-center px-2 text-center text-xs text-subtle">
           {clip.picked_by === "channel" ? "Already on your channel" : "File missing"}

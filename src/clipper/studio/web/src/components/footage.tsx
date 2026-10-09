@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   inspectLink, startImport, startJob, useImports, type FootageImport, type Job, type LinkContents, type RunReport,
 } from "@/api/client";
+import { ProgressBar } from "@/components/progress";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui";
 
@@ -30,10 +31,7 @@ function ImportRow({ item }: { item: FootageImport }) {
             </span>
             <span className="tabular shrink-0">{size(item.done_bytes)}{item.total_bytes ? ` of ${size(item.total_bytes)}` : ""}</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
-            <div className={cn("h-full rounded-full bg-accent transition-[width]", pct === null && "w-1/3 animate-pulse")}
-                 style={pct === null ? undefined : { width: `${Math.max(2, pct)}%` }} />
-          </div>
+          <ProgressBar value={pct} size="sm" label={`Downloading ${item.current || item.names[0]}`} />
         </div>
       )}
     </div>

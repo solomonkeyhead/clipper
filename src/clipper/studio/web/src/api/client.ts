@@ -240,6 +240,8 @@ export interface Job {
   edits?: unknown[];
   status: "queued" | "running" | "done" | "failed"; stage: string; pct: number;
   clips: number; message: string; created: string; finished: string;
+  /** Epoch seconds it began running (D189); 0 until then. */
+  started?: number;
   report?: RunReport | { source_id?: string } | Record<string, never>;
 }
 
@@ -659,6 +661,8 @@ export interface CreateVideo {
   id: number; topic_id: number | null; status: "writing" | "draft" | "approved" | "voiced" | "building" | "built" | "failed";
   script: CreateScript; check_notes: string; voice: string; clip_id: number | null; error: string;
   created_at: string; stage: string | null; pct: number | null; mine: Mine; cancelling?: boolean;
+  /** Epoch seconds its writing or build began (D189). */
+  started?: number | null;
   shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string; problem?: string;
   /** The archive (D131): posted videos move there by themselves; any can be moved in or out by hand. */
   archived?: boolean; archived_at?: string | null; posted?: boolean; posts?: CreatePost[];
