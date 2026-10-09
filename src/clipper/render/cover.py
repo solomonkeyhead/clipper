@@ -20,7 +20,7 @@ import numpy as np
 
 from ..config import Config
 from ..utils.logging import get_logger
-from .ffmpeg import run
+from .ffmpeg import ffmpeg_path, ffprobe_path, run
 from .teaser import hook_filter, reencode_args
 
 log = get_logger(__name__)
@@ -156,12 +156,66 @@ def hook_showing(ass_text: str, at: float) -> bool:
     return any(a <= at < b for a, b in caption_times(ass_text, "Hook"))
 
 
+def _parameter_sets(video: Path) -> bytes:
+    """A video's H.264 parameter sets (SPS and PPS) as its first frame carries them; b"" if unreadable."""
+    import subprocess
+
+    raw = subprocess.run([str(ffmpeg_path()), "-v", "error", "-i", str(video), "-map", "0:v:0", "-c:v", "copy",
+                          "-bsf:v", "h264_mp4toannexb", "-frames:v", "1", "-f", "h264", "-"],
+                         capture_output=True, timeout=60).stdout
+    units = [u.rstrip(b"\0") for u in raw.split(b"\0\0\1") if u]
+    return b"|".join(sorted(u for u in units if u and u[0] & 0x1F in (7, 8)))
+
+
+def _frame_count(video: Path) -> int:
+    got = run(["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets",
+               "-of", "csv=p=0", str(video)], exe=ffprobe_path())
+    return int(got.stdout.strip() or 0)
+
+
+def _spliced(clip: Path, at: float, subs: str, config: Config, fps: int, has_audio: bool, out: Path) -> bool:
+    """`out`: the cover's frames, encoded alone, then `clip`'s video as it is, not encoded again; its sound
+    delayed by the cover's length (D179). The second encode of the whole video took 6.6 s of a 42 s Short.
+    Only when the two encodes' parameter sets are the same (else a player could misread the join), and the
+    result has every frame; otherwise False, and the caller encodes the whole clip as before."""
+    rc = config.render
+    cover = out.with_name(f"{clip.stem}.cover.mp4")
+    listing = out.with_name(f"{clip.stem}.cover.txt")
+    try:
+        run(["-hide_banner", "-nostdin", "-loglevel", "error", "-ss", f"{at:.3f}", "-i", str(clip),
+             "-filter_complex", f"[0:v]trim=end_frame=1,loop=loop={FRAMES - 1}:size=1:start=0,setpts=N/{fps}/TB,{subs}[cv]",
+             "-map", "[cv]", "-an", *reencode_args(config), "-pix_fmt", "yuv420p", "-fps_mode", "cfr", "-r", str(fps),
+             "-y", str(cover)])
+        if not _parameter_sets(cover) or _parameter_sets(cover) != _parameter_sets(clip):
+            return False
+        listing.write_text(f"file '{cover.as_posix()}'\nfile '{clip.resolve().as_posix()}'\n", encoding="utf-8")
+        delay = round(FRAMES / fps * rc.audio_rate)
+        run(["-hide_banner", "-nostdin", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing),
+             "-i", str(clip), "-map", "0:v", "-c:v", "copy",
+             *(["-map", "1:a", "-af", f"aresample={rc.audio_rate},aformat=channel_layouts=stereo,adelay={delay}S:all=1",
+                "-c:a", "aac", "-b:a", rc.audio_bitrate, "-ar", str(rc.audio_rate), "-ac", "2"] if has_audio else ["-an"]),
+             "-movflags", "+faststart", "-y", str(out)])
+        return _frame_count(out) == _frame_count(clip) + FRAMES
+    except Exception as exc:  # the whole clip encoded again instead
+        log.info("%s: cover not joined without encoding (%s)", clip.name, str(exc)[:160])
+        return False
+    finally:
+        cover.unlink(missing_ok=True)
+        listing.unlink(missing_ok=True)
+
+
 def put_first(clip: Path, at: float, *, hook: str, config: Config, work_dir: Path, fps: int,
               draft: bool = False, has_audio: bool = True) -> Path:
     """`clip` opening on its frame at `at` held for FRAMES frames, the hook over it.
     Replaces `clip` in place; on any failure it's left as it was."""
     length = FRAMES / fps
     subs = hook_filter(clip, hook, length, config=config, work_dir=work_dir, draft=draft, tag="cover")
+    joined = clip.with_name(f"{clip.stem}.covered{clip.suffix}")
+    if _spliced(clip, at, subs, config, fps, has_audio, joined):
+        joined.replace(clip)
+        log.info("%s: cover is its frame at %.2fs (joined, not encoded again)", clip.name, at)
+        return clip
+    joined.unlink(missing_ok=True)
     still = (f"[0:v]trim=start={at:.3f},setpts=PTS-STARTPTS,trim=end_frame=1,"
              f"loop=loop={FRAMES - 1}:size=1:start=0,setpts=N/{fps}/TB,{subs}[cv];"
              f"[0:v]setpts=PTS-STARTPTS[mv]")

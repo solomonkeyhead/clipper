@@ -65,6 +65,7 @@ def use_palette(name: str) -> None:
     BOARD, CHALK, YELLOW, BLUE, DIM, SMUDGE = c["board"], c["chalk"], c["yellow"], c["blue"], c["dim"], c["smudge"]
     COLORS.update({"chalk": CHALK, "yellow": YELLOW, "blue": BLUE, "dim": DIM})
     board.cache_clear()
+    _board_array.cache_clear()   # the chalk's own copy of the board too: it kept the last channel's colour (D179)
 FONT = REPO_ROOT / "assets" / "fonts" / "Caveat.ttf"
 #: For what the handwriting has no letter for (Greek, most maths): Clipper's own Inter.
 PLAIN = REPO_ROOT / "assets" / "fonts" / "Inter.ttf"
@@ -935,7 +936,7 @@ def focus_plan(v: Visual, words: list[tuple[float, str]], seconds: float) -> lis
 
 
 def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] | None = None,
-           frames: int | None = None) -> Path:
+           frames: int | None = None, start: int = 0, stop: int | None = None) -> Path:
     """The diagram as a silent clip of the picture panel, `frames` long (else `seconds`); with the shot's
     spoken `words` ((start, text), seconds into the shot), each label arrives as it's said, and the camera
     moves in on the parts as they're explained (D162)."""
@@ -943,4 +944,4 @@ def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] 
 
     CUES.set(tuple(cues(v, words or [])))
     n = frames or max(1, round(seconds * FPS))
-    return drawing_panel(lambda t, d: frame(v, t, d), out, n, focus_plan(v, words or [], n / FPS))
+    return drawing_panel(lambda t, d: frame(v, t, d), out, n, focus_plan(v, words or [], n / FPS), start=start, stop=stop)

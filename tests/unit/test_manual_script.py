@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 
 import pytest
 
@@ -386,6 +387,7 @@ def test_shots_made_before_are_reused_not_made_again(tmp_path, monkeypatch):
 
     monkeypatch.setattr(diagrams, "render", render)
     monkeypatch.setattr(build, "shot_cache", tmp_path / "shots")
+    monkeypatch.setattr(build, "DRAW_WORKERS", 1)   # drawn here, where the stand-in render is (D179)
     v = Visual(kind="diagram", template="card", title="Bone")
     beat = Beat(text="Bone carries the bass.", visual=v)
     s = Script(title="t", beats=[beat])
@@ -807,3 +809,27 @@ def test_a_drawing_can_be_made_bigger_and_moved():
     down = _moved(ink, 1.0, 0.1)
     assert down[500 + round(0.1 * H) + 5, 540, 3] == 255 and down[505, 540, 3] == 0
     assert (_moved(ink, 1.5, 0.0)[..., 3] > 0).sum() > (ink[..., 3] > 0).sum() * 2
+
+
+def test_a_long_drawing_is_drawn_in_pieces_by_the_workers_and_joined(tmp_path, monkeypatch):
+    """D179: drawings are drawn in other processes, a long one in pieces; the shot is the same length."""
+    from clipper.create import build
+    from clipper.ingest.probe import probe
+
+    if not shutil.which("ffmpeg"):
+        pytest.skip("no ffmpeg")
+    monkeypatch.setattr(build, "shot_cache", tmp_path / "shots")
+    monkeypatch.setattr(build, "DRAW_WORKERS", 2)
+    monkeypatch.setattr(build, "PIECE", 30)
+    v = Visual(kind="diagram", template="card", title="Bone")
+    try:
+        made = build._diagram(v, 2.0, tmp_path / "x.mp4", [(0.1, "Bone")], frames=68)
+        assert len(build._drawing[made][1]) == 2          # 68 frames: 30, then 38 (no stub of 8)
+        build._drawings_done()
+    finally:
+        build._drawing.clear()
+        if build._pool:
+            build._pool.shutdown()
+            build._pool = None
+    assert made.is_file() and abs(probe(made).duration - 68 / 30) < 0.05
+    assert not list(made.parent.glob("*.part.mp4")) and not list(made.parent.glob("*.txt"))

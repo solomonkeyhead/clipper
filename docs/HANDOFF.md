@@ -20,9 +20,11 @@ A pass over the whole app on Marc's machine. Done and pushed, Clipper restarted 
 shots, assembly, cover" log line), the Adjust panel on Shot review, captions and the cover on a real video.
 `scripts/ui/walkthrough.py` has steps for D171 but needs Playwright (a cloud session); they were done by hand here.
 
-**Proposed, not done (bigger or riskier):** draw a build's shots in parallel processes (shots are 58 of 85 s, each
-frame drawn in Pillow on one core); put the cover first without re-encoding the whole video (6.6 s a Short and a
-clip); a Pexels key when Pexels gives them (the current log has 165 "no footage good enough" verdicts; more candidates would mean fewer chalk cards).
+**Done after the audit (D179):** drawings in parallel processes, long ones in pieces; footage shots on NVENC; the
+cover joined without encoding the video again. A build of the ready-made script: 85 s to 46 s. Check a real build's
+log line and that the first frames play right on the phone.
+
+**Proposed, not done:** a Pexels key when Pexels gives them (the current log has 165 "no footage good enough" verdicts; more candidates would mean fewer chalk cards).
 
 ## Check these first, on the real machine
 
@@ -129,8 +131,7 @@ Video 12 is the earlier build of that script, already in the Archive (never post
 7. (Done, D134.) The script writer now gets a schema without the app-only Visual fields.
 8. Small: filter Coverr's `is_ai_generated`; the first idea in the list duplicates the ready-made script.
 
-**Speed ideas (tell Marc first, time a real build before changing anything):** make shots in parallel;
-encode shots with NVENC (they are x264 crf 16, then encoded again at assembly).
+**Speed ideas:** done in D179 (parallel drawings, NVENC footage shots, the cover without a second encode).
 
 **Marc's own list of Create issues is still to come** (he waits to tell the better model). Ask for it first.
 

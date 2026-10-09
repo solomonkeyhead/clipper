@@ -3202,3 +3202,19 @@ The learning analysis bootstraps Spearman's rho 2,000 times per signal and targe
 ranking ties in a Python loop: 7 s for 24 clips, and each of three tests paid it. The resamples are now drawn as one
 array and ranked with scipy's `rankdata` (the same draws in the same order, so the same intervals, checked on 20
 random cases); `_ranks` ties are averaged in one pass. Under 3 s, most of it importing scipy.
+
+## D179: a build's drawings in parallel, footage on the graphics card, the cover without a second encode
+Marc said yes to the audit's speed proposals. Timed on the ready-made script (no footage, no AI, 42.5 s): 85 s to 46 s.
+- **Drawings in worker processes.** Each chalk frame is drawn in Pillow on one core, and shots were 58 of the 85 s.
+  With the shot cache on, `_diagram` hands each drawing to a pool of `DRAW_WORKERS` processes (a quarter of the
+  cores, 1 to 4) and goes on; `_drawings_done` waits for the rest before assembly ("Drawing: n left"). A drawing longer
+  than `PIECE` frames is drawn in pieces (the spring camera replays cheaply up to a piece's start) and joined with
+  ffmpeg's concat, copied. Same frames as drawn in one go (piece joins checked: same frame count, 49-54 dB PSNR).
+  `_loop_back` waits for its drawing first. Scripts that start a build need a main guard (`scripts/ui/serve.py` has one).
+- **Footage shots on NVENC** when ffmpeg has it (`compose._nvenc`), x264 otherwise: 15 s of CPU to 4 s per 10 s of
+  footage, 48 dB against x264. They are encoded again at assembly, so the shot is only a step.
+- **The cover joined, not the whole video encoded again.** The cover's two frames are encoded alone with the same
+  settings and joined in front of the video as it is; only the sound is encoded again, delayed by the two frames.
+  Only when the two encodes' SPS and PPS are the same and the result has every frame; otherwise the full encode as
+  before. 6.2 s to 1.2 s on a Short, 5.6 s to 2.1 s on a clip; the frames after the cover are bit-identical.
+- Fixed on the way: `diagrams.use_palette` didn't clear the cached board, so chalk kept the last channel's colour.

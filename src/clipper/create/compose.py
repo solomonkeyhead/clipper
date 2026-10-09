@@ -136,16 +136,28 @@ def frames(proc: subprocess.Popen, size: tuple[int, int], n: int) -> Iterator[np
         yield last
 
 
-class Writer:
-    """Frames into an mp4 (the panel's shots: high quality, as they are encoded again at the end)."""
+@cache
+def _nvenc() -> bool:
+    """Whether the graphics card's encoder opens here."""
+    from ..render.ffmpeg import probe_encoder
 
-    def __init__(self, out: Path, size: tuple[int, int]):
+    return probe_encoder("h264_nvenc").usable
+
+
+class Writer:
+    """Frames into an mp4 (the panel's shots: high quality, as they are encoded again at the end). `footage` on the
+    graphics card's encoder when it has one (D179): x264 took 15 s of CPU for 10 s of footage, NVENC 4, at a quality
+    the final encode can't tell apart (48 dB); a chalkboard costs x264 next to nothing, so drawings keep it."""
+
+    def __init__(self, out: Path, size: tuple[int, int], footage: bool = False):
         self.out, self.size = out, size
         w, h = size
+        codec = (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "16", "-b:v", "0"] if footage and _nvenc()
+                 else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "14"])
         self.proc = subprocess.Popen(
             [str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-             "-s", f"{w}x{h}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "veryfast", "-crf", "14",
-             "-pix_fmt", "yuv420p", str(out)], stdin=subprocess.PIPE)
+             "-s", f"{w}x{h}", "-r", str(FPS), "-i", "-", *codec, "-pix_fmt", "yuv420p", str(out)],
+            stdin=subprocess.PIPE)
 
     def write(self, frame: np.ndarray) -> None:
         self.proc.stdin.write(np.ascontiguousarray(frame, dtype=np.uint8).data)   # no copy (D174)
@@ -239,7 +251,7 @@ def video_panel(src: Path, out: Path, n: int, move: Move, *, start: float = 0.0,
     d = n / FPS
     shown = min(d, play * slow) if play is not None else d
     proc = decode(src, size, start=start, seconds=shown, loop=loop and play is None, slow=slow, filters=look)
-    with Writer(out, (W, PANEL_H)) as wr:
+    with Writer(out, (W, PANEL_H), footage=True) as wr:
         for k, img in enumerate(frames(proc, size, n)):
             wr.write(shoot(img, move, k / FPS, d))
     return out
@@ -254,7 +266,7 @@ def photo_panel(img: Image.Image, out: Path, n: int, move: Move, look: bool = Tr
     if look:   # the footage look (D156): a little less colour, a touch warmer
         arr = _look(arr)
     d = n / FPS
-    with Writer(out, (W, PANEL_H)) as wr:
+    with Writer(out, (W, PANEL_H), footage=True) as wr:
         for k in range(n):
             wr.write(shoot(arr, move, k / FPS, d))
     return out
@@ -279,15 +291,18 @@ class Focus:
     box: tuple[float, float, float, float]
 
 
-def drawing_panel(render_frame, out: Path, n: int, focus: list[Focus] | None = None, push: float = 0.03) -> Path:
+def drawing_panel(render_frame, out: Path, n: int, focus: list[Focus] | None = None, push: float = 0.03,
+                  start: int = 0, stop: int | None = None) -> Path:
     """`n` frames of a chalk drawing (`render_frame(t, d)` gives the panel-sized picture at `t`), the camera
-    pushing in a touch and, for each `focus`, gliding in on that part and back out to the whole."""
+    pushing in a touch and, for each `focus`, gliding in on that part and back out to the whole. Only frames
+    `start` to `stop` are drawn and written (a piece of a long drawing, D179); the camera's glide is worked out
+    from the first frame all the same, which costs next to nothing."""
     d = n / FPS
     u, v, z = 0.5, 0.5, 1.0
     vu = vv = vz = 0.0
     omega = 2 * math.pi * 1.1   # a critically damped glide: there in about half a second, no overshoot
     with Writer(out, (W, PANEL_H)) as wr:
-        for k in range(n):
+        for k in range(stop if stop is not None else n):
             t = k / FPS
             tu, tv, tz = 0.5, 0.5, 1.0
             for f in focus or []:
@@ -308,6 +323,8 @@ def drawing_panel(render_frame, out: Path, n: int, focus: list[Focus] | None = N
                         v, vv = pos, vel
                     else:
                         z, vz = pos, vel
+            if k < start:   # an earlier piece's frame: only the camera moves on
+                continue
             pic = render_frame(t, d)
             img = as_array(pic if pic.mode == "RGB" else pic.convert("RGB"))
             zoom = z * (1 + push * smooth(t / max(d, 1e-3)))

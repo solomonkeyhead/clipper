@@ -17,9 +17,10 @@ import hashlib
 import itertools
 import json
 import math
+import os
 import shutil
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import NamedTuple
 
@@ -27,6 +28,7 @@ import numpy as np
 
 from ..config import Config
 from ..ingest.probe import probe
+from ..render.ffmpeg import run
 from ..render.teaser import reencode_args
 from ..utils.cache import slugify
 from ..utils.logging import get_logger
@@ -243,13 +245,19 @@ class _TooDark(Exception):
     """A stock shot that came out all but black, even cropped in the middle."""
 
 
+def _cache_path(kind: str, key: object) -> Path:
+    """Where the shot for these inputs is kept, marked as used by this build."""
+    digest = hashlib.sha1(json.dumps([RENDER_VERSION, kind, key], sort_keys=True, default=str).encode()).hexdigest()[:24]
+    kept = shot_cache / f"{kind}-{digest}.mp4"
+    used_shots.add(kept)
+    return kept
+
+
 def _kept(kind: str, key: object, out: Path, make) -> Path:
     """The shot for these inputs: made before and kept, or made now by `make(out)` and kept."""
     if shot_cache is None:
         return make(out)
-    digest = hashlib.sha1(json.dumps([RENDER_VERSION, kind, key], sort_keys=True, default=str).encode()).hexdigest()[:24]
-    kept = shot_cache / f"{kind}-{digest}.mp4"
-    used_shots.add(kept)
+    kept = _cache_path(kind, key)
     if kept.is_file() and kept.stat().st_size > 0:
         return kept
     made = make(out)
@@ -258,10 +266,82 @@ def _kept(kind: str, key: object, out: Path, make) -> Path:
     return kept
 
 
+#: Drawings drawn in other processes while this one makes the footage shots (D179): every frame is drawn in Pillow on
+#: one core, and drawings took 58 of an 85 s build. One worker (a small computer) draws them here, in turn.
+DRAW_WORKERS = max(1, min(4, (os.cpu_count() or 2) // 4))
+#: A drawing longer than this many frames is drawn in pieces side by side, joined after: a held drawing of 26 s was the
+#: one the others waited for.
+PIECE = 120
+_pool: ProcessPoolExecutor | None = None
+#: Each drawing under way: its pieces' futures and files (one piece: the shot itself).
+_drawing: dict[Path, tuple[list[Future], list[Path]]] = {}
+#: The channel's board, for the workers (diagrams.use_palette).
+_palette = ""
+
+
+def _draw_shot(visual: dict, n: int, said: list, out: str, palette: str, start: int = 0, stop: int | None = None) -> str:
+    """A drawing's shot, or frames `start` to `stop` of it, in a worker process (D179): written beside where it goes,
+    then moved in."""
+    diagrams.use_palette(palette)
+    part = Path(out).with_suffix(".part.mp4")
+    diagrams.render(Visual.model_validate(visual), n / FPS, part, words=said, frames=n, start=start, stop=stop)
+    part.replace(out)
+    return out
+
+
+def _finish(made: Path) -> None:
+    """A drawing drawn in other processes, waited for and, drawn in pieces, joined (no second encode)."""
+    futures, pieces = _drawing.pop(made)
+    for f in futures:
+        f.result()
+    if len(pieces) > 1:
+        listing = made.with_suffix(".txt")
+        listing.write_text("".join(f"file '{p.as_posix()}'\n" for p in pieces), encoding="utf-8")
+        joined = made.with_suffix(".part.mp4")
+        run(["-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing),
+             "-c", "copy", str(joined)])
+        joined.replace(made)
+        for p in [*pieces, listing]:   # scratch, deleted outright (D133)
+            p.unlink(missing_ok=True)
+
+
+def _drawings_done(progress=None) -> None:
+    """Wait for the drawings still being drawn. One that failed fails the build, as it did drawn here; a cancel
+    is still heard (progress checks for it)."""
+    said = None
+    while _drawing:
+        ready = [m for m, (futures, _) in _drawing.items() if all(f.done() for f in futures)]
+        for made in ready:
+            _finish(made)
+        if not ready:
+            wait([f for futures, _ in _drawing.values() for f in futures], timeout=1, return_when="FIRST_COMPLETED")
+        if progress and _drawing and len(_drawing) != said:
+            said = len(_drawing)
+            progress(f"Drawing: {said} left", 72)
+
+
 def _diagram(visual: Visual, seconds: float, out: Path, said: list, frames: int | None = None) -> Path:
+    global _pool
     n = frames or max(1, round(seconds * FPS))
     key = [visual.model_dump(exclude=_RUNTIME), n, [(round(t, 3), w) for t, w in said], diagrams.BOARD]
-    made = _kept("diagram", key, out, lambda o: diagrams.render(visual, n / FPS, o, words=said, frames=n))
+    if shot_cache is not None and DRAW_WORKERS > 1:
+        made = _cache_path("diagram", key)
+        if not (made.is_file() and made.stat().st_size > 0) and made not in _drawing:
+            if _pool is None:
+                shot_cache.mkdir(parents=True, exist_ok=True)
+                import multiprocessing
+
+                # Started fresh, never forked from a server with threads running (Linux's default).
+                _pool = ProcessPoolExecutor(DRAW_WORKERS, mp_context=multiprocessing.get_context("spawn"))
+            spans = [(a, min(n, a + PIECE)) for a in range(0, n, PIECE)]
+            if len(spans) > 1 and n - spans[-1][0] < PIECE // 3:   # no stub of a piece at the end
+                spans[-2:] = [(spans[-2][0], n)]
+            pieces = [made] if len(spans) == 1 else [made.with_name(f"{made.stem}.{k}.mp4") for k in range(len(spans))]
+            dumped = visual.model_dump()
+            _drawing[made] = ([_pool.submit(_draw_shot, dumped, n, said, str(p), _palette, a, b)
+                               for p, (a, b) in zip(pieces, spans, strict=True)], pieces)
+    else:
+        made = _kept("diagram", key, out, lambda o: diagrams.render(visual, n / FPS, o, words=said, frames=n))
     shot_info[made] = (n, "drawing")
     return made
 
@@ -597,6 +677,8 @@ def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], scr
         return made
     a, b = timings.beats[last[0]]
     n = _frames(a, b - a)
+    if made[0] in _drawing:   # the opening fell back to a drawing (no footage fit) still being drawn (D179)
+        _finish(made[0])
     out = compose.repeat_panel(made[0], work / "loop_back.mp4", n)
     shot_info[out] = (n, shot_info.get(made[0], (0, "footage"))[1])
     return [*made[:starts[-1]], out]
@@ -799,11 +881,15 @@ def _campaign(channel: channels.Channel) -> None:
 
 def build(video_id: int, progress=None) -> int:
     """Make the video and file it; returns its clip id in the library."""
-    global shot_cache
+    global shot_cache, _pool
     try:
         return _build(video_id, progress)
     finally:
         shot_cache = None  # also when it failed: the cache belongs to one build
+        _drawing.clear()
+        if _pool is not None:   # a drawing under way when a build stops still lands in the cache, whole
+            _pool.shutdown(wait=False, cancel_futures=True)
+            _pool = None
 
 
 def _build(video_id: int, progress) -> int:
@@ -827,6 +913,8 @@ def _build(video_id: int, progress) -> int:
     timings = nudged(script, timings)
     channel, config = channels.load(), Config.load()
     diagrams.use_palette(channel.board)   # the channel's board colours, for the sketches' review too (D156)
+    global _palette
+    _palette = channel.board
     notes: list[str] = []
     stock.unjudged.clear()
     chosen.clear()
@@ -856,6 +944,7 @@ def _build(video_id: int, progress) -> int:
     work.mkdir(parents=True, exist_ok=True)
     parts = shots(script, timings, work, progress, own=own, notes=notes,
                   default_fill=userclips.load(video_id)["fill"])
+    _drawings_done(progress)
     lap("shots")
     if progress:
         progress("Putting it together", 75)
