@@ -629,6 +629,7 @@ export interface CreateVisual {
   hold?: boolean;                                                // keep the drawing before on screen (D124)
   camera?: string; restyle?: boolean;                            // "" automatic, push, pull, drift, still (D164)
   transition?: string; scale?: number; shift?: number;           // set by hand on a built video (D171)
+  frame?: number | null; directions?: string[];                  // footage's crop across, a template's arrows (D180)
   picked?: Record<string, unknown>[]; avoid?: string[]; redo?: boolean; previous?: Record<string, unknown> | null;   // D125
 }
 export interface MineClip { id: string; name: string; duration: number; width: number; height: number; low_res: boolean; used: number[]; missing: boolean }
@@ -648,7 +649,9 @@ export interface CreateScript { title: string; beats: CreateBeat[]; description:
   /** Zooms on footage, cut-ins on the Professor, and the transition (D165). */
   zooms?: boolean; cut_ins?: boolean; transitions?: string;
   /** Captions on or off, and the cover's moment (null: the best still) (D171). */
-  captions?: boolean; cover?: number | null }
+  captions?: boolean; cover?: number | null;
+  /** How the captions look (D180): size, place (a share of the height, + down), the lit word's colour ("" the channel's). */
+  caption_size?: number; caption_shift?: number; caption_colour?: string }
 export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string;
   /** The planner's score of 21, and the series it belongs to (D155). */
   score?: number | null; series?: string }
@@ -718,7 +721,8 @@ export const createApi = {
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
   rewrite: (video: number, steer = "") => send("POST", `/api/create/videos/${video}/rewrite`, { steer }),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
-  editStyle: (video: number, body: { zooms?: boolean; cut_ins?: boolean; transitions?: string; captions?: boolean; cover?: number | null }) =>
+  editStyle: (video: number, body: { zooms?: boolean; cut_ins?: boolean; transitions?: string; captions?: boolean; cover?: number | null;
+                                    caption_size?: number; caption_shift?: number; caption_colour?: string }) =>
     send("PUT", `/api/create/videos/${video}/edit`, body),
   sound: (video: number, body: { music?: boolean | null; sfx?: boolean | null }) => send("PUT", `/api/create/videos/${video}/sound`, body),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
@@ -727,7 +731,8 @@ export const createApi = {
   camera: (video: number, body: { beat: number; camera: string }) => send("POST", `/api/create/videos/${video}/part`, body),
   /** One part set by hand (D171): any of these; only what changed is made again. */
   part: (video: number, body: { beat: number; transition?: string; scale?: number; shift?: number; nudge?: number;
-                                title?: string; labels?: string[]; texts?: string[]; caption?: string }) =>
+                                title?: string; labels?: string[]; texts?: string[]; caption?: string;
+                                frame?: number | null; directions?: string[]; marks?: { i: number; color?: string; flip?: boolean }[] }) =>
     send("POST", `/api/create/videos/${video}/part`, body),
   redo: (video: number, body: { beat: number; want: "footage" | "drawing" | "undo"; note: string }) =>
     send("POST", `/api/create/videos/${video}/redo`, body),

@@ -3218,3 +3218,17 @@ Marc said yes to the audit's speed proposals. Timed on the ready-made script (no
   Only when the two encodes' SPS and PPS are the same and the result has every frame; otherwise the full encode as
   before. 6.2 s to 1.2 s on a Short, 5.6 s to 2.1 s on a clip; the frames after the cover are bit-identical.
 - Fixed on the way: `diagrams.use_palette` didn't clear the cached board, so chalk kept the last channel's colour.
+
+## D180: footage framing, caption style, and a drawing's arrows and colours by hand
+The last of the audit's proposals (D120's gaps in MANUAL_CONTROLS). On a built video:
+- **Framing.** Each footage part's Adjust panel has a framing choice: on its subject (as before), or left edge, left,
+  middle, right, right edge (`Visual.frame`, 0 to 1). It replaces the face finder and the judge's guess for that shot
+  only, and is kept even when the crop comes out dark (the automatic one falls back to the middle, then a drawing).
+  The user's own clips keep their face framing: their crop is their own already.
+- **Captions.** Size (80 to 130%), place (over the picture's bottom edge, as made, lower, lowest) and the colour of
+  the word being said (the channel's, or one of six), per video under Captions (`Script.caption_size`,
+  `caption_shift`, `caption_colour`). The cut-in on the Professor still moves them up out of his face.
+- **Drawings.** A sketch's words and arrows each get a colour (the board's five chalks), and an arrow can be turned
+  round (its points reversed); a forces diagram's arrows can point another way. Templates keep their own colours:
+  they are set by position (first arrow yellow, second blue), and nobody asked to change them yet.
+Each counts as a change for the rebuild like the D171 ones, and only that shot is made again.

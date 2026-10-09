@@ -111,16 +111,18 @@ shot_info: dict[Path, tuple[int, str]] = {}
 
 
 def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None, skip: float = 0.0,
-                motion: str = "push", punch: float | None = None, frames: int | None = None) -> Path:
+                motion: str = "push", punch: float | None = None, frames: int | None = None,
+                frame: float | None = None) -> Path:
     """`seconds` (or `frames`) of a stock clip filling the picture panel, the camera moving on it (D162), the crop
     placed on its subject (D111): a wide shot cut to its middle lost the speaker cone to one side and the skull to
     the other. The camera keeps the subject's spot and never leaves the picture. `skip`: seconds already shown of
-    this clip in the shot before, so a clip used twice in a row carries on (D132)."""
+    this clip in the shot before, so a clip used twice in a row carries on (D132). `frame`: the user's own crop
+    place, used as it is (D180)."""
     n = frames or max(1, round(seconds * FPS))
     if src.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):   # a photo: the camera moves over it (D162)
         from PIL import Image
 
-        x = 0.5 if center is None else min(1.0, max(0.0, center))
+        x = min(1.0, max(0.0, frame if frame is not None else 0.5 if center is None else center))
         with Image.open(src) as img:
             compose.photo_panel(img, out, n, compose.Move(kind=motion if motion != "still" else "push", u=x, punch=punch),
                                 look=LOOK)
@@ -129,7 +131,7 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
     seconds = n / FPS
     length = info.duration or seconds
     offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
-    x = min(1.0, max(0.0, _subject_x(src, offset, seconds, center)))
+    x = min(1.0, max(0.0, frame if frame is not None else _subject_x(src, offset, seconds, center)))
     compose.video_panel(src, out, n, compose.Move(kind=motion, u=x, punch=punch), start=offset,
                         loop=length < seconds + offset, look=LOOK, source_size=(info.width or W, info.height or H))
     return out
@@ -236,7 +238,7 @@ used_shots: set[Path] = set()
 #: What a drawing's shot doesn't depend on: set by the app, or used only when the shots are put together (a part's
 #: way in, D171). A change to one of these never draws the drawing again.
 _RUNTIME = {"picked", "avoid", "redo", "previous", "manual", "hold", "clip", "clip_start", "fill", "notice", "wish",
-            "camera", "restyle", "transition"}
+            "camera", "restyle", "transition", "frame"}
 #: The sentence whose picture each of this build's shots shows (the picture's first sentence), set by shots() (D171).
 part_owner: list[int] = []
 
@@ -514,7 +516,10 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
 
         def make(out: Path, holder=holder, skip=skip, motion=motion, punch=punch, n=n) -> Path:
             h = holder["hit"]
-            clip = _stock_shot(stock.fetch(h), n / FPS, out, h.get("center"), skip, motion, punch, frames=n)
+            clip = _stock_shot(stock.fetch(h), n / FPS, out, h.get("center"), skip, motion, punch, frames=n,
+                               frame=visual.frame)
+            if visual.frame is not None:   # the user's framing stays, dark or not (D180)
+                return clip
             if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
                 holder["hit"] = {**h, "center": 0.5}
                 clip = _stock_shot(stock.fetch(h), n / FPS, out, 0.5, skip, motion, punch, frames=n)
@@ -524,7 +529,7 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
 
         try:
             key = [hit.get("id"), hit.get("center"), n, motion, punch and round(punch, 2)] + \
-                ([round(skip, 3)] if skip else [])
+                ([round(skip, 3)] if skip else []) + ([round(visual.frame, 3)] if visual.frame is not None else [])
             made = _kept("stock", key, work / f"{i:02d}{tag}_{k}_stock.mp4", make)
             shot_info[made] = (n, "footage")
             clips.append(made)
@@ -790,7 +795,9 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
                   if w.text.strip(".,!?;:'\"").lower() == beat.emphasis.strip(".,!?;:'\"").lower()}
         edit.presenter = compose.Presenter(shows, timings.words, strong, total)
         edit.cutaways = cutaways(script, timings, punchline, total) if script.cut_ins else []
-    edit.captions = compose.Captions(caption_words(script, timings), accent=palette["yellow"]) if script.captions else None
+    lit = tuple(bytes.fromhex(script.caption_colour[1:])) if len(script.caption_colour) == 7 else palette["yellow"]
+    edit.captions = compose.Captions(caption_words(script, timings), accent=lit, size=script.caption_size,
+                                     shift=script.caption_shift) if script.captions else None
     hook = (script.hook or script.title) if rc.show_hook_text else ""
     if hook:
         edit.hook = compose.hook_image(hook)

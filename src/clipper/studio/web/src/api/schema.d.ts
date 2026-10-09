@@ -835,7 +835,9 @@ export interface paths {
         /**
          * Create Edit Style
          * @description The edit's flourishes for one video (D165): zooms, cut-ins and captions on or off (D171), the transition
-         *     (auto, cut, whip, zoom), and the cover's moment in seconds (null: the best still). The next build uses them.
+         *     (auto, cut, whip, zoom), the cover's moment in seconds (null: the best still), and how the captions look
+         *     (D180): caption_size (0.7-1.3), caption_shift (a share of the height, + down) and caption_colour (the lit
+         *     word's, "#rrggbb" or "" for the channel's). The next build uses them.
          */
         put: operations["create_edit_style_api_create_videos__video_id__edit_put"];
         post?: never;
@@ -1239,6 +1241,9 @@ export interface paths {
          *     build's choice, else push, pull, drift, still), how it comes in (transition: "", cut, whip, zoom), a
          *     drawing's size (scale) and place (shift, + down), its words (title, labels; texts: a sketch's words in
          *     order), where the cut to it falls (nudge, seconds), and one sentence's caption (caption, for `beat`).
+         *     D180: where footage is cropped across (frame, 0 left to 1 right, null: on its subject), a template's arrows
+         *     (directions: up, down, left, right per label) and a sketch's marks (marks: [{i, color, flip}], flip turns
+         *     an arrow round).
          *     Only what changed is made again on the next build; the footage and drawing stay.
          */
         post: operations["create_part_api_create_videos__video_id__camera_post"];
@@ -1263,6 +1268,9 @@ export interface paths {
          *     build's choice, else push, pull, drift, still), how it comes in (transition: "", cut, whip, zoom), a
          *     drawing's size (scale) and place (shift, + down), its words (title, labels; texts: a sketch's words in
          *     order), where the cut to it falls (nudge, seconds), and one sentence's caption (caption, for `beat`).
+         *     D180: where footage is cropped across (frame, 0 left to 1 right, null: on its subject), a template's arrows
+         *     (directions: up, down, left, right per label) and a sketch's marks (marks: [{i, color, flip}], flip turns
+         *     an arrow round).
          *     Only what changed is made again on the next build; the footage and drawing stay.
          */
         post: operations["create_part_api_create_videos__video_id__part_post"];

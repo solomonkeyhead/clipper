@@ -833,3 +833,34 @@ def test_a_long_drawing_is_drawn_in_pieces_by_the_workers_and_joined(tmp_path, m
             build._pool = None
     assert made.is_file() and abs(probe(made).duration - 68 / 30) < 0.05
     assert not list(made.parent.glob("*.part.mp4")) and not list(made.parent.glob("*.txt"))
+
+
+def test_framing_arrows_colours_and_caption_style_are_set_by_hand(client):
+    """D180: footage's crop across, a template's arrows, a sketch's colours and arrows, and how captions look."""
+    from clipper.create import store
+    from clipper.create.sketch import Mark, Sketch
+
+    drawing = Visual(kind="diagram", template="sketch", sketch=Sketch(grid=900, marks=[
+        Mark(kind="arrow", xy=[100, 200, 300, 400]), Mark(kind="text", text="air", xy=[500, 700])]))
+    forces = Visual(kind="diagram", template="forces", labels=["weight", "lift"])
+    vid = _built(store, [Beat(text="One two three.", visual=Visual(kind="stock", query="a")),
+                         Beat(text="Four five six.", visual=drawing), Beat(text="Seven.", visual=forces)],
+                 [(0.0, 2.0), (2.0, 4.0), (4.0, 5.0)])
+    post = lambda **b: client.post(f"/api/create/videos/{vid}/part", json=b)   # noqa: E731
+    assert post(beat=1, frame=0.25).status_code == 200
+    assert post(beat=2, marks=[{"i": 0, "flip": True, "color": "red"}, {"i": 1, "color": "blue"}]).status_code == 200
+    assert post(beat=2, marks=[{"i": 0, "color": "purple"}]).status_code == 400
+    assert post(beat=3, directions=["down", "sideways"]).status_code == 400
+    assert post(beat=3, directions=["down", "up"]).status_code == 200
+    s = Script.model_validate(store.video(vid)["script"])
+    assert s.beats[0].visual.frame == 0.25 and s.beats[0].visual.restyle
+    arrow, word = s.beats[1].visual.sketch.marks
+    assert arrow.xy == [300, 400, 100, 200] and arrow.color == "red" and word.color == "blue"
+    assert s.beats[2].visual.directions == ["down", "up"]
+    assert post(beat=1, frame=None).status_code == 200
+    assert Script.model_validate(store.video(vid)["script"]).beats[0].visual.frame is None
+    edit = lambda **b: client.put(f"/api/create/videos/{vid}/edit", json=b)   # noqa: E731
+    assert edit(caption_colour="yellow").status_code == 400
+    assert edit(caption_size=2, caption_shift=-0.12, caption_colour="#FF6FAE").status_code == 200
+    s = Script.model_validate(store.video(vid)["script"])
+    assert (s.caption_size, s.caption_shift, s.caption_colour) == (1.3, -0.12, "#ff6fae")

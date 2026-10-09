@@ -102,6 +102,25 @@ with sync_playwright() as p:
     expect(page.get_by_test_id("part-adjust")).to_be_visible()
     page.get_by_test_id("part-adjust").screenshot(path=f"{OUT}/4b_adjust.png")
     print("part 3 set by hand: whip in, 115%")
+    # D180: a sketch's colours and arrows on the same panel, then footage framing on part 1
+    marks = page.get_by_test_id("sketch-marks")
+    marks.get_by_label("Colour of “air”").select_option("red")
+    marks.get_by_role("button", name="Turn round").first.click()
+    for _ in range(20):
+        if page.evaluate("async () => (await (await fetch('/api/create')).json()).videos"
+                         ".some(v => (v.script?.beats || []).some(b => (b.visual?.sketch?.marks || []).some(m => m.text === 'air' && m.color === 'red')))"):
+            break
+        time.sleep(0.5)
+    else:
+        raise AssertionError("the colour set for 'air' wasn't saved")
+    marks.screenshot(path=f"{OUT}/4c_marks.png")
+    for k in range(adjust.count()):
+        adjust.nth(k).click()
+        if page.get_by_label("Framing, part 1").count():
+            break
+    page.get_by_label("Framing, part 1").select_option(label="framing: left")
+    expect(page.get_by_label("Framing, part 1")).to_have_value("0.25")
+    print("sketch colour, arrow and footage framing set by hand")
     page.get_by_text("Captions", exact=True).first.click()
     caption = page.get_by_label("Caption for sentence 2")
     caption.fill("You think the recording lies.")
@@ -114,6 +133,11 @@ with sync_playwright() as p:
     else:
         raise AssertionError("the caption written for sentence 2 wasn't saved")
     print("caption for sentence 2 saved")
+    page.get_by_label("Caption size").select_option(label="size: bigger")
+    page.get_by_label("Caption place").select_option(label="place: lower")
+    page.get_by_label("Said word colour").select_option(label="said word: blue")
+    expect(page.get_by_label("Said word colour")).to_have_value("#4fd2ff")
+    print("caption size, place and colour set (D180)")
     page.get_by_role("button", name="Use this frame").first.click()
     expect(page.get_by_text("Cover: the frame at").first).to_be_visible()
     print("cover frame chosen")

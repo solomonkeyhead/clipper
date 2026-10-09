@@ -23,11 +23,11 @@ is the order I'd build them.
 | Who does each AI job | Gemini first for script, check, review and footage; Claude draws (`llm.create_gemini_jobs`, D136) | Switches in Settings per job | Gap (config only) | S |
 | Which stock clip | The AI judge picks one of ~6 | "New footage" opens a picker: searches written for the part, both libraries, every clip scored, best first; pick one (or several for a long part), or let Clipper choose | **Done** (D129) | |
 | Redo one picture | "New pictures" redoes all of them | On a built video: per part, "New footage" or "New drawing" (with optional words), undo, and a rebuild that keeps every other part as it was | **Done** (D125) | |
-| Diagram contents | Templates and sketches are generated | A template's title and labels, a sketch's words, per part (D171); numbers, arrows and colours | Partial | M |
-| Framing of footage | Faces, else the judge's guess | A slider per shot for where the crop sits; push-in on or off | Gap | M |
+| Diagram contents | Templates and sketches are generated | A template's title and labels, a sketch's words, per part (D171); a sketch's words and arrows coloured, its arrows turned round, a forces diagram's arrows pointed (D180); numbers, a template's colours | Partial | S |
+| Framing of footage | Faces, else the judge's guess | Per part, left edge to right edge or on its subject (D180); no push-in is the camera's "hold still" (D164) | **Done** | |
 | Shot lengths and cuts | Cuts land where each sentence starts; footage over 4.5s is split | Nudge a cut earlier or later per part (D171); set the longest a shot may last | Partial | S |
 | Voice timing | Speech recognition times every word | Nudge a sentence's start (D171); captions show the script's spelling or your own text, so a misheard word never shows | Done | - |
-| Captions | One style from settings | On or off and each sentence's text per video (D171); style and position | Partial | M |
+| Captions | One style from settings | On or off and each sentence's text per video (D171); size, place and the said word's colour (D180) | **Done** | |
 | On-screen hook | The writer's 6-word hook (else the title) for 1.5 s (D155) | Its own text per video in the script editor; length and on/off | Partial | S |
 | Script shape and ending | Taken in turn per script (D155) | Pick the shape and ending before writing | Gap | S |
 | Editor's read of a script | Another AI lists fixes and the script is rewritten once (D155); shown in the notes | Edit the script; skip the editor | Gap | S |

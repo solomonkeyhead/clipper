@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import math
+import re
 import threading
 import time
 import traceback
@@ -470,7 +471,9 @@ def routes(app: FastAPI, publish) -> None:
     @app.put("/api/create/videos/{video_id}/edit")
     def create_edit_style(video_id: int, body: dict) -> dict:
         """The edit's flourishes for one video (D165): zooms, cut-ins and captions on or off (D171), the transition
-        (auto, cut, whip, zoom), and the cover's moment in seconds (null: the best still). The next build uses them."""
+        (auto, cut, whip, zoom), the cover's moment in seconds (null: the best still), and how the captions look
+        (D180): caption_size (0.7-1.3), caption_shift (a share of the height, + down) and caption_colour (the lit
+        word's, "#rrggbb" or "" for the channel's). The next build uses them."""
         row = video_or_404(video_id)
         _editable(row)
         script = dict(row["script"])
@@ -486,6 +489,18 @@ def routes(app: FastAPI, publish) -> None:
             if body["transitions"] not in ("auto", "cut", "whip", "zoom"):
                 raise HTTPException(400, "transitions are auto, cut, whip or zoom")
             script["transitions"] = body["transitions"]
+        try:
+            if "caption_size" in body:
+                script["caption_size"] = round(min(1.3, max(0.7, float(body["caption_size"]))), 2)
+            if "caption_shift" in body:
+                script["caption_shift"] = round(min(0.25, max(-0.25, float(body["caption_shift"]))), 3)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "caption_size and caption_shift are numbers") from exc
+        if "caption_colour" in body:
+            colour = str(body["caption_colour"] or "").lower()
+            if colour and not re.fullmatch(r"#[0-9a-f]{6}", colour):
+                raise HTTPException(400, "caption_colour is #rrggbb, or empty for the channel's")
+            script["caption_colour"] = colour
         store.update_video(video_id, script=script)
         return {"ok": True}
 
@@ -944,6 +959,9 @@ def routes(app: FastAPI, publish) -> None:
         build's choice, else push, pull, drift, still), how it comes in (transition: "", cut, whip, zoom), a
         drawing's size (scale) and place (shift, + down), its words (title, labels; texts: a sketch's words in
         order), where the cut to it falls (nudge, seconds), and one sentence's caption (caption, for `beat`).
+        D180: where footage is cropped across (frame, 0 left to 1 right, null: on its subject), a template's arrows
+        (directions: up, down, left, right per label) and a sketch's marks (marks: [{i, color, flip}], flip turns
+        an arrow round).
         Only what changed is made again on the next build; the footage and drawing stay."""
         from ..create.build import MOTIONS
 
@@ -972,8 +990,15 @@ def routes(app: FastAPI, publish) -> None:
             if "shift" in body:
                 change["shift"] = round(min(0.3, max(-0.3, float(body["shift"]))), 3)
             nudge = round(min(1.5, max(-1.5, float(body["nudge"]))), 2) if "nudge" in body else None
+            if "frame" in body:
+                change["frame"] = None if body["frame"] is None else round(min(1.0, max(0.0, float(body["frame"]))), 3)
         except (TypeError, ValueError) as exc:
-            raise HTTPException(400, "scale, shift and nudge are numbers") from exc
+            raise HTTPException(400, "scale, shift, nudge and frame are numbers") from exc
+        if "directions" in body:
+            ways = [str(x).lower() for x in body.get("directions") or []][:8]
+            if any(x not in ("up", "down", "left", "right") for x in ways):
+                raise HTTPException(400, "directions are up, down, left or right")
+            change["directions"] = ways
         words = lambda x: " ".join(str(x or "").split())[:80]   # noqa: E731
         if "title" in body:
             change["title"] = words(body["title"])
@@ -984,6 +1009,23 @@ def routes(app: FastAPI, publish) -> None:
             marks = [m.model_copy(update={"text": next(texts, m.text) or m.text}) if m.kind == "text" else m
                      for m in v.sketch.marks]
             change["sketch"] = v.sketch.model_copy(update={"marks": marks})
+        if body.get("marks") and v.sketch:
+            marks = list(change["sketch"].marks if "sketch" in change else v.sketch.marks)
+            for m in body["marks"]:
+                try:
+                    i = int(m["i"])
+                    mark = marks[i]
+                except (KeyError, TypeError, ValueError, IndexError) as exc:
+                    raise HTTPException(400, "marks are {i, color, flip} for marks on the drawing") from exc
+                if m.get("color"):
+                    if m["color"] not in ("chalk", "yellow", "blue", "red", "dim"):
+                        raise HTTPException(400, "a mark's colour is chalk, yellow, blue, red or dim")
+                    mark = mark.model_copy(update={"color": m["color"]})
+                if m.get("flip") and mark.kind == "arrow":   # the same points the other way: the head at the start
+                    pts = [mark.xy[k:k + 2] for k in range(0, len(mark.xy) - 1, 2)]
+                    mark = mark.model_copy(update={"xy": [c for p in reversed(pts) for c in p]})
+                marks[i] = mark
+            change["sketch"] = (change.get("sketch") or v.sketch).model_copy(update={"marks": marks})
         updated = {k: x for k, x in change.items() if getattr(v, k) != x}
         if updated:
             beats[group[0]] = b.model_copy(update={"visual": v.model_copy(update={**updated, "restyle": True})})

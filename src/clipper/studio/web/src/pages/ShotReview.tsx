@@ -13,8 +13,13 @@ export const CAMERAS: [string, string][] = [["", "camera: auto"], ["push", "push
 const WAYS: [string, string][] = [["", "way in: auto"], ["cut", "plain cut"], ["whip", "whip in"], ["zoom", "zoom in"]];
 const SIZES: [number, string][] = [[0.7, "size 70%"], [0.85, "size 85%"], [1, "size as drawn"], [1.15, "size 115%"], [1.3, "size 130%"]];
 const PLACES: [number, string][] = [[-0.12, "higher"], [0, "in the middle"], [0.12, "lower"]];
+/** Where footage is cropped across, a template's arrows, a sketch's colours, set by hand (D180). */
+const FRAMES: [string, string][] = [["", "framing: on its subject"], ["0", "framing: left edge"], ["0.25", "framing: left"],
+  ["0.5", "framing: middle"], ["0.75", "framing: right"], ["1", "framing: right edge"]];
+const WAYS_ROUND = ["up", "down", "left", "right"];
+const INKS: [string, string][] = [["chalk", "white"], ["yellow", "yellow"], ["blue", "blue"], ["red", "red"], ["dim", "grey"]];
 
-type Mark = { kind: string; text?: string };
+type Mark = { kind: string; text?: string; color?: string };
 const sketchOf = (v: CreateVisual) => v.sketch as { grid?: number; marks?: Mark[] } | null | undefined;
 /** The words on a drawing a user can change: a sketch's labels, or a template's title and labels. */
 function wordsOf(v: CreateVisual): { title: string | null; words: string[] } {
@@ -332,7 +337,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                       </select>
                     </Tip>
                   )}
-                  <Tip label="How it comes in, where its cut falls, and a drawing's size, place and words">
+                  <Tip label="How it comes in, where its cut falls, its framing, and a drawing's size, place, words, arrows and colours">
                     <Button size="sm" variant={adjusting === first ? "primary" : "ghost"} aria-expanded={adjusting === first}
                             disabled={rebuilding} onClick={() => setAdjusting((a) => (a === first ? null : first))}>
                       <SlidersHorizontal className="size-3.5" /> Adjust
@@ -379,6 +384,9 @@ function PartAdjust({ first, v, nudge, busy, onSet }: {
   const edited = title !== (shown.title ?? "") || words.some((w, k) => w !== shown.words[k]);
   const select = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
   const input = "h-8 min-w-32 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  const footage = v.kind === "stock" && !v.clip;
+  const marks = v.template === "sketch" ? (sketchOf(v)?.marks ?? []).map((m, i) => ({ ...m, i })).filter((m) => m.kind === "arrow" || m.kind === "text") : [];
+  const labels = v.template === "forces" ? (v.labels ?? []).slice(0, 4) : [];
   const step = (by: number) => onSet({ nudge: Math.round((nudge + by) * 10) / 10 },
                                      `Cut ${nudge + by === 0 ? "back where the voice put it" : `${Math.abs(nudge + by).toFixed(1)}s ${nudge + by > 0 ? "later" : "earlier"}`}`);
   return (
@@ -409,8 +417,47 @@ function PartAdjust({ first, v, nudge, busy, onSet }: {
             </select>
           </>
         )}
-        {first === 1 && v.kind !== "diagram" && <span>The first part starts with the video: nothing to set here but the camera.</span>}
+        {footage && (
+          <select aria-label={`Framing, part ${first}`} value={v.frame == null ? "" : String(v.frame)} disabled={busy} className={select}
+                  onChange={(e) => onSet({ frame: e.target.value === "" ? null : Number(e.target.value) }, "Framing set")}>
+            {v.frame != null && !FRAMES.some(([k]) => k === String(v.frame)) && <option value={String(v.frame)}>framing: set by hand</option>}
+            {FRAMES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        )}
+        {first === 1 && v.kind !== "diagram" && !footage && <span>The first part starts with the video: nothing to set here but the camera.</span>}
       </div>
+      {labels.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+          {labels.map((label, k) => (
+            <label key={k} className="flex items-center gap-1.5">
+              {label || `arrow ${k + 1}`}
+              <select aria-label={`Arrow ${k + 1} points`} value={v.directions?.[k] ?? "up"} disabled={busy} className={select}
+                      onChange={(e) => onSet({ directions: labels.map((_, j) => (j === k ? e.target.value : v.directions?.[j] ?? "up")) }, "Arrow turned")}>
+                {WAYS_ROUND.map((w) => <option key={w} value={w}>points {w}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
+      )}
+      {marks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted" data-testid="sketch-marks">
+          {marks.map((m, k) => (
+            <span key={m.i} className="flex items-center gap-1 whitespace-nowrap">
+              {m.kind === "arrow" ? `arrow ${marks.slice(0, k + 1).filter((x) => x.kind === "arrow").length}` : `“${m.text}”`}
+              <select aria-label={m.kind === "arrow" ? `Colour of arrow ${marks.slice(0, k + 1).filter((x) => x.kind === "arrow").length}` : `Colour of “${m.text}”`}
+                      value={m.color ?? "chalk"} disabled={busy} className={select}
+                      onChange={(e) => onSet({ marks: [{ i: m.i, color: e.target.value }] }, "Colour set")}>
+                {INKS.map(([k2, name]) => <option key={k2} value={k2}>{name}</option>)}
+              </select>
+              {m.kind === "arrow" && (
+                <Tip label="Point this arrow the other way">
+                  <Button size="sm" variant="secondary" disabled={busy} onClick={() => onSet({ marks: [{ i: m.i, flip: true }] }, "Arrow turned round")}>Turn round</Button>
+                </Tip>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
       {(shown.title !== null || shown.words.length > 0) && (
         <form className="flex flex-wrap items-center gap-1.5" onSubmit={(e) => {
           e.preventDefault();

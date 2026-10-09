@@ -1077,6 +1077,12 @@ function CoverChoice({ video, player }: { video: CreateVideo; player: RefObject<
   );
 }
 
+/** How the captions look, per video (D180). */
+const CAPTION_SIZES: [number, string][] = [[0.8, "size: smaller"], [1, "size: as made"], [1.15, "size: bigger"], [1.3, "size: biggest"]];
+const CAPTION_PLACES: [number, string][] = [[-0.12, "place: over the picture"], [0, "place: as made"], [0.08, "place: lower"], [0.16, "place: lowest"]];
+const CAPTION_COLOURS: [string, string][] = [["", "said word: channel's colour"], ["#ffd23f", "said word: yellow"], ["#ffffff", "said word: white"],
+  ["#5be37d", "said word: green"], ["#4fd2ff", "said word: blue"], ["#ff6fae", "said word: pink"], ["#ff9a3c", "said word: orange"]];
+
 /** Captions for this video (D171): on or off, and any sentence's caption written by hand (its words shown in
  *  place of the spoken ones, spread over the time it's said). Saved as you leave the box; used on Build again. */
 function CaptionsEditor({ video }: { video: CreateVideo }) {
@@ -1102,6 +1108,19 @@ function CaptionsEditor({ video }: { video: CreateVideo }) {
       </label>
       {(video.script.captions ?? true) && (
         <>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            {([["caption_size", "Caption size", video.script.caption_size ?? 1, CAPTION_SIZES],
+               ["caption_shift", "Caption place", video.script.caption_shift ?? 0, CAPTION_PLACES],
+               ["caption_colour", "Said word colour", video.script.caption_colour ?? "", CAPTION_COLOURS]] as const).map(([key, label, now, options]) => (
+              <select key={key} aria-label={label} disabled={video.status === "building"} value={String(now)}
+                      className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                      onChange={(e) => void createApi.editStyle(video.id, { [key]: key === "caption_colour" ? e.target.value : Number(e.target.value) })
+                        .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
+                {!options.some(([k]) => String(k) === String(now)) && <option value={String(now)}>{label}: set by hand</option>}
+                {options.map(([k, name]) => <option key={k} value={String(k)}>{name}</option>)}
+              </select>
+            ))}
+          </div>
           <p className="text-xs text-muted">Each caption shows the spoken words. Write over one to show other words for that sentence; leave it empty for the spoken ones.</p>
           <ol className="flex flex-col gap-1.5">
             {beats.map((b, k) => (

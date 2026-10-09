@@ -408,7 +408,7 @@ class Captions:
 
     SIZE = 98
 
-    def __init__(self, words: list, accent=(255, 214, 0)):
+    def __init__(self, words: list, accent=(255, 214, 0), size: float = 1.0, shift: float = 0.0):
         from ..models import Word
         from ..render import captions as cap
 
@@ -418,6 +418,7 @@ class Captions:
         timed = cap.spread_squashed([Word(start=w.start, end=w.end, text=w.text) for w in words])
         self.pages = cap.chunk_words(timed, style, max_gap=0.6)
         self.accent = accent
+        self.size, self.shift = round(self.SIZE * size), shift   # set per video (D180)
         self.windows = []
         for i, page in enumerate(self.pages):
             nxt = self.pages[i + 1].start if i + 1 < len(self.pages) else None
@@ -429,7 +430,7 @@ class Captions:
         key = (p, lit)
         if key not in self._images:
             words = [w.text.strip() for w in self.pages[p].words]
-            self._images[key] = text_image(words, self.SIZE, lit=lit, accent=self.accent)
+            self._images[key] = text_image(words, self.size, lit=lit, accent=self.accent)
         return self._images[key]
 
     def draw(self, frame: np.ndarray, t: float, y: float = CAPTION_Y) -> None:
@@ -786,7 +787,7 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
             if edit.captions:   # up out of the way while the camera is in on his face
                 # With no presenter, in the middle of the board under the picture, not at its top (D164).
                 y = CAPTION_Y if edit.presenter else (PANEL_H + H) // 2
-                edit.captions.draw(frame, t, y if cut is None else 620)
+                edit.captions.draw(frame, t, y + edit.captions.shift * H if cut is None else 620)
             if edit.signoff and k >= edit.signoff_from:
                 written = chalk_text(edit.signoff, 84, reveal=(k - edit.signoff_from) / (0.5 * FPS))
                 if written is not None:

@@ -79,6 +79,8 @@ class Visual(BaseModel):
     transition: str = ""
     scale: float = 1.0
     shift: float = 0.0
+    # Where footage is cropped across, set by hand (D180): 0 its left edge, 1 its right; None finds the subject.
+    frame: float | None = None
 
 
 class Beat(BaseModel):
@@ -114,6 +116,11 @@ class Script(BaseModel):
     # Captions on or off, and the cover's moment in seconds (None: the build picks the best still) (D171).
     captions: bool = True
     cover: float | None = None
+    # How the captions look (D180): size (1 as made), place (a share of the frame's height, + down) and the colour
+    # of the word being said ("" the channel's, else "#rrggbb").
+    caption_size: float = 1.0
+    caption_shift: float = 0.0
+    caption_colour: str = ""
 
     @property
     def text(self) -> str:
@@ -127,7 +134,7 @@ class Script(BaseModel):
 #: The fields of a picture only the app sets (the user's clips, what a build picked): left out of
 #: the writer's schema, so it isn't shown ~12 fields it can't use and can't invent them.
 APP_ONLY = {"sketch", "clip", "clip_start", "fill", "manual", "picked", "avoid", "redo", "previous", "wish", "notice",
-            "camera", "restyle", "transition", "scale", "shift"}
+            "camera", "restyle", "transition", "scale", "shift", "frame"}
 _WriterVisual = create_model("WriterVisual", **{k: (f.annotation, f) for k, f in Visual.model_fields.items()
                                                 if k not in APP_ONLY})
 _WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""), pose=(str, ""),
