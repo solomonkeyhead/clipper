@@ -81,8 +81,12 @@ class AnthropicBackend(LLMBackend):
     def _complete(self, request: LLMRequest) -> LLMResponse:
         started = time.perf_counter()
         schema = request.response_schema
+        # The instructions are cached (D186): the rubric's, a build's sketches' and the footage judge's are the
+        # same call after call, and a cached read costs a twentieth. One too short to cache is sent as it is.
+        system = [{"type": "text", "text": request.system, "cache_control": {"type": "ephemeral"}}] \
+            if request.system else request.system
         kwargs = {"model": self.model, "max_tokens": request.max_output_tokens or 16000,
-                  "system": request.system, "messages": [{"role": "user", "content": self.content(request)}]}
+                  "system": system, "messages": [{"role": "user", "content": self.content(request)}]}
         try:
             if isinstance(schema, type) and issubclass(schema, BaseModel):
                 message = self.client.messages.parse(output_format=schema, **kwargs)

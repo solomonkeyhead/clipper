@@ -246,6 +246,26 @@ class TestBackendRetries:
         assert "3 LLM call" in backend.usage.summary()
 
 
+def test_claudes_instructions_are_sent_to_be_cached():
+    """D186: the rubric's, a build's sketches' and the footage judge's instructions repeat call after call."""
+    from types import SimpleNamespace
+
+    from clipper.llm.anthropic_backend import AnthropicBackend
+
+    sent = {}
+
+    class Messages:
+        def create(self, **kw):
+            sent.update(kw)
+            return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text="ok")],
+                                   usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+    backend = AnthropicBackend(api_key="test", requests_per_minute=100_000)
+    backend._client = SimpleNamespace(messages=Messages())
+    assert backend.complete(LLMRequest(system="the rubric", user="u")).text == "ok"
+    assert sent["system"] == [{"type": "text", "text": "the rubric", "cache_control": {"type": "ephemeral"}}]
+
+
 class TestBackendRegistry:
     def test_mock_is_always_available(self):
         assert create("mock").name == "mock"

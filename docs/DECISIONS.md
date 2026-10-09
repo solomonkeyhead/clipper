@@ -3298,3 +3298,10 @@ three together used up the stronger free model's daily quota on one run's clips,
 - `correct._ask`, which the scene split, the opening and the titles share, now looks for any model's kept answer
   before asking one: a re-run waited out the stronger model's time-out again before finding the fallback's answer.
 A 10-clip run: about 3 calls for these instead of 30, and the brief sent 3 times instead of 20.
+
+## D186: Claude's instructions sent to be cached
+On the Claude API, a call's instructions (the system prompt) are now marked for the prompt cache. The rubric's go
+out 8 times a run, a build's sketch instructions (about 2,500 tokens with the icon list) once a sketch and once a
+review, the footage judge's once a sentence: a cached read is billed at a twentieth of the input price, a write at
+1.25 times. Instructions too short to cache are sent as they are, at no extra cost. Claude Code on the plan caches
+by itself.
