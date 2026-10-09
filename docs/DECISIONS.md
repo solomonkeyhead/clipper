@@ -3062,3 +3062,7 @@ Marc asked for a way to turn off the punch-in zooms and the Professor cut-ins, a
   change the edit, so Build again is enough; the voice and timings stay.
 - Whip and zoom use that one transition at every change of picture kind, under the same limits as automatic
   (not the first shot, none under 0.5 s, never two in a row). Plain cuts have none.
+
+## D166: the "Professor's Law" running bit is gone
+Marc finds it annoying and not funny. It is out of the physics pack's running bits (the coffee cup and the grudge
+stay) and out of his channel file. The bit rotation, `next_bit`, is unchanged.

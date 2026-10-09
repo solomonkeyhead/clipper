@@ -36,14 +36,14 @@ def test_a_running_bit_comes_at_most_every_third_script_and_counts_its_uses(data
     channel.save(ch)
     with channel.use(ch.slug):
         name, how = script.next_bit(ch)
-        assert name == "law" and "No. 1:" in how
-        store.add_video(None, Script(title="a", beats=[Beat(text="x")], bit="law").model_dump())
+        assert name == "coffee" and how
+        store.add_video(None, Script(title="a", beats=[Beat(text="x")], bit="coffee").model_dump())
         assert script.next_bit(ch) == ("", "")      # never two running
         store.add_video(None, Script(title="b", beats=[Beat(text="x")]).model_dump())
         assert script.next_bit(ch) == ("", "")      # at most one in three
         store.add_video(None, Script(title="c", beats=[Beat(text="x")]).model_dump())
         name, _ = script.next_bit(ch)
-        assert name == "coffee"                      # the least used next
+        assert name == "grudge"                      # the least used next
 
 
 def test_shapes_and_endings_never_repeat_the_last_scripts(data_root):

@@ -90,7 +90,6 @@ PHYSICS_JOKES = [
 #: Running bits (D156): one is asked for at most every third script, never two scripts running, each retired after
 #: RETIRE uses. {n} is how many times the bit has been used, plus one.
 PHYSICS_BITS = [
-    {"name": "law", "how": "Include \"Professor's Law No. {n}:\" followed by a dry one-line law about this moment."},
     {"name": "coffee", "how": "Use the Professor's coffee cup (about 0.3 kg) as the unit of one comparison."},
     {"name": "grudge", "how": "Include one dry line of the Professor's long grudge against an everyday object in "
                               "this moment (the elevator, the shower curtain, the car door)."},
