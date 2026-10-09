@@ -4,7 +4,7 @@ import {
   AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
   ExternalLink, Trash2, Upload, Wand2, X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
 import {
   createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateVisual,
@@ -118,6 +118,7 @@ function GeminiStruggling() {
   const miss = Object.entries(ai?.misses ?? {}).find(([k]) => k.startsWith("gemini"));
   if (!ai || !miss) return null;
   const claude = ai.order.some((b) => b.startsWith("claude_code"));
+  const until = /until (\d\d:\d\d)/.exec(miss[1])?.[1];   // a day's quota says when it's back (D168)
   const useClaude = async () => {
     setBusy(true);
     try {
@@ -135,7 +136,9 @@ function GeminiStruggling() {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-md bg-[color-mix(in_oklch,var(--warning)_10%,transparent)] px-3 py-2 text-xs text-warning">
       <AlertTriangle className="size-3.5" />
-      <span className="flex-1">Gemini is overloaded and Clipper keeps retrying, so this is slow. It hasn't stopped.</span>
+      <span className="flex-1">{/quota/i.test(miss[1])
+        ? `Gemini's free quota is used up${until ? ` until ${until}` : " for now"}, so the other free models answer, more slowly. It hasn't stopped.`
+        : "Gemini is overloaded and Clipper is asking the next model, so this is slow. It hasn't stopped."}</span>
       {claude && (
         <Tip label="Uses your Claude plan's usage for the rest of this build and later ones.">
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => void useClaude()}>
@@ -152,6 +155,10 @@ function minutesAgo(seconds: number | undefined) {
   return m < 1 ? "just now" : `${m} min ago`;
 }
 
+/** Each AI provider by its own name: a miss on Mistral or NVIDIA was labelled "Claude had a problem" (D171). */
+const PROVIDER: Record<string, string> = { gemini: "Gemini", claude_code: "Claude", anthropic: "Claude", mistral: "Mistral",
+  nvidia: "NVIDIA", groq: "Groq", openrouter: "OpenRouter", ollama: "Ollama" };
+
 /** Which AI does what, always in view: Claude or Gemini was a guess for two videos (D118). */
 function AIStrip() {
   const { data: ai } = useCreateAI();
@@ -166,7 +173,7 @@ function AIStrip() {
     <p className={cn("mt-1 flex flex-wrap items-center gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>
       {claude && !ai.problem ? <CheckCircle2 className="size-3.5 text-success" /> : <AlertTriangle className="size-3.5" />}
       {text}
-      {miss && <span className="text-subtle">{miss[0].split(":")[0] === "gemini" ? "Gemini" : "Claude"} had a problem {minutesAgo(ai.missed_ago_s[miss[0]])}: {miss[1]}</span>}
+      {miss && <span className="text-subtle">{PROVIDER[miss[0].split(":")[0]] ?? miss[0].split(":")[0]} had a problem {minutesAgo(ai.missed_ago_s[miss[0]])}: {miss[1]}</span>}
     </p>
   );
 }
@@ -538,12 +545,12 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
               </Button>
             </Tip>
           )}
-          <Tip label={`Claude plans a picture for each sentence you haven't chosen one for, and checks the ${fact}. Your words stay as written.`}>
+          <Tip label={`The AI plans a picture for each sentence you haven't chosen one for, and checks the ${fact}. Your words stay as written.`}>
             <Button variant="secondary" disabled={busy !== null} onClick={run("plan", () => createApi.plan(video.id), "Pictures planned")}>
               {busy === "plan" ? <Loader2 className="size-4 animate-spin" /> : <Shapes className="size-4" />} {busy === "plan" ? "Planning…" : "Plan pictures"}
             </Button>
           </Tip>
-          <Tip label={`Claude reads the script for ${fact === "physics" ? "physics mistakes" : "factual mistakes"} and tells you; it changes nothing.`}>
+          <Tip label={`The AI reads the script for ${fact === "physics" ? "physics mistakes" : "factual mistakes"} and tells you; it changes nothing.`}>
             <Button variant="secondary" disabled={busy !== null} onClick={run("check", () => createApi.check(video.id), "Checked")}>
               {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : `Check ${fact}`}
             </Button>
@@ -1032,15 +1039,83 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
             <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
           </div>
           <SoundChoice video={video} />
+          <CoverChoice video={video} player={player} />
         </div>
       </div>
       <Fold id={`review-${video.id}`} title="Change parts you don't like" startOpen>
         <ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} />
       </Fold>
+      <Fold id={`captions-${video.id}`} title={`Captions${video.script.captions === false ? " (off)" : ""}`}>
+        <CaptionsEditor video={video} />
+      </Fold>
       <Fold id={`clips-${video.id}`} title={`Your own clips${video.mine?.clips.length ? ` (${video.mine.clips.length})` : ""}`}
               startOpen={(video.mine?.clips.length ?? 0) > 0}>
         <MyClips video={video} wps={wps} onRebuild={onRebuild} busyRebuild={busy === "rebuild"} />
       </Fold>
+    </div>
+  );
+}
+
+/** The cover (D171): the best still, picked by the build, or the frame the player is on. Used on Build again. */
+function CoverChoice({ video, player }: { video: CreateVideo; player: RefObject<HTMLVideoElement | null> }) {
+  const qc = useQueryClient();
+  const at = video.script.cover;
+  const set = (cover: number | null) => void createApi.editStyle(video.id, { cover })
+    .then(() => { void qc.invalidateQueries({ queryKey: ["create"] });
+                  toast.success(cover === null ? "Cover: the best still" : `Cover: the frame at ${cover.toFixed(1)}s`,
+                                { description: "Build again to use it." }); },
+          (err: Error) => toast.error(err.message));
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      <span>Cover: {at == null ? "the best still, picked automatically" : `the frame at ${at.toFixed(1)}s`}</span>
+      <Tip label="Pause the video on the frame you want, then press this">
+        <Button size="sm" variant="secondary" disabled={video.status === "building"}
+                onClick={() => set(Math.round((player.current?.currentTime ?? 0) * 10) / 10)}>Use this frame</Button>
+      </Tip>
+      {at != null && <Button size="sm" variant="ghost" onClick={() => set(null)}>Automatic</Button>}
+    </div>
+  );
+}
+
+/** Captions for this video (D171): on or off, and any sentence's caption written by hand (its words shown in
+ *  place of the spoken ones, spread over the time it's said). Saved as you leave the box; used on Build again. */
+function CaptionsEditor({ video }: { video: CreateVideo }) {
+  const qc = useQueryClient();
+  const beats = video.script.beats;
+  const [draft, setDraft] = useState<Record<number, string>>({});
+  const save = (k: number) => {
+    const text = (draft[k] ?? beats[k].caption ?? "").trim();
+    if (text === (beats[k].caption ?? "")) return;
+    void createApi.part(video.id, { beat: k + 1, caption: text })
+      .then(() => { void qc.invalidateQueries({ queryKey: ["create"] });
+                    toast.success(text ? `Caption ${k + 1} written` : `Caption ${k + 1} back to the spoken words`, { description: "Build again to see it." }); },
+            (err: Error) => toast.error(err.message));
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" className="accent-[var(--color-accent)]" checked={video.script.captions ?? true}
+               disabled={video.status === "building"}
+               onChange={(e) => void createApi.editStyle(video.id, { captions: e.target.checked })
+                 .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))} />
+        Show captions <span className="text-xs text-muted">(changes show on Build again)</span>
+      </label>
+      {(video.script.captions ?? true) && (
+        <>
+          <p className="text-xs text-muted">Each caption shows the spoken words. Write over one to show other words for that sentence; leave it empty for the spoken ones.</p>
+          <ol className="flex flex-col gap-1.5">
+            {beats.map((b, k) => (
+              <li key={k} className="flex items-center gap-2">
+                <span className="tabular w-5 shrink-0 text-right text-xs text-subtle">{k + 1}</span>
+                <input value={draft[k] ?? b.caption ?? ""} placeholder={b.text} aria-label={`Caption for sentence ${k + 1}`}
+                       onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))} onBlur={() => save(k)}
+                       onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                       className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
     </div>
   );
 }

@@ -872,7 +872,17 @@ def frame(v: Visual, t: float, d: float) -> Image.Image:
     """The drawing at `t` of `d` seconds: drawn big on a clear layer, shrunk (a template's drawing scaled
     to fill the board, D162), then chalked onto the board. A sketch is fitted already (sketch.fit)."""
     place = None if v.template == "sketch" else _placement(v.model_dump_json(), round(d, 2))
-    return chalk(_fitted(_ink(v, t, d), place))
+    return chalk(_moved(_fitted(_ink(v, t, d), place), v.scale, v.shift))
+
+
+def _moved(ink: np.ndarray, scale: float, shift: float) -> np.ndarray:
+    """The drawing made bigger or smaller about the board's middle and moved up or down (`shift`, a share of the
+    panel's height), as the user set it (D171). As drawn when both are left alone."""
+    if abs(scale - 1) < 1e-3 and abs(shift) < 1e-3:
+        return ink
+    cx, cy = W / 2, (TOP + BOTTOM) / 2
+    m = np.float32([[scale, 0, cx - scale * cx], [0, scale, cy - scale * cy + shift * H]])
+    return cv2.warpAffine(ink, m, (ink.shape[1], ink.shape[0]), flags=cv2.INTER_LINEAR, borderValue=(0, 0, 0, 0))
 
 
 #: The sketch grid's height now (1000 wide); sketches made before D162 were drawn on a 1000x600 one.
@@ -910,6 +920,10 @@ def focus_plan(v: Visual, words: list[tuple[float, str]], seconds: float) -> lis
                 if j == i or (marks[j].kind == "text" and said[j] is not None and abs(said[j] - at) < 0.9)]
         x0, y0 = min(b[0] for b in near) - 70, min(b[1] for b in near) - 70
         x1, y1 = max(b[2] for b in near) + 70, max(b[3] for b in near) + 70
+        # Where the part is once the drawing is sized and moved by hand (D171).
+        cx, cy, s, dy_ = W / 2, (TOP + BOTTOM) / 2, v.scale, v.shift * H
+        x0, x1 = cx + s * (x0 - cx), cx + s * (x1 - cx)
+        y0, y1 = cy + s * (y0 - cy) + dy_, cy + s * (y1 - cy) + dy_
         if (x1 - x0) * (y1 - y0) > 0.45 * area:
             continue
         out.append(Focus(a=at - 0.15, b=min(at + 1.6, seconds - 1.0), box=(x0, y0, x1, y1)))

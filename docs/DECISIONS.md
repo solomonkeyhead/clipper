@@ -3117,3 +3117,21 @@ the free models, Claude blocked, all used them (magnet and paperclip, battery an
 works and stays as it is. What was wrong was size: asked for 260-420 wide, models gave 120-170, and a magnet and a
 paperclip at either end of a long arrow came out as thumbnails. `sketch.fit` now grows each icon to a third of the
 drawing's span before fitting it to the board (about 210-280 wide), never into the icon beside it.
+
+## D171: a built video's parts, captions and cover can be set by hand
+Marc listed the edit steps still automatic-only on a built Short. Each now has a control on the page, kept in the
+script, and none turns anything else off (D120):
+- Per part, "Adjust" on Shot review: the way in (automatic, cut, whip, zoom; over the video's setting, on the
+  picture's first shot), the cut 0.1 s earlier or later (`Beat.nudge`, up to 1.5 s, never leaving a sentence under
+  0.5 s), and for a drawing its size (70-130%) and place (higher, middle, lower), plus its words: a template's
+  title and labels, a sketch's text marks. A chip on the part says what was set.
+- Captions: a fold on the video with "Show captions" and each sentence's caption text. A written caption is spread
+  over the time that sentence is said; a changed sentence clears its caption and nudge.
+- Cover: "Use this frame" on the player, or Automatic.
+- Drawings made before D162 (old 600 grid) get a notice with "Redraw all N", which asks for new drawings on the
+  next build; Undo on a part keeps its old one.
+- The AI strip names providers ("NVIDIA", not "nvidia"), the Gemini note says until when its quota is out, and
+  tooltips say "The AI" where they named a model.
+The camera endpoint became `/part` (it still takes `camera`). Choices that don't change a shot's pixels (camera,
+way in, notes) are left out of the shot cache key, so changing them rebuilds nothing; the new size and place are in
+it, so every drawing is drawn once more on the first build after this change.

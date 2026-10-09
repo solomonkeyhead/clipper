@@ -186,8 +186,10 @@ def _shots(v: dict, timings: dict | None) -> list[dict]:
     if not timings or v["status"] not in ("built", "failed"):
         return []
     try:
+        from ..create.voice import Timings, nudged
+
         script = Script.model_validate(v["script"])
-        beats = timings["beats"]
+        beats = nudged(script, Timings.model_validate(timings)).beats   # where the cuts fall, nudges and all (D171)
         return [{"beats": [k + 1 for k in g], "start": beats[g[0]][0], "end": beats[g[-1]][1]}
                 for g in spans(script) if g[-1] < len(beats)]
     except (ValueError, KeyError, IndexError, TypeError) as exc:
@@ -468,14 +470,19 @@ def routes(app: FastAPI, publish) -> None:
 
     @app.put("/api/create/videos/{video_id}/edit")
     def create_edit_style(video_id: int, body: dict) -> dict:
-        """The edit's flourishes for one video (D165): zooms and cut-ins on or off, and the transition
-        (auto, cut, whip, zoom). The next build uses them."""
+        """The edit's flourishes for one video (D165): zooms, cut-ins and captions on or off (D171), the transition
+        (auto, cut, whip, zoom), and the cover's moment in seconds (null: the best still). The next build uses them."""
         row = video_or_404(video_id)
         _editable(row)
         script = dict(row["script"])
-        for k in ("zooms", "cut_ins"):
+        for k in ("zooms", "cut_ins", "captions"):
             if k in body:
                 script[k] = bool(body[k])
+        if "cover" in body:
+            try:
+                script["cover"] = None if body["cover"] is None else round(max(0.0, float(body["cover"])), 2)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(400, "cover is a time in seconds, or null for automatic") from exc
         if "transitions" in body:
             if body["transitions"] not in ("auto", "cut", "whip", "zoom"):
                 raise HTTPException(400, "transitions are auto, cut, whip or zoom")
@@ -494,6 +501,11 @@ def routes(app: FastAPI, publish) -> None:
             edited = tidy(Script.model_validate({**row["script"], **(body.get("script") or {})}))
         except ValueError as exc:
             raise HTTPException(400, f"that script can't be read: {exc}") from exc
+        # A new voice comes with new words: cuts nudged for the old one don't apply, nor a caption written for a
+        # sentence that changed (D171).
+        kept = {b.get("text") for b in row["script"].get("beats") or []}
+        edited = edited.model_copy(update={"beats": [b.model_copy(update={"nudge": 0.0, "caption": b.caption if b.text in kept else ""})
+                                                     for b in edited.beats]})
         status = "draft" if row["status"] in ("draft", "approved") else "approved"
         store.update_video(video_id, script={**edited.model_dump(), "take": row["script"].get("take", 1)},
                            status=status, voice="", timings="",
@@ -926,24 +938,67 @@ def routes(app: FastAPI, publish) -> None:
         publish("create.changed", {"id": video_id})
         return {"ok": True}
 
+    @app.post("/api/create/videos/{video_id}/part")
     @app.post("/api/create/videos/{video_id}/camera")
-    def create_camera(video_id: int, body: dict) -> dict:
-        """The camera on a part's footage (D164): "" lets the build choose, else push, pull, drift or still.
-        Only that shot is made again on the next build; the footage stays."""
+    def create_part(video_id: int, body: dict) -> dict:
+        """One part of a built video set by hand (D164, D171), each field optional: the camera on its footage ("" the
+        build's choice, else push, pull, drift, still), how it comes in (transition: "", cut, whip, zoom), a
+        drawing's size (scale) and place (shift, + down), its words (title, labels; texts: a sketch's words in
+        order), where the cut to it falls (nudge, seconds), and one sentence's caption (caption, for `beat`).
+        Only what changed is made again on the next build; the footage and drawing stay."""
         from ..create.build import MOTIONS
 
         row = video_or_404(video_id)
         _editable(row)
         script = _script(row)
         beat = _beat(body, len(script.beats))
-        camera = str(body.get("camera") or "")
-        if camera and camera not in MOTIONS:
-            raise HTTPException(400, f"camera is one of {', '.join(MOTIONS)}, or empty for automatic")
         group, _ = _part(row, script, beat)
         beats = list(script.beats)
         b = beats[group[0]]
-        beats[group[0]] = b.model_copy(update={"visual": b.visual.model_copy(
-            update={"camera": camera, "restyle": camera != b.visual.camera or b.visual.restyle})})
+        v = b.visual
+        change: dict = {}
+        if "camera" in body:
+            camera = str(body.get("camera") or "")
+            if camera and camera not in MOTIONS:
+                raise HTTPException(400, f"camera is one of {', '.join(MOTIONS)}, or empty for automatic")
+            change["camera"] = camera
+        if "transition" in body:
+            way = str(body.get("transition") or "")
+            if way not in ("", "cut", "whip", "zoom"):
+                raise HTTPException(400, "transition is cut, whip, zoom, or empty for automatic")
+            change["transition"] = way
+        try:
+            if "scale" in body:
+                change["scale"] = round(min(1.5, max(0.5, float(body["scale"]))), 2)
+            if "shift" in body:
+                change["shift"] = round(min(0.3, max(-0.3, float(body["shift"]))), 3)
+            nudge = round(min(1.5, max(-1.5, float(body["nudge"]))), 2) if "nudge" in body else None
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "scale, shift and nudge are numbers") from exc
+        words = lambda x: " ".join(str(x or "").split())[:80]   # noqa: E731
+        if "title" in body:
+            change["title"] = words(body["title"])
+        if "labels" in body:
+            change["labels"] = [words(x) for x in body.get("labels") or []][:8]
+        if "texts" in body and v.sketch:
+            texts = iter([words(x) for x in body.get("texts") or []])
+            marks = [m.model_copy(update={"text": next(texts, m.text) or m.text}) if m.kind == "text" else m
+                     for m in v.sketch.marks]
+            change["sketch"] = v.sketch.model_copy(update={"marks": marks})
+        updated = {k: x for k, x in change.items() if getattr(v, k) != x}
+        if updated:
+            beats[group[0]] = b.model_copy(update={"visual": v.model_copy(update={**updated, "restyle": True})})
+        if nudge is not None and nudge != b.nudge:
+            if group[0] == 0:
+                raise HTTPException(400, "the first part starts with the video; its cut can't move")
+            beats[group[0]] = beats[group[0]].model_copy(update={
+                "nudge": nudge, "visual": beats[group[0]].visual.model_copy(update={"restyle": True})})
+        if "caption" in body:
+            text = " ".join(str(body.get("caption") or "").split())[:200]
+            if text != beats[beat - 1].caption:
+                beats[beat - 1] = beats[beat - 1].model_copy(update={"caption": text})
+                root = beats[group[0]]
+                beats[group[0]] = root.model_copy(update={"visual": root.visual.model_copy(update={"restyle": True})})
         _put_script(row, script.model_copy(update={"beats": beats}))
         publish("create.changed", {"id": video_id})
         return {"ok": True}

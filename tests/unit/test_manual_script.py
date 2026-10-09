@@ -746,3 +746,64 @@ def test_a_parts_camera_is_set_from_the_page_and_the_build_clears_the_change(cli
     build.chosen.clear()
     after = build.remember(Script.model_validate(store.video(vid)["script"])).beats[0].visual
     assert after.camera == "drift" and not after.restyle
+
+
+def _built(store, beats: list[Beat], cuts: list[tuple[float, float]]) -> int:
+    vid = store.add_video(None, Script(title="t", beats=beats).model_dump())
+    store.update_video(vid, status="built", clip_id=1,
+                       timings={"words": [], "beats": cuts, "duration": cuts[-1][1], "matched": 1.0})
+    return vid
+
+
+def test_a_part_is_set_by_hand_and_only_counts_as_a_change_when_it_changes(client):
+    """D171: the way in, a drawing's size, place and words, the cut and a sentence's caption, from the page."""
+    from clipper.create import store
+    from clipper.create.sketch import Mark, Sketch
+
+    drawing = Visual(kind="diagram", template="sketch", sketch=Sketch(grid=900, marks=[
+        Mark(kind="icon", text="ear", xy=[500, 400, 300]), Mark(kind="text", text="air", xy=[500, 700])]))
+    vid = _built(store, [Beat(text="One two three.", visual=Visual(kind="stock", query="a")),
+                         Beat(text="Four five six.", visual=drawing)], [(0.0, 2.0), (2.0, 4.0)])
+    post = lambda **b: client.post(f"/api/create/videos/{vid}/part", json=b)   # noqa: E731
+    assert post(beat=2, transition="spin").status_code == 400
+    assert post(beat=1, nudge=0.3).status_code == 400                            # the first part starts the video
+    assert post(beat=2, transition="whip", scale=3, shift=0.1, texts=["sound"], nudge=-0.4).status_code == 200
+    assert post(beat=1, caption="  One,  two,  three!  ").status_code == 200
+    s = Script.model_validate(store.video(vid)["script"])
+    v = s.beats[1].visual
+    assert v.transition == "whip" and v.scale == 1.5 and v.shift == 0.1 and v.restyle
+    assert [m.text for m in v.sketch.marks] == ["ear", "sound"] and s.beats[1].nudge == -0.4
+    assert s.beats[0].caption == "One, two, three!" and s.beats[0].visual.restyle
+    view = next(x for x in client.get("/api/create").json()["videos"] if x["id"] == vid)
+    assert view["shots"][1]["start"] == 1.6                                      # the list shows the nudged cut
+
+
+def test_nudged_cuts_and_written_captions_reach_the_edit():
+    from clipper.create import build
+    from clipper.create.compose import Shot
+    from clipper.create.voice import TimedWord, Timings, nudged
+
+    s = Script(title="t", beats=[Beat(text="One two."), Beat(text="Three four.", nudge=-5.0, caption="3 4 five"),
+                                 Beat(text="Six.", visual=Visual(transition="zoom"))])
+    words = [TimedWord(text=w, start=k, end=k + 0.8) for k, w in enumerate(["One", "two.", "Three", "four.", "Six."])]
+    t = Timings(words=words, beats=[(0.0, 2.0), (2.0, 4.0), (4.0, 5.6)], duration=5.6, matched=1.0)
+    assert nudged(s, t).beats == [(0.0, 0.5), (0.5, 4.0), (4.0, 5.6)]           # kept at least half a second
+    shown = build.caption_words(s, t)
+    assert [w.text for w in shown] == ["One", "two.", "3", "4", "five", "Six."]
+    assert shown[2].start == 2.0 and shown[4].end == 3.8                         # over the time it's said
+    shots = [Shot(path=None, start=k * 30, frames=30) for k in range(4)]
+    build.ways_in(shots, s, [0, 1, 1, 2])
+    assert [x.enter for x in shots] == ["cut", "cut", "cut", "zoom"]             # only where its picture starts
+
+
+def test_a_drawing_can_be_made_bigger_and_moved():
+    import numpy as np
+
+    from clipper.create.diagrams import H, W, _moved
+
+    ink = np.zeros((H, W, 4), np.uint8)
+    ink[500:520, 530:550] = 255
+    assert _moved(ink, 1.0, 0.0) is ink
+    down = _moved(ink, 1.0, 0.1)
+    assert down[500 + round(0.1 * H) + 5, 540, 3] == 255 and down[505, 540, 3] == 0
+    assert (_moved(ink, 1.5, 0.0)[..., 3] > 0).sum() > (ink[..., 3] > 0).sum() * 2

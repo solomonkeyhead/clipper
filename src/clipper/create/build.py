@@ -34,7 +34,7 @@ from . import compose, diagrams, stock, store, userclips
 from .ai import CreateError
 from .script import FIRST_DIAGRAM_WORDS, Script, Visual, spans
 from .sketch import draw_all
-from .voice import Timings, folder
+from .voice import Timings, folder, nudged
 
 log = get_logger(__name__)
 
@@ -230,7 +230,12 @@ def choose_punches(script: Script, timings: Timings) -> dict[int, list[float]]:
 
 RENDER_VERSION = 3   # 2: camera moves, punch-ins and one footage look (D156); 3: the picture panel (D162)
 used_shots: set[Path] = set()
-_RUNTIME = {"picked", "avoid", "redo", "previous", "manual", "hold", "clip", "clip_start", "fill"}
+#: What a drawing's shot doesn't depend on: set by the app, or used only when the shots are put together (a part's
+#: way in, D171). A change to one of these never draws the drawing again.
+_RUNTIME = {"picked", "avoid", "redo", "previous", "manual", "hold", "clip", "clip_start", "fill", "notice", "wish",
+            "camera", "restyle", "transition"}
+#: The sentence whose picture each of this build's shots shows (the picture's first sentence), set by shots() (D171).
+part_owner: list[int] = []
 
 
 class _TooDark(Exception):
@@ -574,7 +579,9 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
         end = starts[n + 1] if n + 1 < len(starts) else len(made)
         picture_times[n] = (at, "drawing" if any(m.name.startswith("diagram") or "_diagram" in m.name or "_sketch" in m.name
                                                  for m in made[starts[n]:end]) else "other")
-    return _loop_back(made, starts, groups, script, timings, work)
+    final = _loop_back(made, starts, groups, script, timings, work)
+    part_owner[:] = [groups[max(n for n, s in enumerate(starts) if s <= k)][0] for k in range(len(final))]
+    return final
 
 
 def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], script: Script, timings: Timings,
@@ -689,6 +696,7 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
         shots.append(compose.Shot(path=path, start=at, frames=n, kind=kind))
         at += n
     compose.transitions(shots, seed, script.transitions)
+    ways_in(shots, script, part_owner)
     palette = diagrams.PALETTES.get(channel.board) or diagrams.PALETTES["slate"]
     edit = compose.Edit(shots=shots, total=total, board=compose.base_board(palette["board"], palette["chalk"]))
     plan = character_plan(script, timings, channel, punchline, seed)
@@ -699,7 +707,7 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
                   if w.text.strip(".,!?;:'\"").lower() == beat.emphasis.strip(".,!?;:'\"").lower()}
         edit.presenter = compose.Presenter(shows, timings.words, strong, total)
         edit.cutaways = cutaways(script, timings, punchline, total) if script.cut_ins else []
-    edit.captions = compose.Captions(timings.words, accent=palette["yellow"])
+    edit.captions = compose.Captions(caption_words(script, timings), accent=palette["yellow"]) if script.captions else None
     hook = (script.hook or script.title) if rc.show_hook_text else ""
     if hook:
         edit.hook = compose.hook_image(hook)
@@ -740,6 +748,39 @@ def _words_of(timings: Timings, script: Script, i: int) -> list:
     return timings.words[k:k + len(script.beats[i].text.split())]
 
 
+def ways_in(shots: list, script: Script, owners: list[int]) -> None:
+    """A part's own way in, chosen by hand, over the video's (D171): on the first shot of its picture only."""
+    if len(owners) != len(shots):
+        return
+    for k in range(1, len(shots)):
+        pick = script.beats[owners[k]].visual.transition
+        if owners[k] != owners[k - 1] and pick in ("cut", "whip", "zoom"):
+            shots[k].enter = pick
+
+
+def caption_words(script: Script, timings: Timings) -> list:
+    """The words the captions show (D171): the voice's, except where the user wrote a sentence's caption, whose
+    words are spread over the time that sentence is said, longer words a little longer."""
+    from .voice import TimedWord
+
+    if not any(b.caption.strip() for b in script.beats):
+        return timings.words
+    out = []
+    for i, beat in enumerate(script.beats):
+        said = _words_of(timings, script, i)
+        mine = beat.caption.split()
+        if not mine or not said:
+            out += said
+            continue
+        a, b = said[0].start, said[-1].end
+        weights = [len(w) + 2 for w in mine]
+        unit, at = (b - a) / sum(weights), a
+        for w, weight in zip(mine, weights, strict=True):
+            out.append(TimedWord(text=w, start=round(at, 3), end=round(at + weight * unit, 3)))
+            at += weight * unit
+    return out
+
+
 def _campaign(channel: channels.Channel) -> None:
     """The channel's own campaign, so its videos post and sync like any clip."""
     from ..studio.server import campaigns_dir
@@ -776,6 +817,7 @@ def _build(video_id: int, progress) -> int:
         raise CreateError("drop the voiceover in first")
     script, timings = Script.model_validate(row["script"]), Timings.model_validate(row["timings"])
     script = retry_opening_footage(script)
+    timings = nudged(script, timings)
     channel, config = channels.load(), Config.load()
     diagrams.use_palette(channel.board)   # the channel's board colours, for the sketches' review too (D156)
     notes: list[str] = []
@@ -811,7 +853,8 @@ def _build(video_id: int, progress) -> int:
     out = assemble(parts, Path(row["voice"]), script, timings, work / "final.mp4", channel, config)
     if progress:
         progress("Choosing the cover", 90)
-    cover_at = pick(out, timings.duration)
+    # The moment the user chose for the cover, else the best still (D171).
+    cover_at = script.cover if script.cover is not None and 0 <= script.cover < timings.duration else pick(out, timings.duration)
     if cover_at is not None:
         put_first(out, cover_at, hook=script.title, config=config, work_dir=work, fps=FPS)
     _campaign(channel)

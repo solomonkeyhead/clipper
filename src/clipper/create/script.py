@@ -74,6 +74,11 @@ class Visual(BaseModel):
     previous: dict | None = None
     wish: str = ""              # what the user said they'd rather see, for the footage searches (D129)
     notice: str = ""            # what the last build couldn't do for this picture, shown on it (D129)
+    # Set by hand on a built video (D171): how this picture comes in ("" the build's choice, "cut", "whip", "zoom"),
+    # and a drawing's size and place on the board (1 and 0: as drawn; shift is a share of the panel's height, + down).
+    transition: str = ""
+    scale: float = 1.0
+    shift: float = 0.0
 
 
 class Beat(BaseModel):
@@ -81,6 +86,10 @@ class Beat(BaseModel):
     emphasis: str = ""              # the one word to highlight
     pose: str = ""                  # one of the channel's `poses`, shown for this sentence (D158)
     visual: Visual = Field(default_factory=Visual)
+    # Set by hand on a built video (D171): the words the captions show for this sentence instead of the spoken ones
+    # (spread over the time it is said), and how many seconds earlier (-) or later (+) the cut to it falls.
+    caption: str = ""
+    nudge: float = 0.0
 
 
 class Script(BaseModel):
@@ -102,6 +111,9 @@ class Script(BaseModel):
     zooms: bool = True
     cut_ins: bool = True
     transitions: str = "auto"
+    # Captions on or off, and the cover's moment in seconds (None: the build picks the best still) (D171).
+    captions: bool = True
+    cover: float | None = None
 
     @property
     def text(self) -> str:
@@ -115,7 +127,7 @@ class Script(BaseModel):
 #: The fields of a picture only the app sets (the user's clips, what a build picked): left out of
 #: the writer's schema, so it isn't shown ~12 fields it can't use and can't invent them.
 APP_ONLY = {"sketch", "clip", "clip_start", "fill", "manual", "picked", "avoid", "redo", "previous", "wish", "notice",
-            "camera", "restyle"}
+            "camera", "restyle", "transition", "scale", "shift"}
 _WriterVisual = create_model("WriterVisual", **{k: (f.annotation, f) for k, f in Visual.model_fields.items()
                                                 if k not in APP_ONLY})
 _WriterBeat = create_model("WriterBeat", text=(str, ...), emphasis=(str, ""), pose=(str, ""),

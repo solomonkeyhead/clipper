@@ -834,8 +834,8 @@ export interface paths {
         get?: never;
         /**
          * Create Edit Style
-         * @description The edit's flourishes for one video (D165): zooms and cut-ins on or off, and the transition
-         *     (auto, cut, whip, zoom). The next build uses them.
+         * @description The edit's flourishes for one video (D165): zooms, cut-ins and captions on or off (D171), the transition
+         *     (auto, cut, whip, zoom), and the cover's moment in seconds (null: the best still). The next build uses them.
          */
         put: operations["create_edit_style_api_create_videos__video_id__edit_put"];
         post?: never;
@@ -1234,11 +1234,38 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create Camera
-         * @description The camera on a part's footage (D164): "" lets the build choose, else push, pull, drift or still.
-         *     Only that shot is made again on the next build; the footage stays.
+         * Create Part
+         * @description One part of a built video set by hand (D164, D171), each field optional: the camera on its footage ("" the
+         *     build's choice, else push, pull, drift, still), how it comes in (transition: "", cut, whip, zoom), a
+         *     drawing's size (scale) and place (shift, + down), its words (title, labels; texts: a sketch's words in
+         *     order), where the cut to it falls (nudge, seconds), and one sentence's caption (caption, for `beat`).
+         *     Only what changed is made again on the next build; the footage and drawing stay.
          */
-        post: operations["create_camera_api_create_videos__video_id__camera_post"];
+        post: operations["create_part_api_create_videos__video_id__camera_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/create/videos/{video_id}/part": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Part
+         * @description One part of a built video set by hand (D164, D171), each field optional: the camera on its footage ("" the
+         *     build's choice, else push, pull, drift, still), how it comes in (transition: "", cut, whip, zoom), a
+         *     drawing's size (scale) and place (shift, + down), its words (title, labels; texts: a sketch's words in
+         *     order), where the cut to it falls (nudge, seconds), and one sentence's caption (caption, for `beat`).
+         *     Only what changed is made again on the next build; the footage and drawing stay.
+         */
+        post: operations["create_part_api_create_videos__video_id__part_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6178,7 +6205,46 @@ export interface operations {
             };
         };
     };
-    create_camera_api_create_videos__video_id__camera_post: {
+    create_part_api_create_videos__video_id__camera_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_part_api_create_videos__video_id__part_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -168,3 +168,16 @@ def align(script: Script, words_heard: list[TimedWord], audio_seconds: float) ->
                       for i in range(1, len(script.beats))]
     beats = [(round(s, 3), round(starts[i + 1] if i + 1 < len(starts) else duration, 3)) for i, s in enumerate(starts)]
     return Timings(words=words, beats=beats, duration=duration, matched=round(matched, 3))
+
+
+def nudged(script: Script, timings: Timings) -> Timings:
+    """The cuts moved where the user nudged them (D171): sentence i's picture comes in `nudge` seconds earlier or
+    later, the one before ending there; never leaving a picture under half a second. The words keep their times."""
+    if len(timings.beats) != len(script.beats) or not any(b.nudge for b in script.beats[1:]):
+        return timings
+    beats = [list(x) for x in timings.beats]
+    for i in range(1, len(beats)):
+        if script.beats[i].nudge:
+            at = min(max(beats[i][0] + script.beats[i].nudge, beats[i - 1][0] + 0.5), beats[i][1] - 0.5)
+            beats[i - 1][1] = beats[i][0] = round(at, 3)
+    return timings.model_copy(update={"beats": [tuple(x) for x in beats]})

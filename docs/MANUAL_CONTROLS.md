@@ -23,11 +23,11 @@ is the order I'd build them.
 | Who does each AI job | Gemini first for script, check, review and footage; Claude draws (`llm.create_gemini_jobs`, D136) | Switches in Settings per job | Gap (config only) | S |
 | Which stock clip | The AI judge picks one of ~6 | "New footage" opens a picker: searches written for the part, both libraries, every clip scored, best first; pick one (or several for a long part), or let Clipper choose | **Done** (D129) | |
 | Redo one picture | "New pictures" redoes all of them | On a built video: per part, "New footage" or "New drawing" (with optional words), undo, and a rebuild that keeps every other part as it was | **Done** (D125) | |
-| Diagram contents | Templates and sketches are generated | Edit labels, numbers, arrows and colours of a diagram; move or delete a sketch's words | Gap | L |
+| Diagram contents | Templates and sketches are generated | A template's title and labels, a sketch's words, per part (D171); numbers, arrows and colours | Partial | M |
 | Framing of footage | Faces, else the judge's guess | A slider per shot for where the crop sits; push-in on or off | Gap | M |
-| Shot lengths and cuts | Cuts land where each sentence starts; footage over 4.5s is split | Nudge a cut earlier or later; set the longest a shot may last | Gap | M |
-| Voice timing | Speech recognition times every word | Nudge a sentence's start; fix a misheard word | Gap | M |
-| Captions | One style from settings | Pick the style, position or none per video; edit caption text | Gap | M |
+| Shot lengths and cuts | Cuts land where each sentence starts; footage over 4.5s is split | Nudge a cut earlier or later per part (D171); set the longest a shot may last | Partial | S |
+| Voice timing | Speech recognition times every word | Nudge a sentence's start (D171); captions show the script's spelling or your own text, so a misheard word never shows | Done | - |
+| Captions | One style from settings | On or off and each sentence's text per video (D171); style and position | Partial | M |
 | On-screen hook | The writer's 6-word hook (else the title) for 1.5 s (D155) | Its own text per video in the script editor; length and on/off | Partial | S |
 | Script shape and ending | Taken in turn per script (D155) | Pick the shape and ending before writing | Gap | S |
 | Editor's read of a script | Another AI lists fixes and the script is rewritten once (D155); shown in the notes | Edit the script; skip the editor | Gap | S |
@@ -35,16 +35,16 @@ is the order I'd build them.
 | Last shot | The opening footage again under the last sentence, so it loops (D155) | Pick the last picture yourself (any manual pick stops it) | Done | - |
 | Camera moves and punch-ins | Moves in turn; punch-ins on highlighted words (D156, D162) | The move per sentence in the script editor, and per part on a built video (D164); punch-ins (Zoom-ins) off per video (D165) | Done | - |
 | Cut-ins on the presenter | The camera cuts in on his face on reaction poses and the punchline's last word (D162) | Off per video (D165); pick the sentences | Partial | S |
-| Transitions | Cut, whip or zoom where the kind of picture changes (D162) | Per video: automatic, plain cuts, whip or zoom (D165); pick per cut | Partial | S |
+| Transitions | Cut, whip or zoom where the kind of picture changes (D162) | Per video: automatic, plain cuts, whip or zoom (D165); per part (D171) | Done | - |
 | Photos among the footage | Up to 3 photos offered with each part's clips, shown with a camera move (D163) | Pick or pass over them in the footage picker | Done | - |
-| Drawing size on the board | A template's drawing scaled to fill the board (D162) | A size or position per drawing | Gap | S |
+| Drawing size on the board | A template's drawing scaled to fill the board (D162) | Size and place per drawing (D171) | Done | - |
 | Things in a sketch | The sketcher places icons from a set of 234 (D162) | "Drawing I describe", naming the things to draw | Partial | - |
 | Pictures, highlights and poses | The director, a second AI pass on the final words, plans them (D164) | Each one per sentence; Plan pictures fills only the ones left alone | Done | - |
 | Which free AI answers | Gemini 3.8 Flash, older Gemini, then Mistral, Groq, NVIDIA, OpenRouter with a key (D162, D164) | Model names in config (`llm.create_gemini_models`, `llm.create_free_models`) | Gap (config only) | S |
 | Character, sign-off, board colours | Channel settings (D156) | Per video on or off | Partial | S |
 | Poses on sentences | The writer tags up to 4 sentences (D158) | Pose picker on every sentence; poses per channel | Done | - |
 | Music and chalk sounds | Off; Clipper's own tune or your tracks folder (D156) | On, off or channel default per video | Done | - |
-| Cover frame | Best still picked automatically | Scrub and choose the frame | Gap | S |
+| Cover frame | Best still picked automatically | Pause the player and "Use this frame" (D171) | Done | - |
 | Watermark | Channel setting | On/off and corner per video | Gap | S |
 | Loudness and music | Always normalised; no music | Normalisation off or a level; an optional music bed with ducking under the voice | Gap | M |
 | Which AI writes | Claude plan, else key, else Gemini | A Settings choice (Claude plan, API key, Gemini), model picker, and the "only Claude" switch (`create_claude_only`) | Gap | S |
@@ -72,12 +72,10 @@ is the order I'd build them.
 
 1. Swap the stock clip per sentence (the footage judge is the weakest automatic step, and a bad pick
    is the most visible thing in a Short).
-2. Captions per video and per clip: style, position, off, edit text.
+2. Captions per clip: style, position, off (Create's text and off are done, D171).
 3. Framing override for footage and clips.
 4. The AI choice in Settings, with the "only Claude" switch.
-5. Cover frame picker.
-6. Cut and voice timing nudges.
-7. Diagram label editing.
+5. Cover frame per clip (Create has it, D171).
 
 ## For anyone adding a feature
 

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Film, Loader2, Play, RefreshCw, Search, Shapes, Undo2, Wand2, X } from "lucide-react";
+import { Check, Film, Loader2, Play, RefreshCw, Search, Shapes, SlidersHorizontal, Undo2, Wand2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createApi, useCreate, type CreateVideo, type CreateVisual, type FootageOffer } from "@/api/client";
@@ -8,6 +8,20 @@ import { cn } from "@/lib/utils";
 
 /** The camera on a sentence's footage (D164): automatic, or one move. */
 export const CAMERAS: [string, string][] = [["", "camera: auto"], ["push", "push in"], ["pull", "pull out"], ["drift", "drift across"], ["still", "hold still"]];
+
+/** How a part comes in, a drawing's size and its place on the board, set by hand (D171). */
+const WAYS: [string, string][] = [["", "way in: auto"], ["cut", "plain cut"], ["whip", "whip in"], ["zoom", "zoom in"]];
+const SIZES: [number, string][] = [[0.7, "size 70%"], [0.85, "size 85%"], [1, "size as drawn"], [1.15, "size 115%"], [1.3, "size 130%"]];
+const PLACES: [number, string][] = [[-0.12, "higher"], [0, "in the middle"], [0.12, "lower"]];
+
+type Mark = { kind: string; text?: string };
+const sketchOf = (v: CreateVisual) => v.sketch as { grid?: number; marks?: Mark[] } | null | undefined;
+/** The words on a drawing a user can change: a sketch's labels, or a template's title and labels. */
+function wordsOf(v: CreateVisual): { title: string | null; words: string[] } {
+  if (v.kind !== "diagram") return { title: null, words: [] };
+  if (v.template === "sketch") return { title: null, words: (sketchOf(v)?.marks ?? []).filter((m) => m.kind === "text").map((m) => m.text ?? "") };
+  return { title: v.title, words: v.template === "card" ? [] : v.labels ?? [] };
+}
 
 /** What a picture is, in a few words. */
 function describe(v: CreateVisual): string {
@@ -180,6 +194,39 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
     }
   };
 
+  const [adjusting, setAdjusting] = useState<number | null>(null);
+  /** One part set by hand (D171); only what changed is made again. */
+  const setPart = async (beat: number, body: Omit<Parameters<typeof createApi.part>[1], "beat">, done = "Set") => {
+    setBusy(`${beat}-part`);
+    try {
+      await createApi.part(video.id, { beat, ...body });
+      await qc.invalidateQueries({ queryKey: ["create"] });
+      toast.success(done, { description: "Rebuild to see it: only this part is made again." });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  // Drawings made before the new style (D162): on the old, shorter board, without the icons.
+  const old = (video.shots ?? []).map((s) => s.beats[0]).filter((n) => {
+    const v = beats[n - 1]?.visual;
+    const sk = v && sketchOf(v);
+    return v?.kind === "diagram" && v.template === "sketch" && !v.redo && !!sk?.marks?.length && (sk.grid ?? 600) < 900;
+  });
+  const redrawOld = async () => {
+    setBusy("old");
+    try {
+      for (const n of old) await createApi.redo(video.id, { beat: n, want: "drawing", note: "" });
+      await qc.invalidateQueries({ queryKey: ["create"] });
+      toast.success(`${old.length} drawing${old.length === 1 ? "" : "s"} to draw again`, { description: "Rebuild to draw them. Undo on a part keeps its old drawing." });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const setCamera = async (beat: number, camera: string) => {
     setBusy(`${beat}-camera`);
     try {
@@ -213,6 +260,15 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
           {pending ? `Rebuild with ${pending} change${pending === 1 ? "" : "s"}` : "No changes yet"}
         </Button>
       </div>
+      {drawings && old.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-2.5 text-xs text-muted">
+          <span className="flex-1">{old.length === 1 ? "One drawing was" : `${old.length} drawings were`} made before the new style: smaller on the board,
+            without the ready-drawn objects. Drawing {old.length === 1 ? "it" : "them"} again uses a little of your AI quota on the next build.</span>
+          <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => void redrawOld()}>
+            {busy === "old" ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} Redraw {old.length === 1 ? "it" : `all ${old.length}`}
+          </Button>
+        </div>
+      )}
       {unsaved && (
         <p className="rounded-md border border-warning/40 p-2.5 text-xs text-warning">
           This video was built before Clipper kept its footage, so the next build picks footage again for every footage
@@ -242,7 +298,11 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                   {v.redo && (
                     <Chip tone="accent">{v.kind !== "stock" ? "new drawing" : v.picked?.length ? "your footage" : "new footage"} on the next build</Chip>
                   )}
-                  {v.restyle && !v.redo && <Chip tone="accent">new camera on the next build</Chip>}
+                  {v.restyle && !v.redo && <Chip tone="accent">changed on the next build</Chip>}
+                  {first > 1 && v.transition && <Chip>{WAYS.find(([k]) => k === v.transition)?.[1]}</Chip>}
+                  {!!beats[first - 1]?.nudge && <Chip>cut {(beats[first - 1].nudge ?? 0) > 0 ? "later" : "earlier"} by {Math.abs(beats[first - 1].nudge ?? 0).toFixed(1)}s</Chip>}
+                  {v.kind === "diagram" && (v.scale ?? 1) !== 1 && <Chip>{SIZES.find(([k]) => k === v.scale)?.[1] ?? `size ${Math.round((v.scale ?? 1) * 100)}%`}</Chip>}
+                  {v.kind === "diagram" && !!v.shift && <Chip>{v.shift < 0 ? "higher" : "lower"}</Chip>}
                 </div>
                 {v.notice && <p className="text-xs text-warning">{v.notice}</p>}
                 <p className="line-clamp-2 text-sm">{text}</p>
@@ -272,6 +332,12 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                       </select>
                     </Tip>
                   )}
+                  <Tip label="How it comes in, where its cut falls, and a drawing's size, place and words">
+                    <Button size="sm" variant={adjusting === first ? "primary" : "ghost"} aria-expanded={adjusting === first}
+                            disabled={rebuilding} onClick={() => setAdjusting((a) => (a === first ? null : first))}>
+                      <SlidersHorizontal className="size-3.5" /> Adjust
+                    </Button>
+                  </Tip>
                   {v.previous && (
                     <Tip label="Keep what this part had">
                       <Button size="sm" variant="ghost" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "undo")}>
@@ -280,6 +346,10 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                     </Tip>
                   )}
                 </div>
+                {adjusting === first && (
+                  <PartAdjust key={`${first}-${video.updated_at ?? ""}`} first={first} v={v} nudge={beats[first - 1]?.nudge ?? 0}
+                              busy={busy !== null || rebuilding} onSet={(body, done) => void setPart(first, body, done)} />
+                )}
                 {picking === first && (
                   <FootagePicker video={video} beat={first} wish={notes[first] ?? ""}
                                  setWish={(w) => setNotes((n) => ({ ...n, [first]: w }))}
@@ -292,6 +362,71 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
         })}
       </ol>
       <p className={cn("text-xs text-subtle")}>New drawings and footage judging use a little of your AI quota when you rebuild.</p>
+    </div>
+  );
+}
+
+type PartBody = Omit<Parameters<typeof createApi.part>[1], "beat">;
+
+/** The rest of a part, set by hand (D171): how it comes in, where its cut falls, and a drawing's size, place
+ *  and words. Each change is saved at once and counts as a change for the rebuild. */
+function PartAdjust({ first, v, nudge, busy, onSet }: {
+  first: number; v: CreateVisual; nudge: number; busy: boolean; onSet: (body: PartBody, done?: string) => void;
+}) {
+  const shown = wordsOf(v);
+  const [title, setTitle] = useState(shown.title ?? "");
+  const [words, setWords] = useState(shown.words);
+  const edited = title !== (shown.title ?? "") || words.some((w, k) => w !== shown.words[k]);
+  const select = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  const input = "h-8 min-w-32 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  const step = (by: number) => onSet({ nudge: Math.round((nudge + by) * 10) / 10 },
+                                     `Cut ${nudge + by === 0 ? "back where the voice put it" : `${Math.abs(nudge + by).toFixed(1)}s ${nudge + by > 0 ? "later" : "earlier"}`}`);
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-1 p-2.5" data-testid="part-adjust">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+        {first > 1 && (
+          <>
+            <select aria-label={`Way in, part ${first}`} value={v.transition ?? ""} disabled={busy} className={select}
+                    onChange={(e) => onSet({ transition: e.target.value }, "Way in set")}>
+              {WAYS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+            <span className="flex items-center gap-1">
+              <Tip label="Move the cut to this part earlier"><Button size="sm" variant="secondary" disabled={busy || nudge <= -1.5} onClick={() => step(-0.1)}>−0.1s</Button></Tip>
+              <span className="tabular w-24 text-center">cut {nudge === 0 ? "as voiced" : `${nudge > 0 ? "+" : ""}${nudge.toFixed(1)}s`}</span>
+              <Tip label="Move the cut to this part later"><Button size="sm" variant="secondary" disabled={busy || nudge >= 1.5} onClick={() => step(0.1)}>+0.1s</Button></Tip>
+            </span>
+          </>
+        )}
+        {v.kind === "diagram" && (
+          <>
+            <select aria-label={`Drawing size, part ${first}`} value={SIZES.some(([k]) => k === (v.scale ?? 1)) ? v.scale ?? 1 : 1}
+                    disabled={busy} className={select} onChange={(e) => onSet({ scale: Number(e.target.value) }, "Size set")}>
+              {SIZES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+            <select aria-label={`Drawing place, part ${first}`} value={PLACES.some(([k]) => k === (v.shift ?? 0)) ? v.shift ?? 0 : 0}
+                    disabled={busy} className={select} onChange={(e) => onSet({ shift: Number(e.target.value) }, "Place set")}>
+              {PLACES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+          </>
+        )}
+        {first === 1 && v.kind !== "diagram" && <span>The first part starts with the video: nothing to set here but the camera.</span>}
+      </div>
+      {(shown.title !== null || shown.words.length > 0) && (
+        <form className="flex flex-wrap items-center gap-1.5" onSubmit={(e) => {
+          e.preventDefault();
+          onSet(v.template === "sketch" ? { texts: words } : { title, labels: words }, "Words changed");
+        }}>
+          {shown.title !== null && (
+            <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.stopPropagation()}
+                   aria-label="The drawing's title" placeholder="Title" className={input} />
+          )}
+          {words.map((w, k) => (
+            <input key={k} value={w} onChange={(e) => setWords((ws) => ws.map((x, j) => (j === k ? e.target.value : x)))}
+                   onKeyDown={(e) => e.stopPropagation()} aria-label={`Word ${k + 1} on the drawing`} className={input} />
+          ))}
+          <Button type="submit" size="sm" variant="secondary" disabled={busy || !edited}>Save words</Button>
+        </form>
+      )}
     </div>
   );
 }
