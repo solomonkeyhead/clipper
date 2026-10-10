@@ -308,7 +308,7 @@ function YourOwn({ wps }: { wps: number }) {
 
 function Ideas({ topics }: { topics: CreateTopic[] }) {
   const qc = useQueryClient();
-  const [busy, setBusy] = useState<number | "more" | null>(null);
+  const [busy, setBusy] = useState<number | "more" | "mine" | null>(null);
   const [steer, setSteer] = useState("");
   const [find, setFind] = useState("");
   const words = find.toLowerCase().split(/\s+/).filter(Boolean);
@@ -322,6 +322,22 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
       await refresh();
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const [mine, setMine] = useState("");
+  const [mineAngle, setMineAngle] = useState("");
+  /** Your own idea: onto the board, and written at once (D191). */
+  const writeMine = async () => {
+    setBusy("mine");
+    try {
+      const { id } = await createApi.ownIdea(mine, mineAngle);
+      await createApi.script(id);
+      setMine(""); setMineAngle("");
+      await refresh();
+    } catch (e) {
+      toast.error("Couldn't write it", { description: (e as Error).message });
     } finally {
       setBusy(null);
     }
@@ -343,6 +359,19 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="size-4 text-accent" /> Ideas <span className="font-normal text-subtle">{topics.length}</span></h2>
         <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void more()}>
           {busy === "more" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} More ideas
+        </Button>
+      </div>
+      <div className="flex flex-col gap-1.5 border-b border-line px-4 py-3">
+        <label className="text-xs font-medium" htmlFor="own-idea">Your own idea</label>
+        <input id="own-idea" value={mine} onChange={(e) => setMine(e.target.value)}
+               onKeyDown={(e) => { if (e.key === "Enter" && busy === null && mine.trim().length >= 8) void writeMine(); }}
+               placeholder="e.g. Why does a spoon flip your reflection?"
+               className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
+        <input value={mineAngle} onChange={(e) => setMineAngle(e.target.value)} aria-label="Angle (optional)"
+               placeholder="Angle or what to cover (optional)"
+               className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
+        <Button size="sm" variant="primary" className="self-start" disabled={busy !== null || mine.trim().length < 8} onClick={() => void writeMine()}>
+          {busy === "mine" ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} Write the script
         </Button>
       </div>
       <div className="border-b border-line px-4 py-2">

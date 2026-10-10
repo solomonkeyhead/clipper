@@ -3379,3 +3379,9 @@ Marc watched video 22 (clip 104) and listed what was wrong; each is fixed where 
 - Back to ideas (Marc, the same day): any video, at any stage, can go back to the idea board. Its idea is new
   again (an owner's own script becomes an idea by its title) and the video goes as a delete does. A sent-back
   idea (`create_topics.sent_back`) shows even when a Short of it is still in Clips.
+
+## D191: your own idea, written from the Ideas box
+The Ideas box has a "Your own idea" form (the idea, an optional angle, "Write the script"). It goes on the board as
+an idea like the planner's (`POST /api/create/ideas/own`; one already there, used or skipped, comes back as new)
+and its script is written at once, in the background, as Write it does. Unlike "Write your own script", the AI
+writes it, in the channel's voice and rules, with its checks and picture plan.

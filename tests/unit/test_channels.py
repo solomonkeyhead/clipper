@@ -242,3 +242,20 @@ def test_a_video_goes_back_to_the_idea_board_from_any_stage(data_root):
     board = [t["question"] for t in client.get("/api/create").json()["topics"]]
     assert "Why is the sky blue?" in board and "Why does a spoon flip you?" in board   # shown though made
     assert store.video(other) is not None
+
+
+def test_your_own_idea_goes_on_the_board_and_can_be_written(data_root):
+    """D191: an idea of the owner's own, even one already used, is on the board as new."""
+    from fastapi.testclient import TestClient
+
+    from clipper.create import store
+    from clipper.studio import server
+
+    client = TestClient(server.create_app())
+    client.post("/api/create/channels", json={"name": "Physics Lab", "pack": "physics"})
+    assert client.post("/api/create/ideas/own", json={"question": "hi"}).status_code == 400
+    got = client.post("/api/create/ideas/own", json={"question": "Why does a spoon flip your reflection?", "angle": "mirror"}).json()
+    assert store.topic(got["id"])["status"] == "new"
+    store.set_topic(got["id"], "used")
+    again = client.post("/api/create/ideas/own", json={"question": "why does a spoon flip your reflection?"}).json()
+    assert again["id"] == got["id"] and store.topic(got["id"])["status"] == "new"

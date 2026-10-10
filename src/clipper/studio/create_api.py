@@ -463,6 +463,22 @@ def routes(app: FastAPI, publish) -> None:
         steer = str((body or {}).get("steer") or "").strip()[:400]
         return {"added": await asyncio.to_thread(ai, topics.generate, count, steer)}
 
+    @app.post("/api/create/ideas/own")
+    def create_own_idea(body: dict) -> dict:
+        """The owner's own idea (D191): on the board like any other (one already there, even skipped or used, is
+        brought back as new), ready for Write it."""
+        question = " ".join(str(body.get("question") or "").split())[:200]
+        if len(question) < 8:
+            raise HTTPException(400, "say the idea as a question or a line, at least a few words")
+        angle = " ".join(str(body.get("angle") or "").split())[:300]
+        store.add_topics([{"question": question, "angle": angle, "felt": False}])
+        found = next((t for t in store.topics(status=None) if t["question"].lower() == question.lower()), None)
+        if found is None:
+            raise HTTPException(500, "the idea wasn't saved")
+        store.send_back(found["id"])   # shown even if a Short of it was made
+        publish("create.changed", {})
+        return {"id": found["id"]}
+
     @app.post("/api/create/topics/{topic_id}/skip")
     def create_skip(topic_id: int) -> dict:
         store.set_topic(topic_id, "skipped")

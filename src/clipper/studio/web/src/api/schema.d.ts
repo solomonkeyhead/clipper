@@ -749,6 +749,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/create/ideas/own": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Own Idea
+         * @description The owner's own idea (D191): on the board like any other (one already there, even skipped or used, is
+         *     brought back as new), ready for Write it.
+         */
+        post: operations["create_own_idea_api_create_ideas_own_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/create/topics/{topic_id}/skip": {
         parameters: {
             query?: never;
@@ -5353,6 +5374,43 @@ export interface operations {
                 "application/json": {
                     [key: string]: unknown;
                 } | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_own_idea_api_create_ideas_own_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {

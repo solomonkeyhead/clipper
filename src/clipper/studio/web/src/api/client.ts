@@ -721,6 +721,7 @@ export const createApi = {
   channelActive: (slug: string) => send("PUT", "/api/create/channel/active", { slug }),
   channelDelete: (slug: string) => send("DELETE", `/api/create/channels/${slug}`),
   ideas: (count = 20, steer = "") => send<{ added: number }>("POST", "/api/create/ideas", { count, steer }),
+  ownIdea: (question: string, angle = "") => send<{ id: number }>("POST", "/api/create/ideas/own", { question, angle }),
   skip: (topic: number) => send("POST", `/api/create/topics/${topic}/skip`),
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
   rewrite: (video: number, steer = "") => send("POST", `/api/create/videos/${video}/rewrite`, { steer }),
