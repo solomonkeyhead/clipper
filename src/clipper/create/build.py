@@ -233,7 +233,8 @@ def choose_punches(script: Script, timings: Timings) -> dict[int, list[float]]:
     return out
 
 
-RENDER_VERSION = 3   # 2: camera moves, punch-ins and one footage look (D156); 3: the picture panel (D162)
+RENDER_VERSION = 4   # 2: camera moves, punch-ins and one footage look (D156); 3: the picture panel (D162);
+#: 4: drawings built left to right, coloured by temperature, a graph that moves the way its sentence says (D190)
 used_shots: set[Path] = set()
 #: What a drawing's shot doesn't depend on: set by the app, or used only when the shots are put together (a part's
 #: way in, D171). A change to one of these never draws the drawing again.
@@ -751,18 +752,23 @@ CUT_IN_POSES = {"shocked", "facepalm", "deadpan", "smug", "nervous", "confused",
 CUT_INS, CUT_IN_GAP, CUT_IN_SECONDS = 2, 6.0, 0.7
 
 
-def cutaways(script: Script, timings: Timings, punchline: float, total: int) -> list[compose.Cutaway]:
+def cutaways(script: Script, timings: Timings, punchline: float, total: int,
+             shots: list[compose.Shot] = ()) -> list[compose.Cutaway]:
     """When the camera cuts in on the Professor (D162): for the last 0.7 s of a sentence tagged with a reaction
     pose (at most CUT_INS, CUT_IN_GAP apart, not in the hook), and on the punchline's last word to the end, the
-    deadpan beat, in closer. A hard cut in and out, as a comedy edit does."""
+    deadpan beat, in closer. A hard cut in and out, as a comedy edit does. Never mid-video over a drawing (D190):
+    its last part lands at the end of its sentence, and a cut-in there pushed it off the screen before it could
+    be read."""
+    drawn = [(s.start, s.start + s.frames) for s in shots if s.kind == "drawing"]
     face_x, face_y = compose.W * 0.44, compose.H * 0.6
     out: list[compose.Cutaway] = []
     last = -CUT_IN_GAP
     if len(timings.beats) == len(script.beats):
         for i, beat in enumerate(script.beats[:-1]):
             a, b = timings.beats[i]
+            over_drawing = any(s < round(b * FPS) and round((b - CUT_IN_SECONDS) * FPS) < e for s, e in drawn)
             if beat.pose in CUT_IN_POSES and a >= CHARACTER_START and b - CUT_IN_SECONDS - last >= CUT_IN_GAP \
-                    and len(out) < CUT_INS and b - a > 1.5:
+                    and len(out) < CUT_INS and b - a > 1.5 and not over_drawing:
                 out.append(compose.Cutaway(a=round((b - CUT_IN_SECONDS) * FPS), b=round(b * FPS), z=1.28,
                                            x=face_x, y=face_y))
                 last = b
@@ -794,11 +800,8 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     plan = character_plan(script, timings, channel, punchline, seed)
     if plan:
         shows = sorted(((pic, a, b) for pic, times in plan for a, b in times), key=lambda x: x[1])
-        strong = {w.start for i, beat in enumerate(script.beats) if beat.emphasis
-                  for w in _words_of(timings, script, i)
-                  if w.text.strip(".,!?;:'\"").lower() == beat.emphasis.strip(".,!?;:'\"").lower()}
-        edit.presenter = compose.Presenter(shows, timings.words, strong, total)
-        edit.cutaways = cutaways(script, timings, punchline, total) if script.cut_ins else []
+        edit.presenter = compose.Presenter(shows, total)
+        edit.cutaways = cutaways(script, timings, punchline, total, shots) if script.cut_ins else []
     lit = tuple(bytes.fromhex(script.caption_colour[1:])) if len(script.caption_colour) == 7 else palette["yellow"]
     edit.captions = compose.Captions(caption_words(script, timings), accent=lit, size=script.caption_size,
                                      shift=script.caption_shift) if script.captions else None

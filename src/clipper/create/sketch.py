@@ -81,6 +81,11 @@ HOW TO BUILD IT.
    label is about 26 px wide per letter at size 2, 75 px tall.
 6. True. Proportions right (a head bigger than an ear canal), arrows the way things really go,
    nothing the {subject} gets wrong.
+7. Agrees with the words, read with the sound off. A drop, a loss or "less" points down, a rise up; what
+   leaves moves away; heat flows from warm to cold (from the skin into a wet cloth: never "chill" drawn
+   flowing in). Colours keep their meaning: blue for cold or slow, red for hot or fast.
+8. Left to right. List the marks in the order a reader reads them, left to right and top to bottom,
+   and give a line its left end first: the board builds the way the eye reads.
 
 MARKS (xy is a flat list of numbers):
 - icon: a ready-drawn object. text = its name from the list; xy = [cx, cy, width], width 120-420
@@ -121,7 +126,10 @@ REVIEW = """You see your chalk sketch rendered as it will appear on the phone (t
 only). Judge it as a viewer seeing it for two seconds, against what it must show. Problems to fix:
 a shape nobody would recognise (use an icon, or fix the outline points); the drawing small, or
 crowded into one part of the board; too many things or words; the main action not standing out; a
-label naming the wrong thing, or with no room near what it names; {subject} the picture gets wrong.
+label naming the wrong thing, or with no room near what it names; {subject} the picture gets wrong;
+a picture that says the opposite of its sentence (an arrow the wrong way, a rise drawn for a drop,
+heat or cold flowing the wrong way, blue on the hot thing or red on the cold one); a drawing that
+shows something the sentence never says.
 The drawing is fitted to the board after you, kept out of the bottom-right corner, and its labels
 moved off lines and each other: don't spend a fix on those. If it works, answer ok = true and nothing
 else. Otherwise ok = false, list the problems, and return the whole corrected sketch."""

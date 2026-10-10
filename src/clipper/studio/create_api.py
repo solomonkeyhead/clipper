@@ -183,7 +183,8 @@ def _view() -> dict:
             "channels": [{"slug": c.slug, "name": c.name, "handle": c.handle, "pack": c.pack} for c in channels.all_channels()],
             "packs": [{"key": p.key, "label": p.label, "about": p.about, "drawings": p.drawings} for p in packs.PACKS.values()],
             # Ideas already made into a Short (or one of the channel's own examples) don't show (D154).
-            "topics": [t for t in store.topics() if not topics_mod.made_already(t["question"], _made_titles(ch, videos))],
+            "topics": [t for t in store.topics()
+                       if t.get("sent_back") or not topics_mod.made_already(t["question"], _made_titles(ch, videos))],
             "videos": videos}
 
 
@@ -1154,8 +1155,8 @@ def routes(app: FastAPI, publish) -> None:
         from difflib import SequenceMatcher
 
         titles = [r["script"].title.lower() for r in found.values()]
-        for t in store.topics():
-            if any(SequenceMatcher(None, t["question"].lower(), x).ratio() >= 0.75 for x in titles):
+        for t in store.topics():   # one the owner sent back stays (D190)
+            if not t.get("sent_back") and any(SequenceMatcher(None, t["question"].lower(), x).ratio() >= 0.75 for x in titles):
                 store.set_topic(t["id"], "used")
         made: dict[str, list[dict]] = {}
         for v in store.videos():
@@ -1212,6 +1213,27 @@ def routes(app: FastAPI, publish) -> None:
         _stopped(video_id)
         publish("create.changed", {"id": video_id})
         return {"stopping": False}
+
+    @app.post("/api/create/videos/{video_id}/to-ideas")
+    def create_to_ideas(video_id: int) -> dict:
+        """Send a video back to the idea board, from any stage (D190): its idea is new again (a script of the
+        owner's own becomes an idea by its title) and the video goes as a delete does, its files to the Recycle
+        Bin, a finished clip kept in Clips."""
+        row = video_or_404(video_id)
+        if video_id in _running:
+            raise HTTPException(409, "it's being written or built: wait for it, or cancel the build first")
+        topic_id = row["topic_id"]
+        if not topic_id:
+            title = " ".join(((row.get("script") or {}).get("title") or "").split())
+            if not title:
+                raise HTTPException(400, "it has no title to make an idea from")
+            store.add_topics([{"question": title, "angle": "", "felt": False}])
+            topic_id = next((t["id"] for t in store.topics(status=None) if t["question"].lower() == title.lower()), None)
+        _delete(row)
+        if topic_id:
+            store.send_back(topic_id)
+        publish("create.changed", {"id": video_id})
+        return {"ok": True}
 
     @app.delete("/api/create/videos/{video_id}")
     def create_delete(video_id: int, clip: bool = False) -> dict:

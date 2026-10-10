@@ -270,6 +270,8 @@ MIGRATIONS = [
     # The planner's score of 21 and its series (D155).
     ("create_topics", "score", "ALTER TABLE create_topics ADD COLUMN score INTEGER"),
     ("create_topics", "series", "ALTER TABLE create_topics ADD COLUMN series TEXT NOT NULL DEFAULT ''"),
+    # Sent back to the board by the owner (D190): shown even though a Short of it was made.
+    ("create_topics", "sent_back", "ALTER TABLE create_topics ADD COLUMN sent_back INTEGER NOT NULL DEFAULT 0"),
 ]
 TRASH_DAYS = 30
 

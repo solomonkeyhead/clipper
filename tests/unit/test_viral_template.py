@@ -32,7 +32,8 @@ def test_punch_ins_land_on_the_highlighted_word_away_from_the_hook_and_punchline
 
 
 def test_a_running_bit_comes_at_most_every_third_script_and_counts_its_uses(data_root):
-    ch = channel.make("physics", "Prof")
+    bits = [{"name": "coffee", "how": "Use the cup."}, {"name": "grudge", "how": "One grudge."}]
+    ch = channel.make("physics", "Prof").model_copy(update={"bits": bits})   # the pack has none since D190
     channel.save(ch)
     with channel.use(ch.slug):
         name, how = script.next_bit(ch)

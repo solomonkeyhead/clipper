@@ -122,15 +122,22 @@ CUES: contextvars.ContextVar[tuple[float | None, ...]] = contextvars.ContextVar(
 def stage(t: float, d: float, i: int, n: int, label: int | None = None) -> float:
     """How far element `i` of `n` has arrived at time `t`: they come in turn over 60% of `d`;
     or, for the element showing label `label`, just as the voice says it (D110: pieces
-    drawn on a fixed schedule ran ahead of, or behind, the words)."""
+    drawn on a fixed schedule ran ahead of, or behind, the words). In order, left to right (D190): the first
+    label comes on the schedule, so the board starts with the first thing, and a part nobody names waits for
+    every part before it that waits for its word (the "escaping vapor" box came in before the "cloth weave"
+    box to its left, which waited for "weave": the board built right to left)."""
     cues = CUES.get()
-    if label is not None and label < len(cues) and cues[label] is not None:
+    late = max(0.6 * d, d - 1.2)
+    if label and label < len(cues) and cues[label] is not None:
         # On its word, but up for at least the last 1.2 s (a cue said at the very end left the
         # board empty); in a drawing held over several sentences, parts arrive late on purpose (D124).
-        return ease((t - min(cues[label], max(0.6 * d, d - 1.2)) + 0.15) / 0.45)
+        return ease((t - min(cues[label], late) + 0.15) / 0.45)
     window = 0.6 * d
     each = window / max(1, n)
-    return ease((t - i * each * 0.85) / max(0.25, each))
+    start = i * each * 0.85
+    if label:
+        start = max([start, *(min(c, late) + 0.15 for c in cues[1:label] if c is not None)])
+    return ease((t - start) / max(0.25, each))
 
 
 def _stem(word: str) -> str:
@@ -356,6 +363,17 @@ def graph(draw, v: Visual, t: float, d: float) -> None:
     if len(pts) > 1:
         draw.line(pts, fill=YELLOW, width=10, joint="curve")
         tx, ty = pts[-1]
+        if v.move in ("down", "up") and pc >= 1:
+            # The sentence is about a change (D190): "less motion means a drop in temperature" drew a rising line
+            # ending high, read as a rise. Once the line is up, the dot runs along it the way the words go,
+            # from the high end to the low end for "down", with an arrow beside it pointing that way.
+            high_first = pts[0][1] < pts[-1][1]
+            path = pts if high_first == (v.move == "down") else pts[::-1]
+            run = ease((t / max(d, 1e-3) - 0.6) / 0.3)
+            tx, ty = _at(path, run)
+            if 0 < run < 0.97:   # the arrow while it moves; at rest it would sit on the axis
+                sign = 1 if v.move == "down" else -1
+                arrow(draw, (tx + 50, ty - 45 * sign), (tx + 50, ty + 45 * sign), YELLOW, width=8, head=26)
         draw.ellipse((tx - 16, ty - 16, tx + 16, ty + 16), fill=YELLOW)
 
 
@@ -407,6 +425,10 @@ def particles(draw, v: Visual, t: float, d: float) -> None:
     speeds = [*v.values[:n], *[1.0] * n][:n]
     counts = [*v.amounts[:n], *[1.0] * n][:n]
     top_s, top_c = max(speeds) or 1.0, max(counts) or 1.0
+    # Colour says temperature (D190): the faster box warm, the slower cold. By place it was yellow left, blue right,
+    # so "the slower, colder molecules stay behind in the weave" showed them yellow and the escaping ones blue.
+    hues = ([COLORS["red"] if s == max(speeds) else BLUE for s in speeds] if n == 2 and speeds[0] != speeds[1]
+            else [YELLOW, BLUE][:n])
     title(draw, v, stage(t, d, 0, n + 1))
     box_w = 380 if n == 2 else 600
     y0, y1 = TOP + (150 if v.title else 40), BOTTOM - 90
@@ -416,7 +438,7 @@ def particles(draw, v: Visual, t: float, d: float) -> None:
             continue
         cx = W / 2 if n == 1 else (W / 2 - 230 if i == 0 else W / 2 + 230)
         x0, x1 = cx - box_w / 2, cx + box_w / 2
-        color = YELLOW if i == 0 else BLUE
+        color = hues[i]
         draw.rectangle((x0, y0, x1, y1), outline=CHALK, width=8)
         text(draw, (cx, y1 + 50), label, 70, color, max_width=box_w + 40, reveal=p)
         rnd = random.Random(31 + i)  # the same molecules every frame
@@ -619,6 +641,13 @@ def _tip(draw, at: tuple[float, float], color, p: float) -> None:
         draw.ellipse((at[0] - 7, at[1] - 7, at[0] + 7, at[1] + 7), fill=color)
 
 
+def _left(m) -> float:
+    """How far left a mark starts on the grid: an icon, circle, dot or word by its middle."""
+    if m.kind in ("icon", "circle", "dot", "text") or len(m.xy) < 2:
+        return m.xy[0] if m.xy else 0.0
+    return min(m.xy[0::2])
+
+
 def sketch(draw, v: Visual, t: float, d: float) -> None:
     """A chalk sketch made for this sentence (create/sketch.py): its marks arrive in order,
     or as the voice says their cue word; lines are drawn on, words written, waves and
@@ -632,12 +661,22 @@ def sketch(draw, v: Visual, t: float, d: float) -> None:
     # Words after the lines, so no line runs through a word ("vibration" was struck out);
     # the first mark straight away, whatever its cue, so the board is never empty.
     order = [i for i, m in enumerate(marks) if m.kind != "text"] + [i for i, m in enumerate(marks) if m.kind == "text"]
+    # Left to right (D190): the parts no word calls up come in the order a reader reads, the leftmost first,
+    # in the turns the schedule gives them; a part on its word keeps its word.
+    said, free = CUES.get(), []
+    for i, m in enumerate(marks):
+        if m.kind != "text" and not (0 < i < len(said) and said[i] is not None):
+            free.append(i)
+    slot = dict(zip(sorted(free, key=lambda i: (_left(marks[i]), i)), free, strict=True))
     for i in order:
         m = marks[i]
-        p = stage(t, d, i + 1, len(marks) + 1, label=i if i else None)
+        s = slot.get(i, i)
+        p = stage(t, d, s + 1, len(marks) + 1, label=s if s else None)
         if p <= 0:
             continue
         color, pts = COLORS.get(m.color, CHALK), _pts(m.xy)
+        if m.kind in ("line", "curve") and len(pts) >= 2 and pts[0][0] > pts[-1][0]:
+            pts = pts[::-1]   # a line with no head is drawn from its left end (D190)
         if m.kind in ("line", "arrow", "curve", "loop"):
             line = _smooth(pts, closed=m.kind == "loop") if m.kind in ("curve", "loop") else pts
             part = _upto(line, p)

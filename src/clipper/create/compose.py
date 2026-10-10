@@ -6,9 +6,9 @@ switched on and off by `enable`; the captions were the clipping pipeline's subti
 
 - the camera is a float affine transform (cv2.warpAffine: sub-pixel, eased), with a motion blur on the fast
   moves, so pushes glide and a punch-in snaps and settles;
-- the Professor is a sprite on a spring: he stands on the bottom edge of the frame, bounces on every word
-  (harder on the highlighted ones), breathes, pops when he changes pose, slides in at the start, and the
-  camera cuts in on his face for his reactions and the punchline;
+- the Professor is a sprite: he stands on the bottom edge of the frame, breathes, pops gently when he
+  changes pose, slides in at the start, and the camera cuts in on his face for his reactions and the
+  punchline (he bounced on every word until D190: it read as shaking, not talking);
 - the captions pop in a page at a time, the word being said lit;
 - shots change with a cut, or now and then a whip or a zoom.
 
@@ -554,15 +554,13 @@ def _blend_warped(frame: np.ndarray, rgb: np.ndarray | None, alpha: np.ndarray, 
 
 
 class Presenter:
-    """The channel's character on screen all video (D159), alive (D162). `shows` is (picture, from, to) in
-    seconds, covering the video; `words` the voice's words, `strong` the start times of the highlighted ones."""
+    """The channel's character on screen all video (D159). `shows` is (picture, from, to) in seconds, covering
+    the video. He stands still but for a slow breath, a soft pop as he changes pose and a slide in at the start:
+    the spring that kicked him on every word (D162) and tipped him side to side read as a seizure (D190)."""
 
-    #: The spring he bounces on: how fast (Hz), how damped, and the kick each word gives (pixels a second).
-    BOB_HZ, BOB_DAMP, KICK, STRONG_KICK = 3.4, 0.34, 190.0, 330.0
-    TILT_HZ, TILT_DAMP, TILT_KICK = 2.1, 0.38, 26.0
-    POP_FRAMES, ENTER_FRAMES = 8, 10
+    POP_FRAMES, ENTER_FRAMES = 9, 10
 
-    def __init__(self, shows: list[tuple[Path, float, float]], words: list, strong: set[float], total: int):
+    def __init__(self, shows: list[tuple[Path, float, float]], total: int):
         self.total = total
         self.sprites: dict[Path, Sprite] = {}
         for pic, _, _ in shows:
@@ -579,33 +577,6 @@ class Presenter:
         first = next((p for p in self.pose if p is not None), None)
         self.pose = [p or first for p in self.pose]
         self.changes = {k for k in range(1, total) if self.pose[k] != self.pose[k - 1]}
-        self.bob, self.vel, self.tilt = self._springs(words, strong)
-
-    def _springs(self, words: list, strong: set[float]) -> tuple[list[float], list[float], list[float]]:
-        kicks: dict[int, float] = {}
-        turns: dict[int, float] = {}
-        for i, w in enumerate(words):
-            k = round(w.start * FPS)
-            kicks[k] = kicks.get(k, 0.0) + (self.STRONG_KICK if any(abs(w.start - s) < 1e-3 for s in strong) else self.KICK)
-            turns[k] = self.TILT_KICK * (1 if i % 2 else -1)
-        for k in self.changes:   # a hop when he changes pose
-            kicks[k] = kicks.get(k, 0.0) + 260.0
-        bob, vel, tilt = [], [], []
-        y = vy = r = vr = 0.0
-        wb, wt = 2 * math.pi * self.BOB_HZ, 2 * math.pi * self.TILT_HZ
-        for k in range(self.total):
-            vy -= kicks.get(k, 0.0)
-            vr += turns.get(k, 0.0)
-            for _ in range(4):
-                dt = 1 / (4 * FPS)
-                vy += (-wb * wb * y - 2 * self.BOB_DAMP * wb * vy) * dt
-                y += vy * dt
-                vr += (-wt * wt * r - 2 * self.TILT_DAMP * wt * vr) * dt
-                r += vr * dt
-            bob.append(y)
-            vel.append(vy)
-            tilt.append(r)
-        return bob, vel, tilt
 
     def face(self) -> tuple[float, float]:
         """Where his face is on the frame, about: for the camera cutting in on him."""
@@ -621,19 +592,17 @@ class Presenter:
         t = k / FPS
         scale = 1.0
         since = max((c for c in self.changes if c <= k), default=None)
-        if since is not None and k - since < self.POP_FRAMES:
-            scale = 0.88 + 0.12 * out_back((k - since) / self.POP_FRAMES, 2.2)
-        y = self.bob[k] if k < len(self.bob) else 0.0
+        if since is not None and k - since < self.POP_FRAMES:   # a soft settle, no overshoot past full size
+            scale = 0.95 + 0.05 * smooth((k - since) / self.POP_FRAMES)
+        y = 0.0
         if k < self.ENTER_FRAMES:   # slides up into the frame as the video starts
             y += (1 - out_back(k / self.ENTER_FRAMES, 1.2)) * 380
-        stretch = max(-0.045, min(0.045, -self.vel[min(k, len(self.vel) - 1)] / 2600)) if self.vel else 0.0
         breathe = 0.006 * math.sin(2 * math.pi * t / 3.3)
-        sy = scale * (1 + stretch + breathe)
-        sx = scale * (1 - stretch * 0.6 - breathe * 0.4)
+        sy = scale * (1 + breathe)
+        sx = scale * (1 - breathe * 0.4)
         w = sprite.size[0]
         dest = (PRESENTER_X + w / 2, H + PRESENTER_SINK + y)
-        angle = self.tilt[k] if k < len(self.tilt) else 0.0
-        m = _affine(sprite, sx, sy, angle, dest)
+        m = _affine(sprite, sx, sy, 0.0, dest)
         shadow = m.copy()
         shadow[0, 2] += 16
         shadow[1, 2] += 6
@@ -777,7 +746,11 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
             cut = next((c for c in edit.cutaways if c.a <= k < c.b), None)
             if cut:
                 fx, fy = edit.presenter.face() if edit.presenter else (W / 2, H / 2)
-                m = np.float32([[cut.z, 0, cut.x - cut.z * fx], [0, cut.z, cut.y - cut.z * fy]])
+                # Kept inside the frame (D190): past its bottom edge the copied last row drew his cut-off waist
+                # down the screen in streaks.
+                tx = min(0.0, max(W * (1 - cut.z), cut.x - cut.z * fx))
+                ty = min(0.0, max(H * (1 - cut.z), cut.y - cut.z * fy))
+                m = np.float32([[cut.z, 0, tx], [0, cut.z, ty]])
                 frame = cv2.warpAffine(frame, m, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
             t = k / FPS
             if edit.hook is not None and k < edit.hook_frames:

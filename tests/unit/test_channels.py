@@ -218,3 +218,27 @@ def test_a_script_that_fails_to_write_says_why_on_the_video(data_root, monkeypat
     row = store.video(video)
     assert row["status"] == "draft" and "no AI model answered" in row["error"]
     assert client.post(f"/api/create/videos/{video}/approve").status_code == 400   # nothing to approve yet
+
+
+def test_a_video_goes_back_to_the_idea_board_from_any_stage(data_root):
+    """D190: its idea is new again; a script of the owner's own becomes an idea by its title."""
+    from fastapi.testclient import TestClient
+
+    from clipper.create import store
+    from clipper.studio import server
+
+    client = TestClient(server.create_app())
+    client.post("/api/create/channels", json={"name": "Physics Lab", "pack": "physics"})
+    store.add_topics([{"question": "Why does a spoon flip you?", "angle": "mirror", "felt": False}])
+    topic = store.topics()[0]
+    store.set_topic(topic["id"], "used")
+    made = store.add_video(topic["id"], {"title": "Why does a spoon flip you?", "beats": []}, "")
+    store.update_video(made, status="built")
+    assert client.post(f"/api/create/videos/{made}/to-ideas").status_code == 200
+    assert store.video(made) is None and store.topic(topic["id"])["status"] == "new"
+    own = store.add_video(None, {"title": "Why is the sky blue?", "beats": []}, "")
+    other = store.add_video(None, {"title": "Why is the sky blue?", "beats": []}, "")   # a Short of it stays made
+    assert client.post(f"/api/create/videos/{own}/to-ideas").status_code == 200
+    board = [t["question"] for t in client.get("/api/create").json()["topics"]]
+    assert "Why is the sky blue?" in board and "Why does a spoon flip you?" in board   # shown though made
+    assert store.video(other) is not None

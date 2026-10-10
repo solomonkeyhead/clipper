@@ -55,6 +55,17 @@ def test_long_pauses_are_cut_but_the_beat_before_the_punchline_stays():
     assert len(gaps) == 3                                  # the 0.1 s gap is left alone
 
 
+def test_a_cut_keeps_a_word_tail_the_recognizer_missed():
+    """D190: "generator" sounded 0.2 s past its heard end; the cut is only where the voice is quiet."""
+    loud = [-10.0] * 100 + [-20.0] * 20 + [-50.0] * 60 + [-10.0] * 20   # word, its soft tail, silence, next word
+    [(a, b)] = voice.quiet_only([(1.05, 1.75)], loud)                   # the cut from the heard end
+    assert a >= 1.2 + voice.EDGE - 1e-9 and b == 1.75                   # starts after the tail
+    dip = [-10.0] * 100 + [-40.0] * 3 + [-10.0] * 10 + [-50.0] * 60      # a short dip inside the word
+    [(a, b)] = voice.quiet_only([(1.0, 1.7)], dip)
+    assert a >= 1.13                                                    # past "-ture", not in the dip
+    assert voice.quiet_only([(1.0, 1.1)], [-10.0] * 200) == []          # no quiet: no cut
+
+
 def test_an_untouched_physics_channel_moves_to_the_new_rules_and_an_edited_one_keeps_its_own(data_root):
     old = channel.make("physics", "Prof").model_dump()
     for slug, rules in (("prof", packs.PHYSICS_RULES_BEFORE_D155), ("mine", ["my own rule"])):

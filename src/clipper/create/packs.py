@@ -87,14 +87,6 @@ PHYSICS_JOKES = [
     "A polite correction of the viewer (\"Cold does not come in. Heat leaves. Without saying goodbye.\")",
 ]
 
-#: Running bits (D156): one is asked for at most every third script, never two scripts running, each retired after
-#: RETIRE uses. {n} is how many times the bit has been used, plus one.
-PHYSICS_BITS = [
-    {"name": "coffee", "how": "Use the Professor's coffee cup (about 0.3 kg) as the unit of one comparison."},
-    {"name": "grudge", "how": "Include one dry line of the Professor's long grudge against an everyday object in "
-                              "this moment (the elevator, the shower curtain, the car door)."},
-]
-
 #: The German Professor's script shapes, one per script in turn (D155): one shape every time reads as a
 #: template, which YouTube's July 2025 rules on mass-produced content name.
 PHYSICS_SHAPES = [
@@ -225,7 +217,7 @@ PHYSICS = Pack(
     areas="mechanics, heat, sound, light, electricity, fluids and pressure, materials",
     abstract='"pressure", "physics",\n  "energy"', hashtags="#physics,\n#science and one specific",
     templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True,
-    shapes=list(PHYSICS_SHAPES), jokes=list(PHYSICS_JOKES), bits=list(PHYSICS_BITS), signoff="Class dismissed.",
+    shapes=list(PHYSICS_SHAPES), jokes=list(PHYSICS_JOKES),   # no running bits, no sign-off (D190)
     scope="any STEM subject, physics first, then chemistry, engineering, earth and space, maths, technology")
 
 PACKS: dict[str, Pack] = {p.key: p for p in (EXPLAINER, STORIES, FOOTAGE, PHYSICS)}

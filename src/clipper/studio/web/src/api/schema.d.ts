@@ -1398,6 +1398,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/create/videos/{video_id}/to-ideas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create To Ideas
+         * @description Send a video back to the idea board, from any stage (D190): its idea is new again (a script of the
+         *     owner's own becomes an idea by its title) and the video goes as a delete does, its files to the Recycle
+         *     Bin, a finished clip kept in Clips.
+         */
+        post: operations["create_to_ideas_api_create_videos__video_id__to_ideas_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/create/videos/{video_id}": {
         parameters: {
             query?: never;
@@ -6450,6 +6472,39 @@ export interface operations {
         };
     };
     create_cancel_api_create_videos__video_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_to_ideas_api_create_videos__video_id__to_ideas_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -48,6 +48,7 @@ class Visual(BaseModel):
     directions: list[str] = Field(default_factory=list)   # forces: up | down | left | right, per label
     equation: str = ""
     shape: str = ""                 # graph: rising | falling | peak | wave; ray: refract | reflect
+    move: str = ""                  # graph: "down" | "up", the way the sentence moves along the curve (D190)
     subject: str = ""               # forces: what the arrows push on, written in its box
     amounts: list[float] = Field(default_factory=list)    # wave: amplitudes; particles: how many
     idea: str = ""                  # sketch: what to draw, for the sketcher (create/sketch.py)
@@ -258,6 +259,14 @@ and footage where they name a thing or a moment the viewer knows."""
 #: searches; nothing scored, and four such lines were drawn one by one at the end of the build.
 UNFILMABLE = """A line with nothing in it a camera could film (a law or rule, a conclusion, a number on its own) gets a
 drawing, never footage: no library has a clip of it."""
+#: For a channel that draws (D190), the owner's notes on video 22: a drop in temperature drawn as a rising line,
+#: the colder molecules drawn in the warm colour, chill drawn flowing into the skin.
+AGREE = """A drawing agrees with its own sentence with the sound off. A drop, a loss or "less" goes down; a rise
+goes up; what leaves moves away; heat flows from warm to cold, never "cold" flowing in. A graph about a change says
+which way: move = "down" for a drop, "up" for a rise (the dot runs along the curve that way); when the sentence
+says something falls as time goes on, x = time and shape "falling" shows it best. Particles: values = speeds, so
+the colder, slower molecules get the lower value (they are drawn cold, the faster ones warm). Two boxes or things
+side by side: the one the sentence starts from on the left."""
 
 
 def channel_visuals_head(channel: channels.Channel) -> str:
@@ -287,8 +296,8 @@ POSE_USE = {
     "shocked": "a surprising fact", "facepalm": "the common mistake", "aha": "the key insight, the click",
     "thinking": "setting up the question", "smug": "a point the viewer should concede", "shrug": "nobody fully knows",
     "deadpan": "the dry joke, then silence", "confused": "a viewer's question", "nervous": "where it gets bad",
-    "whisper": "a fun fact, an aside", "laugh": "right after his own joke", "coffee": "the coffee bit",
-    "grudge": "the grudge bit", "proud": "the sign-off",
+    "whisper": "a fun fact, an aside", "laugh": "right after his own joke", "coffee": "a calm aside",
+    "grudge": "mild annoyance", "proud": "the answer landing",   # no running bits, no sign-off (D190)
 }
 MAX_POSES = 6   # he is on screen all the time now (D159): more changes keep him alive
 POSE_AFTER_WORDS = 7   # the character already shows at the start (D156): no pose in the first sentence or so
@@ -325,6 +334,9 @@ def _system(channel: channels.Channel) -> str:
     rules = "\n".join(f"- {r}" for r in channel.rules)
     jokes = ("\n\nJoke shapes to follow (shapes, never lines to copy):\n" + "\n".join(f"- {j}" for j in channel.jokes)
              if channel.jokes else "")
+    if not channel.bits:   # the owner took the coffee cup, the grudges and "Class dismissed" out (D190)
+        jokes += ("\n\nNo running gags carried from video to video: no catchphrase, no named law or rule of the "
+                  "presenter's, no recurring object or grudge, no sign-off line. Each video stands on its own.")
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
             f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{channels.fill(WRITER_TAIL, channel)}\n\n"
             "The examples are the channel's own scripts, for voice and rhythm only: some break today's "
@@ -335,7 +347,7 @@ def _director(channel: channels.Channel) -> str:
     """The director's brief (D164): what the pictures are for, then the channel's picture rules."""
     head = DIRECTOR.replace("{name}", channel.name).replace("{niche}", channel.niche)
     if channel.drawings:
-        head += " " + UNFILMABLE.replace("\n", " ")
+        head += " " + UNFILMABLE.replace("\n", " ") + " " + AGREE.replace("\n", " ")
     return f"{head}\n\n{channels.fill(visuals(channel), channel)}"
 
 
@@ -682,7 +694,8 @@ def _diagrams(script: Script) -> str:
             continue
         parts = [f"{v.template}", f"title {v.title!r}" if v.title else "", f"subject {v.subject!r}" if v.subject else "",
                  f"labels {v.labels}" if v.labels else "",
-                 f"shape {v.shape}" if v.shape else "", f"values {v.values}" if v.values else "",
+                 f"shape {v.shape}" if v.shape else "", f"the dot runs {v.move} the curve" if v.move else "",
+                 f"values {v.values}" if v.values else "",
                  f"amounts {v.amounts}" if v.amounts else "",
                  f"a sketch of: {v.idea}" if v.idea else "",
                  "drawn with labels " + str([m.text for m in v.sketch.marks if m.text]) if v.sketch else "",

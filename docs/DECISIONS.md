@@ -3351,3 +3351,31 @@ wait unexplained: "Writing the script 30%" for two minutes, no sign of what was 
   seconds after 5. Thumbnails fade in over a grey placeholder instead of popping in on black. Create's loading
   shape is its own two columns, so nothing jumps.
 - Not done: stopping a script that's being written (the AI call can't be taken back; it is a minute or two).
+
+## D190: video 22's notes: a calm Professor, whole words, drawings that agree, back to ideas
+Marc watched video 22 (clip 104) and listed what was wrong; each is fixed where every video goes through it.
+- The Professor shook. A spring kicked him on every word and tipped him left and right; it read as a seizure,
+  not talking. He now stands still but for a slow breath, a soft settle when he changes pose and the slide in.
+- "Genera-" and "tempera-": the pause cutter (D155) trusted speech recognition's word ends, which come early on
+  a soft last syllable; the voice was still loud where it cut. A cut is now made only inside the longest stretch
+  quieter than 32 dB under the voice's loud parts (`voice.quiet_only`); with no such stretch, no cut. On take 22
+  both cuts land on sound and are dropped.
+- The cut-in on his face replicated the frame's last row past its bottom edge: his cut-off waist ran down the
+  screen in streaks. The view now stays inside the frame. Cut-ins mid-video never sit over a drawing: the
+  drawing's last part lands at its sentence's end, and the cut-in hid it before it could be read.
+- "Class dismissed" and the running bits (the coffee cup, the grudges) are gone from the physics pack and from
+  his channel; a channel with no bits tells the writer no running gags, catchphrases, named laws or sign-off.
+  The sign-off stays a channel setting anyone can fill.
+- Drawings build left to right: the first label comes on the schedule, a part nobody names waits for every part
+  before it that waits for its word ("escaping vapor" came in before "cloth weave" to its left), a sketch's
+  unnamed parts arrive leftmost first, and a line with no head is drawn from its left end.
+- Colour keeps its meaning: in particles the faster box is warm and the slower cold (the colder molecules
+  had been drawn yellow and the escaping ones blue, by place).
+- A graph says which way the sentence goes: `move` "down" or "up" runs the dot along the curve that way with
+  an arrow ("less motion means a drop in temperature" drew a rise). The director is told to set it, and that a
+  picture agrees with its sentence (a drop goes down, heat flows warm to cold); the sketch brief and its review
+  get the same checks, and the review looks for a picture that says the opposite of its words.
+- RENDER_VERSION 4, so the next build draws its drawings again.
+- Back to ideas (Marc, the same day): any video, at any stage, can go back to the idea board. Its idea is new
+  again (an owner's own script becomes an idea by its title) and the video goes as a delete does. A sent-back
+  idea (`create_topics.sent_back`) shows even when a Short of it is still in Clips.

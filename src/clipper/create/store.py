@@ -45,6 +45,12 @@ def set_topic(topic_id: int, status: str) -> None:
         con.execute("UPDATE create_topics SET status=? WHERE id=?", (status, topic_id))
 
 
+def send_back(topic_id: int) -> None:
+    """The idea on the board again, by the owner's hand (D190): shown even if a Short of it is in Clips."""
+    with db.connect() as con:
+        con.execute("UPDATE create_topics SET status='new', sent_back=1 WHERE id=?", (topic_id,))
+
+
 def topic(topic_id: int) -> dict | None:
     with db.connect() as con:
         row = con.execute("SELECT * FROM create_topics WHERE id=?", (topic_id,)).fetchone()

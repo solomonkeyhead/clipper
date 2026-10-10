@@ -101,6 +101,52 @@ def cuts(words: list[TimedWord], last_from: int) -> list[tuple[float, float]]:
     return out
 
 
+#: A cut stays where the voice is really quiet (D190): speech recognition ends a word early on a soft last
+#: syllable, so a pause cut from the word's heard end took "genera-tor" and "tempera-ture" with it. Quieter than
+#: QUIET dB under the voice's loud parts is silence; EDGE is kept after the last sound and before the next.
+QUIET, EDGE = 32.0, 0.06
+
+
+def levels(path: Path) -> list[float]:
+    """The voice's loudness every 10 ms, in dB under its loud parts (the 95th percentile)."""
+    import subprocess
+
+    import numpy as np
+
+    from ..render.ffmpeg import ffmpeg_path
+
+    raw = subprocess.run([str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-i", str(path), "-ac", "1",
+                          "-ar", "16000", "-f", "s16le", "-"], capture_output=True, check=True).stdout
+    x = np.frombuffer(raw, np.int16).astype(np.float32) / 32768
+    n = len(x) // 160
+    if not n:
+        return []
+    db = 10 * np.log10((x[: n * 160].reshape(n, 160) ** 2).mean(1) + 1e-10)
+    return (db - np.percentile(db, 95)).tolist()
+
+
+def quiet_only(gaps: list[tuple[float, float]], loud: list[float]) -> list[tuple[float, float]]:
+    """Each cut shrunk to the longest quiet stretch inside it, so a word's tail running into it (and a short dip
+    inside a word, "tempera . ture") is kept; a cut with no quiet left is dropped."""
+    out = []
+    for a, b in gaps:
+        i, j = max(0, int(a * 100)), min(len(loud), int(b * 100))
+        best, run = (i, i), None
+        for k in range(i, j + 1):
+            quiet = k < j and loud[k] <= -QUIET
+            if quiet and run is None:
+                run = k
+            elif not quiet and run is not None:
+                best = max(best, (run, k), key=lambda r: r[1] - r[0])
+                run = None
+        s, e = best
+        a2 = a if s == i else s / 100 + EDGE
+        b2 = b if e == j else e / 100 - EDGE
+        if b2 - a2 > 0.03:
+            out.append((a2, b2))
+    return out
+
+
 def tighten(path: Path, script: Script, words_heard: list[TimedWord], audio_seconds: float) -> tuple[Path, list[TimedWord], float]:
     """The voice with its long pauses cut (D155): a copy next to the recording (the take itself is kept),
     and the heard words moved to their new times. Nothing to cut: the recording as it is."""
@@ -112,6 +158,8 @@ def tighten(path: Path, script: Script, words_heard: list[TimedWord], audio_seco
     # The last sentence's first word, counted from the end of what was heard (missed words aside).
     last_from = max(0, len(words_heard) - last_words)
     gaps = cuts(words_heard, last_from)
+    if gaps:
+        gaps = quiet_only(gaps, levels(path))
     if not gaps:
         return path, words_heard, audio_seconds
     keep, at = [], 0.0

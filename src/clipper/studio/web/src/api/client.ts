@@ -748,6 +748,8 @@ export const createApi = {
     send<{ id: number }>("POST", "/api/create/videos", body),
   ready: () => fetch("/api/create/ready").then((r) => r.json() as Promise<ReadyScript[]>),
   archive: (video: number, archived: boolean) => send("POST", `/api/create/videos/${video}/archive`, { archived }),
+  /** Back to the idea board, from any stage (D190): the idea is new again, the video goes as a delete does. */
+  toIdeas: (video: number) => send("POST", `/api/create/videos/${video}/to-ideas`),
   useReady: (name: string) => send<{ id: number }>("POST", `/api/create/ready/${encodeURIComponent(name)}`),
   plan: (video: number) => send("POST", `/api/create/videos/${video}/plan`),
   check: (video: number) => send<{ notes: string }>("POST", `/api/create/videos/${video}/check`),

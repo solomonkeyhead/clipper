@@ -419,11 +419,12 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
   const [open, setOpenState] = useState(() => folds.get(`card-${video.id}`) ?? startOpen);
   const setOpen = (next: boolean | ((o: boolean) => boolean)) =>
     setOpenState((o) => { const v = typeof next === "function" ? next(o) : next; folds.set(`card-${video.id}`, v); return v; });
-  const [confirm, setConfirm] = useState(false);
+  const [confirm, setConfirm] = useState<"delete" | "ideas" | null>(null);
   // Opens when it becomes the video to work on; never closes on its own (it shut while in use, D127).
   useEffect(() => { if (startOpen) setOpen(true); }, [startOpen]);
   const s = video.script;
   const building = video.status === "voiced" || video.status === "building";
+  const busyNow = building || video.status === "writing";
   /** Delete, from any state, so no video can get stuck on the page (D123). */
   const archive = async (on: boolean) => {
     try {
@@ -443,7 +444,18 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setConfirm(false);
+      setConfirm(null);
+    }
+  };
+  const toIdeas = async () => {
+    try {
+      await createApi.toIdeas(video.id);
+      toast.success("Back on the idea board", { description: video.clip_id ? "Its files are in the Recycle Bin; the finished video stays in Clips." : "Its files are in the Recycle Bin." });
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setConfirm(null);
     }
   };
   return (
@@ -459,7 +471,13 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           </span>
           <Steps status={video.status} />
         </button>
-        {confirm ? (
+        {confirm === "ideas" ? (
+          <span className="flex shrink-0 items-center gap-1 text-xs">
+            <span className="text-muted">Back to ideas? This video goes to the Recycle Bin.</span>
+            <Button size="sm" variant="primary" onClick={() => void toIdeas()}>Back to ideas</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Keep</Button>
+          </span>
+        ) : confirm ? (
           <span className="flex shrink-0 items-center gap-1 text-xs">
             <span className="text-muted">{building ? "Stop and delete?" : "Delete?"}</span>
             {video.clip_id ? (
@@ -470,7 +488,7 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
             ) : (
               <Button size="sm" variant="danger" onClick={() => void remove()}>Delete</Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => setConfirm(false)}>Keep</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Keep</Button>
           </span>
         ) : (
           <>
@@ -482,8 +500,15 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
               </Button>
             </Tip>
           )}
+          {!busyNow && (
+            <Tip label="Back to the idea board: the idea comes back to write again later, this video goes">
+              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Back to ideas" onClick={() => setConfirm("ideas")}>
+                <Lightbulb className="size-4" />
+              </Button>
+            </Tip>
+          )}
           <Tip label={building ? "Stop the build and delete this video" : "Delete this video"}>
-            <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Delete this video" onClick={() => setConfirm(true)}>
+            <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Delete this video" onClick={() => setConfirm("delete")}>
               <Trash2 className="size-4" />
             </Button>
           </Tip>
