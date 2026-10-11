@@ -176,7 +176,7 @@ def test_another_take_passes_the_owners_note_on(data_root, monkeypatch):
     topic = store.topics()[0]
     video = store.add_video(topic["id"], {"title": "t", "text": "x", "beats": [], "description": "", "hashtags": []}, "")
     seen = {}
-    def write(q, a="", *, take=1, steer="", progress=None):
+    def write(q, a="", *, take=1, steer="", progress=None, previous=None):
         progress("Writing the script", 5)
         seen.update(steer=steer, take=take)
         return script.Script(title="t", text="y", beats=[script.Beat(text="y")], description="", hashtags=[]), "note"

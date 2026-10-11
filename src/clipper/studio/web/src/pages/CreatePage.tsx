@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
-  ExternalLink, Trash2, Upload, Wand2, X,
+  ExternalLink, Trash2, Undo2, Upload, Wand2, X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
@@ -580,6 +580,14 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
     }
   };
   const remove = run("delete", () => createApi.remove(video.id), "Removed from Create");
+  /** The script before the last take, edit or picture plan (D193). */
+  const undo = video.undo && (
+    <Tip label={`Back to the script as it was before ${video.undo === "your edit" ? "your last edit" : `the last ${video.undo}`}. Press again to go further back.`}>
+      <Button variant="ghost" disabled={busy !== null} onClick={run("undo", () => createApi.undo(video.id), `Undone: ${video.undo}`)}>
+        <Undo2 className="size-4" /> Undo
+      </Button>
+    </Tip>
+  );
 
   if (video.status === "writing") {   // written in the background, step by step (D188)
     return (
@@ -658,15 +666,21 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
               {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : `Check ${fact}`}
             </Button>
           </Tip>
-          <Button variant="ghost" className="ml-auto" disabled={busy !== null} onClick={remove}><Trash2 className="size-4" /> Delete</Button>
+          <span className="ml-auto flex items-center gap-2">
+            {undo}
+            <Button variant="ghost" disabled={busy !== null} onClick={remove}><Trash2 className="size-4" /> Delete</Button>
+          </span>
         </div>
       ) : (
         <>
           <VoiceStep video={video} />
           {video.status === "approved" && (
-            <Button variant="ghost" className="self-start" disabled={busy !== null} onClick={run("unapprove", () => createApi.edit(video.id, {}))}>
-              <PenLine className="size-4" /> Edit the script again
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="ghost" disabled={busy !== null} onClick={run("unapprove", () => createApi.edit(video.id, {}))}>
+                <PenLine className="size-4" /> Edit the script again
+              </Button>
+              {undo}
+            </div>
           )}
         </>
       )}

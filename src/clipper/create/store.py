@@ -76,7 +76,41 @@ def _video(row) -> dict:
     out = dict(row)
     out["script"] = json.loads(out["script"] or "{}")
     out["timings"] = json.loads(out["timings"]) if out["timings"] else None
+    out["history"] = json.loads(out.get("history") or "[]")
     return out
+
+
+#: How many earlier versions of a script are kept for Undo (D193).
+HISTORY = 20
+
+
+def remember(row: dict, why: str) -> None:
+    """The script as it is now, kept before a change (`why`: "Another take", "your edit"...) so Undo can bring it
+    back (D193). The same script twice in a row is kept once."""
+    if not (row["script"].get("beats") or []):
+        return
+    past = list(row.get("history") or [])
+    if past and past[-1]["script"] == row["script"]:
+        return
+    past.append({"script": row["script"], "check_notes": row.get("check_notes") or "", "why": why, "at": db.now()})
+    with db.connect() as con:
+        con.execute("UPDATE create_videos SET history=? WHERE id=?", (json.dumps(past[-HISTORY:]), row["id"]))
+
+
+def undo(video_id: int) -> dict | None:
+    """The script before the last change, back in place (and taken off the history); None if there's none."""
+    row = video(video_id)
+    if not row or not row["history"]:
+        return None
+    last = row["history"].pop()
+    texts = lambda s: [b.get("text") for b in s.get("beats") or []]  # noqa: E731
+    changes = {"script": last["script"], "check_notes": last["check_notes"]}
+    if texts(last["script"]) != texts(row["script"]):   # other words: a voice made for these no longer fits
+        changes.update(voice="", timings="", status="draft")
+    update_video(video_id, **changes)
+    with db.connect() as con:
+        con.execute("UPDATE create_videos SET history=? WHERE id=?", (json.dumps(row["history"]), video_id))
+    return last
 
 
 def add_video(topic_id: int | None, script: dict, check_notes: str = "", ready: str = "") -> int:

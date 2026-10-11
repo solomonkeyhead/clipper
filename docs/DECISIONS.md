@@ -3400,3 +3400,14 @@ nothing on screen: Approve script, Archive, Delete, Back to ideas, Try again, a 
   is checked on a load.
 - Access: Stats' "open the post" icons have names, the drop zones take Space as well as Enter, an idea's skip
   button shows when reached by keyboard, and the light theme's warning and success colours pass 4.5:1.
+## D193: Undo for a script, and a new take that sees the last one
+Marc asked Another take to change only the ending; it wrote a whole new script, because the writer was given the
+idea and his note but never the script it replaced. The take before was gone (the database row is overwritten).
+- A new take is shown the one it replaces. With a note it revises it: only what the note asks changes, every
+  other line stays word for word, and the shape and ending kind stay. Without a note it's told to write a different
+  one and reuse none of its lines.
+- Each video keeps its last 20 scripts (`create_videos.history`): saved before Another take, an edit that changes
+  something, and Plan pictures. Undo (beside Delete on a draft, beside "Edit the script again" once approved) puts
+  the one before back, again and again; other words clear a voice made for the old ones.
+- Video 25 (pursed lips) was restored to take 1: four sentences with their picture plans from what the database file
+  still held, the rest from Marc's screenshot. Take 2 is one Undo away.

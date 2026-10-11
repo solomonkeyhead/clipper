@@ -674,6 +674,8 @@ export interface CreateVideo {
   shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string; problem?: string;
   /** The archive (D131): posted videos move there by themselves; any can be moved in or out by hand. */
   archived?: boolean; archived_at?: string | null; posted?: boolean; posts?: CreatePost[];
+  /** What Undo would take back ("Another take", "your edit", "Plan pictures"); "" when there's nothing (D193). */
+  undo?: string;
 }
 export interface CreatePost { platform: string; url: string; posted_at: string | null; views: number | null }
 export interface ReadyScript {
@@ -739,6 +741,7 @@ export const createApi = {
     send("PUT", `/api/create/videos/${video}/edit`, body),
   sound: (video: number, body: { music?: boolean | null; sfx?: boolean | null }) => send("PUT", `/api/create/videos/${video}/sound`, body),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
+  undo: (video: number) => send<{ undid: string }>("POST", `/api/create/videos/${video}/undo`),
   footage: (video: number, body: { beat: number; wish: string }) => send<FootageOffer>("POST", `/api/create/videos/${video}/footage`, body),
   footageUse: (video: number, body: { beat: number; ids: string[] }) => send("POST", `/api/create/videos/${video}/footage/use`, body),
   camera: (video: number, body: { beat: number; camera: string }) => send("POST", `/api/create/videos/${video}/part`, body),

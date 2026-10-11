@@ -272,6 +272,8 @@ MIGRATIONS = [
     ("create_topics", "series", "ALTER TABLE create_topics ADD COLUMN series TEXT NOT NULL DEFAULT ''"),
     # Sent back to the board by the owner (D190): shown even though a Short of it was made.
     ("create_topics", "sent_back", "ALTER TABLE create_topics ADD COLUMN sent_back INTEGER NOT NULL DEFAULT 0"),
+    # The scripts a video had before each change, newest last, for Undo (D193).
+    ("create_videos", "history", "ALTER TABLE create_videos ADD COLUMN history TEXT NOT NULL DEFAULT '[]'"),
 ]
 TRASH_DAYS = 30
 

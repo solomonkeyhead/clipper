@@ -412,7 +412,7 @@ def recent_endings(limit: int = 10) -> list[str]:
 
 def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "",
           shape: str | None = None, ending: str | None = None, bit: tuple[str, str] | None = None,
-          draft: Script | None = None) -> Script:
+          draft: Script | None = None, previous: Script | None = None) -> Script:
     """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes to `draft`, `steer` is
     the owner's note on what to change (D153). The channel's own standing guidance applies every time.
     `shape` and `ending` default to the channel's next in turn (D155). The draft is shown with the fixes (D168):
@@ -434,6 +434,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
             + ("The channel's latest endings; reuse none of their jokes or their shape:\n"
                + "\n".join(f"- {e}" for e in endings) + "\n" if endings else "")
+            + _previous_block(previous, steer)
             + ("\nYour last draft:\n" + "\n".join(b.text for b in draft.beats) + "\n" if feedback and draft else "")
             + (f"\nFix these problems from the last draft, keeping what works in it:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
@@ -447,6 +448,21 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
         raise CreateError("the script came back empty; try again")
     return Script(title=got.title, hook=got.hook, description=got.description, hashtags=got.hashtags,
                   beats=[Beat(text=t) for t in lines], shape=shape, ending=ending, bit=bit[0])
+
+
+def _previous_block(previous: Script | None, steer: str) -> str:
+    """The take being replaced, for Another take (D193). With the owner's note it is revised: what the note
+    doesn't touch stays word for word ("change only the ending" got a whole new script). Without one, the new
+    take is a different script, so it is shown to be avoided."""
+    if previous is None or not previous.beats:
+        return ""
+    lines = "\n".join(b.text for b in previous.beats)
+    if steer.strip():
+        return ("\nThe owner's current script, which they want changed only as their note says:\n"
+                f"Title: {previous.title}\n{lines}\n"
+                "Change only what the note asks for. Keep every other line exactly as it is, in the same order, "
+                "and keep the title unless the note is about it.\n")
+    return f"\nThe last take, which the owner wants replaced; write a different one, reusing none of its lines:\n{lines}\n"
 
 
 #: Habits that mark a script as machine-written (D155), found in code before anyone reads it.
@@ -752,7 +768,7 @@ def critique(script: Script, writer: str = "") -> list[str]:
 
 
 def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str = "",
-                  progress=None) -> tuple[Script, str]:
+                  progress=None, previous: Script | None = None) -> tuple[Script, str]:
     """A script held to the channel's countable rules, an editor's read and the physics check, rewritten
     once with everything they found (D155), and what each said, for the page. `progress(stage, percent)` hears
     each step (D188): the page shows it, and the log gets each step's seconds."""
@@ -768,7 +784,10 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     ai.misses.clear()
     channel = channels.load()
     step("Writing the script", 5)
-    script = write(question, angle, take=take, steer=steer)
+    # A note revises the take it names (D193): its shape and ending stay unless the note says otherwise.
+    keep = previous if previous and steer.strip() else None
+    script = write(question, angle, take=take, steer=steer, previous=previous,
+                   shape=keep.shape if keep else None, ending=keep.ending if keep else None)
     writer = ai.last_used
     notes: list[str] = []
     step(f"The editor's read and the {channels.check_name().lower()}", 30)
@@ -787,7 +806,7 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
             bit = (bit[0], bit[1].replace("{n}", str(1 + sum(v["script"].get("bit") == bit[0] for v in _videos()))))
         step("Rewriting with the fixes", 50)
         script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
-                       ending=script.ending, bit=bit, draft=script)
+                       ending=script.ending, bit=bit, draft=script, previous=keep)
         writer = ai.last_used
         step("Planning the pictures", 70)
         # The director plans on the final words, then one check reads the words and the diagrams (D183): the

@@ -1162,6 +1162,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/create/videos/{video_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Undo
+         * @description The script as it was before the last change: a take, an edit or a picture plan (D193).
+         */
+        post: operations["create_undo_api_create_videos__video_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/create/videos/{video_id}/check": {
         parameters: {
             query?: never;
@@ -6111,6 +6131,39 @@ export interface operations {
         };
     };
     create_plan_api_create_videos__video_id__plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_undo_api_create_videos__video_id__undo_post: {
         parameters: {
             query?: never;
             header?: never;

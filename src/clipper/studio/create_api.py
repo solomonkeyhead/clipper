@@ -167,6 +167,8 @@ def _view() -> dict:
         v["stage"], v["pct"] = (stage if stage else (None, None))
         v["started"] = _started.get(v["id"])
         timings = v.pop("timings", None)
+        history = v.pop("history", None) or []   # the page needs only what Undo would undo (D193)
+        v["undo"] = history[-1]["why"] if history else ""
         v["shots"] = _shots(v, timings)
         v["cancelling"] = v["id"] in cancelled
         v["archived"] = bool(v.get("archived_at"))
@@ -285,7 +287,12 @@ def _write(video_id: int, publish, question: str, angle: str, take: int = 1, ste
         if row is None:
             return
         channels.set_current(row["channel"])
-        written, notes = script.write_checked(question, angle, take=take, steer=steer, progress=step)
+        # A new take sees the one it replaces (D193): "change only the ending" had nothing to keep.
+        previous = None
+        if again and row["script"].get("beats"):
+            previous = script.Script.model_validate(row["script"])
+            store.remember(row, "Another take")
+        written, notes = script.write_checked(question, angle, take=take, steer=steer, progress=step, previous=previous)
         written.series = series   # the idea's series, shown with the video (D155)
         store.update_video(video_id, script={**written.model_dump(), "take": take}, check_notes=notes,
                            status="draft", voice="", timings="", error="")
@@ -583,6 +590,8 @@ def routes(app: FastAPI, publish) -> None:
         edited = edited.model_copy(update={"beats": [b.model_copy(update={"nudge": 0.0, "caption": b.caption if b.text in kept else ""})
                                                      for b in edited.beats]})
         status = "draft" if row["status"] in ("draft", "approved") else "approved"
+        if edited.model_dump() != Script.model_validate(row["script"]).model_dump():   # "Edit the script again" changes no words
+            store.remember(row, "your edit")
         store.update_video(video_id, script={**edited.model_dump(), "take": row["script"].get("take", 1)},
                            status=status, voice="", timings="",
                            check_notes=row["check_notes"] + "\n(Edited by hand since.)"
@@ -868,9 +877,23 @@ def routes(app: FastAPI, publish) -> None:
         if row["status"] not in ("draft", "approved"):
             raise HTTPException(400, "use New pictures on a finished video")
         planned, notes = await asyncio.to_thread(ai, scripts.replan, _script(row))
+        store.remember(row, "Plan pictures")
         store.update_video(video_id, script={**planned.model_dump(), "take": row["script"].get("take", 1)},
                            check_notes=notes)
         return {"ok": True}
+
+    @app.post("/api/create/videos/{video_id}/undo")
+    def create_undo(video_id: int) -> dict:
+        """The script as it was before the last change: a take, an edit or a picture plan (D193)."""
+        row = video_or_404(video_id)
+        _editable(row)
+        if row["status"] not in ("draft", "approved"):
+            raise HTTPException(400, "a built video's script is what it was built from; undo before it's voiced")
+        last = store.undo(video_id)
+        if last is None:
+            raise HTTPException(400, "nothing to undo")
+        publish("create.changed", {"id": video_id})
+        return {"undid": last["why"]}
 
     @app.post("/api/create/videos/{video_id}/check")
     async def create_check(video_id: int) -> dict:
