@@ -47,7 +47,7 @@ def test_a_running_bit_comes_at_most_every_third_script_and_counts_its_uses(data
         assert name == "grudge"                      # the least used next
 
 
-def test_shapes_and_endings_never_repeat_the_last_scripts(data_root):
+def test_shapes_never_repeat_the_last_scripts_and_the_ending_is_always_the_loop(data_root):
     ch = channel.make("physics", "Prof")
     channel.save(ch)
     with channel.use(ch.slug):
@@ -55,7 +55,7 @@ def test_shapes_and_endings_never_repeat_the_last_scripts(data_root):
         store.add_video(None, Script(title="b", beats=[Beat(text="x")], shape=ch.shapes[1], ending="send").model_dump())
         for _ in range(20):
             shape, ending = script.turn(ch)
-            assert shape not in ch.shapes[:2] and ending != "send"
+            assert shape not in ch.shapes[:2] and ending == "loop"   # D195
 
 
 def test_a_square_picture_becomes_a_round_badge(tmp_path):

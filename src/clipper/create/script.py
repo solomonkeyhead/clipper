@@ -364,16 +364,17 @@ ENDINGS = {
 
 
 def turn(channel: channels.Channel) -> tuple[str, str]:
-    """The shape and ending for the channel's next script: picked at random but never the shape of either of the
-    last two scripts nor the last one's ending (D156; in strict turn, D155, the order itself became a pattern)."""
+    """The shape and ending for the channel's next script: the shape picked at random but never the shape of either
+    of the last two scripts (D156; in strict turn, D155, the order itself became a pattern); the ending always
+    the loop back to the opening question (D195)."""
     import random
 
     from . import store
 
     recent = [v["script"] for v in store.videos()[:2]]
     shapes = [x for x in channel.shapes if x not in {r.get("shape") for r in recent}] or channel.shapes or [""]
-    endings = [e for e in ENDINGS if not recent or e != recent[0].get("ending")]
-    return random.choice(shapes), random.choice(endings)
+    # Always the loop (Marc, D195): "send this to" and the one-word question stay in ENDINGS for older scripts.
+    return random.choice(shapes), "loop"
 
 
 #: A running bit is retired after this many uses (D156).

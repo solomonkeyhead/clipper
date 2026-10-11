@@ -3415,3 +3415,7 @@ idea and his note but never the script it replaced. The take before was gone (th
 Marc's Instagram posts came out cut at the top and bottom; TikTok and YouTube were fine. The files are 9:16:
 instagram.com's upload starts its crop step on a square, and Clipper only opens that page (no posting API). The
 Instagram row of the Post panel now says, in view, to click the crop icon and pick Original.
+## D195: scripts always end on the loop
+Marc likes the loop endings most. `script.turn` now always picks "loop" (a last line leading straight back into the
+opening question); "send this to" and the one-word question are no longer chosen, though old scripts that have
+them still read. Shapes still vary.
