@@ -3411,3 +3411,7 @@ idea and his note but never the script it replaced. The take before was gone (th
   the one before back, again and again; other words clear a voice made for the old ones.
 - Video 25 (pursed lips) was restored to take 1: four sentences with their picture plans from what the database file
   still held, the rest from Marc's screenshot. Take 2 is one Undo away.
+## D194: Instagram's crop step, said where you post
+Marc's Instagram posts came out cut at the top and bottom; TikTok and YouTube were fine. The files are 9:16:
+instagram.com's upload starts its crop step on a square, and Clipper only opens that page (no posting API). The
+Instagram row of the Post panel now says, in view, to click the crop icon and pick Original.

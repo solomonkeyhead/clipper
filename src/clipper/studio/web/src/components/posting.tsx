@@ -32,7 +32,8 @@ const UPLOAD: Record<string, { name: string; url: string; how: string; label: st
   },
   instagram: {
     name: "Instagram", url: "https://www.instagram.com/",
-    how: "Press Create (+), then Post",
+    // The website's crop step starts on a square (D194): left there, it cuts the top and bottom off a 9:16 clip.
+    how: "Press Create (+), then Post. At the crop step, click the crop icon (bottom left) and pick Original, or Instagram cuts off the top and bottom",
     label: "Advanced settings → Add paid partnership label, if the campaign gave you a brand account to tag",
   },
   youtube: {
@@ -187,6 +188,9 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
           </a>
         </Tip>
       </div>
+      {k === "instagram" && (   // in view, not only in a tooltip: every post was cut to a square (D194)
+        <p className="mt-1 pl-[7rem] text-xs text-warning">At the crop step, click the crop icon (bottom left) and pick <b>Original</b>, or Instagram cuts off the top and bottom.</p>
+      )}
       {accounts.length > 0 && (
         <p className="mt-1 flex flex-wrap items-center gap-1 pl-[7rem] text-xs text-muted">
           Post from {accounts.map((a) => <span key={a.key} className="rounded-full border border-line px-2 py-0.5 text-fg">@{a.handle}</span>)}
