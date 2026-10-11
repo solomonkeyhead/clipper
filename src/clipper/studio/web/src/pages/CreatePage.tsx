@@ -7,7 +7,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
 import {
-  createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateVisual,
+  createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual,
 } from "@/api/client";
 import { JobProgress, type Step } from "@/components/progress";
 import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
@@ -168,7 +168,7 @@ function GeminiStruggling() {
         : "Gemini is overloaded and Clipper is asking the next model, so this is slow. It hasn't stopped."}</span>
       {claude && (
         <Tip label="Uses your Claude plan's usage for the rest of this build and later ones.">
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => void useClaude()}>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => useClaude()}>
             {busy && <Loader2 className="size-3.5 animate-spin" />} Use Claude for footage
           </Button>
         </Tip>
@@ -264,7 +264,7 @@ function YourOwn({ wps }: { wps: number }) {
                     </div>
                     <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
                   </div>
-                  <Button size="sm" variant={r.made.length ? "secondary" : "primary"} disabled={busy} onClick={() => void start(r.name)}>
+                  <Button size="sm" variant={r.made.length ? "secondary" : "primary"} disabled={busy} onClick={() => start(r.name)}>
                     {r.made.length ? "Make again" : "Use it"}
                   </Button>
                 </div>
@@ -295,7 +295,7 @@ function YourOwn({ wps }: { wps: number }) {
         <span>Plan the pictures and check the {fact} for me. Your words are never changed. Leave it off to choose every picture yourself.</span>
       </label>
       <div className="flex items-center gap-2">
-        <Button variant="primary" disabled={busy || !text.trim()} onClick={() => void create()}>
+        <Button variant="primary" disabled={busy || !text.trim()} onClick={() => create()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy ? (plan ? "Planning…" : "Creating…") : "Create"}
         </Button>
         <Button variant="ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
@@ -342,6 +342,11 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
       setBusy(null);
     }
   };
+  /** Gone from the list as it's clicked (D192); back if the server says no. */
+  const skip = (id: number) => {
+    qc.setQueryData<CreateView>(["create"], (d) => d && { ...d, topics: d.topics.filter((x) => x.id !== id) });
+    return createApi.skip(id).finally(refresh);
+  };
   const write = async (t: CreateTopic) => {
     setBusy(t.id);
     try {
@@ -357,7 +362,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
     <Card className="flex max-h-[78vh] flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="size-4 text-accent" /> Ideas <span className="font-normal text-subtle">{topics.length}</span></h2>
-        <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void more()}>
+        <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => more()}>
           {busy === "more" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} More ideas
         </Button>
       </div>
@@ -370,7 +375,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
         <input value={mineAngle} onChange={(e) => setMineAngle(e.target.value)} aria-label="Angle (optional)"
                placeholder="Angle or what to cover (optional)"
                className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
-        <Button size="sm" variant="primary" className="self-start" disabled={busy !== null || mine.trim().length < 8} onClick={() => void writeMine()}>
+        <Button size="sm" variant="primary" className="self-start" disabled={busy !== null || mine.trim().length < 8} onClick={() => writeMine()}>
           {busy === "mine" ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} Write the script
         </Button>
       </div>
@@ -403,12 +408,12 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => void write(t)}>
+              <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => write(t)}>
                 {busy === t.id ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} {busy === t.id ? "Writing…" : "Write it"}
               </Button>
               <Tip label="Not this one">
-                <Button size="icon" variant="ghost" className="size-7 opacity-60 group-hover:opacity-100" aria-label="Skip this idea"
-                        onClick={() => void createApi.skip(t.id).then(() => qc.invalidateQueries({ queryKey: ["create"] }))}>
+                <Button size="icon" variant="ghost" className="size-7 opacity-60 group-hover:opacity-100 focus-visible:opacity-100" aria-label="Skip this idea"
+                        onClick={() => skip(t.id)}>
                   <X className="size-3.5" />
                 </Button>
               </Tip>
@@ -456,12 +461,15 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
   const busyNow = building || video.status === "writing";
   /** Delete, from any state, so no video can get stuck on the page (D123). */
   const archive = async (on: boolean) => {
+    // Moved as it's clicked (D192); the refresh after puts it back if the server said no.
+    qc.setQueryData<CreateView>(["create"], (d) => d && { ...d, videos: d.videos.map((x) => x.id === video.id ? { ...x, archived: on } : x) });
     try {
       await createApi.archive(video.id, on);
       toast.success(on ? "Moved to the Archive" : "Back in Create", { description: on ? "Open the Archive at the bottom of the list to find it." : undefined });
-      await qc.invalidateQueries({ queryKey: ["create"] });
     } catch (e) {
       toast.error((e as Error).message);
+    } finally {
+      await qc.invalidateQueries({ queryKey: ["create"] });
     }
   };
   const remove = async (withClip = false) => {
@@ -503,7 +511,7 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
         {confirm === "ideas" ? (
           <span className="flex shrink-0 items-center gap-1 text-xs">
             <span className="text-muted">Back to ideas? This video goes to the Recycle Bin.</span>
-            <Button size="sm" variant="primary" onClick={() => void toIdeas()}>Back to ideas</Button>
+            <Button size="sm" variant="primary" onClick={() => toIdeas()}>Back to ideas</Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Keep</Button>
           </span>
         ) : confirm ? (
@@ -511,11 +519,11 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
             <span className="text-muted">{building ? "Stop and delete?" : "Delete?"}</span>
             {video.clip_id ? (
               <>
-                <Button size="sm" variant="danger" onClick={() => void remove(true)}>Delete and its clip</Button>
-                <Button size="sm" variant="secondary" onClick={() => void remove(false)}>Keep the clip</Button>
+                <Button size="sm" variant="danger" onClick={() => remove(true)}>Delete and its clip</Button>
+                <Button size="sm" variant="secondary" onClick={() => remove(false)}>Keep the clip</Button>
               </>
             ) : (
-              <Button size="sm" variant="danger" onClick={() => void remove()}>Delete</Button>
+              <Button size="sm" variant="danger" onClick={() => remove()}>Delete</Button>
             )}
             <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Keep</Button>
           </span>
@@ -524,7 +532,7 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           {!building && (
             <Tip label={video.archived ? "Back to Create: out of the Archive, into the list above" : "Move to the Archive (posted videos go there by themselves)"}>
               <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={video.archived ? "Back to Create" : "Move to the Archive"}
-                      onClick={() => void archive(!video.archived)}>
+                      onClick={() => archive(!video.archived)}>
                 {video.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
               </Button>
             </Tip>
@@ -920,10 +928,10 @@ function VoiceStep({ video }: { video: CreateVideo }) {
       {way === "file" && <>
         <Step n={1}>
           <span className="flex-1">Copy the script.</span>
-          <Button size="sm" variant="primary" onClick={() => void copyText(text, "Script")}><ClipboardCopy className="size-3.5" /> Copy script</Button>
+          <Button size="sm" variant="primary" onClick={() => copyText(text, "Script")}><ClipboardCopy className="size-3.5" /> Copy script</Button>
           {/elevenlabs/i.test(how) && (
             <Tip label="A sentence a line and a [pause] before the punchline, for Eleven v3. Try stability 0.55 to 0.65, similarity 0.75, style 0 to 0.1, and make the punchline 2 or 3 times to keep the flattest.">
-              <Button size="sm" variant="secondary" onClick={() => void copyText(eleven, "Script for ElevenLabs")}><ClipboardCopy className="size-3.5" /> For ElevenLabs</Button>
+              <Button size="sm" variant="secondary" onClick={() => copyText(eleven, "Script for ElevenLabs")}><ClipboardCopy className="size-3.5" /> For ElevenLabs</Button>
             </Tip>
           )}
         </Step>
@@ -935,7 +943,7 @@ function VoiceStep({ video }: { video: CreateVideo }) {
             onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
             onDrop={(e) => { e.preventDefault(); setOver(false); void upload(e.dataTransfer.files[0]); }}
             onClick={() => input.current?.click()} role="button" tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && input.current?.click()}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.current?.click(); } }}
             className={cn("flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-6 text-sm",
               over ? "border-accent bg-accent-soft text-fg" : "border-line-strong text-muted hover:border-accent hover:text-fg")}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
@@ -949,7 +957,7 @@ function VoiceStep({ video }: { video: CreateVideo }) {
         <div className="flex flex-col gap-2 text-sm">
           <p className="text-muted">The video is the pictures with the words as captions, timed at about {create?.channel.words_per_second ?? 2.3} words a second, over a silent track. Add music or a voice-over in the app you post from.</p>
           <Button variant="primary" className="self-start" disabled={busy}
-                  onClick={() => void gotIt(() => createApi.noVoice(video.id), "Building without a voice")}>
+                  onClick={() => gotIt(() => createApi.noVoice(video.id), "Building without a voice")}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />} Build it with no voice
           </Button>
         </div>
@@ -987,7 +995,7 @@ function Recorder({ text, busy, onUse }: { text: string; busy: boolean; onUse: (
       <p className="max-h-40 overflow-auto rounded-md border border-line bg-surface-1 p-3 whitespace-pre-wrap">{text}</p>
       <div className="flex flex-wrap items-center gap-2">
         {!recording
-          ? <Button variant="primary" onClick={() => void start()}><Mic className="size-4" /> {take ? "Record again" : "Start recording"}</Button>
+          ? <Button variant="primary" onClick={() => start()}><Mic className="size-4" /> {take ? "Record again" : "Start recording"}</Button>
           : <Button variant="danger" onClick={stop}><span className="size-2.5 animate-pulse rounded-full bg-danger" /> Stop</Button>}
         {take && !recording && <audio controls src={URL.createObjectURL(take)} className="h-9" />}
         {take && !recording && (

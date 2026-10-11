@@ -127,7 +127,7 @@ function FinishedRow({ job, runs = 1 }: { job: Job; runs?: number }) {
             )}
             {again && (
               <Tip label="Clip this video again with the campaign's current rules and profile">
-                <Button size="sm" variant="secondary" onClick={() => void rerun()}>
+                <Button size="sm" variant="secondary" onClick={() => rerun()}>
                   <RefreshCw className="size-3.5" /> Clip it again
                 </Button>
               </Tip>
@@ -598,7 +598,7 @@ export function NewClipsPage() {
                 : "Add at least one moment's start and end"}
             </span>
           )}
-          <Button variant="primary" disabled={!ready || busy} onClick={() => void make()}>
+          <Button variant="primary" disabled={!ready || busy} onClick={() => make()}>
             <Scissors className="size-4" /> {picked.length > 1 ? `Make clips from ${picked.length} videos` : "Make clips"}
           </Button>
         </div>

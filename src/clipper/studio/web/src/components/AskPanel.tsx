@@ -52,7 +52,7 @@ function Answer({ message }: { message: ResearchMessage }) {
           ))}
         </div>
       )}
-      <Button size="sm" variant="ghost" className="w-fit" onClick={() => void copyText(message.content, "Answer")}>
+      <Button size="sm" variant="ghost" className="w-fit" onClick={() => copyText(message.content, "Answer")}>
         <Copy className="size-3.5" /> Copy
       </Button>
     </div>
@@ -79,9 +79,8 @@ function WebSetup() {
             <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder="tvly-…"
                    aria-label="Tavily key" className="h-8 flex-1 rounded-sm border border-line bg-surface-1 px-2 text-sm text-fg focus:border-accent focus:outline-none" />
             <Button size="sm" variant="primary" disabled={key.trim().length < 10}
-                    onClick={() => save.mutate({ TAVILY_API_KEY: key }, {
+                    onClick={() => save.mutateAsync({ TAVILY_API_KEY: key }, {
                       onSuccess: () => { setKey(""); setOpen(false); void qc.invalidateQueries({ queryKey: ["research"] }); toast.success("Web search is on"); },
-                      onError: (e) => toast.error((e as Error).message),
                     })}>Save</Button>
           </div>
         </div>
@@ -129,7 +128,7 @@ function Conversation({ threadId, onThread }: { threadId?: number; onThread: (id
             <p className="text-sm text-muted">Quick questions about your clips, campaigns and what's working. It only answers; it never changes anything.</p>
             <div className="flex flex-col gap-2">
               {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => void send(s)}
+                <button key={s} onClick={() => send(s)}
                         className="rounded-md border border-line p-2.5 text-left text-sm text-muted transition-colors hover:border-line-strong hover:bg-surface-2 hover:text-fg">{s}</button>
               ))}
             </div>
@@ -160,7 +159,7 @@ function Conversation({ threadId, onThread }: { threadId?: number; onThread: (id
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
                     className="flex-1 resize-none bg-transparent px-2 py-1 text-sm outline-none placeholder:text-subtle" />
-          <Button size="icon" variant="primary" disabled={!text.trim() || pending !== null} onClick={() => void send()} aria-label="Send">
+          <Button size="icon" variant="primary" disabled={!text.trim() || pending !== null} onClick={() => send()} aria-label="Send">
             {pending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
           </Button>
         </div>
@@ -201,7 +200,7 @@ export function AskPanel() {
                 {threadId !== undefined && (
                   <Tip label="Delete this chat">
                     <Button size="icon" variant="ghost" aria-label="Delete this chat" className="hover:text-danger"
-                            onClick={() => void deleteThread(threadId).then(() => {
+                            onClick={() => deleteThread(threadId).then(() => {
                               setThreadId(undefined);
                               void qc.invalidateQueries({ queryKey: ["research", "threads"] });
                             })}>

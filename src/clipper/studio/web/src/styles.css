@@ -62,8 +62,9 @@
   --accent-soft: rgb(79 107 0 / 0.10);
   --focus-ring: #4F6B00;
   --money: #3F7A12;
-  --success: #17804F;
-  --warning: #A86400;
+  /* Darker than they were (D192): the warning and success words fell under 4.5:1 on the grey surfaces. */
+  --success: #137446;
+  --warning: #955800;
   --danger: #C8341F;
   --info: #1F6FB8;
   --cap-shadow: none;
@@ -183,6 +184,17 @@ h2, h3 { font-family: var(--font-display); }
   .pop-in { animation: none; }
   .img-in { transition: none; }
 }
+
+/* A button waiting on Clipper (D192, components/ui Button): its words and icon give way to a spinner, the button
+   keeping its size, unless it already shows its own spinner. Not dimmed while it waits: it's the one working. */
+button[data-busy]:not(:has(.animate-spin)) { -webkit-text-fill-color: transparent; cursor: progress; }
+button[data-busy]:not(:has(.animate-spin)) > * { visibility: hidden; }
+button[data-busy]:not(:has(.animate-spin))::after {
+  content: ""; position: absolute; inset: 0; margin: auto; width: 1em; height: 1em;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 9999px;
+  animation: spin 0.7s linear infinite;
+}
+button[data-busy]:disabled { opacity: 1; }
 
 .fade-in { animation: fade-in var(--dur-enter) var(--ease-decelerate); }
 @keyframes sheet-in { from { transform: translateX(24px); opacity: 0; } }

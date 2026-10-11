@@ -105,7 +105,7 @@ export function CampaignsPage() {
           )}
           {uses.finder && (
             <Button variant={finding ? "secondary" : "ghost"}
-                    onClick={() => void navigate({ search: { find: finding ? undefined : "1" } })}>
+                    onClick={() => navigate({ search: { find: finding ? undefined : "1" } })}>
               <Search className="size-4" /> Find campaigns
               {found.length > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent">{found.length}</span>}
             </Button>
@@ -288,7 +288,7 @@ function MoneyCard({ c }: { c: Campaign }) {
               <li key={p.id} className="flex items-center gap-3 py-1.5">
                 <span className="tabular w-24 text-money">{formatMoney(p.amount)}</span>
                 <span className="flex-1 text-muted">{p.paid_on}{p.note && ` · ${p.note}`}</span>
-                <Button size="icon" variant="ghost" className="size-7" aria-label="Remove payout" onClick={() => remove.mutate(p.id)}>
+                <Button size="icon" variant="ghost" className="size-7" aria-label="Remove payout" onClick={() => remove.mutateAsync(p.id)}>
                   <Trash2 className="size-3.5" />
                 </Button>
               </li>
@@ -357,7 +357,7 @@ export function CampaignPage() {
               <Pencil className="size-4" /> Edit
             </Link>
           )}
-          <Button variant="ghost" onClick={() => setCampaign.mutate({ name: c.name, archived: !c.archived })}>
+          <Button variant="ghost" onClick={() => setCampaign.mutateAsync({ name: c.name, archived: !c.archived })}>
             {c.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
             {c.archived ? "Unarchive" : "Archive"}
           </Button>

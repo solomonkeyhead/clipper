@@ -44,7 +44,7 @@ function SiteCopy({ page }: { page: string }) {
     toast.success(`${page} copied`, { description: "Paste it into GitHub's file editor." });
   };
   return (
-    <button type="button" onClick={() => void copy()}
+    <button type="button" onClick={() => copy()}
             className="ml-1 inline-flex h-6 items-center gap-1 rounded-sm border border-line bg-surface-2 px-2 text-xs font-medium text-fg hover:bg-surface-3">
       Copy page
     </button>
@@ -102,7 +102,7 @@ function AccountRow({ account }: { account: Account }) {
       {confirm ? (
         <span className="flex items-center gap-1.5 text-xs">
           <span className="text-muted">Stop syncing this account?</span>
-          <Button size="sm" variant="danger" onClick={() => disconnect.mutate({ platform: account.platform, id: account.id },
+          <Button size="sm" variant="danger" onClick={() => disconnect.mutateAsync({ platform: account.platform, id: account.id },
             { onSuccess: () => toast("Disconnected", { description: "Its posts stay in your stats; they just stop updating." }) })}>
             Disconnect
           </Button>
@@ -139,9 +139,8 @@ function TikTokAppKeys({ onSaved }: { onSaved?: () => void }) {
       </div>
       <div className="flex justify-end">
         <Button variant="primary" disabled={!key.trim() || !secret.trim() || save.isPending}
-          onClick={() => save.mutate({ TIKTOK_CLIENT_KEY: key, TIKTOK_CLIENT_SECRET: secret }, {
+          onClick={() => save.mutateAsync({ TIKTOK_CLIENT_KEY: key, TIKTOK_CLIENT_SECRET: secret }, {
             onSuccess: () => { setKey(""); setSecret(""); toast.success("TikTok app keys saved"); onSaved?.(); },
-            onError: (e) => toast.error((e as Error).message),
           })}>
           <KeyRound className="size-4" /> Save keys
         </Button>
@@ -285,9 +284,8 @@ function YouTubeAppKeys() {
       </div>
       <div className="flex justify-end">
         <Button variant="primary" disabled={!id.trim() || !secret.trim() || save.isPending}
-          onClick={() => save.mutate({ YOUTUBE_CLIENT_ID: id, YOUTUBE_CLIENT_SECRET: secret }, {
+          onClick={() => save.mutateAsync({ YOUTUBE_CLIENT_ID: id, YOUTUBE_CLIENT_SECRET: secret }, {
             onSuccess: () => { setId(""); setSecret(""); toast.success("Google app saved"); },
-            onError: (e) => toast.error((e as Error).message),
           })}>
           <KeyRound className="size-4" /> Save keys
         </Button>
@@ -330,9 +328,8 @@ function InstagramAppKeys({ onToken }: { onToken: () => void }) {
       <div className="flex items-center justify-between gap-2">
         <Button variant="ghost" onClick={onToken}>Paste a token instead</Button>
         <Button variant="primary" disabled={!id.trim() || !secret.trim() || save.isPending}
-          onClick={() => save.mutate({ INSTAGRAM_APP_ID: id, INSTAGRAM_APP_SECRET: secret }, {
+          onClick={() => save.mutateAsync({ INSTAGRAM_APP_ID: id, INSTAGRAM_APP_SECRET: secret }, {
             onSuccess: () => { setId(""); setSecret(""); toast.success("Meta app saved", { description: "Now \"Add an Instagram account\" is one click." }); },
-            onError: (e) => toast.error((e as Error).message),
           })}>
           <KeyRound className="size-4" /> Save
         </Button>
@@ -386,7 +383,7 @@ function InstagramToken({ onBack }: { onBack: () => void }) {
       <Field label="Access token">{(id) => <SecretInput id={id} value={token} onChange={setToken} placeholder="IGAA…" />}</Field>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onBack}>Back</Button>
-        <Button variant="primary" disabled={token.trim().length < 20 || busy} onClick={() => void connect()}>
+        <Button variant="primary" disabled={token.trim().length < 20 || busy} onClick={() => connect()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="instagram" className="size-4" />} Connect
         </Button>
       </div>
@@ -435,7 +432,7 @@ function AddX() {
                                 onKeyDown={(e) => { if (e.key === "Enter" && username.trim() && !busy) void connect(); }} />}
           </Field>
         </div>
-        <Button variant="primary" disabled={busy || !username.trim()} onClick={() => void connect()}>
+        <Button variant="primary" disabled={busy || !username.trim()} onClick={() => connect()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="x" className="size-4" />} Connect
         </Button>
         <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
@@ -463,7 +460,7 @@ function AddX() {
       </Field>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-        <Button variant="primary" disabled={busy || !username.trim() || (!haveToken && token.trim().length < 30)} onClick={() => void connect()}>
+        <Button variant="primary" disabled={busy || !username.trim() || (!haveToken && token.trim().length < 30)} onClick={() => connect()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="x" className="size-4" />} Connect
         </Button>
       </div>
@@ -598,7 +595,7 @@ function Computer() {
         An hour of footage takes about {rec.minutes_per_hour} minutes to read, roughly.</div>
       {data.matches
         ? <div className="text-success">Already set up this way.</div>
-        : <Button variant="primary" size="sm" className="self-start" onClick={() => void apply()}>Use the best settings for this computer</Button>}
+        : <Button variant="primary" size="sm" className="self-start" onClick={() => apply()}>Use the best settings for this computer</Button>}
     </div>
   );
 }
@@ -695,14 +692,13 @@ function AIKey() {
           {(id) => <SecretInput id={id} value={key} onChange={setKey} placeholder="AIza…" isSet={setup?.keys.GEMINI_API_KEY} />}
         </Field>
         <Button variant="primary" disabled={key.trim().length < 20 || save.isPending}
-          onClick={() => save.mutate({ GEMINI_API_KEY: key }, {
+          onClick={() => save.mutateAsync({ GEMINI_API_KEY: key }, {
             onSuccess: () => { setKey(""); void check(); },
-            onError: (e) => toast.error((e as Error).message),
           })}>
           Save
         </Button>
         {setup?.ai_ready && (
-          <Button variant="secondary" disabled={testing} onClick={() => void check()}>
+          <Button variant="secondary" disabled={testing} onClick={() => check()}>
             {testing && <Loader2 className="size-4 animate-spin" />} Test
           </Button>
         )}
@@ -743,9 +739,8 @@ function FootageKeys() {
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-muted">NASA: always on, no key needed.</span>
         <Button variant="primary" disabled={!typed.length || save.isPending}
-                onClick={() => save.mutate(Object.fromEntries(typed), {
+                onClick={() => save.mutateAsync(Object.fromEntries(typed), {
                   onSuccess: () => { setValues({}); toast.success("Footage keys saved"); },
-                  onError: (e) => toast.error((e as Error).message),
                 })}>
           <KeyRound className="size-4" /> Save keys
         </Button>
@@ -776,7 +771,7 @@ function SystemCheck() {
           <h2 className="text-md font-semibold">System check</h2>
           <p className="mt-0.5 text-sm text-muted">Checks this PC has what clipping needs: video tools, graphics card, fonts, disk space.</p>
         </div>
-        <Button variant="secondary" disabled={busy} onClick={() => void run()}>
+        <Button variant="secondary" disabled={busy} onClick={() => run()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Stethoscope className="size-4" />} {busy ? "Checking…" : "Run check"}
         </Button>
       </div>

@@ -166,6 +166,23 @@ with sync_playwright() as p:
     expect(page.get_by_role("button", name="Archive 1")).to_be_visible()
     expect(cards).to_have_count(2)
     print("archived by hand: cards", cards.count())
+    # D192: with a slow server, a click still answers at once: archiving moves the card before the server has
+    # answered, and a button waiting on it spins and takes no second click.
+    page.evaluate("""() => { const real = window.fetch; window.__sent = 0;
+        window.fetch = async (u, o) => { if (o && o.method && o.method !== 'GET') { window.__sent++;
+            await new Promise((r) => setTimeout(r, 1500)); } return real(u, o); }; }""")
+    page.get_by_role("button", name="Move to the Archive").first.click()
+    expect(cards).to_have_count(1, timeout=300)
+    expect(page.get_by_role("button", name="Archive 2")).to_be_visible(timeout=300)
+    page.wait_for_timeout(1700)
+    again = page.get_by_role("button", name="Make again")
+    sent = page.evaluate("window.__sent")
+    again.click()
+    again.click(force=True)
+    expect(again).to_have_attribute("data-busy", "true", timeout=400)
+    assert page.evaluate("window.__sent") == sent + 1, "a second click on a waiting button was sent"
+    page.wait_for_timeout(1700)
+    print("slow server: the archive moved at once, a waiting button spun and took one click")
     # the footage libraries card in Settings (D130)
     page.goto("http://127.0.0.1:8799/settings")
     expect(page.get_by_text("Footage libraries for Create")).to_be_visible()

@@ -396,7 +396,7 @@ export function DashboardPage() {
                 <span className="line-clamp-1">{post.clip_title}</span>
                 <span className="line-clamp-1 text-xs text-muted">Passed {formatCount(task.views)} views: {task.task}</span>
               </button>
-              <Button size="sm" variant="ghost" onClick={() => setTask.mutate({ url: post.url, views: task.views, done: true })}>
+              <Button size="sm" variant="ghost" onClick={() => setTask.mutateAsync({ url: post.url, views: task.views, done: true })}>
                 Done
               </Button>
             </div>

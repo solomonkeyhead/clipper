@@ -328,11 +328,11 @@ function Workbench({ view }: { view: EditorView }) {
           <Tip label="Undo" keys="Ctrl Z"><Button size="icon" variant="ghost" aria-label="Undo" disabled={!hist.past.length} onClick={undo}><Undo2 className="size-4" /></Button></Tip>
           <Tip label="Redo" keys="Ctrl Shift Z"><Button size="icon" variant="ghost" aria-label="Redo" disabled={!hist.future.length} onClick={redo}><Redo2 className="size-4" /></Button></Tip>
           <Tip label="A quick render of exactly what the clip will be: framing, captions, hook" keys="P">
-            <Button variant="secondary" disabled={Boolean(problems.length) || busy !== null} onClick={() => void makePreview()}>
+            <Button variant="secondary" disabled={Boolean(problems.length) || busy !== null} onClick={() => makePreview()}>
               {busy === "preview" ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />} {busy === "preview" ? "Rendering…" : "Preview"}
             </Button>
           </Tip>
-          <Button variant="primary" disabled={Boolean(problems.length) || busy !== null || live} onClick={() => void save()}>
+          <Button variant="primary" disabled={Boolean(problems.length) || busy !== null || live} onClick={() => save()}>
             {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : <Scissors className="size-4" />}
             {view.clip_id != null ? "Save changes" : "Make clip"}
           </Button>
@@ -377,7 +377,7 @@ function Workbench({ view }: { view: EditorView }) {
               <Tool label="End here" keys="O" onClick={act.out}>End</Tool>
               <Tool label="Split at the playhead" keys="S" onClick={act.split}><SplitSquareHorizontal className="size-3.5" /> Split</Tool>
               <Tool label={blocked("internal_cuts") ? `No cuts inside the clip: ${why("internal_cuts")}` : "Cut dead air and filler words, like Clipper does on podcasts"} keys="T"
-                    onClick={() => void tighten()} disabled={blocked("internal_cuts") || !edit.pieces.length || busy !== null}>
+                    onClick={() => tighten()} disabled={blocked("internal_cuts") || !edit.pieces.length || busy !== null}>
                 {busy === "tighten" ? <Loader2 className="size-3.5 animate-spin" /> : <Wind className="size-3.5" />} Tighten
               </Tool>
               <Tool label={blocked("visual_effects") ? `No zooms: ${why("visual_effects")}` : "Punch in on this piece: none, 1.1×, 1.2×"} keys="Z"

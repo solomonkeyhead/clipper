@@ -817,7 +817,7 @@ export function ClipSheet() {
                       <Download className="size-4" /> Download <Kbd className="ml-auto border-accent-fg/30 bg-accent-fg/10 text-accent-fg">D</Kbd>
                     </a>
                   )}
-                  {!hosted && <Tip label="Show in folder"><Button variant="secondary" size="icon" aria-label="Show in folder" onClick={() => void showFile(clip.id)}>
+                  {!hosted && <Tip label="Show in folder"><Button variant="secondary" size="icon" aria-label="Show in folder" onClick={() => showFile(clip.id)}>
                     <FolderOpen className="size-4" />
                   </Button></Tip>}
                   <DeleteButton clip={clip} size="md" />

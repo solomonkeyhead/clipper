@@ -122,7 +122,8 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
   });
   const platformLink = (p: Post) => (
     <Tip label={`${PLATFORM_NAME[p.platform] ?? p.platform}${p.account ? ` @${p.account}` : ""}: open the post`}>
-      <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-fg"><PlatformIcon platform={p.platform} /></a>
+      <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-fg"
+         aria-label={`Open the post on ${PLATFORM_NAME[p.platform] ?? p.platform}`}><PlatformIcon platform={p.platform} /></a>
     </Tip>
   );
 

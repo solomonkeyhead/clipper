@@ -119,7 +119,7 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
         <input value={wish} onChange={(e) => setWish(e.target.value)} placeholder="What you'd like to see (optional)"
                onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") void find(); }} aria-label="What you'd like to see"
                className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
-        <Button size="sm" variant="secondary" disabled={searching} onClick={() => void find()}>
+        <Button size="sm" variant="secondary" disabled={searching} onClick={() => find()}>
           {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Search again
         </Button>
         <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close"><X className="size-3.5" /></Button>
@@ -173,7 +173,7 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
         </>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" disabled={!chosen.length || saving} onClick={() => void use()}>
+        <Button size="sm" variant="primary" disabled={!chosen.length || saving} onClick={() => use()}>
           {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />} Use {chosen.length > 1 ? `these ${chosen.length}` : "this one"}
         </Button>
         <Tip label="Clipper picks the footage itself when you rebuild (only a good match is used)">
@@ -285,7 +285,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-2.5 text-xs text-muted">
           <span className="flex-1">{old.length === 1 ? "One drawing was" : `${old.length} drawings were`} made before the new style: smaller on the board,
             without the ready-drawn objects. Drawing {old.length === 1 ? "it" : "them"} again uses a little of your AI quota on the next build.</span>
-          <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => void redrawOld()}>
+          <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => redrawOld()}>
             {busy === "old" ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} Redraw {old.length === 1 ? "it" : `all ${old.length}`}
           </Button>
         </div>
@@ -340,7 +340,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                     </Button>
                   </Tip>
                   {drawings && <Tip label="A new chalk drawing for this part. Your words, if any, say what to draw.">
-                    <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "drawing")}>
+                    <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => ask(first, "drawing")}>
                       {busy === `${first}-drawing` ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} New drawing
                     </Button>
                   </Tip>}
@@ -361,7 +361,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
                   </Tip>
                   {v.previous && (
                     <Tip label="Keep what this part had">
-                      <Button size="sm" variant="ghost" disabled={busy !== null || rebuilding} onClick={() => void ask(first, "undo")}>
+                      <Button size="sm" variant="ghost" disabled={busy !== null || rebuilding} onClick={() => ask(first, "undo")}>
                         <Undo2 className="size-3.5" /> Undo
                       </Button>
                     </Tip>

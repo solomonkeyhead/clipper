@@ -111,7 +111,7 @@ export function LinkImport({ onImported, campaign = "" }: { onImported: (names: 
           </div>
           <div className="mt-2 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setContents(null)}>Cancel</Button>
-            <Button variant="primary" disabled={!picked.length} onClick={() => void begin(picked)}>
+            <Button variant="primary" disabled={!picked.length} onClick={() => begin(picked)}>
               Download {picked.length} video{picked.length === 1 ? "" : "s"}
             </Button>
           </div>
@@ -181,7 +181,7 @@ export function JobResults({ job }: { job: Job }) {
                       </div>
                       <p className="mt-0.5 line-clamp-2 text-sm">“{m.text}”</p>
                     </div>
-                    <Button size="sm" variant="secondary" disabled={making !== null} onClick={() => void make(i, m.start, m.end)}>
+                    <Button size="sm" variant="secondary" disabled={making !== null} onClick={() => make(i, m.start, m.end)}>
                       {making === i ? <Loader2 className="size-3.5 animate-spin" /> : <Scissors className="size-3.5" />} Make it anyway
                     </Button>
                   </div>

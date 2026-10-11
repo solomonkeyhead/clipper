@@ -178,6 +178,13 @@ class TestApi:
         for path in ("/", "/campaigns/chad-powers-s2", "/clips?status=ready"):
             page = client.get(path)
             assert page.status_code == 200 and '<div id="root">' in page.text
+        # D192: the page itself is checked every time, its content-named files kept for good.
+        import re
+
+        assert page.headers["cache-control"] == "no-cache"
+        asset = client.get(re.search(r'/assets/[^"]+\.js', page.text).group())
+        assert asset.status_code == 200 and "immutable" in asset.headers["cache-control"]
+        assert "immutable" not in client.get("/assets/nope.js").headers.get("cache-control", "")
         assert client.get("/api/nope").status_code == 404
         (campaign,) = client.get("/api/campaigns").json()
         assert campaign["name"] == "chad-powers-s2" and campaign["counts"]["ready"] == 1

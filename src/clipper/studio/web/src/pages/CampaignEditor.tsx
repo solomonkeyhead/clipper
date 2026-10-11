@@ -153,7 +153,7 @@ function BriefReader({ onRead, initial = "", from, saved, editing = false }: {
                 placeholder="Paste the campaign brief here…" aria-label="Campaign brief" />
       <div className="flex items-center justify-end gap-3">
         {busy && <span className="text-xs text-muted">Reading the brief (about 10 seconds)…</span>}
-        <Button type="button" variant="primary" disabled={busy || text.trim().length < 40} onClick={() => void read()}>
+        <Button type="button" variant="primary" disabled={busy || text.trim().length < 40} onClick={() => read()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
           Fill in the form
         </Button>
@@ -444,9 +444,8 @@ export function CampaignEditorPage() {
           <div>
             {canDelete && (
               <Button type="button" variant="ghost" className="hover:text-danger"
-                onClick={() => remove.mutate(editing!, {
+                onClick={() => remove.mutateAsync(editing!, {
                   onSuccess: () => { toast("Campaign deleted", { description: "Its file is in the Recycle Bin." }); void navigate({ to: "/campaigns" }); },
-                  onError: (e) => toast.error((e as Error).message),
                 })}>
                 <Trash2 className="size-4" /> Delete campaign
               </Button>

@@ -136,7 +136,7 @@ export function MyClips({ video, wps, onRebuild, busyRebuild }: {
       <div onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
            onDrop={(e) => { e.preventDefault(); setOver(false); if (!busy) void upload(e.dataTransfer.files); }}
            onClick={() => !busy && input.current?.click()} role="button" tabIndex={0}
-           onKeyDown={(e) => e.key === "Enter" && !busy && input.current?.click()}
+           onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !busy) { e.preventDefault(); input.current?.click(); } }}
            className={cn("flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-4 text-sm",
              over ? "border-accent bg-accent-soft text-fg" : "border-line-strong text-muted hover:border-accent hover:text-fg",
              busy && "cursor-wait opacity-70")}>
@@ -163,7 +163,7 @@ export function MyClips({ video, wps, onRebuild, busyRebuild }: {
                 </div>
                 <Tip label="Remove this clip">
                   <Button size="icon" variant="ghost" aria-label={`Remove ${c.name}`} disabled={busy}
-                          onClick={() => void guard("remove", () => createApi.clipRemove(video.id, c.id))}>
+                          onClick={() => guard("remove", () => createApi.clipRemove(video.id, c.id))}>
                     <Trash2 className="size-4" />
                   </Button>
                 </Tip>
@@ -173,17 +173,17 @@ export function MyClips({ video, wps, onRebuild, busyRebuild }: {
 
           <div className="flex flex-wrap items-center gap-2">
             <Tip label="Claude looks at your clips and puts each on the sentence it fits. Uses a little of your Claude plan.">
-              <Button variant="primary" disabled={busy} onClick={() => void guard("ai", () => createApi.place(video.id, "ai", strict), (r: { note: string }) => r.note)}>
+              <Button variant="primary" disabled={busy} onClick={() => guard("ai", () => createApi.place(video.id, "ai", strict), (r: { note: string }) => r.note)}>
                 {working === "ai" ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} {working === "ai" ? "Looking at them…" : "Place them for me"}
               </Button>
             </Tip>
             <Tip label="Free, no AI: the clips in the order you added them, spread across the video.">
-              <Button variant="secondary" disabled={busy} onClick={() => void guard("order", () => createApi.place(video.id, "order"), (r: { note: string }) => r.note)}>
+              <Button variant="secondary" disabled={busy} onClick={() => guard("order", () => createApi.place(video.id, "order"), (r: { note: string }) => r.note)}>
                 <Wand2 className="size-4" /> In order
               </Button>
             </Tip>
             {placed && (
-              <Button variant="ghost" disabled={busy} onClick={() => void guard("clear", () => createApi.place(video.id, "clear"), (r: { note: string }) => r.note)}>
+              <Button variant="ghost" disabled={busy} onClick={() => guard("clear", () => createApi.place(video.id, "clear"), (r: { note: string }) => r.note)}>
                 Clear
               </Button>
             )}

@@ -68,7 +68,7 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
         <input className={input} value={niche} onChange={(e) => setNiche(e.target.value)} placeholder="e.g. strange facts about the ocean" />
       </Field>
       <div className="flex gap-2">
-        <Button variant="primary" disabled={busy || !name.trim()} onClick={() => void make()}>Make the channel</Button>
+        <Button variant="primary" disabled={busy || !name.trim()} onClick={() => make()}>Make the channel</Button>
         {!first && <Button variant="ghost" onClick={onDone}>Cancel</Button>}
       </div>
     </Card>
@@ -176,7 +176,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
         Chalk taps on drawings and a two-note tap at the punchline
       </label>
       <div className="flex gap-2">
-        <Button variant="primary" onClick={() => void save()}>Save</Button>
+        <Button variant="primary" onClick={() => save()}>Save</Button>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
       </div>
     </Card>

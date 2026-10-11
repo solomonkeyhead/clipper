@@ -2,7 +2,8 @@ import * as RadixSwitch from "@radix-ui/react-switch";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, Copy, Info } from "lucide-react";
-import { forwardRef, useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { toast } from "sonner";
 import { cn, copyText } from "@/lib/utils";
 
 /* ---------- Button ---------- */
@@ -10,15 +11,35 @@ import { cn, copyText } from "@/lib/utils";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "icon";
 
+/** A click whose action returns a promise (it waits on Clipper) takes no second click until it's done, and
+ *  past 100 ms the button's words give way to a spinner at the same size (D192): every click answers at once,
+ *  the button pressed is the one that spins, and a double click can't send it twice. */
 export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant; size?: Size;
-}>(({ variant = "secondary", size = "md", className, ...props }, ref) => (
+}>(({ variant = "secondary", size = "md", className, onClick, ...props }, ref) => {
+  const [busy, setBusy] = useState<0 | 1 | 2>(0);   // idle, waiting, waiting long enough to show it
+  const waiting = useRef(false);   // set at once: a second click can come before the page redraws
+  return (
   <button
     ref={ref}
     // Not a form's submit unless it says so: a helper button inside a form
     // ("Fill in the form") once saved the campaign it was meant to fill.
     type="button"
+    aria-busy={busy > 0 || undefined}
+    data-busy={busy === 2 || undefined}
+    onClick={(e) => {
+      if (waiting.current) return;
+      const result = onClick?.(e) as unknown;
+      if (!(result instanceof Promise)) return;
+      waiting.current = true;
+      setBusy(1);
+      const show = setTimeout(() => setBusy(2), 100);
+      const done = () => { clearTimeout(show); waiting.current = false; setBusy(0); };
+      // An action that handles its own errors never rejects; one that didn't would have failed in silence.
+      result.then(done, (err: unknown) => { done(); toast.error(err instanceof Error ? err.message : String(err)); });
+    }}
     className={cn(
+      busy === 2 && "relative",   // for the spinner; a button placed absolutely keeps its place
       "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-medium",
       "transition-[background-color,border-color,color,transform] duration-[var(--dur-fast)] ease-standard",
       "active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40",
@@ -33,7 +54,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
     )}
     {...props}
   />
-));
+  );
+});
 Button.displayName = "Button";
 
 /* ---------- Tooltip (teaches the shortcut) ---------- */

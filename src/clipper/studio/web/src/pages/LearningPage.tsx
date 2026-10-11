@@ -217,7 +217,7 @@ function TastePanel({ have, need }: { have: number; need: number }) {
         ) : <><b>It has learnt from {have} scored clips.</b> Export what it learnt to keep, or to start another install from.</>}
       </div>
       <div className="flex gap-2">
-        <Button size="sm" variant="secondary" onClick={() => void exportIt()}>Export my taste</Button>
+        <Button size="sm" variant="secondary" onClick={() => exportIt()}>Export my taste</Button>
         <Button size="sm" variant="secondary" onClick={() => file.current?.click()}>Start from a taste file</Button>
         <input ref={file} type="file" accept="application/json,.json" className="hidden" onChange={(e) => void importIt(e.target.files?.[0])} />
       </div>

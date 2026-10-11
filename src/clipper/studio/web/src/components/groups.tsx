@@ -72,7 +72,7 @@ function GroupRow({ group, accounts, onEdit }: { group: AccountGroup; accounts: 
         </Button>
         <Button size="icon" variant="ghost" aria-label="Edit group" onClick={onEdit}><Pencil className="size-3.5" /></Button>
         <Button size="icon" variant="ghost" aria-label="Delete group"
-                onClick={() => remove.mutate(group.id!, { onSuccess: () => toast("Group deleted", { description: "Its accounts stay connected." }) })}>
+                onClick={() => remove.mutateAsync(group.id!, { onSuccess: () => toast("Group deleted", { description: "Its accounts stay connected." }) })}>
           <Trash2 className="size-3.5" />
         </Button>
       </div>
@@ -122,9 +122,8 @@ function GroupEditor({ group, accounts, onDone }: { group: AccountGroup; account
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onDone}>Cancel</Button>
         <Button variant="primary" disabled={!name.trim() || !members.length || save.isPending}
-          onClick={() => save.mutate({ id: group.id, name, members, campaigns: chosen }, {
+          onClick={() => save.mutateAsync({ id: group.id, name, members, campaigns: chosen }, {
             onSuccess: () => { toast.success(group.id == null ? "Group made" : "Group saved"); onDone(); },
-            onError: (e) => toast.error((e as Error).message),
           })}>
           Save
         </Button>

@@ -171,10 +171,18 @@ export function useSetTask() {
   });
 }
 
+/** Optimistic (D192): a switch flips as it's clicked, not when the server has answered; put back on error. */
 export function useSetSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (changes: Record<string, string>) => unwrap(api.PUT("/api/settings", { body: changes })),
+    onMutate: async (changes) => {
+      await qc.cancelQueries({ queryKey: keys.settings });
+      const previous = qc.getQueryData(keys.settings);
+      qc.setQueryData(keys.settings, (old: Record<string, string> | undefined) => old && { ...old, ...changes });
+      return { previous };
+    },
+    onError: (_e, _v, context) => context?.previous && qc.setQueryData(keys.settings, context.previous),
     onSuccess: (data) => {
       qc.setQueryData(keys.settings, data);
       qc.invalidateQueries({ queryKey: keys.status });

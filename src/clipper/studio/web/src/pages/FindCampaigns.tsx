@@ -80,7 +80,7 @@ function CheckBox() {
       </div>
       <TextArea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the campaign here…" aria-label="Campaign to check" />
       <div className="flex justify-end">
-        <Button variant="primary" disabled={busy || text.trim().length < 40} onClick={() => void run()}>
+        <Button variant="primary" disabled={busy || text.trim().length < 40} onClick={() => run()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />} Check the fit
         </Button>
       </div>
@@ -145,7 +145,7 @@ function FoundRow({ found }: { found: FoundCampaign }) {
             </a>
           )}
           {!result && (
-            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void check()}>
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => check()}>
               {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Check the fit
             </Button>
           )}

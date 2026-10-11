@@ -3385,3 +3385,18 @@ The Ideas box has a "Your own idea" form (the idea, an optional angle, "Write th
 an idea like the planner's (`POST /api/create/ideas/own`; one already there, used or skipped, comes back as new)
 and its script is written at once, in the background, as Write it does. Unlike "Write your own script", the AI
 writes it, in the channel's voice and rules, with its checks and picture plan.
+
+## D192: every click answers at once
+Marc asked for another pass over the site, mainly for how fast clicks respond. Page changes and clicks inside a
+page already drew in under 100 ms (measured on his data). What felt slow was a button waiting on the server with
+nothing on screen: Approve script, Archive, Delete, Back to ideas, Try again, a Settings switch.
+- The shared Button: an action that returns a promise takes no second click until it's done (three clicks sent
+  Approve three times), and after 100 ms its words give way to a spinner at the same size. A failed promise the
+  action didn't catch shows its message instead of vanishing. Save buttons hand it their promise (`mutateAsync`).
+- Shown before the server answers, put back if it says no: Settings switches and choices (`useSetSettings`),
+  skipping an idea, archiving a video.
+- The Create list read the clip titles once per idea (29 database opens a refresh): once now, about half the time.
+- The page's built files are kept by the browser for good (their names change with each build); only index.html
+  is checked on a load.
+- Access: Stats' "open the post" icons have names, the drop zones take Space as well as Enter, an idea's skip
+  button shows when reached by keyboard, and the light theme's warning and success colours pass 4.5:1.

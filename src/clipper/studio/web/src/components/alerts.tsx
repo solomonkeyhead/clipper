@@ -108,7 +108,7 @@ function ChannelPicker({ alerts, bot }: { alerts: Alerts; bot: DiscordBot }) {
           </div>
         </div>
       ))}
-      <div><Button variant="primary" size="sm" disabled={busy || !changed} onClick={() => void save()}>
+      <div><Button variant="primary" size="sm" disabled={busy || !changed} onClick={() => save()}>
         {busy && <Loader2 className="size-3.5 animate-spin" />} Watch these
       </Button></div>
     </div>
@@ -151,7 +151,7 @@ function Preferences({ alerts }: { alerts: Alerts }) {
           )}
         </Field>
       </div>
-      <div><Button variant="secondary" size="sm" onClick={() => void save()}>Save preferences</Button></div>
+      <div><Button variant="secondary" size="sm" onClick={() => save()}>Save preferences</Button></div>
     </div>
   );
 }
@@ -177,7 +177,7 @@ function DiscordSetup({ alerts }: { alerts: Alerts }) {
               </a>
             ) : <Hint>(Finish step 1 first.)</Hint>}
             {bot && (
-              <Button size="sm" variant="ghost" disabled={isFetching} onClick={() => void refetch()}>
+              <Button size="sm" variant="ghost" disabled={isFetching} onClick={() => refetch()}>
                 <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} /> Refresh
               </Button>
             )}
@@ -282,12 +282,12 @@ function WhopSignIn({ alerts }: { alerts: Alerts }) {
       {alerts.whop_signed_in ? (
         <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle2 className="size-4" /> Signed in
-          <Button size="sm" variant="ghost" onClick={() => void signOut()}>Sign out</Button>
+          <Button size="sm" variant="ghost" onClick={() => signOut()}>Sign out</Button>
         </div>
       ) : waiting ? (
         <div className="flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin text-accent" /> Approve Clipper in the Whop tab…</div>
       ) : (
-        <div><Button size="sm" variant="primary" disabled={!alerts.whop_app} onClick={() => void connect()}>Sign in with Whop</Button></div>
+        <div><Button size="sm" variant="primary" disabled={!alerts.whop_app} onClick={() => connect()}>Sign in with Whop</Button></div>
       )}
     </Step>
   );
@@ -334,10 +334,10 @@ function WhopFeedPicker({ alerts }: { alerts: Alerts }) {
         </div>
       ))}
       <div className="flex gap-2">
-        <Button variant="primary" size="sm" disabled={busy || !changed} onClick={() => void save()}>
+        <Button variant="primary" size="sm" disabled={busy || !changed} onClick={() => save()}>
           {busy && <Loader2 className="size-3.5 animate-spin" />} Watch these
         </Button>
-        <Button size="sm" variant="ghost" disabled={isFetching} onClick={() => void refetch()}>
+        <Button size="sm" variant="ghost" disabled={isFetching} onClick={() => refetch()}>
           <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} /> Refresh
         </Button>
       </div>
@@ -423,7 +423,7 @@ function Watching({ alerts, onEdit }: { alerts: Alerts; onEdit: () => void }) {
         </span>
         {alerts.error && <div className="mt-0.5 flex items-center gap-1.5 text-xs text-warning"><AlertTriangle className="size-3.5" /> {alerts.error}</div>}
       </div>
-      <Button size="sm" variant="secondary" disabled={busy} onClick={() => void now()}>
+      <Button size="sm" variant="secondary" disabled={busy} onClick={() => now()}>
         {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Check now
       </Button>
       <Button size="sm" variant="ghost" onClick={onEdit}><Settings2 className="size-3.5" /> Set up</Button>

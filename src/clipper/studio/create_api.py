@@ -161,6 +161,7 @@ def _view() -> dict:
     from ..create.script import Script
 
     videos = [v for v in videos if v["id"] not in doomed]
+    made = _made_titles(ch, videos)   # once, not once per idea: it was a third of every refresh
     for v in videos:
         stage = progress.get(v["id"])
         v["stage"], v["pct"] = (stage if stage else (None, None))
@@ -184,7 +185,7 @@ def _view() -> dict:
             "packs": [{"key": p.key, "label": p.label, "about": p.about, "drawings": p.drawings} for p in packs.PACKS.values()],
             # Ideas already made into a Short (or one of the channel's own examples) don't show (D154).
             "topics": [t for t in store.topics()
-                       if t.get("sent_back") or not topics_mod.made_already(t["question"], _made_titles(ch, videos))],
+                       if t.get("sent_back") or not topics_mod.made_already(t["question"], made)],
             "videos": videos}
 
 

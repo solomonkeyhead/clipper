@@ -555,6 +555,17 @@ def purge_trash() -> int:
     return purged
 
 
+class _BuiltFiles(StaticFiles):
+    """The page's built files are named by their content, so the browser keeps them for good (D192): a page load
+    asks only for index.html instead of re-checking each file, and they aren't compressed again every time."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 def create_app(*, auto_sync: bool = False) -> FastAPI:
     from .jobs import JobRunner
 
@@ -1475,7 +1486,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     # The single-page app: real files from the build, index.html for its routes.
     if (STATIC / "assets").is_dir():
-        app.mount("/assets", StaticFiles(directory=STATIC / "assets"), name="assets")
+        app.mount("/assets", _BuiltFiles(directory=STATIC / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> FileResponse:
