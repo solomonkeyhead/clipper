@@ -40,12 +40,22 @@ log = get_logger(__name__)
 
 W, H, FPS = 1080, 1920, 30
 PANEL_H = 1120
-#: The captions' middle line, on the board just under the panel.
-CAPTION_Y = PANEL_H + 84
-#: The Professor: this tall, his bottom edge a little below the frame's (his bust is cut flat there), bottom left.
-PRESENTER_H = 660
+#: Where the apps draw over a Short (D201), measured on YouTube Shorts and TikTok (Instagram Reels is close to
+#: TikTok): the like, comment and share column right of SAFE_RIGHT from about the panel's foot down, and the channel
+#: name and title below SAFE_BOTTOM (YouTube's own "Promote this Short" sits higher, but only its owner sees it).
+SAFE_RIGHT, SAFE_BOTTOM = 880, 1600
+#: The captions' middle line, on the board just under the panel, and their widest, so a page never runs under the
+#: buttons: centred, 700 wide ends at 890 (a 21-letter page at 1000 wide put "your" under YouTube's like button).
+CAPTION_Y = PANEL_H + 70
+CAPTION_W = 700
+#: The Professor (D201): this tall, bottom left, his bottom edge PRESENTER_LIFT above the frame's and the lowest
+#: PRESENTER_FADE of him fading into the board. He stood on the frame's edge at 660 tall, so the apps' channel name
+#: and title covered his chin, his hands and the chalk in them; now his face and hands end above SAFE_BOTTOM, and his
+#: cut-off bust no longer shows as a hard line.
+PRESENTER_H = 580
 PRESENTER_X = 18
-PRESENTER_SINK = 26
+PRESENTER_LIFT = 80
+PRESENTER_FADE = 0.3
 ANTON = REPO_ROOT / "assets" / "fonts" / "Anton-Regular.ttf"
 CAVEAT = REPO_ROOT / "assets" / "fonts" / "Caveat.ttf"
 
@@ -439,7 +449,7 @@ class Captions:
 
         style = cap.CaptionStyle(name="create", font="Anton", font_size=self.SIZE, primary=cap.WHITE,
                                  highlight=cap.YELLOW, outline_colour=cap.BLACK, outline=8, shadow=2,
-                                 max_words_per_chunk=4, max_chars_per_line=21, max_lines=1)
+                                 max_words_per_chunk=4, max_chars_per_line=16, max_lines=1)   # D201: fits CAPTION_W
         timed = cap.spread_squashed([Word(start=w.start, end=w.end, text=w.text) for w in words])
         self.pages = cap.chunk_words(timed, style, max_gap=0.6)
         self.accent = accent
@@ -455,7 +465,7 @@ class Captions:
         key = (p, lit)
         if key not in self._images:
             words = [w.text.strip() for w in self.pages[p].words]
-            self._images[key] = text_image(words, self.size, lit=lit, accent=self.accent)
+            self._images[key] = text_image(words, self.size, lit=lit, accent=self.accent, max_width=CAPTION_W)
         return self._images[key]
 
     def draw(self, frame: np.ndarray, t: float, y: float = CAPTION_Y) -> None:
@@ -616,6 +626,15 @@ def _blend_warped(frame: np.ndarray, rgb: np.ndarray | None, alpha: np.ndarray, 
     frame[y0:y1, x0:x1] = np.clip(out, 0, 255).astype(np.uint8)
 
 
+def faded(sprite: Sprite, share: float = PRESENTER_FADE) -> Sprite:
+    """The sprite with its lowest `share` fading out (D201): he stands above the frame's foot, and a bust cut flat
+    in the middle of the board looked pasted on."""
+    h = sprite.alpha.shape[0]
+    ramp = np.clip((1.0 - np.arange(h, dtype=np.float32) / h) / share, 0.0, 1.0)[:, None]
+    return Sprite(rgb=sprite.rgb * ramp[..., None], alpha=sprite.alpha * ramp, shadow=sprite.shadow * ramp,
+                  box=sprite.box, canvas=sprite.canvas)
+
+
 class Presenter:
     """The channel's character on screen all video (D159). `shows` is (picture, from, to) in seconds, covering
     the video. He stands still but for a slow breath, a soft pop as he changes pose and a slide in at the start:
@@ -635,10 +654,10 @@ class Presenter:
         self.versions: dict[tuple[Path, str], Sprite] = {}
         for pic, _, _ in shows:
             if pic not in self.sprites and (sprite := load_sprite(pic, PRESENTER_H)):
-                self.sprites[pic] = sprite
+                self.sprites[pic] = faded(sprite)
                 for kind in ("open", "blink"):
                     if v := load_variant(pic.with_name(f"{pic.stem}-{kind}{pic.suffix}"), sprite, PRESENTER_H):
-                        self.versions[(pic, kind)] = v
+                        self.versions[(pic, kind)] = faded(v)
         self.talk = (list(talk) + [False] * total)[:total] if talk else [False] * total
         rng, self.blink, k = random.Random(seed), [False] * total, 0
         while True:
@@ -688,7 +707,7 @@ class Presenter:
         sy = scale * (1 + breathe) * zoom
         sx = scale * (1 - breathe * 0.4) * zoom
         w = sprite.size[0]
-        dest = (PRESENTER_X + w / 2, H + PRESENTER_SINK + y) if zoom == 1.0 else (W / 2, H + PRESENTER_SINK * zoom)
+        dest = (PRESENTER_X + w / 2, H - PRESENTER_LIFT + y) if zoom == 1.0 else (W / 2, H - PRESENTER_LIFT * zoom)
         m = _affine(sprite, sx, sy, 0.0, dest)
         shadow = m.copy()
         shadow[0, 2] += 16
@@ -854,7 +873,7 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
             if edit.signoff and k >= edit.signoff_from:
                 written = chalk_text(edit.signoff, 84, reveal=(k - edit.signoff_from) / (0.5 * FPS))
                 if written is not None:
-                    paste(frame, written, W - written.shape[1] - 46, PANEL_H + 330)
+                    paste(frame, written, min(W - 46, SAFE_RIGHT) - written.shape[1], PANEL_H + 330)
             if edit.watermark is not None and k >= edit.hook_frames and not again:   # after the hook, which it covered
                 paste(frame, edit.watermark, W - edit.watermark.shape[1] - 48, 170,
                       0.85 * min(1.0, (k - edit.hook_frames + 1) / 6))

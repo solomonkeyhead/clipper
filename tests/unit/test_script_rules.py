@@ -153,3 +153,16 @@ def test_a_drawing_that_goes_on_with_an_earlier_one_keeps_its_marks_and_draws_on
     assert diagrams.cues(v, [(1.0, "bone")]) == [None, 1.0]            # the old mark has no cue in this shot
     fresh = v.model_copy(update={"sketch": both.model_copy(update={"base": 0})})
     assert diagrams.frame(v, 0.05, 4.0).tobytes() != diagrams.frame(fresh, 0.05, 4.0).tobytes()   # the ear is there at once
+
+
+def test_the_professor_and_the_captions_stay_clear_of_the_apps_buttons_and_titles():
+    """D201: YouTube's channel name and title covered his chin and hands, and a long caption ran under the like button."""
+    from clipper.create import compose as C
+    from clipper.create.voice import TimedWord
+
+    hands = C.H - C.PRESENTER_LIFT - C.PRESENTER_H * (1 - 0.55)   # his face and hands are the top 55 % of him
+    assert hands <= C.SAFE_BOTTOM and C.H - C.PRESENTER_LIFT - C.PRESENTER_H > C.CAPTION_Y + 50
+    said = ["Both", "breaths", "leave", "your", "lungs", "at", "thirty-seven", "degrees", "Fahrenheit"]
+    caps = C.Captions([TimedWord(text=w, start=i * 0.4, end=i * 0.4 + 0.35) for i, w in enumerate(said)])
+    assert all(caps.image(p, 0).shape[1] - 2 * 18 <= C.CAPTION_W for p in range(len(caps.pages)))   # less its blank margin
+    assert C.W / 2 + C.CAPTION_W / 2 <= C.SAFE_RIGHT + 10

@@ -78,3 +78,12 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
   `studio/web/src/` the page source (built into `studio/static/`, don't read the build).
 - `llm/` model backends; `render/` ffmpeg, captions, faces, cover; `campaign/` campaign rules.
 - `<data>/campaigns/*.yaml` one per campaign (the repo keeps only `campaigns/example.yaml`, the template).
+
+## Helper agents
+Two cheaper agents are in `.claude/agents/`. Hand them the easy jobs; keep the hard thinking.
+- `helper` (Haiku): searching files, listing folders, reading a file for one fact, renames, one-line edits spelled
+  out exactly, running the tests or the linter and reporting failures.
+- `worker` (Sonnet): a change inside one file whose goal is decided, a test for a described behaviour, a docs entry,
+  checking a page or an output.
+- Opus keeps planning, debugging, changes across several files, prompt and design changes, anything that spends the
+  owner's money or AI usage, commits, and every message to the owner. Check a helper's answer before using it.

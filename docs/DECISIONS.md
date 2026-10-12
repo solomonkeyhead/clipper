@@ -3516,3 +3516,19 @@ voice choice have names a screen reader can use; the physics pack's label no lon
 recorder's blob URL and timer were already fixed (D196). Not done: a migration to shorter default rules (Marc's
 "Every other script short" switch is the test first; changing every channel's length before it reports would hide the
 result).
+
+## D201: the Professor and the captions clear of the apps' buttons and titles; helper agents (2026-10-12)
+Marc's screenshots of video 25 on YouTube Shorts and TikTok: YouTube's channel name and title (and its owner-only
+"Promote this Short") covered the Professor's chin, his hands and the chalk in them, TikTok's caption his chest, and
+a 21-letter caption page ran under YouTube's like button. Measured from the screenshots and kept as constants:
+the apps' button column is right of x 880 from about the panel's foot down, their text below y 1600 (`SAFE_RIGHT`,
+`SAFE_BOTTOM`). The Professor is 580 tall instead of 660, stands 80 px above the frame's foot instead of 26 below
+it, and his lowest 30 % fades into the board (`compose.faded`), so his face and hands end above 1600 and his cut-off
+bust is no hard line; a cut-in uses the same lift. Captions are at most 700 wide (centred, they end at 890) and a page
+is at most 16 letters, so pages stay at full size, two or three words; they sit 14 px higher. A sign-off stays left of
+the buttons. Checked on frames drawn by the new code with four of Marc's poses and a cut-in, the apps' zones laid on
+top. Built videos keep the old layout until they are built again.
+Helper agents: `.claude/agents/helper.md` (Haiku: searches, listings, renames, one-line edits, running the tests) and
+`worker.md` (Sonnet: a change inside one file, a test, a docs entry, a page check), with a note in CLAUDE.md that Opus
+keeps planning, debugging, changes across several files and everything that spends Marc's money. Made by a new user
+skill, `helper-agents` (in Marc's own `~/.claude/skills`), which sets the same up in any project.
