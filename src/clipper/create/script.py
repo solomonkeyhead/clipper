@@ -108,6 +108,7 @@ class Script(BaseModel):
     hook: str = ""                  # the words on screen at the start, at most 6 (D155); "" = the title
     # Set by the app, not the writer (D155): the shape and ending it was asked for, and the idea's series.
     shape: str = ""
+    length: str = ""                # "short": a short take, held to SHORT_WORDS (D199)
     ending: str = ""
     series: str = ""
     bit: str = ""                   # the running bit it was asked to use (D156)
@@ -404,6 +405,20 @@ def turn(channel: channels.Channel) -> tuple[str, str]:
     return random.choice(shapes), "loop"
 
 
+#: A short take's words (D199): about 30 to 38 seconds. Viewers left the 40-50 s videos at 19 to 21 s on average.
+SHORT_WORDS = (70, 90)
+
+
+def next_length(channel: channels.Channel) -> str:
+    """"short" for every other script when the channel tests short takes (D199), else ""."""
+    from . import store
+
+    if not channel.short_takes:
+        return ""
+    newest = store.videos()[:1]
+    return "" if newest and newest[0]["script"].get("length") == "short" else "short"
+
+
 #: A running bit is retired after this many uses (D156).
 RETIRE = 8
 
@@ -441,7 +456,7 @@ def recent_endings(limit: int = 10) -> list[str]:
 
 def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "",
           shape: str | None = None, ending: str | None = None, bit: tuple[str, str] | None = None,
-          draft: Script | None = None, previous: Script | None = None) -> Script:
+          draft: Script | None = None, previous: Script | None = None, length: str | None = None) -> Script:
     """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes to `draft`, `steer` is
     the owner's note on what to change (D153). The channel's own standing guidance applies every time.
     `shape` and `ending` default to the channel's next in turn (D155). The draft is shown with the fixes (D168):
@@ -452,6 +467,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
         shape = next_shape if shape is None else shape
         ending = next_ending if ending is None else ending
     bit = next_bit(channel) if bit is None else bit
+    length = next_length(channel) if length is None else length
     guide = channels.steering("scripts", channel.script_focus, channel.script_avoid, steer,
                               yields="; the word count, the order of the structure and the output format still apply, "
                                      "and every claim must still be true", never="Never in a script")
@@ -461,6 +477,9 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             + (f"Shape: {shape}\n" if shape else "")
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
+            + (f"Length: this one is a short take, {SHORT_WORDS[0]} to {SHORT_WORDS[1]} words in all, which replaces the "
+               "word count in the rules. Keep the opening question, the first cause early and the ending; leave out "
+               "a second example and any line that only says again what another said.\n" if length == "short" else "")
             + ("The channel's latest endings. Every video ends on the loop, so vary the rest: reuse none of their "
                "words or jokes, and lead back into the opening a different way from each:\n"
                + "\n".join(f"- {e}" for e in endings) + "\n" if endings else "")
@@ -477,7 +496,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
     if not lines:
         raise CreateError("the script came back empty; try again")
     return Script(title=got.title, hook=got.hook, description=got.description, hashtags=got.hashtags,
-                  beats=[Beat(text=t) for t in lines], shape=shape, ending=ending, bit=bit[0])
+                  beats=[Beat(text=t) for t in lines], shape=shape, ending=ending, bit=bit[0], length=length)
 
 
 def _previous_block(previous: Script | None, steer: str) -> str:
@@ -517,7 +536,7 @@ def lint(script: Script, channel: channels.Channel) -> list[str]:
     """What breaks the channel's countable rules (D155): length, sentence length, the hook, the on-screen
     hook and the banned habits. Free: no model call. Each problem is one line the writer can act on."""
     problems = []
-    low, high = [*channel.words, 0, 10_000][:2]
+    low, high = SHORT_WORDS if script.length == "short" else [*channel.words, 0, 10_000][:2]
     if not low <= script.words <= high:
         problems.append(f"It is {script.words} words; it must be {low} to {high}.")
     sentences = _sentences(script.text)
@@ -854,7 +873,8 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
     # A note revises the take it names (D193): its shape and ending stay unless the note says otherwise.
     keep = previous if previous and steer.strip() else None
     script = write(question, angle, take=take, steer=steer, previous=previous,
-                   shape=keep.shape if keep else None, ending=keep.ending if keep else None)
+                   shape=keep.shape if keep else None, ending=keep.ending if keep else None,
+                   length=keep.length if keep else None)
     writer = ai.last_used
     notes: list[str] = []
     step(f"The editor's read and the {channels.check_name().lower()}", 30)
@@ -873,7 +893,7 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
             bit = (bit[0], bit[1].replace("{n}", str(1 + sum(v["script"].get("bit") == bit[0] for v in _videos()))))
         step("Rewriting with the fixes", 50)
         script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
-                       ending=script.ending, bit=bit, draft=script, previous=keep)
+                       ending=script.ending, bit=bit, draft=script, previous=keep, length=script.length)
         writer = ai.last_used
         step("Planning the pictures", 70)
         # The director plans on the final words, then one check reads the words and the diagrams (D183): the

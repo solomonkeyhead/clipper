@@ -183,7 +183,7 @@ def _view() -> dict:
                         "words_per_second": ch.words_per_second, "pack": ch.pack, "drawings": ch.drawings,
                         "check_name": channels.check_name(ch),
                         "niche": ch.niche, "subject": ch.subject, "music": ch.music, "sfx": ch.sfx,
-                        "poses": list(ch.poses)},
+                        "short_takes": ch.short_takes, "poses": list(ch.poses)},
             "channels": [{"slug": c.slug, "name": c.name, "handle": c.handle, "pack": c.pack} for c in channels.all_channels()],
             "packs": [{"key": p.key, "label": p.label, "about": p.about, "drawings": p.drawings} for p in packs.PACKS.values()],
             # Ideas already made into a Short (or one of the channel's own examples) don't show (D154).
@@ -402,7 +402,7 @@ def routes(app: FastAPI, publish) -> None:
         updates = {k: str(body[k]).strip() for k in texts if k in body}
         if "rules" in body:
             updates["rules"] = [str(r).strip() for r in body["rules"] if str(r).strip()]
-        for flag in ("drawings", "music", "sfx"):
+        for flag in ("drawings", "music", "sfx", "short_takes"):
             if flag in body:
                 updates[flag] = bool(body[flag])
         if "reactions" in body:   # D156: the character's reaction pictures, one path a line

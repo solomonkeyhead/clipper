@@ -27,6 +27,23 @@ def test_lint_holds_a_script_to_the_channels_countable_rules():
         assert said in problems, said
 
 
+def test_short_takes_alternate_and_are_held_to_their_own_length(monkeypatch):
+    """D199: every other script a short take, when the channel tests them."""
+    from clipper.create import store
+
+    ch = channel.make("physics", "German Professor")
+    newest: list[dict] = []
+    monkeypatch.setattr(store, "videos", lambda: newest)
+    assert script.next_length(ch) == ""                                    # off by default
+    ch = ch.model_copy(update={"short_takes": True})
+    assert script.next_length(ch) == "short"
+    newest.append({"script": {"length": "short"}})
+    assert script.next_length(ch) == ""
+    usual = _script("Why does the lift make you heavier?", *["The floor pushes up on your feet a little harder."] * 9)
+    assert script.lint(usual, ch) == []
+    assert "it must be 70 to 90" in " ".join(script.lint(usual.model_copy(update={"length": "short"}), ch))
+
+
 def test_ideas_under_15_of_21_or_off_the_channel_are_dropped():
     good = topics._Idea(question="Why does your ear pop?", angle="pressure", series=" In  the Car ",
                         scores=topics._Scores(felt=3, common=3, surprise=2, mechanism=3, showable=2, searched=2, fit=3))

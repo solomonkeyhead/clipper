@@ -27,7 +27,8 @@ function Verdict({ label, verdict, rho, n, need, explain }: {
       <span className={cn("text-2xl font-semibold", v.tone)}>{v.text}</span>
       <span className="text-xs text-muted">
         {verdict === "not enough yet" ? `${n} of ${need} clips needed`
-          : <Tip label={`${explain} Its rank correlation is ${rho?.toFixed(2)}: 1 is a perfect match, 0 no link.`}><span>over {n} clips</span></Tip>}
+          : <><Tip label={`${explain} Its rank correlation is ${rho?.toFixed(2)}: 1 is a perfect match, 0 no link.`}><span tabIndex={0}>over {n} clips</span></Tip>
+            {(verdict === "weak" || verdict === "none") && <span>; rate more clips Good or Not good to firm it up</span>}</>}
       </span>
     </Card>
   );
@@ -393,9 +394,20 @@ export function LearningPage() {
       <PageHeader title="Learning"
         subtitle="Clipper learns which moments to pick from the clips you post, the ones you mark not good, and how many views your posts get. This page shows whether its scores match your taste and your views." />
 
-      <TastePanel have={report.weights_n} need={report.min_for_weights} />
+      {/* Plain words first (D199): the verdicts said "Weak" with no next step above a line saying the score points
+          the right way. Taste and the experiments (about your own channel's videos) last, the experiments folded. */}
+      {insights(report).length > 0 && (
+        <Card className="flex flex-col gap-2 p-5">
+          <h2 className="flex items-center gap-2 text-md font-semibold"><Lightbulb className="size-4 text-accent" /> What it's seeing</h2>
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {insights(report).map((line, i) => (
+              <li key={i} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />{line}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
-      <Experiments />
+      <WhatsWorkingCard />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="flex flex-col gap-1 p-4">
@@ -420,19 +432,6 @@ export function LearningPage() {
           </span>
         </Card>
       </div>
-
-      <WhatsWorkingCard />
-
-      {insights(report).length > 0 && (
-        <Card className="flex flex-col gap-2 p-5">
-          <h2 className="flex items-center gap-2 text-md font-semibold"><Lightbulb className="size-4 text-accent" /> What it's seeing</h2>
-          <ul className="flex flex-col gap-1.5 text-sm">
-            {insights(report).map((line, i) => (
-              <li key={i} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />{line}</li>
-            ))}
-          </ul>
-        </Card>
-      )}
 
       <div className="grid gap-4">
         <Card className="flex flex-col gap-3 p-4">
@@ -538,6 +537,13 @@ export function LearningPage() {
           <p className="text-xs text-subtle">After 3 clips posted or marked, Clipper also shows the scorer examples of clips you liked and didn't.</p>
         )}
       </Card>
+
+      <TastePanel have={report.weights_n} need={report.min_for_weights} />
+
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-muted hover:text-fg">Experiments: pair two videos that differ in one thing</summary>
+        <div className="mt-3"><Experiments /></div>
+      </details>
     </div>
   );
 }

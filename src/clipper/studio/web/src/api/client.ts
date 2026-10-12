@@ -659,6 +659,8 @@ export interface CreateBeat { text: string; emphasis: string; pose?: string; vis
 export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number;
   /** On-screen words at the start; the shape and ending it was asked for; the idea's series (D155). */
   hook?: string; shape?: string; ending?: string; series?: string;
+  /** "short": a short take (D199). */
+  length?: string;
   /** Music and sound effects for this video; null or missing: the channel's setting (D156, D197). */
   music?: boolean | null; sfx?: boolean | null; bit?: string;
   /** Zooms on footage, cut-ins on the Professor, and the transition (D165). */
@@ -732,6 +734,8 @@ export interface ChannelEdit {
   areas?: string; idea_focus?: string; idea_avoid?: string; script_focus?: string; script_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
   /** D156: the character and its reactions, the sign-off, the board's colours, music and sound effects by default. */
   character?: string; reactions?: string[]; presenter?: string; poses?: Record<string, string> | string; signoff?: string; board?: string; music?: boolean; sfx?: boolean;
+  /** Every other script a short take (D199). */
+  short_takes?: boolean;
 }
 export const createApi = {
   channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>

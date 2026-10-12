@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   connectInstagram, connectX, instagramConnectState, runSystemCheck, startInstagramConnect, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
-  useSetKeys, useSetSettings, useSettings, useSetup, useUses, type Account, type CheckResult,
+  useSetKeys, useSetSettings, useSettings, useSetup, useStatus, useUses, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
 import { GroupsCard } from "@/components/groups";
@@ -796,6 +796,7 @@ function SystemCheck() {
 export function SettingsPage() {
   const { data: settings } = useSettings();
   const uses = useUses();
+  const { data: status } = useStatus();
   const save = useSetSettings();
   const qc = useQueryClient();
   const theme = useUI((s) => s.theme);
@@ -810,6 +811,8 @@ export function SettingsPage() {
   return (
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
+      {/* Under headings (D199): one long card mixed clipping, the app and this computer. */}
+      <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">AI</h2>
       <AIKey />
       <Card className="px-5 py-3"><h2 className="text-md font-semibold">Who does what: clipping</h2>
         <p className="mt-0.5 mb-1 text-sm text-muted">Pick the AI for each job, or leave it on Automatic.</p><WhoDoesWhat part="clipping" /></Card>
@@ -819,25 +822,9 @@ export function SettingsPage() {
           <p className="mt-0.5 mb-1 text-sm text-muted">For your own channel's Shorts.</p><WhoDoesWhat part="create" /></Card>
         <FootageKeys />
       </>}
-      <Card className="divide-y divide-line px-5">
-        <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />
-        <Row title="What you use Clipper for" body="Parts you turn off are hidden everywhere, so the app only shows what you do." control={<Uses />} />
-        <Row
-          title="Sync every"
-          body="How often Clipper fetches views and stats from your connected accounts while it's open. X is read at most hourly, since it charges per read."
-          control={settings ? (
-            <select value={settings.sync_minutes} aria-label="Sync interval"
-                    onChange={(e) => save.mutate({ sync_minutes: e.target.value })}
-                    className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
-              {["5", "15", "30", "60"].map((m) => <option key={m} value={m}>{m} minutes</option>)}
-            </select>
-          ) : <Skeleton className="h-9 w-32" />}
-        />
-        <Row
-          title="Tell me when it's done"
-          body="A notification when a clipping job or a Short's build finishes while you're on another tab or window. Only this browser; it asks permission the first time."
-          control={<NotifySwitch />}
-        />
+      {uses.campaigns && <>
+        <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Clipping</h2>
+        <Card className="divide-y divide-line px-5">
         <Row
           title="Open on the payoff"
           body={<>Podcast and stream clips start with the first half of their best line, stopping just before it lands, then
@@ -859,6 +846,27 @@ export function SettingsPage() {
             <Switch label="Pick the cover" checked={settings.auto_cover !== "0"}
                     onChange={(v) => save.mutate({ auto_cover: v ? "1" : "0" })} />
           ) : <Skeleton className="h-5 w-9" />}
+        />
+        </Card>
+      </>}
+      <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">The app</h2>
+      <Card className="divide-y divide-line px-5">
+        <Row title="What you use Clipper for" body="Parts you turn off are hidden everywhere, so the app only shows what you do." control={<Uses />} />
+        <Row
+          title="Sync every"
+          body="How often Clipper fetches views and stats from your connected accounts while it's open. X is read at most hourly, since it charges per read."
+          control={settings ? (
+            <select value={settings.sync_minutes} aria-label="Sync interval"
+                    onChange={(e) => save.mutate({ sync_minutes: e.target.value })}
+                    className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+              {["5", "15", "30", "60"].map((m) => <option key={m} value={m}>{m} minutes</option>)}
+            </select>
+          ) : <Skeleton className="h-9 w-32" />}
+        />
+        <Row
+          title="Tell me when it's done"
+          body="A notification when a clipping job or a Short's build finishes while you're on another tab or window. Only this browser; it asks permission the first time."
+          control={<NotifySwitch />}
         />
         <Row
           title="Theme"
@@ -923,7 +931,14 @@ export function SettingsPage() {
           />
         </div>
       </details>
-      <SystemCheck />
+      {/* Hosted, this computer is the server's: nothing to set or check here. */}
+      {!status?.hosted && <>
+        <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">This computer</h2>
+        <Card className="divide-y divide-line px-5">
+        <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />
+        </Card>
+        <SystemCheck />
+      </>}
     </div>
   );
 }

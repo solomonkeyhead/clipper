@@ -72,7 +72,8 @@ export function Tip({ label, keys, children, side = "top" }: {
 }) {
   return (
     <RadixTooltip.Root delayDuration={500}>
-      <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
+      {/* Focusable (D199): a plain span's explanation (n/a, Estimated, Median) opened by hover only; a button keeps its own. */}
+      <RadixTooltip.Trigger asChild tabIndex={0}>{children}</RadixTooltip.Trigger>
       <RadixTooltip.Portal>
         <RadixTooltip.Content
           side={side}

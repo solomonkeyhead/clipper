@@ -13,11 +13,26 @@ import { PostTable } from "./StatsPage";
 import { ClipFilters, NoClips, firstFilter, inFilter, type ClipFilter } from "./WorkPages";
 import { PLATFORM_NAME, ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
+/** Whole days until a "YYYY-MM-DD" deadline (negative once past); null without one. */
+function daysLeft(deadline: string): number | null {
+  const end = deadline ? Date.parse(`${deadline}T23:59:59`) : NaN;
+  return Number.isNaN(end) ? null : Math.floor((end - Date.now()) / 86_400_000);
+}
+
+const SORTS = {
+  usual: { label: "Sort: as added", by: () => 0 },
+  ending: { label: "Sort: ending soon", by: (a: Campaign, b: Campaign) => (daysLeft(a.deadline) ?? 1e9) - (daysLeft(b.deadline) ?? 1e9) },
+  earnings: { label: "Sort: earned so far", by: (a: Campaign, b: Campaign) => (b.est_earnings ?? -1) - (a.est_earnings ?? -1) },
+  rate: { label: "Sort: pay per 1K", by: (a: Campaign, b: Campaign) => (b.reward_per_1k_usd ?? -1) - (a.reward_per_1k_usd ?? -1) },
+} as const;
+
 function CampaignCard({ c }: { c: Campaign }) {
   const navigate = useNavigate();
   // Nothing to post or submit: say where its clips went, and the next step (D154). HardScope showed 0 0 0 0
   // with 18 clips made, all skipped.
   const idle = !c.own_channel && c.counts.ready + c.counts.posted + c.counts.submitted === 0;
+  // When it stops paying (D199): the deadline and the budget left were only on the campaign's own page.
+  const days = c.own_channel ? null : daysLeft(c.deadline);
   return (
     <Link to="/campaigns/$name" params={{ name: c.name }}
           className="group flex flex-col gap-4 rounded-lg border border-line bg-surface-1 p-5 shadow-1 transition-colors duration-[var(--dur-base)] hover:border-line-strong hover:bg-surface-2">
@@ -30,6 +45,8 @@ function CampaignCard({ c }: { c: Campaign }) {
             ))}
             {c.marketplace && <span className="ml-1 text-xs whitespace-nowrap">{c.marketplace}</span>}
             {c.last_post && <span className="text-xs whitespace-nowrap">· last post {ago(c.last_post)}</span>}
+            {days !== null && days >= 0 && <span className={cn("text-xs whitespace-nowrap", days <= 3 && "text-warning")}>· ends {days === 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`}</span>}
+            {!c.own_channel && c.budget_left != null && <span className="text-xs whitespace-nowrap">· {formatMoney(c.budget_left)} budget left</span>}
           </div>
         </div>
         {c.reward_per_1k_usd !== null && c.reward_per_1k_usd !== undefined && (
@@ -91,14 +108,21 @@ export function CampaignsPage() {
   const uses = useUses();
   const finding = search.find === "1" && uses.finder;
   const [showArchived, setShowArchived] = useState(false);
+  const [sort, setSort] = useState<keyof typeof SORTS>("usual");
   // The user's own channel (German Professor) isn't a paid campaign: listed on its own (D140).
-  const list = (data ?? []).filter((c) => c.archived === showArchived && !c.own_channel);
+  const list = (data ?? []).filter((c) => c.archived === showArchived && !c.own_channel).sort(SORTS[sort].by);
   const channels = (data ?? []).filter((c) => c.own_channel && !c.archived);
   const archivedCount = (data ?? []).filter((c) => c.archived).length;
   return (
     <div className="fade-in">
       <PageHeader title="Campaigns" subtitle="Each campaign's pay, rules and progress."
         actions={<>
+          {list.length > 1 && (
+            <select value={sort} onChange={(e) => setSort(e.target.value as keyof typeof SORTS)} aria-label="Sort campaigns"
+                    className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+              {Object.entries(SORTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          )}
           {archivedCount > 0 && (
             <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>
               {showArchived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}

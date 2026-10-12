@@ -524,7 +524,7 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           <span className="min-w-0">
             <span className="block truncate font-semibold">{s.title || "Untitled"}</span>
             <span className="text-xs text-muted">
-              {video.status === "writing" ? "Being written…" : `${s.beats?.length ?? 0} beats · ~${Math.round(words(s) / wps)}s`}
+              {video.status === "writing" ? "Being written…" : `${s.beats?.length ?? 0} beats · ~${Math.round(words(s) / wps)}s${s.length === "short" ? " · short take" : ""}`}
               {video.archived && video.archived_at ? ` · archived ${video.archived_at.slice(0, 10)}` : ""}
             </span>
           </span>

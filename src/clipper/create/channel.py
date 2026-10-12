@@ -77,6 +77,8 @@ class Channel(BaseModel):
     board: str = "slate"
     music: bool = False
     sfx: bool = False
+    # Every other script a short take (script.SHORT_WORDS), to see whether shorter keeps viewers to the end (D199).
+    short_takes: bool = False
     jokes: list[str] = Field(default_factory=list)
     bits: list[dict] = Field(default_factory=list)
     # The campaign the finished videos are filed under (studio library).

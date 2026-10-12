@@ -3463,3 +3463,13 @@ off. Channel settings explains the talking, -open and -blink pictures, and no lo
 The idea planner now gets the channel's track record (`topics.track_record`: each posted video's views on every
 platform and the share watched, best first, once two days old) and the month, so it leans toward what worked here
 instead of only its built-in guess; its system prompt (the fixture) is unchanged.
+
+## D199: short takes, and the last of the site review (2026-10-11)
+Viewers left the Professor's 40-50 s videos at 19 to 21 s on average. A channel can now have every other script
+written as a short take (`Channel.short_takes`, off by default; `Script.length = "short"`, 70 to 90 words, the
+writer told so and lint holding it there; a rewrite keeps the length), to pair in Learning's Experiments. Site: Stats
+hides columns no post has a number for and puts Est. $ beside Views, its one median says it mixes platforms;
+Learning leads with what it's seeing and what's working, a weak verdict says to rate more, and Experiments sit folded
+at the bottom; campaign cards say when they end and the budget left, with a sort (ending soon, earned, pay per 1K);
+Settings is under headings (AI, Clipping, The app, This computer), with This computer gone when hosted; a tooltip's
+trigger takes keyboard focus; the Make clips row stays in view.

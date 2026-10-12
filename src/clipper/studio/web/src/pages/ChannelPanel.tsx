@@ -78,7 +78,7 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
 interface FullChannel {
   slug: string; name: string; handle: string; niche: string; persona: string; rules: string[]; voice: string;
   subject: string; expert: string; areas: string; idea_focus: string; idea_avoid: string; script_focus: string; script_avoid: string; words_per_second: number; drawings: boolean; pack: string; examples: number;
-  watermark: string; character: string; reactions: string[]; presenter: string; poses: Record<string, string>; signoff: string; board: string; music: boolean; sfx: boolean;
+  watermark: string; character: string; reactions: string[]; presenter: string; poses: Record<string, string>; signoff: string; board: string; music: boolean; sfx: boolean; short_takes: boolean;
 }
 
 /** The board's colours (create/diagrams.PALETTES, D156). */
@@ -174,6 +174,10 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("sfx") as boolean} onChange={(e) => set({ sfx: e.target.checked })} />
         Sound effects on the edit: whooshes on transitions, a thump on zoom-ins, chalk as drawings are drawn, a riser into the punchline. Made by Clipper, so nothing for Content ID to match
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("short_takes") as boolean} onChange={(e) => set({ short_takes: e.target.checked })} />
+        Every other script short (70 to 90 words, about 35 seconds), to see whether shorter videos keep viewers to the end. Pair them in Learning's Experiments
       </label>
       <div className="flex gap-2">
         <Button variant="primary" onClick={() => save()}>Save</Button>

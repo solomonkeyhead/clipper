@@ -13,6 +13,7 @@ type Key = "posted" | "views" | "x" | "watch" | "pct" | "stayed" | "skip" | "lik
 
 const COLUMNS: { key: Key; label: string; get: (p: Post) => number | null | undefined; tip?: string }[] = [
   { key: "views", label: "Views", get: (p) => p.views },
+  { key: "money", label: "Est. $", get: (p) => p.est_earnings, tip: "Views ÷ 1,000 × the campaign's rate" },
   { key: "x", label: "vs median", get: (p) => p.x_median, tip: "Views compared with your median for this platform and campaign" },
   { key: "watch", label: "Avg watch", get: (p) => p.avg_watch_s },
   { key: "pct", label: "% viewed", get: (p) => p.avg_view_pct, tip: "The average share of the video watched (YouTube). Over 100% means people rewatched it" },
@@ -21,7 +22,6 @@ const COLUMNS: { key: Key; label: string; get: (p: Post) => number | null | unde
   { key: "likes", label: "Likes", get: (p) => p.likes },
   { key: "shares", label: "Shares", get: (p) => p.shares },
   { key: "saves", label: "Saves", get: (p) => p.saves },
-  { key: "money", label: "Est. $", get: (p) => p.est_earnings, tip: "Views ÷ 1,000 × the campaign's rate" },
 ];
 
 function cell(p: Post, key: Key): React.ReactNode {
@@ -100,6 +100,10 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
     });
   }, [posts, sort]);
 
+  // Only the columns with a number somewhere (D199): Est. $ on your own channel and Skip 3s with no Instagram posts were
+  // columns of n/a. "Stayed" is typed in, so it shows wherever there's a YouTube post to type it for.
+  const columns = COLUMNS.filter((c) => c.key === "stayed" ? posts.some((p) => p.platform === "youtube")
+    : posts.some((p) => c.get(p) != null));
   if (!posts.length) {
     return <EmptyState icon={<BarChart3 className="size-5" />} title="No posts yet"
       body="Post a clip with its caption and the next sync picks it up, with its link and numbers."
@@ -136,7 +140,7 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
           <tr className="h-9">
             <th className="px-2 font-medium">Clip</th>
             <th className="px-2 font-medium">{header("posted", "Posted")}</th>
-            {COLUMNS.map((c) => <th key={c.key} className="px-2 text-right font-medium">{header(c.key, c.label, c.tip)}</th>)}
+            {columns.map((c) => <th key={c.key} className="px-2 text-right font-medium">{header(c.key, c.label, c.tip)}</th>)}
             <th className="px-2 font-medium"><span className="sr-only">Link</span></th>
           </tr>
         </thead>
@@ -171,7 +175,7 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
                     {ago(row.posted_at)}
                     {row.settling && <Tip label="Instagram's and YouTube's numbers can arrive up to 48 hours late"><span className="ml-1.5"><Chip tone="warning">settling</Chip></span></Tip>}
                   </td>
-                  {COLUMNS.map((c) => {
+                  {columns.map((c) => {
                     // The box to type YouTube's "stayed" in, on the clip's own row too: it hid in the folded rows (D161).
                     const yt = c.key === "stayed" && many ? list.find((p) => p.platform === "youtube") : undefined;
                     return <td key={c.key} className="px-2 text-right whitespace-nowrap">{yt ? <StayedCell post={yt} /> : cell(row, c.key)}</td>;
@@ -188,7 +192,7 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
                       </span>
                     </td>
                     <td className="px-2 whitespace-nowrap text-muted">{ago(p.posted_at)}</td>
-                    {COLUMNS.map((c) => <td key={c.key} className="px-2 text-right whitespace-nowrap">{cell(p, c.key)}</td>)}
+                    {columns.map((c) => <td key={c.key} className="px-2 text-right whitespace-nowrap">{cell(p, c.key)}</td>)}
                     <td className="px-2 text-right">
                       <CopyButton text={p.url} what={`${PLATFORM_NAME[p.platform] ?? p.platform} link`} variant="ghost" />
                     </td>
@@ -276,7 +280,8 @@ export function StatsPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <Metric label="Est. earnings" tone="money" value={money.length ? formatMoney(sum((p) => p.est_earnings)) : "–"} />
             <Metric label="Views" value={formatCount(sum((p) => p.views))} sub={`${list.length} posts`} />
-            <Metric label="Median views" value={formatCount(median)} />
+            {/* One median across platforms mixes TikTok's and YouTube's numbers; the rows below have each one's (D199). */}
+            <Metric label="Median views" value={formatCount(median)} sub={platform === "all" && platforms.length > 1 ? "all platforms together" : undefined} />
             <Metric label="Avg watch time" value={withWatch.length ? `${(withWatch.reduce((s, p) => s + (p.avg_watch_s ?? 0), 0) / withWatch.length).toFixed(1)}s` : "–"}
                     sub={withWatch.length ? `from ${withWatch.length} posts that report it` : "TikTok's API doesn't report it"} />
             <Metric label="Skipped in 3s" value={withSkip.length ? `${Math.round(withSkip.reduce((s, p) => s + (p.skip_rate_pct ?? 0), 0) / withSkip.length)}%` : "–"}
