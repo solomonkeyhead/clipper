@@ -13,6 +13,7 @@ like every clip.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import itertools
 import json
@@ -131,18 +132,69 @@ def _frames(at: float | None, seconds: float) -> int:
 shot_info: dict[Path, tuple[int, str]] = {}
 
 
+#: How much a clip moves (D200): the mean change in grey level (0-255) between frames 0.2 s apart, over a window. Under
+#: STILL a clip is all but a photo: the judge sees one thumbnail, so a vacuum cleaner "that barely moves" scored as well
+#: as one running. ponytail: a constant tuned on a few clips; tune it on Marc's real ones.
+STILL = 2.0
+
+
+@functools.lru_cache(maxsize=256)
+def _activity(src: Path, start: float, seconds: float) -> float:
+    """How much `seconds` of a clip from `start` move, 0 for a clip that can't be read (then nothing changes)."""
+    try:
+        import cv2
+        import numpy as np
+
+        cap = cv2.VideoCapture(str(src))
+        try:
+            prev, diffs = None, []
+            for k in range(max(2, min(8, round(seconds / 0.2)))):
+                cap.set(cv2.CAP_PROP_POS_MSEC, (start + k * 0.2) * 1000)
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                grey = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (96, 54), interpolation=cv2.INTER_AREA)
+                if prev is not None:
+                    diffs.append(float(np.abs(grey.astype(np.int16) - prev.astype(np.int16)).mean()))
+                prev = grey
+        finally:
+            cap.release()
+        return sum(diffs) / len(diffs) if diffs else STILL
+    except ImportError:
+        return STILL
+
+
+def _lively(src: Path, offset: float, seconds: float) -> bool:
+    """Whether the stretch a shot plays moves enough to keep the camera still on it (D200)."""
+    return _activity(src, round(offset, 1), round(seconds, 1)) >= STILL
+
+
 def _framing(src: Path, seconds: float, center: float | None, skip: float, frame: float | None):
-    """Where in a clip a shot starts and where across it the camera looks (D111, D132, D180); and the clip's probe."""
+    """Where in a clip a shot starts and where across it the camera looks (D111, D132, D180); and the clip's probe.
+    The start is the most moving of three stretches (D200), the usual 15 % in unless another moves clearly more."""
     info = probe(src)
     length = info.duration or seconds
-    offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
+    room = max(0.0, length - seconds - 0.1)
+    offset = min(length * 0.15 + skip, room)
+    if room > 1.0 and frame is None:
+        best, top = offset, _activity(src, round(offset, 1), round(seconds, 1))
+        for share in (0.4, 0.65):
+            at = min(length * share + skip, room)
+            if (got := _activity(src, round(at, 1), round(seconds, 1))) > top * 1.25:
+                best, top = at, got
+        offset = best
     x = min(1.0, max(0.0, frame if frame is not None else _subject_x(src, offset, seconds, center)))
     return offset, x, info
 
 
+def _camera(motion: str, punch: float | None, lively: bool) -> str:
+    """A "still" camera on a clip that barely moves is a photo on screen (D200): it pushes in slowly instead."""
+    return "push" if motion == "still" and punch is None and not lively else motion
+
+
 def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None, skip: float = 0.0,
                 motion: str = "push", punch: float | None = None, frames: int | None = None,
-                frame: float | None = None) -> Path:
+                frame: float | None = None, middle: float | None = None) -> Path:
     """`seconds` (or `frames`) of a stock clip filling the picture panel, the camera moving on it (D162), the crop
     placed on its subject (D111): a wide shot cut to its middle lost the speaker cone to one side and the skull to
     the other. The camera keeps the subject's spot and never leaves the picture. `skip`: seconds already shown of
@@ -154,13 +206,15 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
 
         x = min(1.0, max(0.0, frame if frame is not None else 0.5 if center is None else center))
         with Image.open(src) as img:
-            compose.photo_panel(img, out, n, compose.Move(kind=motion if motion != "still" else "push", u=x, punch=punch),
+            compose.photo_panel(img, out, n, compose.Move(kind=motion if motion != "still" else "push", u=x,
+                                                          v=0.5 if middle is None else middle, punch=punch),
                                 look=LOOK)
         return out
     seconds = n / FPS
     offset, x, info = _framing(src, seconds, center, skip, frame)
-    compose.video_panel(src, out, n, compose.Move(kind=motion, u=x, punch=punch), start=offset,
-                        loop=(info.duration or seconds) < seconds + offset, look=LOOK,
+    motion = _camera(motion, punch, _lively(src, offset, seconds))
+    compose.video_panel(src, out, n, compose.Move(kind=motion, u=x, v=0.5 if middle is None else middle, punch=punch),
+                        start=offset, loop=(info.duration or seconds) < seconds + offset, look=LOOK,
                         source_size=(info.width or W, info.height or H))
     return out
 
@@ -275,9 +329,10 @@ def choose_punches(script: Script, timings: Timings) -> dict[int, list[float]]:
     return out
 
 
-RENDER_VERSION = 5   # 2: camera moves, punch-ins and one footage look (D156); 3: the picture panel (D162);
+RENDER_VERSION = 6   # 2: camera moves, punch-ins and one footage look (D156); 3: the picture panel (D162);
 #: 4: drawings built left to right, coloured by temperature, a graph that moves the way its sentence says (D190);
-#: 5: a gentler punch-in, the drawings' camera after the part is drawn and keeping the title in view (D197)
+#: 5: a gentler punch-in, the drawings' camera after the part is drawn and keeping the title in view (D197);
+#: 6: the most moving stretch of a clip, a still clip pushes in, the subject's height (D200)
 used_shots: set[Path] = set()
 #: What a drawing's shot doesn't depend on: set by the app, or used only when the shots are put together (a part's
 #: way in, D171). A change to one of these never draws the drawing again.
@@ -586,18 +641,18 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
         def make(out: Path, holder=holder, skip=skip, motion=motion, punch=punch, n=n) -> Path:
             h = holder["hit"]
             clip = _stock_shot(stock.fetch(h), n / FPS, out, h.get("center"), skip, motion, punch, frames=n,
-                               frame=visual.frame)
+                               frame=visual.frame, middle=h.get("center_y"))
             if visual.frame is not None:   # the user's framing stays, dark or not (D180)
                 return clip
             if _too_dark(clip):  # the crop found the dark part: the middle, else no footage
                 holder["hit"] = {**h, "center": 0.5}
-                clip = _stock_shot(stock.fetch(h), n / FPS, out, 0.5, skip, motion, punch, frames=n)
+                clip = _stock_shot(stock.fetch(h), n / FPS, out, 0.5, skip, motion, punch, frames=n, middle=0.5)
             if _too_dark(clip):
                 raise _TooDark
             return clip
 
         try:
-            key = [hit.get("id"), hit.get("center"), n, motion, punch and round(punch, 2)] + \
+            key = [hit.get("id"), hit.get("center"), hit.get("center_y"), n, motion, punch and round(punch, 2)] + \
                 ([round(skip, 3)] if skip else []) + ([round(visual.frame, 3)] if visual.frame is not None else [])
             made = _kept("stock", key, work / f"{i:02d}{tag}_{k}_stock.mp4", make)
             shot_info[made] = (n, "footage")
@@ -606,7 +661,7 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
             return none_fit()
         hits[k] = holder["hit"]
     if not tag:
-        chosen[i] = {"picked": [{k: h.get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center")}
+        chosen[i] = {"picked": [{k: h.get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center", "center_y")}
                                 for h in hits], "queries": queries}
     return clips
 
@@ -776,7 +831,8 @@ def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], scr
     if lead < round(0.6 * FPS):
         return made
     out = work / "loop_lead.mp4"
-    move = compose.Move(kind=o["motion"] if not (photo and o["motion"] == "still") else "push", u=x)
+    kind = "push" if photo and o["motion"] == "still" else o["motion"] if photo else _camera(o["motion"], None, _lively(src, offset, d0))
+    move = compose.Move(kind=kind, u=x, v=o["hit"].get("center_y") or 0.5)
     if photo:
         from PIL import Image
 

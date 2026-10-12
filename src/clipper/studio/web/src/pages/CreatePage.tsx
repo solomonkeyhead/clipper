@@ -75,7 +75,7 @@ export function CreatePage() {
         {/* The video in progress comes first on a phone-width window; the ideas wait below it. */}
         <div className="order-2 lg:order-1"><Ideas topics={data.topics} /></div>
         <div className="order-1 flex flex-col gap-4 lg:order-2">
-          <YourOwn wps={data.channel.words_per_second} />
+          <NewShort wps={data.channel.words_per_second} />
           {work.length === 0 && (
             archived.length ? <p className="text-sm text-muted">Nothing in progress: everything you've made is in the Archive below.</p>
               : <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (a minute or two), or write your own script." />
@@ -107,17 +107,30 @@ function CreateSkeleton() {
 function ArchiveList({ videos, wps }: { videos: CreateVideo[]; wps: number }) {
   const [open, setOpen] = useState(() => folds.get("archive") ?? false);
   const toggle = () => setOpen((o) => { folds.set("archive", !o); return !o; });
+  // What worked (D200): each video's views on every platform together, and the most viewed first on request.
+  const [byViews, setByViews] = useState(false);
+  const views = (v: CreateVideo) => (v.posts ?? []).reduce((n, p) => n + (p.views ?? 0), 0);
+  const total = videos.reduce((n, v) => n + views(v), 0);
+  const shown = byViews ? [...videos].sort((a, b) => views(b) - views(a)) : videos;
   return (
     <section className="flex flex-col gap-3">
       <button type="button" onClick={toggle} aria-expanded={open}
               className="flex items-center gap-2 self-start text-sm font-semibold text-muted hover:text-fg">
         <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
-        <Archive className="size-4" /> Archive <span className="font-normal text-subtle">{videos.length}</span>
+        <Archive className="size-4" /> Archive <span className="font-normal text-subtle">{videos.length}{total > 0 && ` · ${formatCount(total)} views`}</span>
       </button>
       {open && (
         <>
-          <p className="-mt-1 text-xs text-muted">Videos move here once they're posted (found on your channel, or marked posted in Clips). You can also archive any video yourself.</p>
-          {videos.map((v) => <VideoCard key={v.id} video={v} open={false} wps={wps} />)}
+          <p className="-mt-1 flex flex-wrap items-center gap-x-3 text-xs text-muted">
+            <span>Videos move here once they're posted (found on your channel, or marked posted in Clips). You can also archive any video yourself.</span>
+            {total > 0 && (
+              <button type="button" aria-pressed={byViews} onClick={() => setByViews((b) => !b)}
+                      className={cn("rounded-full border px-2 py-0.5", byViews ? "border-accent bg-accent-soft text-accent" : "border-line hover:text-fg")}>
+                Most viewed first
+              </button>
+            )}
+          </p>
+          {shown.map((v) => <VideoCard key={v.id} video={v} open={false} wps={wps} />)}
         </>
       )}
     </section>
@@ -225,11 +238,74 @@ function AIStrip() {
   );
 }
 
+/** One place to start a Short (D200): your own idea for the AI to write, your own words, or a ready-made script.
+ *  The ideas the planner offers are the list beside it. Before this there were three cards with near-identical names. */
+function NewShort({ wps }: { wps: number }) {
+  const [way, setWay] = useState<"idea" | "words" | "ready">("idea");
+  const { data: ready = [] } = useQuery({ queryKey: ["create", "ready"], queryFn: createApi.ready, staleTime: 60_000 });
+  const ways: ["idea" | "words" | "ready", string, string][] = [
+    ["idea", "My idea, AI writes it", "Type the question"], ["words", "My own words", "Paste your script"],
+    ...(ready.length > 0 ? [["ready", "Ready-made", "Written and drawn already"] as ["ready", string, string]] : []),
+  ];
+  return (
+    <Card className="flex flex-col gap-3 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold"><Plus className="size-4 text-accent" /> New Short</h2>
+      <div className={cn("grid gap-2", ways.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")} role="radiogroup" aria-label="How to start a Short">
+        {ways.map(([key, title, hint]) => (
+          <button key={key} type="button" role="radio" aria-checked={way === key} onClick={() => setWay(key)}
+                  className={cn("flex flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors",
+                    way === key ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
+            <span className="text-sm font-medium">{title}</span>
+            <span className="text-xs text-muted">{hint}</span>
+          </button>
+        ))}
+      </div>
+      {way === "idea" && <MyIdea />}
+      {way === "words" && <OwnWords wps={wps} />}
+      {way === "ready" && <ReadyMade ready={ready} />}
+      <p className="text-xs text-subtle">Or press Write it on one of the ideas.</p>
+    </Card>
+  );
+}
+
+/** Your own idea: onto the board, and written at once (D191). */
+function MyIdea() {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [mine, setMine] = useState("");
+  const [mineAngle, setMineAngle] = useState("");
+  const writeMine = async () => {
+    setBusy(true);
+    try {
+      const { id } = await createApi.ownIdea(mine, mineAngle);
+      await createApi.script(id);
+      setMine(""); setMineAngle("");
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error("Couldn't write it", { description: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const field = "h-9 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-sm outline-none placeholder:text-subtle focus:border-accent";
+  return (
+    <div className="flex flex-col gap-2">
+      <input value={mine} onChange={(e) => setMine(e.target.value)} aria-label="Your own idea"
+             onKeyDown={(e) => { if (e.key === "Enter" && !busy && mine.trim().length >= 8) void writeMine(); }}
+             placeholder="e.g. Why does a spoon flip your reflection?" className={field} />
+      <input value={mineAngle} onChange={(e) => setMineAngle(e.target.value)} aria-label="Angle (optional)"
+             placeholder="Angle or what to cover (optional)" className={field} />
+      <Button variant="primary" className="self-start" disabled={busy || mine.trim().length < 8} onClick={() => writeMine()}>
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />} {busy ? "Writing…" : "AI writes it"}
+      </Button>
+    </div>
+  );
+}
+
 /** Write the script yourself (D120): paste or type it, and Clipper cuts it into sentences, keeping every
  *  word. Pictures and the physics check are optional help, not a requirement. */
-function YourOwn({ wps }: { wps: number }) {
+function OwnWords({ wps }: { wps: number }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [description, setDescription] = useState("");
@@ -243,7 +319,7 @@ function YourOwn({ wps }: { wps: number }) {
     try {
       await createApi.own({ title, text, description, hashtags, plan });
       toast.success("Script created", { description: plan ? `Pictures planned and ${fact} checked.` : "Choose the pictures yourself, or press Plan pictures." });
-      setTitle(""); setText(""); setDescription(""); setHashtags(""); setOpen(false);
+      setTitle(""); setText(""); setDescription(""); setHashtags("");
       await qc.invalidateQueries({ queryKey: ["create"] });
     } catch (e) {
       toast.error((e as Error).message);   // what was typed stays in the box
@@ -251,54 +327,9 @@ function YourOwn({ wps }: { wps: number }) {
       setBusy(false);
     }
   };
-  const { data: ready = [] } = useQuery({ queryKey: ["create", "ready"], queryFn: createApi.ready, staleTime: 60_000 });
-  const start = async (name: string) => {
-    setBusy(true);
-    try {
-      await createApi.useReady(name);
-      await qc.invalidateQueries({ queryKey: ["create"] });
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (!open) {
-    return (
-      <div className="flex flex-col gap-2">
-        <div className="flex"><Button variant="secondary" onClick={() => setOpen(true)}><PenLine className="size-4" /> Use my own words</Button></div>
-        {ready.length > 0 && (
-          <Card className="flex flex-col gap-1 p-3">
-            <span className="text-xs font-medium text-muted">Ready-made: written and drawn already</span>
-            {ready.map((r) => {
-              // What's been made from it already (D131): posted ones are in the Archive.
-              const posted = r.made.filter((m) => m.archived).length;
-              const going = r.made.length - posted;
-              return (
-                <div key={r.name} className="flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{r.title}</span>
-                      {posted > 0 && <Chip tone="success" className="h-5 shrink-0 text-[11px]">in the Archive</Chip>}
-                      {going > 0 && <Chip className="h-5 shrink-0 text-[11px]">{going === 1 ? "made, below" : `${going} made, below`}</Chip>}
-                    </div>
-                    <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
-                  </div>
-                  <Button size="sm" variant={r.made.length ? "secondary" : "primary"} disabled={busy} onClick={() => start(r.name)}>
-                    {r.made.length ? "Make again" : "Use it"}
-                  </Button>
-                </div>
-              );
-            })}
-          </Card>
-        )}
-      </div>
-    );
-  }
   const field = "rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-accent focus:outline-none";
   return (
-    <Card className="flex flex-col gap-3 p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold"><PenLine className="size-4 text-accent" /> Your own script</h2>
+    <div className="flex flex-col gap-3">
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional: the first sentence is used)" aria-label="Title" className={cn(field, "font-semibold")} />
       <textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} aria-label="Script"
                 placeholder={"Paste or type your script. Each sentence becomes one picture.\nPress Enter to cut it yourself: one line is one sentence."}
@@ -314,13 +345,51 @@ function YourOwn({ wps }: { wps: number }) {
         <input type="checkbox" className="mt-1" checked={plan} onChange={(e) => setPlan(e.target.checked)} />
         <span>Plan the pictures and check the {fact} for me. Your words are never changed. Leave it off to choose every picture yourself.</span>
       </label>
-      <div className="flex items-center gap-2">
-        <Button variant="primary" disabled={busy || !text.trim()} onClick={() => create()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy ? (plan ? "Planning…" : "Creating…") : "Create"}
-        </Button>
-        <Button variant="ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
-      </div>
-    </Card>
+      <Button variant="primary" className="self-start" disabled={busy || !text.trim()} onClick={() => create()}>
+        {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy ? (plan ? "Planning…" : "Creating…") : "Use my own words"}
+      </Button>
+    </div>
+  );
+}
+
+/** The scripts that ship written and drawn already, and what's been made from each. */
+function ReadyMade({ ready }: { ready: { name: string; title: string; about: string; made: { archived?: boolean }[] }[] }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const start = async (name: string) => {
+    setBusy(true);
+    try {
+      await createApi.useReady(name);
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      {ready.map((r) => {
+        // What's been made from it already (D131): posted ones are in the Archive.
+        const posted = r.made.filter((m) => m.archived).length;
+        const going = r.made.length - posted;
+        return (
+          <div key={r.name} className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium">{r.title}</span>
+                {posted > 0 && <Chip tone="success" className="h-5 shrink-0 text-[11px]">in the Archive</Chip>}
+                {going > 0 && <Chip className="h-5 shrink-0 text-[11px]">{going === 1 ? "made, below" : `${going} made, below`}</Chip>}
+              </div>
+              <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
+            </div>
+            <Button size="sm" variant={r.made.length ? "secondary" : "primary"} disabled={busy} onClick={() => start(r.name)}>
+              {r.made.length ? "Make again" : "Use it"}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -328,7 +397,7 @@ function YourOwn({ wps }: { wps: number }) {
 
 function Ideas({ topics }: { topics: CreateTopic[] }) {
   const qc = useQueryClient();
-  const [busy, setBusy] = useState<number | "more" | "mine" | null>(null);
+  const [busy, setBusy] = useState<number | "more" | null>(null);
   const [steer, setSteer] = useState("");
   const [steering, setSteering] = useState(false);   // the steer box, behind a chevron by More ideas (D199)
   const [find, setFind] = useState("");
@@ -343,22 +412,6 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
       await refresh();
     } catch (e) {
       toast.error((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  };
-  const [mine, setMine] = useState("");
-  const [mineAngle, setMineAngle] = useState("");
-  /** Your own idea: onto the board, and written at once (D191). */
-  const writeMine = async () => {
-    setBusy("mine");
-    try {
-      const { id } = await createApi.ownIdea(mine, mineAngle);
-      await createApi.script(id);
-      setMine(""); setMineAngle("");
-      await refresh();
-    } catch (e) {
-      toast.error("Couldn't write it", { description: (e as Error).message });
     } finally {
       setBusy(null);
     }
@@ -396,19 +449,6 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
             </Button>
           </Tip>
         </span>
-      </div>
-      <div className="flex flex-col gap-1.5 border-b border-line px-4 py-3">
-        <label className="text-xs font-medium" htmlFor="own-idea">Your own idea</label>
-        <input id="own-idea" value={mine} onChange={(e) => setMine(e.target.value)}
-               onKeyDown={(e) => { if (e.key === "Enter" && busy === null && mine.trim().length >= 8) void writeMine(); }}
-               placeholder="e.g. Why does a spoon flip your reflection?"
-               className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
-        <input value={mineAngle} onChange={(e) => setMineAngle(e.target.value)} aria-label="Angle (optional)"
-               placeholder="Angle or what to cover (optional)"
-               className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
-        <Button size="sm" variant="primary" className="self-start" disabled={busy !== null || mine.trim().length < 8} onClick={() => writeMine()}>
-          {busy === "mine" ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} AI writes it
-        </Button>
       </div>
       {(steering || steer) && <div className="border-b border-line px-4 py-2">
         <input value={steer} onChange={(e) => setSteer(e.target.value)} aria-label="Steer the next ideas" autoFocus
@@ -468,10 +508,11 @@ function Steps({ status }: { status: CreateVideo["status"] }) {
     <div className="flex items-center gap-1.5 text-xs">
       {STEPS.map(([label], i) => (
         <span key={label} className="flex items-center gap-1.5">
-          <span className={cn("rounded-full px-2 py-0.5 font-semibold",
+          <span aria-current={i === at && status !== "built" ? "step" : undefined}
+                className={cn("rounded-full px-2 py-0.5 font-semibold",
             i < at || status === "built" ? "bg-accent-soft text-accent" : i === at ? "bg-accent text-accent-fg" : "bg-surface-2 text-subtle",
             status === "failed" && i === at && "bg-[color-mix(in_oklch,var(--danger)_18%,transparent)] text-danger")}>
-            {label}
+            {label}{(i < at || status === "built") && <span className="sr-only"> (done)</span>}
           </span>
           {i < STEPS.length - 1 && <span className="h-px w-3 bg-line-strong" />}
         </span>
@@ -573,7 +614,7 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           <>
           {!building && (
             <Tip label={video.archived ? "Back to Create: out of the Archive, into the list above" : "Move to the Archive (posted videos go there by themselves)"}>
-              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={video.archived ? "Back to Create" : "Move to the Archive"}
+              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={`${video.archived ? "Back to Create" : "Move to the Archive"}: ${s.title || "Untitled"}`}
                       onClick={() => archive(!video.archived)}>
                 {video.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
               </Button>
@@ -581,13 +622,13 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           )}
           {!busyNow && (
             <Tip label="Back to the idea board: the idea comes back to write again later, this video goes">
-              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Back to ideas" onClick={() => setConfirm("ideas")}>
+              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={`Back to ideas: ${s.title || "Untitled"}`} onClick={() => setConfirm("ideas")}>
                 <Lightbulb className="size-4" />
               </Button>
             </Tip>
           )}
           <Tip label={building ? "Stop the build and delete this video" : "Delete this video"}>
-            <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label="Delete this video" onClick={() => setConfirm("delete")}>
+            <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={`Delete this video: ${s.title || "Untitled"}`} onClick={() => setConfirm("delete")}>
               <Trash2 className="size-4" />
             </Button>
           </Tip>
@@ -836,8 +877,8 @@ const kindOf = (v: CreateVisual): PictureKind =>
 
 /** Choosing a sentence's picture yourself (D120): footage by your own search words, a chalk
  *  phrase, or a drawing you describe. "Automatic" hands it back to Clipper. */
-function PictureChoice({ visual, emphasis, onChange, canHold }: {
-  visual: CreateVisual; emphasis: string; onChange: (v: CreateVisual, emphasis?: string) => void; canHold: boolean;
+function PictureChoice({ visual, emphasis, onChange, canHold, canBuild }: {
+  visual: CreateVisual; emphasis: string; onChange: (v: CreateVisual, emphasis?: string) => void; canHold: boolean; canBuild: boolean;
 }) {
   const kind = kindOf(visual);
   const drawings = useCreate().data?.channel.drawings !== false;   // a footage-only channel draws nothing (D146)
@@ -877,6 +918,15 @@ function PictureChoice({ visual, emphasis, onChange, canHold }: {
                onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
                onBlur={(e) => e.target.value.trim() !== value && commit(e.target.value)}
                className={cn(field, "min-w-48 flex-1")} />
+      )}
+      {kind === "sketch" && canBuild && (
+        <Tip label="Starts from the drawing an earlier sentence made, with its marks already on the board, and draws only what this sentence adds. For when footage came in between.">
+          <label className="flex items-center gap-1.5 text-xs text-muted">
+            <input type="checkbox" className="accent-[var(--color-accent)]" checked={!!visual.builds}
+                   onChange={(e) => onChange({ ...visual, builds: e.target.checked, sketch: null })} />
+            Goes on with an earlier drawing
+          </label>
+        </Tip>
       )}
     </div>
   );
@@ -941,7 +991,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
             </div>
             {!locked && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <PictureChoice visual={b.visual} emphasis={b.emphasis} canHold={i > 0 && (beats[i - 1].visual.kind === "diagram" || !!beats[i - 1].visual.hold)} onChange={(v, emphasis) => patch(i, { visual: v, ...(emphasis !== undefined ? { emphasis } : {}) })} />
+                <PictureChoice visual={b.visual} emphasis={b.emphasis} canBuild={beats.slice(0, i).some((x) => x.visual.kind === "diagram")} canHold={i > 0 && (beats[i - 1].visual.kind === "diagram" || !!beats[i - 1].visual.hold)} onChange={(v, emphasis) => patch(i, { visual: v, ...(emphasis !== undefined ? { emphasis } : {}) })} />
                 <Tip label="The word shown highlighted in the captions">
                   <input key={b.emphasis} defaultValue={b.emphasis} placeholder="highlight word" aria-label={`Highlight word, sentence ${i + 1}`}
                          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
@@ -1043,7 +1093,10 @@ function VoiceStep({ video, title = "Add the voice" }: { video: CreateVideo; tit
   const how = create?.channel.voice ?? "";
   // For ElevenLabs v3 (D156): a sentence a line, and a [pause] before the punchline so the deadpan beat lands.
   const beats = video.script.beats.map((b) => b.text.trim());
-  const eleven = [...beats.slice(0, -1), ...(beats.length > 1 ? ["[pause]"] : []), ...beats.slice(-1)].join("\n");
+  // The punchline is the second to last sentence on a loop (D200): the last one runs back into the start.
+  const loop = video.script.loop ?? video.script.ending === "loop";
+  const at = loop && beats.length >= 3 ? beats.length - 2 : beats.length - 1;
+  const eleven = [...beats.slice(0, at), ...(beats.length > 1 ? ["[pause]"] : []), ...beats.slice(at)].join("\n");
   const gotIt = async (work: () => Promise<unknown>, done: string) => {
     setBusy(true);
     try {
@@ -1061,9 +1114,9 @@ function VoiceStep({ video, title = "Add the voice" }: { video: CreateVideo; tit
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-accent/30 bg-accent-soft/40 p-4">
       <h3 className="flex items-center gap-2 text-sm font-semibold"><Mic className="size-4 text-accent" /> {title}</h3>
-      <div className="flex flex-wrap gap-1.5" role="tablist">
+      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you give the voice">
         {ways.map(([key, label]) => (
-          <button key={key} role="tab" aria-selected={way === key} onClick={() => setWay(key)}
+          <button key={key} type="button" role="radio" aria-checked={way === key} onClick={() => setWay(key)}
                   className={cn("h-8 rounded-full border px-3 text-sm font-medium", way === key ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
             {label}
           </button>
@@ -1376,6 +1429,18 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
           <VoiceStep video={video} title="Replace the voice: same words, built again" />
         </div>
       </Fold>
+      {/* One Build bar (D200): every change not built yet, with the button, held in view at the foot while you work
+          down the parts; the other rebuild buttons sat wherever you had made the change. */}
+      {(video.unbuilt?.length ?? 0) > 0 && (
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-md border border-line-strong bg-surface-1/95 px-3 py-2 text-sm shadow-2 backdrop-blur md:bottom-2">
+          <span className="min-w-0 flex-1 text-muted">
+            <b className="text-fg">{video.unbuilt!.length} change{video.unbuilt!.length === 1 ? "" : "s"} not built yet</b>: {video.unbuilt!.slice(0, 4).join(", ")}{video.unbuilt!.length > 4 ? "…" : ""}
+          </span>
+          <Button variant="primary" disabled={busy !== null} onClick={onRebuild}>
+            {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
+          </Button>
+        </div>
+      )}
       </div>
     </div>
   );

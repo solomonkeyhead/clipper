@@ -210,7 +210,7 @@ dry aside now and then, no hype. Spoken English.""",
     drawings=False, templates=[], words=[70, 110], sentence_max=13, hook_max=10)
 
 PHYSICS = Pack(
-    key="physics", label="Everyday physics (the German Professor's)",
+    key="physics", label="Everyday physics",
     about="A funny German physics professor explains why the physical world does what it does to you.",
     persona=PHYSICS_PERSONA, rules=PHYSICS_RULES,
     subject="physics", expert="a physics professor",

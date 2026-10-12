@@ -111,3 +111,45 @@ def test_lint_catches_filler_a_finished_loop_line_and_copied_example_lines():
     assert any(p.startswith("Lines copied") for p in script.lint(copied, ch)), joke
     filler = loop.model_copy(update={"beats": [Beat(text="Why is it essentially heavier for you?"), *loop.beats[1:]]})
     assert any("filler" in p for p in script.lint(filler, ch))
+
+
+def test_a_still_clip_is_found_and_its_still_camera_pushes_in(tmp_path):
+    """D200: the judge sees one thumbnail, so a clip that barely moves needs measuring."""
+    import cv2
+    import numpy as np
+
+    from clipper.create import build
+
+    def clip(name, moving):
+        path = tmp_path / name
+        w = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 10, (160, 90))
+        for k in range(30):
+            frame = np.full((90, 160, 3), 90, np.uint8)
+            if moving:
+                cv2.rectangle(frame, (k * 4, 20), (k * 4 + 40, 70), (255, 255, 255), -1)
+            w.write(frame)
+        w.release()
+        return path
+
+    assert build._activity(clip("still.mp4", False), 0.0, 2.0) < build.STILL <= build._activity(clip("moves.mp4", True), 0.0, 2.0)
+    assert build._camera("still", None, lively=False) == "push"
+    assert build._camera("still", 1.0, lively=False) == "still"      # a punch-in holds still on purpose
+    assert build._camera("still", None, lively=True) == "still"
+
+
+def test_a_drawing_that_goes_on_with_an_earlier_one_keeps_its_marks_and_draws_only_the_new(monkeypatch):
+    """D200: footage between two sentences of one mechanism no longer makes the second start from a blank board."""
+    import json as _json
+
+    from clipper.create import diagrams, sketch
+    from clipper.create.script import Visual
+
+    old = sketch.Sketch(marks=[sketch.Mark(kind="icon", text="ear", xy=[300, 400, 300])], grid=900)
+    new = {"marks": [{"kind": "arrow", "xy": [500, 400, 800, 400], "color": "yellow", "cue": "bone"}]}
+    monkeypatch.setattr(sketch, "ask", lambda *a, **k: _json.dumps(new))
+    both = sketch.draw_on("The sound goes through bone.", "an arrow through bone", old)
+    assert [m.kind for m in both.marks] == ["icon", "arrow"] and both.base == 1 and both.marks[0] == old.marks[0]
+    v = Visual(kind="diagram", template="sketch", sketch=both, builds=True)
+    assert diagrams.cues(v, [(1.0, "bone")]) == [None, 1.0]            # the old mark has no cue in this shot
+    fresh = v.model_copy(update={"sketch": both.model_copy(update={"base": 0})})
+    assert diagrams.frame(v, 0.05, 4.0).tobytes() != diagrams.frame(fresh, 0.05, 4.0).tobytes()   # the ear is there at once

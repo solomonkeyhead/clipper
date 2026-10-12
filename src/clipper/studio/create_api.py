@@ -1048,7 +1048,7 @@ def routes(app: FastAPI, publish) -> None:
         group, _ = _part(row, script, beat)
         b = script.beats[group[0]]
         v = b.visual
-        picks = [{k: pool[x].get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center")}
+        picks = [{k: pool[x].get(k) for k in ("id", "url", "width", "height", "duration", "tags", "thumb", "center", "center_y")}
                  for x in dict.fromkeys(ids)][:8]
         new = v.model_copy(update={
             "kind": "stock", "picked": picks, "redo": True, "manual": True, "hold": False, "clip": "", "notice": "",

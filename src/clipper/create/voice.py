@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from ..paths import data_root, ensure
 from .ai import CreateError
-from .script import Script
+from .script import Script, loops_back
 
 AUDIO = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".webm", ".opus"}   # webm: recorded in the page (D146)
 TAIL = 0.6    # a breath after the last word, then it ends (and loops)
@@ -154,8 +154,11 @@ def tighten(path: Path, script: Script, words_heard: list[TimedWord], audio_seco
 
     if path.stem == "voice_tight":   # already cut; ffmpeg can't write the file it reads
         return path, words_heard, audio_seconds
-    last_words = len(script.beats[-1].text.split()) if script.beats else 0
-    # The last sentence's first word, counted from the end of what was heard (missed words aside).
+    # The punchline's words (D200): on a loop it is the second to last sentence, the last one runs back into the start,
+    # so the deadpan beat comes before the punchline, not before the loop line.
+    punch = script.beats[-2:-1] if loops_back(script) and len(script.beats) >= 3 else script.beats[-1:]
+    last_words = len(script.beats[-1].text.split()) + (len(punch[0].text.split()) if punch and punch[0] is not script.beats[-1] else 0)
+    # The punchline's first word, counted from the end of what was heard (missed words aside).
     last_from = max(0, len(words_heard) - last_words)
     gaps = cuts(words_heard, last_from)
     if gaps:

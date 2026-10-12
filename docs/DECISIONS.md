@@ -3492,3 +3492,27 @@ caught plain physics). The channel's example scripts moved from each request int
 which is cached, and are the best three instead of five.
 A footage-only channel's writer is no longer told about chalk drawings, and the editor is told the ending only when
 the script was asked for one (its fallback still said "a deadpan two-beat line").
+
+## D200: still clips, vertical framing, drawings that go on, one New Short card, and the idea planner's openings (2026-10-12)
+Idea planner (Marc's yes): an idea's question is capped at the channel's `hook_max` (8 on the physics pack, filled in by
+`channel.fill`, so the planner can no longer offer 14 words for an 8-word opening), "your" is used only where the thing
+is the viewer's, "surprise" means the likely guess is wrong, and "showable" means the moment is common stock footage
+for the first second. `tests/fixtures/topics_physics.txt` was regenerated for this on purpose; nothing else in it moved.
+Footage: `build._activity` measures how much a clip moves (mean grey change 0.2 s apart; `STILL = 2.0`, a number to tune
+on Marc's clips). A shot plays the most moving of three stretches of its clip (the usual 15 % in unless another moves
+25 % more), and a "still" camera on a clip that barely moves becomes a slow push (a punch-in still holds still on
+purpose). The footage judge also gives where DOWN the thumbnail the subject is (`center_y`, same call, no extra cost);
+it is kept with each pick and placed in `Move.v`. RENDER_VERSION 6. Not done: keeping a still clip from being picked at
+all (that needs the download before the judge). Drawings: `Visual.builds` / `Sketch.base`. A sketch sentence with
+builds set is drawn after the others, on the nearest earlier drawing: the model gets its marks and returns only the new
+ones (`sketch.draw_on`, not fitted or looked over again, so the board doesn't shift under the viewer), and the shot
+shows the old marks from the first frame and draws the new ones on their words. The director may set it; the sentence
+has a "Goes on with an earlier drawing" box. The ElevenLabs copy and the voice's deadpan pause (0.6 s) now sit before
+the PUNCHLINE, the second to last sentence on a loop, instead of before the loop line.
+Page: one "New Short" card (my idea AI writes, my own words, ready-made) replaces three near-identical ones; a Build bar
+held at the foot of a finished video lists every change not built yet with one button; tooltips open on a tap
+(3 s) on a touch screen; the Archive shows total views and sorts the most viewed first; the Steps, archive icons and
+voice choice have names a screen reader can use; the physics pack's label no longer carries a person's name. The
+recorder's blob URL and timer were already fixed (D196). Not done: a migration to shorter default rules (Marc's
+"Every other script short" switch is the test first; changing every channel's length before it reports would hide the
+result).

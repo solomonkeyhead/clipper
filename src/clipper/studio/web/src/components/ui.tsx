@@ -70,10 +70,20 @@ Button.displayName = "Button";
 export function Tip({ label, keys, children, side = "top" }: {
   label: ReactNode; keys?: string; children: ReactNode; side?: "top" | "bottom" | "left" | "right";
 }) {
+  // A tap opens it on a touch screen (D200), for a few seconds: a tooltip opened by hover and keyboard only.
+  const [open, setOpen] = useState(false);
+  const touched = useRef(false);
+  useEffect(() => {
+    if (!open || !touched.current) return;
+    const t = setTimeout(() => setOpen(false), 3000);
+    return () => clearTimeout(t);
+  }, [open]);
   return (
-    <RadixTooltip.Root delayDuration={500}>
+    <RadixTooltip.Root delayDuration={500} open={open} onOpenChange={setOpen}>
       {/* Focusable (D199): a plain span's explanation (n/a, Estimated, Median) opened by hover only; a button keeps its own. */}
-      <RadixTooltip.Trigger asChild tabIndex={0}>{children}</RadixTooltip.Trigger>
+      <RadixTooltip.Trigger asChild tabIndex={0}
+                            onPointerDown={(e) => { touched.current = e.pointerType === "touch"; }}
+                            onClick={() => { if (touched.current) setOpen(true); }}>{children}</RadixTooltip.Trigger>
       <RadixTooltip.Portal>
         <RadixTooltip.Content
           side={side}

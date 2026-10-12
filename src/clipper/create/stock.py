@@ -339,7 +339,8 @@ photo never moves: score it below a video that fits as well, and 8 or more only 
 the sentence says.
 For each candidate also give center: where across its thumbnail the subject is, 0 = left edge, 0.5 =
 middle, 1 = right edge (a wide picture is cropped to the panel around it, so put it on the thing the
-sentence is about).
+sentence is about), and middle: how far down it the subject is, 0 = top edge, 1 = bottom edge (the panel is
+taller than wide, so the crop is placed on it up and down too).
 If nothing scores 7 or more, give better: up to 3 new searches, 2 to 4 plain words each, for what stock
 libraries really film (objects, places, nature, people in ordinary situations: "man listening to
 headphones", "subwoofer speaker vibrating") that would show this sentence. Mix the literal thing with a
@@ -353,6 +354,7 @@ GOOD_ENOUGH = 7
 class _Ranks(BaseModel):
     scores: list[int] = []
     centers: list[float] = []
+    middles: list[float] = []   # where down each thumbnail the subject is (D200)
     better: list[str] = []      # when nothing fits: searches more likely to find it (D124)
 
 
@@ -407,8 +409,9 @@ def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "")
     for k, (h, _) in enumerate(shown):
         score = got.scores[k] if k < len(got.scores) else None
         center = got.centers[k] if k < len(got.centers) else 0.5
+        middle = got.middles[k] if k < len(got.middles) else 0.5
         out.append({**h, "score": None if score is None else max(0, min(10, int(score))),
-                    "center": min(1.0, max(0.0, float(center)))})
+                    "center": min(1.0, max(0.0, float(center))), "center_y": min(1.0, max(0.0, float(middle)))})
     out.sort(key=lambda h: -(h["score"] if h["score"] is not None else -1))
     return out, [" ".join(str(q).split()[:5]) for q in got.better if str(q).strip()][:3]
 
@@ -560,7 +563,7 @@ def rank(sentence: str, hits: list[dict], context: str = "") -> list[dict]:
         return _scored(sentence, hits, context)[0]
     except _NoAnswer as exc:
         log.info("create: candidates not scored (%s)", exc.__cause__ or "no thumbnails")
-        return [{**h, "score": None, "center": 0.5} for h in hits if _thumb(h)]
+        return [{**h, "score": None, "center": 0.5, "center_y": 0.5} for h in hits if _thumb(h)]
 
 
 def candidates(queries: list[str], seconds: float, exclude: set, sentence: str, context: str = "",

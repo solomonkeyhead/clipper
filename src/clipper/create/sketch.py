@@ -50,6 +50,9 @@ class Sketch(BaseModel):
     # The grid's height it was drawn on (1000 wide): 600 before D162, when drawings had a 640 px band of the
     # frame; 900 since, on the taller picture panel. A sketch saved without it is an old one.
     grid: int = 600
+    # How many of the marks came from an earlier drawing this one builds on (D200): drawn in full from the first
+    # frame; the rest arrive on their words.
+    base: int = 0
 
 
 DRAW = """You draw the chalkboard sketches for a 45-second {subject} video watched on a phone.
@@ -378,6 +381,30 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
     return sketch
 
 
+ON_TOP = """
+This drawing goes on with an earlier one that is already on the board. The marks already there (keep them exactly as
+they are; do NOT return them) are:
+{marks}
+Return ONLY the new marks this sentence adds, on the same board, placed in the free space and beside what they
+belong to, each cued to this sentence's words. 2-8 marks."""
+
+
+def draw_on(sentence: str, idea: str, earlier: Sketch, script_text: str = "") -> Sketch:
+    """The earlier sketch with this sentence's new marks added (D200), `base` counting the old ones. Not fitted or
+    reviewed again: fitting would move the marks the viewer has already seen. ponytail: no look-and-fix pass on a
+    building drawing; add one if they come out crowded."""
+    user = (f"The video's script, for context:\n{script_text}\n\n" if script_text else "") + \
+        f"Sentence: {sentence}\nWhat to add: {idea}"
+    prompt = _prompt(DRAW) + ON_TOP.replace("{marks}", json.dumps([m.model_dump(exclude_defaults=True) for m in earlier.marks]))
+    try:
+        new = _Drawn.model_validate(json.loads(ask(prompt, user, _Drawn, temperature=0.4, job="sketch")))
+    except (ValueError, TypeError) as exc:
+        raise CreateError("the sketch came back unreadable") from exc
+    if not new.marks:
+        raise CreateError("the sketch added nothing")
+    return earlier.model_copy(update={"marks": [*earlier.marks, *new.marks], "base": len(earlier.marks)})
+
+
 def draw_all(script) -> tuple[object, list[str]]:
     """Every sketch beat of `script` drawn (at once: each takes the model a while); a beat
     whose sketch fails becomes stock footage with its card. Returns the script and notes."""
@@ -388,15 +415,25 @@ def draw_all(script) -> tuple[object, list[str]]:
             and not (b.visual.sketch and b.visual.sketch.marks) and not b.visual.clip]  # a clip of the user's: drawn only if needed
     notes = []
 
-    def one(i: int):
+    def one(i: int, earlier: Sketch | None = None):
         # A drawing held over the next sentences is drawn for all of them, so its parts can
         # arrive on their words (D124).
         v = beats[i].visual
         group = next((g for g in spans(script) if g[0] == i), [i])
-        return draw(" ".join(beats[k].text for k in group), v.idea, script.text, v.title)
+        said = " ".join(beats[k].text for k in group)
+        if earlier is not None:   # builds on an earlier drawing (D200)
+            return draw_on(said, v.idea, earlier, script.text)
+        return draw(said, v.idea, script.text, v.title)
 
+    building = [i for i in todo if beats[i].visual.builds]
     with ThreadPoolExecutor(max_workers=4) as pool:
-        done = list(pool.map(lambda i: (i, _safe(one, i)), todo))
+        done = list(pool.map(lambda i: (i, _safe(one, i)), [i for i in todo if i not in building]))
+    # The building drawings last, in order, each on the drawing before it (this build's, else the saved one).
+    for i in building:
+        before = [(j, b.visual.sketch) for j, b in enumerate(beats[:i]) if b.visual.sketch and b.visual.sketch.marks]
+        before += [(j, s) for j, s in done if s is not None and j < i]
+        earlier = max(before, key=lambda p: p[0])[1] if before else None   # none: drawn on a blank board
+        done.append((i, _safe(lambda k, e=earlier: one(k, e), i)))
     for i, sketch in done:
         v = beats[i].visual
         if sketch is None:

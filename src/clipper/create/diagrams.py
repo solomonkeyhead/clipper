@@ -151,7 +151,7 @@ def cues(v: Visual, words: list[tuple[float, str]]) -> list[float | None]:
     spoken = [(at, _stem(w)) for at, w in words if len(_stem(w)) >= 3]
     out: list[float | None] = []
     last = 0.0
-    labels = [m.cue for m in v.sketch.marks] if v.template == "sketch" and v.sketch else v.labels
+    labels = [("" if k < v.sketch.base else m.cue) for k, m in enumerate(v.sketch.marks)]         if v.template == "sketch" and v.sketch else v.labels
     for label in labels:
         keys = {_stem(w) for w in label.split() if len(_stem(w)) >= 3}
         hit = next((at for at, w in spoken if at >= last and any(w.startswith(k) or k.startswith(w) for k in keys)), None)
@@ -656,8 +656,9 @@ def sketch(draw, v: Visual, t: float, d: float) -> None:
     from . import icons
 
     marks = v.sketch.marks if v.sketch else []
+    base = v.sketch.base if v.sketch else 0   # marks of the drawing this one goes on with: there from the first frame (D200)
     GRID_DY.set((GRID_H - v.sketch.grid) / 2 if v.sketch else 0.0)
-    title(draw, v, stage(t, d, 0, len(marks) + 1))
+    title(draw, v, 1.0 if base else stage(t, d, 0, len(marks) + 1))
     # Words after the lines, so no line runs through a word ("vibration" was struck out);
     # the first mark straight away, whatever its cue, so the board is never empty.
     order = [i for i, m in enumerate(marks) if m.kind != "text"] + [i for i, m in enumerate(marks) if m.kind == "text"]
@@ -665,13 +666,13 @@ def sketch(draw, v: Visual, t: float, d: float) -> None:
     # in the turns the schedule gives them; a part on its word keeps its word.
     said, free = CUES.get(), []
     for i, m in enumerate(marks):
-        if m.kind != "text" and not (0 < i < len(said) and said[i] is not None):
+        if i >= base and m.kind != "text" and not (0 < i < len(said) and said[i] is not None):
             free.append(i)
     slot = dict(zip(sorted(free, key=lambda i: (_left(marks[i]), i)), free, strict=True))
     for i in order:
         m = marks[i]
         s = slot.get(i, i)
-        p = stage(t, d, s + 1, len(marks) + 1, label=s if s else None)
+        p = 1.0 if i < base else stage(t, d, s + 1 - base, len(marks) - base + 1, label=s if s else None)
         if p <= 0:
             continue
         color, pts = COLORS.get(m.color, CHALK), _pts(m.xy)

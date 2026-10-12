@@ -65,6 +65,9 @@ class Visual(BaseModel):
     # as the explanation goes on ("two routes... route one is air... route two is bone"), its
     # parts arriving on the words of all those sentences, instead of a new shot each sentence.
     hold: bool = False
+    # A drawing that goes on with an earlier one (D200): the same objects, footage in between. It starts as that
+    # drawing ended and draws only what this sentence adds, instead of a new board of the same lips.
+    builds: bool = False
     # The camera on this sentence's footage (D162): "" lets the build choose (moves taken in turn), else "push",
     # "pull", "drift" or "still". The user's pick, never the writer's.
     camera: str = ""
@@ -271,6 +274,9 @@ alone finds it sitting still."""
 ONE_DRAWING = """When two or more sentences in a row explain one mechanism, plan ONE drawing on the first, its idea
 covering all of them, and set hold = true on the rest. Never plan a new drawing that redraws the objects of the
 drawing just before it."""
+#: For a channel that draws (D200): footage between two sentences of one mechanism made the second drawing start over.
+BUILDS = """When a drawing explains more of an earlier drawing (the same objects), with footage in between, plan a
+sketch with builds = true and give as its idea only what this sentence adds: it starts as the earlier drawing ended."""
 #: When the script loops (D196), the director plans the seam away: the last sentence plays over the opening shot.
 LOOP_PICTURE = """This video loops: its last sentence runs back into its first. Give the last beat kind "stock" (never
 a drawing, never hold) and the first beat's queries, and choose the first beat's queries so one moving shot of the
@@ -374,7 +380,7 @@ def _director(channel: channels.Channel) -> str:
     """The director's brief (D164): what the pictures are for, then the channel's picture rules."""
     head = DIRECTOR.replace("{name}", channel.name).replace("{niche}", channel.niche)
     if channel.drawings:
-        head += " " + " ".join(t.replace("\n", " ") for t in (UNFILMABLE, AGREE, ONE_DRAWING))
+        head += " " + " ".join(t.replace("\n", " ") for t in (UNFILMABLE, AGREE, ONE_DRAWING, BUILDS))
     return f"{head}\n\n{channels.fill(visuals(channel), channel)}"
 
 

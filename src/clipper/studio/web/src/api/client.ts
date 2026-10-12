@@ -642,6 +642,7 @@ export interface CreateVisual {
   manual?: boolean; idea?: string; sketch?: unknown;            // a picture the user chose (D120)
   wish?: string; notice?: string;                                // D129
   hold?: boolean;                                                // keep the drawing before on screen (D124)
+  builds?: boolean;                                              // a drawing that goes on with an earlier one (D200)
   camera?: string; restyle?: boolean;                            // "" automatic, push, pull, drift, still (D164)
   transition?: string; scale?: number; shift?: number;           // set by hand on a built video (D171)
   frame?: number | null; directions?: string[];                  // footage's crop across, a template's arrows (D180)

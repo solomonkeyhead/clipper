@@ -38,6 +38,9 @@ is the order I'd build them.
 | Transitions | Cut, whip or zoom where the kind of picture changes (D162) | Per video: automatic, plain cuts, whip or zoom (D165); per part (D171) | Done | - |
 | Photos among the footage | Up to 3 photos offered with each part's clips, shown with a camera move (D163) | Pick or pass over them in the footage picker | Done | - |
 | Drawing size on the board | A template's drawing scaled to fill the board (D162) | Size and place per drawing (D171) | Done | - |
+| Script length | One length per channel (its words range) | "Every other script short" in Channel settings (70 to 90 words, D199); a take is labelled "short take" | Done | - |
+| A drawing across footage | The director plans it; a later drawing of the same mechanism goes on with the earlier one (D200) | "Goes on with an earlier drawing" on any drawing sentence | Done | - |
+| Still clips and framing up and down | A clip that barely moves gets a slow push, its most moving stretch is played, and the judge places the crop up and down too (D200) | Camera per part and framing per part (D164, D180) | Partial | S |
 | Things in a sketch | The sketcher places icons from a set of 234 (D162) | "Drawing I describe", naming the things to draw | Partial | - |
 | Pictures, highlights and poses | The director, a second AI pass on the final words, plans them (D164) | Each one per sentence; Plan pictures fills only the ones left alone | Done | - |
 | Which free AI answers | Gemini 3.8 Flash, then older Gemini; no other free providers since D188 (D162, D188) | Model names in config (`llm.create_gemini_models`) | Gap (config only) | S |
