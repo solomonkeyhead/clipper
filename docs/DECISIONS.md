@@ -3473,3 +3473,8 @@ Learning leads with what it's seeing and what's working, a weak verdict says to 
 at the bottom; campaign cards say when they end and the budget left, with a sort (ending soon, earned, pay per 1K);
 Settings is under headings (AI, Clipping, The app, This computer), with This computer gone when hosted; a tooltip's
 trigger takes keyboard focus; the Make clips row stays in view.
+Create: a finished card shows its thumbnail and views per platform instead of four lit steps, and its title wraps
+to two lines; Write it on the ideas is quiet until its row is hovered, and the steer box sits behind a chevron by
+More ideas; a draft's own clips are folded and its action row stays at the card's foot; a finished video has Open to
+post and Build again, with stats, Clips and New pictures under More (New pictures asks first), and its sound, loop
+and cover controls are folded as Look and sound.

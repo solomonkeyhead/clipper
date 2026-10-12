@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
-  ExternalLink, Redo2, Trash2, Undo2, Upload, Wand2, X,
+  ExternalLink, MoreHorizontal, Redo2, Trash2, Undo2, Upload, Wand2, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
@@ -10,9 +10,9 @@ import {
   createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual,
 } from "@/api/client";
 import { JobProgress, type Step } from "@/components/progress";
-import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip } from "@/components/ui";
+import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip, buttonClass } from "@/components/ui";
 import { useUI } from "@/lib/store";
-import { cn, copyText } from "@/lib/utils";
+import { PLATFORM_NAME, cn, copyText, formatCount } from "@/lib/utils";
 import { ChannelBar, NewChannel } from "./ChannelPanel";
 import { MyClips } from "./MyClips";
 import { CAMERAS, ShotReview } from "./ShotReview";
@@ -330,6 +330,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<number | "more" | "mine" | null>(null);
   const [steer, setSteer] = useState("");
+  const [steering, setSteering] = useState(false);   // the steer box, behind a chevron by More ideas (D199)
   const [find, setFind] = useState("");
   const words = find.toLowerCase().split(/\s+/).filter(Boolean);
   const shown = words.length ? topics.filter((t) => words.every((w) => `${t.question} ${t.angle} ${t.series ?? ""}`.toLowerCase().includes(w))) : topics;
@@ -384,9 +385,17 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
     <Card className="flex max-h-[78vh] flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="size-4 text-accent" /> Ideas <span className="font-normal text-subtle">{topics.length}</span></h2>
-        <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => more()}>
-          {busy === "more" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} More ideas
-        </Button>
+        <span className="flex items-center gap-0.5">
+          <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => more()}>
+            {busy === "more" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} More ideas
+          </Button>
+          <Tip label="Steer the next batch">
+            <Button size="icon" variant="ghost" className="size-7" aria-label="Steer the next batch" aria-expanded={steering || !!steer}
+                    onClick={() => setSteering((v) => !v)}>
+              <ChevronRight className={cn("size-3.5 transition-transform", (steering || steer) && "rotate-90")} />
+            </Button>
+          </Tip>
+        </span>
       </div>
       <div className="flex flex-col gap-1.5 border-b border-line px-4 py-3">
         <label className="text-xs font-medium" htmlFor="own-idea">Your own idea</label>
@@ -401,13 +410,13 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
           {busy === "mine" ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} Write the script
         </Button>
       </div>
-      <div className="border-b border-line px-4 py-2">
-        <input value={steer} onChange={(e) => setSteer(e.target.value)} aria-label="Steer the next ideas"
+      {(steering || steer) && <div className="border-b border-line px-4 py-2">
+        <input value={steer} onChange={(e) => setSteer(e.target.value)} aria-label="Steer the next ideas" autoFocus
                onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void more(); }}
                placeholder="Steer the next batch, e.g. only light and sound, no biology"
                className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
         <p className="mt-1 text-[11px] text-subtle">Lasting guidance is under Channel settings. Skipping an idea teaches it what to avoid.</p>
-      </div>
+      </div>}
       {(topics.length > 10 || find) && (
         <div className="border-b border-line px-4 py-2">
           <input value={find} onChange={(e) => setFind(e.target.value)} aria-label="Search the ideas" type="search"
@@ -430,7 +439,9 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => write(t)} aria-label={`Write it: ${t.question}`}>
+              {/* Lime only on the row you're on (D199): 27 lime buttons drowned the one that matters. */}
+              <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => write(t)} aria-label={`Write it: ${t.question}`}
+                      className="group-hover:border-transparent group-hover:bg-accent group-hover:text-accent-fg group-focus-within:border-transparent group-focus-within:bg-accent group-focus-within:text-accent-fg">
                 {busy === t.id ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} {busy === t.id ? "Writing…" : "Write it"}
               </Button>
               <Tip label="Not this one">
@@ -522,13 +533,22 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
       <div className="flex items-center gap-2 p-4">
         <button className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span className="min-w-0">
-            <span className="block truncate font-semibold">{s.title || "Untitled"}</span>
+            <span className="line-clamp-2 font-semibold">{s.title || "Untitled"}</span>
             <span className="text-xs text-muted">
               {video.status === "writing" ? "Being written…" : `${s.beats?.length ?? 0} beats · ~${Math.round(words(s) / wps)}s${s.length === "short" ? " · short take" : ""}`}
               {video.archived && video.archived_at ? ` · archived ${video.archived_at.slice(0, 10)}` : ""}
             </span>
           </span>
-          <Steps status={video.status} />
+          {/* Built: its picture and views (D199); four lit steps on every finished card said nothing. */}
+          {video.status === "built" && video.clip_id ? (
+            <span className="flex shrink-0 items-center gap-2.5 text-xs text-muted">
+              <span className="tabular">
+                {video.posts?.length ? video.posts.map((p) => `${PLATFORM_NAME[p.platform] ?? p.platform} ${p.views == null ? "–" : formatCount(p.views)}`).join(" · ")
+                  : video.posted ? "Posted" : "Not posted yet"}
+              </span>
+              <img src={`/thumb/${video.clip_id}`} alt="" loading="lazy" className="aspect-[9/16] h-12 rounded-[4px] bg-black object-cover" />
+            </span>
+          ) : <Steps status={video.status} />}
         </button>
         {confirm === "ideas" ? (
           <span className="flex shrink-0 items-center gap-1 text-xs">
@@ -668,15 +688,21 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       )}
       <CheckNote text={video.check_notes} />
       <ScriptEditor video={video} wps={wps} />
-      <MyClips video={video} wps={wps} onRebuild={video.status === "failed" && video.voice ? run("rebuild", () => createApi.build(video.id)) : undefined}
-               busyRebuild={busy === "rebuild"} />
-      {video.status === "draft" && video.topic_id !== null && (
+      {/* Folded (D199): the whole drop card sat between the script and Approve. */}
+      <Fold id={`clips-${video.id}`} title={`Your own clips (optional)${video.mine?.clips.length ? `: ${video.mine.clips.length}` : ""}`}
+            startOpen={(video.mine?.clips.length ?? 0) > 0 || video.status === "failed"}>
+        <MyClips video={video} wps={wps} onRebuild={video.status === "failed" && video.voice ? run("rebuild", () => createApi.build(video.id)) : undefined}
+                 busyRebuild={busy === "rebuild"} />
+      </Fold>
+      {video.status === "draft" && (
+        // Held in view at the card's foot (D199): Approve sat below a long script; above a phone's tabs.
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 -mx-4 -mb-4 flex flex-col gap-2 rounded-b-lg border-t border-line bg-surface-1/95 px-4 py-3 backdrop-blur md:bottom-0">
+      {video.topic_id !== null && (
         <input value={note} onChange={(e) => setNote(e.target.value)} aria-label="Tell it what to change for the next take"
                onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void run("rewrite", () => again(), "A new take")(); }}
                placeholder="Steer Another take: shorter, funnier opening, use a kitchen example, less jargon…"
                className="h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none placeholder:text-subtle focus:border-accent" />
       )}
-      {video.status === "draft" ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" disabled={busy !== null} onClick={run("approve", () => createApi.approve(video.id))}>
             <CheckCircle2 className="size-4" /> Approve script
@@ -701,7 +727,9 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
           {/* Deleting is the card's own trash button, which asks first (D196): this one didn't. */}
           <span className="ml-auto flex items-center gap-2">{undo}</span>
         </div>
-      ) : (
+        </div>
+      )}
+      {video.status !== "draft" && (
         <>
           <VoiceStep video={video} />
           {video.status === "approved" && (
@@ -1160,6 +1188,7 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
   const { data: clips = [] } = useClips();
   const clip = clips.find((c) => c.id === video.clip_id);
   const player = useRef<HTMLVideoElement>(null);
+  const [replan, setReplan] = useState(false);   // New pictures asks first (D199): one click replanned every part
   const seek = (t: number) => {
     const el = player.current;
     if (!el) return;
@@ -1182,39 +1211,52 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
             </div>
           )}
           <PostedLine video={video} />
-          <p className="text-sm">It's in your library under <b>{video.script.title}</b>, with the title, description and hashtags ready to copy.</p>
           {/* Who wrote and drew it, and what didn't work, stay visible after the build (D118). */}
           <CheckNote text={video.check_notes} />
-          <div className="flex flex-wrap gap-2">
+          {/* One main button and one other (D199); the rest under More: six equal buttons sat over the parts. */}
+          <div className="flex flex-wrap items-center gap-2">
             {clip && <Button variant="primary" onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
-            {/* Where this video goes next, and where its numbers are (D143). */}
-            {clip && (clip.posts.length > 0 || video.posted) && (
-              <Link to="/stats" search={{ campaign: clip.campaign }}
-                    className="inline-flex h-9 items-center rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
-                See its stats
-              </Link>
-            )}
-            {clip && (
-              <Link to="/clips" search={{ campaign: clip.campaign, status: "all" }}
-                    className="inline-flex h-9 items-center rounded-sm px-3 text-sm font-medium text-muted hover:bg-surface-2 hover:text-fg">
-                All your Shorts in Clips
-              </Link>
-            )}
-            <Tip label="Same words and voice: footage and diagrams planned again, then built">
-              <Button variant="secondary" disabled={busy !== null} onClick={onPictures}>
-                {busy === "pictures" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} {busy === "pictures" ? "Planning…" : "New pictures"}
-              </Button>
-            </Tip>
             <Tip label="Same words, voice and pictures, built again; only parts you asked to change, or that had no footage, are made again">
               <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
                 {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
               </Button>
             </Tip>
+            <details className="relative">
+              <summary className={cn(buttonClass("ghost"), "cursor-pointer list-none [&::-webkit-details-marker]:hidden")}>
+                <MoreHorizontal className="size-4" /> More
+              </summary>
+              <div className="absolute left-0 z-20 mt-1 flex w-60 flex-col rounded-md border border-line bg-surface-1 p-1 text-sm shadow-3">
+                {/* Where this video goes next, and where its numbers are (D143). */}
+                {clip && (clip.posts.length > 0 || video.posted) && (
+                  <Link to="/stats" search={{ campaign: clip.campaign }} className="rounded-sm px-3 py-2 hover:bg-surface-2">See its stats</Link>
+                )}
+                {clip && (
+                  <Link to="/clips" search={{ campaign: clip.campaign, status: "all" }} className="rounded-sm px-3 py-2 hover:bg-surface-2">All your Shorts in Clips</Link>
+                )}
+                <button type="button" disabled={busy !== null}
+                        onClick={(e) => { setReplan(true); e.currentTarget.closest("details")?.removeAttribute("open"); }}
+                        className="rounded-sm px-3 py-2 text-left hover:bg-surface-2 disabled:opacity-50">New pictures for every part…</button>
+              </div>
+            </details>
           </div>
+          {replan && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-3 text-sm">
+              <span className="flex-1 text-muted">Plans every picture you haven't chosen yourself again and builds it; same words and voice. Uses AI.</span>
+              <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => { setReplan(false); onPictures(); }}>
+                {busy === "pictures" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} New pictures
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setReplan(false)}>Keep these</Button>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Folded beside Captions (D199): five controls and the cover row sat between the buttons and the parts. */}
+      <Fold id={`look-${video.id}`} title="Look and sound">
+        <div className="flex flex-col gap-3">
           <SoundChoice video={video} />
           <CoverChoice video={video} player={player} />
         </div>
-      </div>
+      </Fold>
       <Fold id={`review-${video.id}`} title="Change parts you don't like" startOpen>
         <ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} />
       </Fold>

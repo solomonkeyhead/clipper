@@ -138,9 +138,17 @@ with sync_playwright() as p:
     page.get_by_label("Said word colour").select_option(label="said word: blue")
     expect(page.get_by_label("Said word colour")).to_have_value("#4fd2ff")
     print("caption size, place and colour set (D180)")
+    page.get_by_role("button", name="Look and sound").first.click()   # sound, the loop and the cover, folded (D199)
+    page.get_by_label("Seamless loop").first.check()
     page.get_by_role("button", name="Use this frame").first.click()
     expect(page.get_by_text("Cover: the frame at").first).to_be_visible()
     print("cover frame chosen")
+    # D199: New pictures is under More and asks first
+    page.locator("summary", has_text="More").first.click()
+    page.get_by_role("button", name="New pictures for every part…").click()
+    expect(page.get_by_text("Plans every picture you haven't chosen yourself")).to_be_visible()
+    page.get_by_role("button", name="Keep these").click()
+    print("new pictures asks first")
     # the archive (D131): the posted video is in it by itself, comes back, and goes in again by hand
     expect(page.get_by_text("in the Archive")).to_be_visible()
     expect(page.get_by_role("button", name="Make again")).to_be_visible()
