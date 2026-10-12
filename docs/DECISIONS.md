@@ -3490,3 +3490,5 @@ Scripts: lint now also flags filler ("essentially", "basically"; video 25 had tw
 on a full stop or question mark, and five or more words in a row from a quoted joke, shape or persona line (four
 caught plain physics). The channel's example scripts moved from each request into the writer's system prompt,
 which is cached, and are the best three instead of five.
+A footage-only channel's writer is no longer told about chalk drawings, and the editor is told the ending only when
+the script was asked for one (its fallback still said "a deadpan two-beat line").

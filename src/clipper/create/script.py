@@ -358,8 +358,11 @@ def _system(channel: channels.Channel) -> str:
     if not channel.bits:   # the owner took the coffee cup, the grudges and "Class dismissed" out (D190)
         jokes += ("\n\nNo running gags carried from video to video: no catchphrase, no named law or rule of the "
                   "presenter's, no recurring object or grudge, no sign-off line. Each video stands on its own.")
+    tail = channels.fill(WRITER_TAIL, channel)
+    if not channel.drawings:   # a footage-only channel was told of chalk drawings it never makes (D199)
+        tail = tail.replace(" (real footage, or a chalk drawing that shows\nthe mechanism)", " (real footage)")
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
-            f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{channels.fill(WRITER_TAIL, channel)}\n\n"
+            f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{tail}\n\n"
             "The examples are the channel's own scripts, for voice and rhythm only: some break today's "
             "rules (length, sentence length, structure), and the rules win. Never reuse their jokes or lines."
             # Here, not in each request (D199): the system prompt is cached, and five went uncached into both the
@@ -871,7 +874,9 @@ def critique(script: Script, writer: str = "") -> list[str]:
     channel = channels.load()
     shape = script.shape if script.shape in channel.shapes else ""
     bit = next((b["how"].replace("{n}", "N") for b in channel.bits if b["name"] == script.bit), "")
-    user = (f"It was asked to end with {ENDINGS.get(script.ending, 'a deadpan two-beat line')}.\n"
+    # Only an ending it was asked for (D199): the fallback told the editor "a deadpan two-beat line" after D195
+    # made every ending the loop.
+    user = ((f"It was asked to end with {ENDINGS[script.ending]}.\n" if script.ending in ENDINGS else "")
             + (f"Its shape, as asked: {shape}\n" if shape else "") + (f"It was asked to include: {bit}\n" if bit else "")
             + "\n"
             f"Title: {script.title}\nScript:\n" + "\n".join(b.text for b in script.beats))
