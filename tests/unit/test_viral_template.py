@@ -78,8 +78,8 @@ def test_poses_are_kept_only_where_they_fit(data_root):
     poses = ["shocked", "aha", "aha", "SHOCKED", "wave", "aha"]
     beats = [Beat(text=t, pose=p) for t, p in zip(texts, poses, strict=True)]
     got = [b.pose for b in script._poses(Script(title="t", beats=beats), ch)]
-    # not on the opening sentence (too few words said), not an unknown one, not on the last sentence
-    assert got == ["", "aha", "aha", "shocked", "", ""]
+    # the opening may react (D202); not an unknown one, not on the last sentence
+    assert got == ["shocked", "aha", "aha", "shocked", "", ""]
     assert "shocked (a surprising fact)" in script.pose_note(ch) and script.pose_note(channel.make("physics", "P")) == ""
 
 
@@ -95,8 +95,12 @@ def test_the_character_stays_on_screen_the_whole_video(tmp_path):
     timing = Timings(words=[], beats=[(0.3, 3), (3, 6), (6, 9), (9, 12), (12, 15), (15, 17)], duration=17.0, matched=1.0)
     build.picture_times[:] = [(7.0, "drawing")]
     plan = dict(build.character_plan(Script(title="t", beats=beats), timing, ch, 15.0, seed=0))
-    assert plan == {f["base"]: [(0.0, 3)], f["shocked"]: [(3, 6)], f["point"]: [(6, 9)], f["talk1"]: [(9, 12)],
-                    f["talk2"]: [(12, 15.0)], f["react"]: [(15.0, 18.0)]}
+    # the opening talks from OPEN_POP in (D202), its first frame still the channel's picture
+    assert plan == {f["base"]: [(0.0, 0.6)], f["talk1"]: [(0.6, 3), (12, 15.0)], f["shocked"]: [(3, 6)],
+                    f["point"]: [(6, 9)], f["talk2"]: [(9, 12)], f["react"]: [(15.0, 18.0)]}
+    beats[0] = Beat(text="a", pose="shocked")   # the writer's pose for the opening
+    plan = dict(build.character_plan(Script(title="t", beats=beats), timing, ch, 15.0, seed=0))
+    assert plan[f["base"]] == [(0.0, 0.6)] and plan[f["shocked"]] == [(0.6, 6)]
 
 
 def test_transition_modes():

@@ -3532,3 +3532,31 @@ Helper agents: `.claude/agents/helper.md` (Haiku: searches, listings, renames, o
 `worker.md` (Sonnet: a change inside one file, a test, a docs entry, a page check), with a note in CLAUDE.md that Opus
 keeps planning, debugging, changes across several files and everything that spends Marc's money. Made by a new user
 skill, `helper-agents` (in Marc's own `~/.claude/skills`), which sets the same up in any project.
+
+## D202: the first 3 seconds: the surprise first, a sharper first shot, a hook that adds, no pause, a Professor who moves (2026-10-12)
+Marc: most viewers swipe before 2 or even 3 seconds. Looked at frames of the first 3 s of videos 23, 25 and 26 and the
+voice of all 20 in the library. Five causes, all in every video: (1) every one opened "Why does..." (the rules said to),
+and the reason to stay ("You blame cold water. I blame evaporation.") came at about 2.2 s; (2) the first shot was weak:
+a soft close-up of hair and a cheek, a blurred hand, a model posing, as the opening took footage the judge scored 5;
+(3) the words on screen said the question again ("WHY WET SHIRTS FEEL COLD" while he says it), though the brief asked
+otherwise; (4) 0.2 to 0.45 s of silence after the question, at 1.8 to 2.6 s; (5) the bottom 44 % of the screen, the
+Professor, didn't change through the opening sentence (no pose before word 7, and no mouth-open pictures exist).
+Decided, all five (Marc: "go for all of them"):
+- Script: physics rules D202 (`packs.OPEN_ON_SURPRISE`): the first line is the strange fact, number or contradiction,
+  said to "you", at most 8 words; the question may come second or never; never "Why" first. The joke rule and the six
+  shapes say "open on" instead of "the question, then". The Explainer pack too. A channel still on the D156 rules word
+  for word (Marc's) moves to them with the pack's shapes and jokes. New limit `open_surprise`; lint flags an opening
+  that is a question. The writer's brief and the editor's read ask for the reason to stay in the first line; the
+  editor is told when a channel may open with a question. Titles and ideas stay questions (the idea prompts are the
+  fixture-locked ones).
+- On-screen hook: lint flags one that is a question or shares most of its words with the title or the first two lines
+  (`script._echoes`, by first four letters); the writer then rewrites once, as for any lint problem.
+- First shot: the footage judge is told it is judging the first shot (`stock.OPENING`): sharp, big, something happening
+  from frame one, and soft, too-tight, slow or posed pictures score 4 at most; `OPENING_GOOD_ENOUGH` 5 to 6.
+- Voice: pauses in the first 3 s (from the first word) are cut to 0.1 s (`voice.OPEN_PAUSE`); new recordings only, as
+  the cut is made when the voice is timed.
+- Professor: the writer may pose the opening sentence; the build changes him 0.6 s in (`build.OPEN_POP`) to that pose,
+  else to the talking pictures, and keeps the first frame his usual picture so a loop's restart doesn't change him.
+Not checked on a real build: that needs a new script, a recording and footage judging (Marc's AI usage). Built videos
+keep their openings until they are written and recorded again. The "Viewed vs swiped away" box is empty for every post,
+so whether this helps can only be told once Marc types it in from YouTube Studio.

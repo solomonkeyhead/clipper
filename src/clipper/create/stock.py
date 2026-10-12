@@ -346,6 +346,13 @@ libraries really film (objects, places, nature, people in ordinary situations: "
 headphones", "subwoofer speaker vibrating") that would show this sentence. Mix the literal thing with a
 person experiencing it; never abstract words or actions nobody films, and none already searched."""
 
+#: Told the judge for the video's first shot (D202): soft-focus close-ups of hair and a hand, and a model posing,
+#: opened videos most viewers swiped away by 2 to 3 seconds.
+OPENING = ("This is the video's first shot, seen before the viewer decides to stay. Score it for how clearly it shows "
+           "the moment at a glance: sharp, the subject big and whole, something happening from its first frame. A soft "
+           "or out-of-focus picture, a close-up too tight to tell what it is (hair, skin, part of a hand), a slow pretty "
+           "shot where nothing happens, or a model posing for the camera scores 4 at most.\n")
+
 #: The judge's score a clip needs to be used; below it the beat gets a chalk card (D110).
 #: Picks were judged "very poor" when any non-zero pick was taken.
 GOOD_ENOUGH = 7
@@ -390,7 +397,8 @@ class _NoAnswer(Exception):
     """The model couldn't look (busy, offline): not the same as "none of these fit"."""
 
 
-def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "") -> tuple[list[dict], list[str]]:
+def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "",
+            opening: bool = False) -> tuple[list[dict], list[str]]:
     """Every candidate with a thumbnail, with the judge's score (0-10, None if it gave none) and where its
     subject sits across the frame, best first (the libraries' order breaks ties), and the better searches it
     suggests when none is good enough. Raises _NoAnswer when no model could look."""
@@ -398,7 +406,8 @@ def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "")
     if not shown:
         raise _NoAnswer
     try:
-        prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "") + f"Sentence: {sentence}\n"
+        prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "") + (OPENING if opening else "")
+                  + f"Sentence: {sentence}\n"
                   + (f"Searched for: {query}\n" if query else "") + _listing(shown))
         answer = ask(JUDGE, prompt, _Ranks, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True,
                      job="footage", keep=True)
@@ -417,12 +426,12 @@ def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "")
 
 
 def _judge(sentence: str, query: str, hits: list[dict], context: str = "",
-           good_enough: int = GOOD_ENOUGH) -> tuple[list[dict], list[str]]:
+           good_enough: int = GOOD_ENOUGH, opening: bool = False) -> tuple[list[dict], list[str]]:
     """The candidates good enough for the sentence, best first ([] if none is), and the better searches the
     judge suggests when none is. A photo needs a point more (D196): three of video 25's five footage shots were
     photos, the opening too. When one passes, the videos a point under the bar follow it as spares for a long
     sentence's later parts, from the same scores (D196): one clip carried on through a 7 s sentence."""
-    scored, better = _scored(sentence, hits, context, query)
+    scored, better = _scored(sentence, hits, context, query, opening)
     good = [h for h in scored if h["score"] is not None and h["score"] >= good_enough + is_photo(h)]
     if not good:
         log.info("create: no footage good enough for %r (best scored %s)", sentence[:60], scored[0]["score"])
@@ -488,28 +497,28 @@ def _pool(queries: list[str], used: set, seconds: float, photos: bool = True) ->
 
 
 def choose(queries: list[str], seconds: float, used: set, sentence: str = "", context: str = "",
-           good_enough: int = GOOD_ENOUGH, count: int = 1, photos: bool = True) -> list[dict]:
+           good_enough: int = GOOD_ENOUGH, count: int = 1, photos: bool = True, opening: bool = False) -> list[dict]:
     """Up to `count` different unused clips for the parts of a beat, each `seconds` long, best first, judged
     against the sentence (and the whole script, `context`) across all its searches at once. When none is good
     enough the judge's own better searches get one more look (D124), the last (D181): the build's further
     rounds, up to five calls a part, almost never found one. [] when nothing fits: the beat gets a chalkboard
     drawing instead, never a generic stand-in ("science laboratory" opened a video once). `good_enough` is
     lower when the user asked for footage on that sentence themselves (D126). `photos` off: videos only (the
-    opening, which should be the most striking moving picture, D196)."""
+    opening, which should be the most striking moving picture, D196). `opening`: judged as the first shot (D202)."""
     ranked = _pool(queries, used, seconds, photos)
     if not ranked:
         return []
     if not sentence:
         return ranked[:count]
     try:
-        good, better = _judge(sentence, " / ".join(queries), ranked, context, good_enough)
+        good, better = _judge(sentence, " / ".join(queries), ranked, context, good_enough, opening)
         if not good and better:
             tried = {q.lower() for q in queries}
             fresh = [q for q in better if q.lower() not in tried]
             again = _pool(fresh, used, seconds, photos) if fresh else []
             if again:
                 log.info("create: footage searched again for %r: %s", sentence[:60], " / ".join(fresh))
-                good, _ = _judge(sentence, " / ".join(fresh), again, context, good_enough)
+                good, _ = _judge(sentence, " / ".join(fresh), again, context, good_enough, opening)
         return good[:count]
     except _NoAnswer:
         hit = by_words(queries, ranked)

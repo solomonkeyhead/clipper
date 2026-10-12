@@ -84,16 +84,19 @@ def heard(path: Path) -> list[TimedWord]:
 MAX_PAUSE = 0.25
 BEAT_PAUSE = 0.6
 LEAD = 0.1      # silence kept before the first word
+#: Pauses starting in the first OPEN_SECONDS are cut down to OPEN_PAUSE (D202): 0.2 to 0.45 s of silence after the
+#: opening question, at 1.8 to 2.6 s, was where most viewers swiped.
+OPEN_SECONDS, OPEN_PAUSE = 3.0, 0.1
 
 
 def cuts(words: list[TimedWord], last_from: int) -> list[tuple[float, float]]:
-    """The stretches of silence to take out: each pause over MAX_PAUSE loses its middle, so the words
+    """The stretches of silence to take out: each pause over MAX_PAUSE (OPEN_PAUSE in the opening) loses its middle, so the words
     either side keep their tails; `last_from` is the first word of the last sentence."""
     out = []
     if words and words[0].start > LEAD:
         out.append((0.0, words[0].start - LEAD))
     for k in range(1, len(words)):
-        keep = BEAT_PAUSE if k == last_from else MAX_PAUSE
+        keep = BEAT_PAUSE if k == last_from else OPEN_PAUSE if words[k - 1].end - words[0].start < OPEN_SECONDS else MAX_PAUSE
         gap = words[k].start - words[k - 1].end
         if gap > keep + 0.02:
             mid = (words[k - 1].end + words[k].start) / 2

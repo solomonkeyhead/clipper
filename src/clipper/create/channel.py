@@ -60,6 +60,7 @@ class Channel(BaseModel):
     sentence_max: int = 16
     hook_max: int = 14
     hook_you: bool = False
+    open_surprise: bool = False          # D202: the opening line is the surprise, never a question
     shapes: list[str] = Field(default_factory=list)
     scope: str = ""
     # Real scripts of the channel's own, imitated for voice and rhythm, never copied.
@@ -86,7 +87,7 @@ class Channel(BaseModel):
 
 
 #: The fields a channel file from before D155 lacks, taken from its pack when read.
-LIMITS = ("words", "sentence_max", "hook_max", "hook_you", "shapes", "scope", "jokes", "bits", "signoff")
+LIMITS = ("words", "sentence_max", "hook_max", "hook_you", "open_surprise", "shapes", "scope", "jokes", "bits", "signoff")
 
 
 def _pack_limits(p: packs.Pack) -> dict:

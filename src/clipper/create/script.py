@@ -246,8 +246,8 @@ lit in the captions and the camera punches in on it, so pick the word that carri
 #: The writer's closing instructions (D164): the words only; the director plans the pictures after.
 WRITER_TAIL = """Every sentence gets its own picture under it (real footage, or a chalk drawing that shows
 the mechanism), so write concrete sentences a picture can show, and let the explanation go one
-step a sentence. Give the viewer a reason to stay within the first three seconds: by the second line the
-obvious answer is shown wrong, or a number or a contradiction makes the question stranger; explain after that.
+step a sentence. Give the viewer a reason to stay within the first two seconds: the first line already shows the
+obvious answer wrong, or gives a number or a contradiction that makes the moment strange; explain after that.
 Write for the ear, as every line is read aloud: numbers as they are said, rounded, in one unit (never two units,
 never digits with symbols), no abbreviations, no word a narrator would trip on; a technical term only when it is
 the point, said once and explained in plain words. Name a thing before you point back to it.
@@ -255,8 +255,9 @@ Lines quoted in the rules, the shape, the joke shapes, the persona and the examp
 only: never reuse three or more words in a row from one, nor its sentence frame with new words in it.
 
 Answer with: lines (the script, one spoken sentence a line, two only if both are very short, in
-order), title (the question, at most 60 characters), hook (the words on screen for the first second and a half, read before the question is heard: at most 6 words
-that carry the surprise or the stakes, not the question reworded, "Elevators really do make you heavier"),
+order), title (the question, at most 60 characters), hook (the words on screen for the first second and a half, read while the first line is heard: at most 6 words
+that carry the surprise or the stakes and add what the voice does not say, never a question and never the title or
+the first line reworded, "The thermometer did not move"),
 description (the script's idea in 3-5 short lines, in the same voice, ending on its punchline),
 hashtags (3: {hashtags})."""
 
@@ -327,7 +328,6 @@ POSE_USE = {
     "grudge": "mild annoyance", "proud": "the answer landing",   # no running bits, no sign-off (D190)
 }
 MAX_POSES = 6   # he is on screen all the time now (D159): more changes keep him alive
-POSE_AFTER_WORDS = 7   # the character already shows at the start (D156): no pose in the first sentence or so
 
 
 def pose_note(channel: channels.Channel) -> str:
@@ -338,21 +338,21 @@ def pose_note(channel: channels.Channel) -> str:
     if not names:
         return ""
     return (f"Poses for the on-screen presenter: set a beat's pose to one of these on at most {MAX_POSES} sentences "
-            f"where it fits what is said, never on the first sentence, and leave it empty "
+            f"where it fits what is said (the first sentence too: he reacts to the surprise as the video opens), and leave it empty "
             f"elsewhere. The last sentence needs none. Poses: {names}.\n")
 
 
 def _poses(script: Script, channel: channels.Channel) -> list[Beat]:
-    """The poses kept: known ones, not on the opening words or the last sentence, at most MAX_POSES. The "talking"
-    poses are the build's own, for the sentences in between (D159)."""
-    beats, kept, before = [], 0, 0
+    """The poses kept: known ones, not on the last sentence, at most MAX_POSES. The "talking" poses are the build's
+    own, for the sentences in between (D159). The opening may have one (D202): he stood still through it, while
+    most viewers swiped."""
+    beats, kept = [], 0
     for i, beat in enumerate(script.beats):
         pose = beat.pose.strip().lower() if beat.pose else ""
-        ok = (pose in channel.poses and not pose.startswith("talking") and before >= POSE_AFTER_WORDS
+        ok = (pose in channel.poses and not pose.startswith("talking")
               and i < len(script.beats) - 1 and kept < MAX_POSES)
         beats.append(beat.model_copy(update={"pose": pose if ok else ""}))
         kept += bool(ok)
-        before += len(beat.text.split())
     return beats
 
 
@@ -370,7 +370,7 @@ def _system(channel: channels.Channel) -> str:
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
             f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{tail}\n\n"
             "The examples are the channel's own scripts, for voice and rhythm only: some break today's "
-            "rules (length, sentence length, structure), and the rules win. Never reuse their jokes or lines."
+            "rules (the opening, length, sentence length, structure), and the rules win. Never reuse their jokes or lines."
             # Here, not in each request (D199): the system prompt is cached, and five went uncached into both the
             # write and the rewrite. Three: examples steer more than rules, and the older ones break them.
             + (f"\n\nThe channel's best scripts:\n\n{channels.examples_block(channel, limit=3)}" if channel.examples else ""))
@@ -406,7 +406,7 @@ ENDINGS = {
 def turn(channel: channels.Channel) -> tuple[str, str]:
     """The shape and ending for the channel's next script: the shape picked at random but never the shape of either
     of the last two scripts (D156; in strict turn, D155, the order itself became a pattern); the ending always
-    the loop back to the opening question (D195)."""
+    the loop back to the opening line (D195)."""
     import random
 
     from . import store
@@ -489,7 +489,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
             + (f"Length: this one is a short take, {SHORT_WORDS[0]} to {SHORT_WORDS[1]} words in all, which replaces the "
-               "word count in the rules. Keep the opening question, the first cause early and the ending; leave out "
+               "word count in the rules. Keep the opening, the first cause early and the ending; leave out "
                "a second example and any line that only says again what another said.\n" if length == "short" else "")
             + ("The channel's latest endings. Every video ends on the loop, so vary the rest: reuse none of their "
                "words or jokes, and lead back into the opening a different way from each:\n"
@@ -557,12 +557,18 @@ def lint(script: Script, channel: channels.Channel) -> list[str]:
     if long:
         problems.append(f"Sentences over {channel.sentence_max} words: " + " | ".join(long[:3]))
     hook = sentences[0] if sentences else ""
+    opening = "opening line" if channel.open_surprise else "opening question"
     if len(hook.split()) > channel.hook_max:
-        problems.append(f"The opening question is {len(hook.split())} words; at most {channel.hook_max}.")
+        problems.append(f"The {opening} is {len(hook.split())} words; at most {channel.hook_max}.")
     if channel.hook_you and not re.search(r"\byou(?:r|'re|'ve)?\b", hook, re.I):
-        problems.append('The opening question must say "you" or "your".')
+        problems.append(f'The {opening} must say "you" or "your".')
+    if channel.open_surprise and _asks(hook):
+        problems.append(f'Open on the surprise, not a question: "{hook}". The question may come second.')
     if len(script.hook.split()) > HOOK_TEXT_MAX:
         problems.append(f"The on-screen hook is {len(script.hook.split())} words; at most {HOOK_TEXT_MAX}.")
+    if script.hook.strip() and (_asks(script.hook) or _echoes(script.hook, [script.title, *sentences[:2]])):
+        problems.append(f'The on-screen hook "{script.hook}" says what the title or the voice says. Give it the '
+                        "surprise or the stakes in other words, not a question.")
     for pattern, name in BANNED:
         if pattern.search(script.text):
             problems.append(f"Remove {name}.")
@@ -580,6 +586,25 @@ def lint(script: Script, channel: channels.Channel) -> list[str]:
 
 def _words(text: str) -> list[str]:
     return re.sub(r"[^a-z0-9' ]+", " ", text.lower()).split()
+
+
+def _asks(line: str) -> bool:
+    """A line that is a question (D202): it ends on "?" or starts with a question word."""
+    line = line.strip()
+    return line.endswith("?") or bool(re.match(r"(?:why|how come|what makes|ever)\b", line, re.I))
+
+
+_PLAIN = {"why", "how", "what", "does", "do", "did", "the", "and", "your", "you", "are", "is", "a", "an", "so",
+          "feel", "make", "makes", "can", "this", "that", "it", "its", "of", "to", "in", "on", "with", "when"}
+
+
+def _echoes(hook: str, said: list[str]) -> bool:
+    """The on-screen hook saying what is heard or titled anyway (D202): "Why wet shirts feel cold" over "Why does
+    your wet shirt feel cold?". Most of its words, by their first four letters, are in one of `said`."""
+    def stems(text: str) -> set[str]:
+        return {w[:4] for w in _words(text) if len(w) > 2 and w not in _PLAIN}
+    own = stems(hook)
+    return len(own) >= 2 and any(len(own & stems(s)) >= max(2, 0.6 * len(own)) for s in said if s)
 
 
 def _copied(text: str, sources: list[str], run: int = 5) -> list[str]:
@@ -807,8 +832,9 @@ mechanism. Return ok=true with no problems if it is correct. Otherwise list each
 CRITIC = """You are a short-form video editor reviewing a script for a {subject} Shorts channel before
 it is recorded. Judge only these, each pass or fail:
 1. Hook: the first line is about a concrete moment the viewer knows, in words they would use, short enough to read
-   in two seconds (when the channel opens with a question, it stays a question). By the second line the viewer has
-   a reason to stay: the obvious answer shown wrong, or a number or contradiction that makes the question stranger.
+   in two seconds. The first line already gives the viewer a reason to stay: the obvious answer shown wrong, or a
+   number or contradiction that makes the moment strange; a plain question first fails. Only when you are told the
+   channel may open with a question does it stay one, and then the reason comes by the second line.
 2. First cause early: the real reason starts within about 20 words of the opening line.
 3. Ear: every sentence says one thing and is easy to say and hear aloud: numbers as they are said, one unit, no
    symbols, no word a narrator would trip on, nothing pointed back to before it is named.
@@ -884,6 +910,7 @@ def critique(script: Script, writer: str = "") -> list[str]:
     # made every ending the loop.
     user = ((f"It was asked to end with {ENDINGS[script.ending]}.\n" if script.ending in ENDINGS else "")
             + (f"Its shape, as asked: {shape}\n" if shape else "") + (f"It was asked to include: {bit}\n" if bit else "")
+            + ("" if channel.open_surprise else "The channel may open with a question.\n")   # D202
             + "\n"
             f"Title: {script.title}\nScript:\n" + "\n".join(b.text for b in script.beats))
     try:

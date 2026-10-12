@@ -67,14 +67,31 @@ PHYSICS_RULES_D155 = [
 
 #: D156, from the second report: a small joke in the middle as well as the ending, none in the opening
 #: question, and every joke carrying a fact.
-PHYSICS_RULES = [
+PHYSICS_RULES_D156 = [
     *PHYSICS_RULES_D155[:7],
     "Two jokes: one small one in the middle, then the ending. No joke in the opening question: it must be a "
     "clear question. Every joke carries a fact (\"2,000 newtons of politeness\").",
     *PHYSICS_RULES_D155[7:],
 ]
+
+#: D202: open on the surprise, not the question. All 20 videos opened "Why does...", the twist came at about
+#: 2.2 s, and most viewers had swiped by 2 to 3 s.
+OPEN_ON_SURPRISE = ("Open on the surprise, not the question: the first line, at most 8 words, said to the viewer "
+                    "(\"you\" or \"your\"), is the strange true fact, the number or the contradiction about a concrete "
+                    "moment they have felt or seen (\"The elevator makes you heavier. Really.\"). The question may "
+                    "follow as the second line, or never be asked. Never start with \"Why\" or a question.")
+PHYSICS_RULES = [
+    PHYSICS_RULES_D155[0],
+    OPEN_ON_SURPRISE,
+    PHYSICS_RULES_D155[2],
+    PHYSICS_RULES_D155[3].replace("of the opening question", "of the opening"),
+    *PHYSICS_RULES_D155[4:7],
+    "Two jokes: one small one in the middle, then the ending. No joke in the opening line: the surprise must be "
+    "clear. Every joke carries a fact (\"2,000 newtons of politeness\").",
+    *PHYSICS_RULES_D155[7:],
+]
 #: Rule sets a physics channel may still have word for word; read, it moves to PHYSICS_RULES.
-PHYSICS_RULES_BEFORE = [PHYSICS_RULES_BEFORE_D155, PHYSICS_RULES_D155]
+PHYSICS_RULES_BEFORE = [PHYSICS_RULES_BEFORE_D155, PHYSICS_RULES_D155, PHYSICS_RULES_D156]
 
 #: Joke shapes for the writer to follow, never lines to copy (D156, the second report's patterns).
 PHYSICS_JOKES = [
@@ -83,25 +100,25 @@ PHYSICS_JOKES = [
     "Understatement of a huge number (\"The Sun loses 4 million tonnes a second. It is having a difficult week.\")",
     "An absurd but exact comparison (\"This raindrop of fluid decides whether you feel seasick.\")",
     "Three beats, escalating (\"The car brakes. You continue. Your coffee continues further.\")",
-    "A callback: the ending reuses a word from the opening question with a new meaning",
+    "A callback: the ending reuses a word from the opening line with a new meaning",
     "A polite correction of the viewer (\"Cold does not come in. Heat leaves. Without saying goodbye.\")",
 ]
 
 #: The German Professor's script shapes, one per script in turn (D155): one shape every time reads as a
 #: template, which YouTube's July 2025 rules on mass-produced content name.
 PHYSICS_SHAPES = [
-    "Myth-bust: the question, then what people believe in one dry line (\"You say centrifugal force. "
+    "Myth-bust: open on what people believe, shown wrong in one dry line (\"You say centrifugal force. "
     "I say careful.\"), then the real chain of causes.",
-    "Walk-through: the question, then follow the viewer through the moment in the second person, step "
-    "by step (\"You press the button. The floor pushes up.\"), saying what the physics does at each step.",
-    "One number: the question, then one surprising true figure that frames it (\"On Everest, water "
+    "Walk-through: open on the strange part of the moment, then follow the viewer through it in the second "
+    "person, step by step (\"You press the button. The floor pushes up.\"), saying what the physics does at each step.",
+    "One number: open on one surprising true figure that frames it (\"On Everest, water "
     "boils at about 70 degrees.\"), then why that number makes it happen.",
     # D156: three more, so the shapes can't be learned after three videos.
-    "What if not: the question, then what would happen if the physics did not work this way (\"If the "
+    "What if not: open on what would happen if the physics did not work this way (\"If the "
     "floor didn't push harder, you'd keep the elevator's speed... downward.\"), then why it does.",
-    "Scale jump: the question, then zoom to the tiny scale where it happens (molecules, air, light), or "
+    "Scale jump: open on the moment, then zoom to the tiny scale where it happens (molecules, air, light), or "
     "out to the huge one, then back to the viewer's moment.",
-    "Two things: the question, then the same physics in two everyday moments side by side (the elevator "
+    "Two things: open on the same physics in two everyday moments side by side (the elevator "
     "and the car), then the one cause they share.",
 ]
 
@@ -132,6 +149,7 @@ class Pack(BaseModel):
     sentence_max: int = 16
     hook_max: int = 14
     hook_you: bool = False             # the opening line must say "you" or "your"
+    open_surprise: bool = False        # the opening line is the surprise, never a question (D202)
     shapes: list[str] = Field(default_factory=list)   # script shapes used in turn; none: the rules' one
     scope: str = ""                    # what an idea may be about, for the planner's fit score; "" = subject
     jokes: list[str] = Field(default_factory=list)   # joke shapes for the writer (D156)
@@ -148,14 +166,17 @@ English, short sentences, the rhythm of someone explaining with a raised eyebrow
     # D164: the physics channel's tested rules (D155, D156), made general.
     rules=[
         "85 to 115 words in all: it is read aloud at about 2.3 words a second, 37 to 50 seconds.",
-        "Open with ONE question of at most 10 words, said to the viewer (\"you\" or \"your\"), about a "
-        "concrete moment they have met in daily life.",
-        "Give the first reason within 20 words of the opening question. The answer is complete by three "
+        # D202: the surprise first, as the physics channel's openings now are.
+        "Open on the surprise, not the question: the first line, at most 10 words, said to the viewer (\"you\" or "
+        "\"your\"), is the strange true fact, the number or the contradiction about a concrete moment they have met "
+        "in daily life. The question may follow as the second line, or never be asked. Never start with \"Why\" or a "
+        "question.",
+        "Give the first reason within 20 words of the opening. The answer is complete by three "
         "quarters of the way through; what follows only lands it.",
         "Then the explanation as a short chain of causes, 3 to 5 steps, each its own short sentence.",
         "At most one formula or rule, said in words.",
         "One everyday comparison, from something the viewer touched this week, that explains one thing only.",
-        "Two jokes at most: a small one in the middle, then the ending. None in the opening question. Every "
+        "Two jokes at most: a small one in the middle, then the ending. None in the opening line. Every "
         "joke carries a fact.",
         "End on a dry two-beat line that ties back to the opening.",
         "Every sentence at most 13 words. " + PLAIN,
@@ -165,7 +186,7 @@ English, short sentences, the rhythm of someone explaining with a raised eyebrow
     subject="everyday science and how things work", expert="a teacher who knows the subject well",
     areas="the body, the home, food, money, technology, nature, travel, work",
     abstract='"concept", "idea",\n  "theory"', hashtags="#learn,\n#howitworks and one specific",
-    words=[85, 115], sentence_max=13, hook_max=10, hook_you=True)
+    words=[85, 115], sentence_max=13, hook_max=10, hook_you=True, open_surprise=True)
 
 STORIES = Pack(
     key="stories", label="History and true stories",
@@ -216,7 +237,7 @@ PHYSICS = Pack(
     subject="physics", expert="a physics professor",
     areas="mechanics, heat, sound, light, electricity, fluids and pressure, materials",
     abstract='"pressure", "physics",\n  "energy"', hashtags="#physics,\n#science and one specific",
-    templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True,
+    templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True, open_surprise=True,
     shapes=list(PHYSICS_SHAPES), jokes=list(PHYSICS_JOKES),   # no running bits, no sign-off (D190)
     scope="any STEM subject, physics first, then chemistry, engineering, earth and space, maths, technology")
 

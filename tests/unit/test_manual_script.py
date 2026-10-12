@@ -307,7 +307,7 @@ def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(t
     picks = iter([{"id": "a", "url": "u", "center": 0.3}, {"id": "b", "url": "u", "center": 0.6}])
     asked = []
 
-    def choose(queries, part, used, sentence="", context="", good_enough=7, count=1, photos=True):
+    def choose(queries, part, used, sentence="", context="", good_enough=7, count=1, photos=True, opening=False):
         asked.append(set(used))
         return [next(picks)]
 

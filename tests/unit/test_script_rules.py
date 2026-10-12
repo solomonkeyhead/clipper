@@ -15,16 +15,26 @@ def _script(*sentences: str, hook: str = "") -> Script:
 
 def test_lint_holds_a_script_to_the_channels_countable_rules():
     ch = channel.make("physics", "German Professor")
-    clean = _script("Why does the lift make you heavier?", *["The floor pushes up on your feet a little harder."] * 9,
-                    hook="Why lifts make you heavier")
+    clean = _script("The lift really does make you heavier.", *["The floor pushes up on your feet a little harder."] * 9,
+                    hook="The scale reads more")
     assert 85 <= clean.words <= 110 and script.lint(clean, ch) == []
     bad = _script("Why do elevators accelerate upward so strangely sometimes at all?",
                   "It's not gravity, it's the floor — and here's the thing about floors and their very strong push.",
                   hook="Why do elevators make everyone feel heavy?")
     problems = " ".join(script.lint(bad, ch))
-    for said in ("words; it must be 85 to 110", "Sentences over 12", "opening question is 10 words",
-                 '"you" or "your"', "on-screen hook is 7", "em dash", "it's not X", "here's the thing"):
+    for said in ("words; it must be 85 to 110", "Sentences over 12", "opening line is 10 words",
+                 '"you" or "your"', "on-screen hook is 7", "em dash", "it's not X", "here's the thing",
+                 "Open on the surprise, not a question", "says what the title or the voice says"):
         assert said in problems, said
+
+
+def test_the_on_screen_hook_must_add_to_what_is_heard():
+    """D202: video 23's hook "Why wet shirts feel cold" over "Why does your wet shirt feel cold?"."""
+    heard = ["Why does your wet shirt feel cold?", "You blame cold water."]
+    assert script._echoes("Wet shirts feel cold", heard)
+    assert script._echoes("Pursed lips make cold breath", ["Why does pursing your lips cool your breath?"])
+    assert not script._echoes("The thermometer did not change", ["Why does wind make you feel colder?"])
+    assert script._asks("Why do you feel a static shock?") and not script._asks("Every lift lies to you.")
 
 
 def test_short_takes_alternate_and_are_held_to_their_own_length(monkeypatch):
@@ -39,7 +49,7 @@ def test_short_takes_alternate_and_are_held_to_their_own_length(monkeypatch):
     assert script.next_length(ch) == "short"
     newest.append({"script": {"length": "short"}})
     assert script.next_length(ch) == ""
-    usual = _script("Why does the lift make you heavier?", *["The floor pushes up on your feet a little harder."] * 9)
+    usual = _script("The lift really does make you heavier.", *["The floor pushes up on your feet a little harder."] * 9)
     assert script.lint(usual, ch) == []
     assert "it must be 70 to 90" in " ".join(script.lint(usual.model_copy(update={"length": "short"}), ch))
 
@@ -63,13 +73,15 @@ def test_no_drawing_in_the_first_four_seconds():
 def test_long_pauses_are_cut_but_the_beat_before_the_punchline_stays():
     w = voice.TimedWord
     words = [w(text="a", start=0.5, end=0.8), w(text="b", start=2.0, end=2.3), w(text="c", start=2.4, end=2.6),
-             w(text="d", start=4.0, end=4.2)]
-    gaps = voice.cuts(words, last_from=3)
+             w(text="d", start=4.0, end=4.2), w(text="e", start=5.4, end=5.6), w(text="f", start=7.0, end=7.2)]
+    gaps = voice.cuts(words, last_from=5)
     left = [b - a for a, b in gaps]
-    assert abs(left[0] - 0.4) < 1e-9                      # lead-in down to 0.1 s
-    assert abs((1.2 - left[1]) - voice.MAX_PAUSE) < 1e-9  # a 1.2 s pause down to 0.25 s
-    assert abs((1.4 - left[2]) - voice.BEAT_PAUSE) < 1e-9  # the pause before the last sentence keeps 0.6 s
-    assert len(gaps) == 3                                  # the 0.1 s gap is left alone
+    assert abs(left[0] - 0.4) < 1e-9                       # lead-in down to 0.1 s
+    assert abs((1.2 - left[1]) - voice.OPEN_PAUSE) < 1e-9  # in the opening 3 s, down to 0.1 s (D202)
+    assert abs((1.4 - left[2]) - voice.OPEN_PAUSE) < 1e-9
+    assert abs((1.2 - left[3]) - voice.MAX_PAUSE) < 1e-9   # after it, a 1.2 s pause down to 0.25 s
+    assert abs((1.4 - left[4]) - voice.BEAT_PAUSE) < 1e-9  # the pause before the last sentence keeps 0.6 s
+    assert len(gaps) == 5                                   # the 0.1 s gap is left alone
 
 
 def test_a_cut_keeps_a_word_tail_the_recognizer_missed():
@@ -85,11 +97,14 @@ def test_a_cut_keeps_a_word_tail_the_recognizer_missed():
 
 def test_an_untouched_physics_channel_moves_to_the_new_rules_and_an_edited_one_keeps_its_own(data_root):
     old = channel.make("physics", "Prof").model_dump()
-    for slug, rules in (("prof", packs.PHYSICS_RULES_BEFORE_D155), ("mine", ["my own rule"])):
+    for slug, rules in (("prof", packs.PHYSICS_RULES_BEFORE_D155), ("d156", packs.PHYSICS_RULES_D156),
+                        ("mine", ["my own rule"])):
         raw = {k: v for k, v in old.items() if k not in channel.LIMITS} | {"slug": slug, "rules": list(rules)}
         (channel.channels_dir() / f"{slug}.json").write_text(json.dumps(raw), encoding="utf-8")
     prof, mine = channel.load("prof"), channel.load("mine")
     assert prof.rules == packs.PHYSICS_RULES and (prof.words, prof.hook_max, len(prof.shapes)) == ([85, 110], 8, 6)
+    d156 = channel.load("d156")   # Marc's channel's rules before D202: the surprise first, and the shapes with it
+    assert d156.rules == packs.PHYSICS_RULES and d156.open_surprise and d156.shapes == packs.PHYSICS_SHAPES
     assert mine.rules == ["my own rule"] and (mine.words, mine.hook_max, mine.shapes) == ([80, 125], 14, [])
 
 
@@ -100,7 +115,7 @@ def test_the_editor_is_another_ai_family_from_the_writer():
 def test_lint_catches_filler_a_finished_loop_line_and_copied_example_lines():
     """D199: free checks in code before anyone reads the script."""
     ch = channel.make("physics", "German Professor")
-    lines = ["Why does the lift make you heavier?", *["The floor pushes up on your feet a little harder."] * 8]
+    lines = ["The lift really does make you heavier.", *["The floor pushes up on your feet a little harder."] * 8]
     loop = Script(title="t", ending="loop", beats=[Beat(text=t) for t in [*lines, "So next time you step in and wonder"]])
     assert script.lint(loop, ch) == []
     done = loop.model_copy(update={"beats": [*loop.beats[:-1], Beat(text="So next time, wonder why.")]})

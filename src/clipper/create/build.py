@@ -62,8 +62,9 @@ LOOK = "eq=saturation=0.85:contrast=1.05,colorbalance=rm=0.03:bm=-0.03,noise=all
 CHARACTER_HEIGHT = compose.PRESENTER_H
 CHARACTER_START = 2.5
 #: The judge's score footage needs on the opening words (D159): a looser real clip beats a drawing there, as the
-#: viewer's own moment, moving, holds them first (D155); a drawing only when even this finds nothing.
-OPENING_GOOD_ENOUGH = 5
+#: viewer's own moment, moving, holds them first (D155); a drawing only when even this finds nothing. 6, judged as
+#: the first shot (D202): at 5 a blurry close-up of hair opened a video.
+OPENING_GOOD_ENOUGH = 6
 #: A loop's end (D197): the silence from the last word round to the first, as between two sentences, and the last
 #: LOOP_TAIL seconds played on the opening clip, leading into its first frame.
 LOOP_GAP, LOOP_TAIL = 0.25, 1.5
@@ -527,7 +528,7 @@ def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, 
         written = stock.plan_searches(text, script.text, wish=visual.wish, tried=queries if asked else None)
         searches = list(dict.fromkeys([*written, *queries]))[:6] or [_query_from(beat.text)]
     found = stock.choose(searches, parts[0], avoid, sentence=beat.text, context=script.text, good_enough=good,
-                         count=count, photos=i > 0)
+                         count=count, photos=i > 0, opening=i == 0)
     log.info("create: footage for sentence %d: %d of %d part(s) found%s", i + 1, len(found), count,
              ", searches written for it" if widened else "")
     return _Footage(parts, [found[k] if k < len(found) else None for k in range(count)], searches)
@@ -857,6 +858,8 @@ def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], scr
 #: In a long sentence the talking picture changes at a word about this often, and a pose holds this long at the
 #: end of its sentence (D196): one picture a sentence, 4 s at a time, looked still.
 TALK_SWITCH, POSE_HOLD = 2.0, 2.4
+#: When he first changes picture in the opening sentence (D202).
+OPEN_POP = 0.6
 
 
 def _switches(a: float, b: float, word_starts: list[float]) -> list[float]:
@@ -905,7 +908,7 @@ def talking_frames(voice: Path, timings: Timings, total: int) -> list[bool]:
 def character_plan(script: Script, timings: Timings, channel: channels.Channel, punchline: float,
                    seed: int, loop_at: float | None = None) -> list[tuple[Path, list[tuple[float, float]]]]:
     """Which picture of the character shows when (D159), each with its times; together they cover the whole video.
-    The opening sentence: the channel's picture. Then per sentence: the writer's pose for it (D158), else the presenting
+    The opening sentence: the channel's picture, then from OPEN_POP its pose or talking (D202). Then per sentence: the writer's pose for it (D158), else the presenting
     picture where the first drawing appears (D157), else the "talking" poses in turn, else the channel's picture.
     From the punchline: a reaction (D156). He stays, as CodeBullet's does: popping in for 2 s read as a glitch.
     On a loop (`loop_at`, the last line's start, D197): the reaction holds to the last line, he talks through it, and
@@ -932,9 +935,19 @@ def character_plan(script: Script, timings: Timings, channel: channels.Channel, 
             idle += 1
 
     for i, (a, b) in enumerate(itertools.pairwise(starts)):
-        pose = found(channel.poses.get(script.beats[i].pose, "")) if i and script.beats[i].pose else []
+        pose = found(channel.poses.get(script.beats[i].pose, "")) if script.beats[i].pose else []
         if i == 0:
-            shows.append((base[0], a, b))
+            # D202: he changes OPEN_POP in, to the writer's pose for the opening, else talking: through a still
+            # opening sentence half the screen didn't move while most viewers swiped. The first frame stays the
+            # channel's picture, so a loop's restart doesn't change him.
+            if (pose or talking) and b - a >= OPEN_POP + 0.6:
+                shows.append((base[0], a, a + OPEN_POP))
+                if pose:
+                    shows.append((pose[0], a + OPEN_POP, b))
+                else:
+                    talk(a + OPEN_POP, b)
+            else:
+                shows.append((base[0], a, b))
         elif pose:   # a long sentence talks first and pulls the pose as it lands, held to its end (a cut-in's there)
             if talking and b - POSE_HOLD - a >= 1.0:
                 talk(a, b - POSE_HOLD)
