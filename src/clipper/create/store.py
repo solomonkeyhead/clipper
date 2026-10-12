@@ -138,6 +138,26 @@ def undo(video_id: int, forward: bool = False) -> dict | None:
     return last
 
 
+def _texts(script: dict) -> list[str]:
+    return [b.get("text") for b in script.get("beats") or []]
+
+
+def use_take(video_id: int, k: int) -> dict | None:
+    """An earlier take (`k` in the history, oldest first) back in place, the script it replaces kept in the history
+    (D199): Undo only stepped back one at a time, blind. None if there's no such take."""
+    row = video(video_id)
+    past = row["history"] if row else []
+    if not 0 <= k < len(past):
+        return None
+    pick = past[k]
+    remember(row, "before an earlier take")
+    changes = {"script": pick["script"], "check_notes": pick.get("check_notes", "")}
+    if _texts(pick["script"]) != _texts(row["script"]):   # other words: a voice made for these no longer fits
+        changes.update(voice="", timings="", status="draft")
+    update_video(video_id, **changes)
+    return pick
+
+
 def add_video(topic_id: int | None, script: dict, check_notes: str = "", ready: str = "") -> int:
     """`ready` names the ready-made script it was made from, if any (D131)."""
     with db.connect() as con:

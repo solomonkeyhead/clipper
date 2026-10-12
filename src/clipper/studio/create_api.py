@@ -169,6 +169,7 @@ def _view() -> dict:
         timings = v.pop("timings", None)
         history = v.pop("history", None) or []   # the page needs only what Undo would undo (D193)
         v["undo"] = history[-1]["why"] if history else ""
+        v["takes"] = len(history)   # earlier versions to compare (D199)
         v["redo"] = bool(v.pop("future", None))   # Undo took something back that Redo can return (D196)
         v["unbuilt"] = store.unbuilt(v["script"], v.pop("built", None)) if v["status"] == "built" else None   # D199
         v["shots"] = _shots(v, timings)
@@ -898,6 +899,25 @@ def routes(app: FastAPI, publish) -> None:
             raise HTTPException(400, "nothing to redo" if forward else "nothing to undo")
         publish("create.changed", {"id": video_id})
         return {"undid": last["why"]}
+
+    @app.get("/api/create/videos/{video_id}/takes")
+    def create_takes(video_id: int) -> list[dict]:
+        """The earlier versions of the script, oldest first, to compare with the one in place (D199)."""
+        row = video_or_404(video_id)
+        return [{"index": k, "why": h["why"], "at": h.get("at", ""), "title": h["script"].get("title", ""),
+                 "lines": [b.get("text", "") for b in h["script"].get("beats") or []]}
+                for k, h in enumerate(row["history"])]
+
+    @app.post("/api/create/videos/{video_id}/takes/{k}/use")
+    def create_use_take(video_id: int, k: int) -> dict:
+        row = video_or_404(video_id)
+        _editable(row)
+        if row["status"] not in ("draft", "approved"):
+            raise HTTPException(400, "a built video's script is what it was built from")
+        if store.use_take(video_id, k) is None:
+            raise HTTPException(404, "no such take")
+        publish("create.changed", {"id": video_id})
+        return {"ok": True}
 
     @app.post("/api/create/videos/{video_id}/check")
     async def create_check(video_id: int) -> dict:

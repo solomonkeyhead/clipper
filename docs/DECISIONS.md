@@ -3483,3 +3483,6 @@ jump to, and the part playing lights up in the list. A "Words and voice" fold sh
 to its words (asking first; the build stays in Clips, and it leaves the Archive) and takes a new voice. The script as
 last built is kept (`create_videos.built`), and `store.unbuilt` names what changed since (music, the cover, sentence
 4...): Rebuild counts all of it, with the list on hover, and Build again says how many aren't built yet.
+A draft with earlier versions has an "Earlier takes" fold: any take beside the script in place, the lines that
+differ marked, and "Use take N" (`store.use_take`, which keeps the replaced script in the history). The two ways to
+write are named apart: "AI writes it" for your own idea, "Use my own words" for a script you write.

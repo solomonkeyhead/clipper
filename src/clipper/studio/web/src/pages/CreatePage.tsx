@@ -266,7 +266,7 @@ function YourOwn({ wps }: { wps: number }) {
   if (!open) {
     return (
       <div className="flex flex-col gap-2">
-        <div className="flex"><Button variant="secondary" onClick={() => setOpen(true)}><PenLine className="size-4" /> Write your own script</Button></div>
+        <div className="flex"><Button variant="secondary" onClick={() => setOpen(true)}><PenLine className="size-4" /> Use my own words</Button></div>
         {ready.length > 0 && (
           <Card className="flex flex-col gap-1 p-3">
             <span className="text-xs font-medium text-muted">Ready-made: written and drawn already</span>
@@ -407,7 +407,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
                placeholder="Angle or what to cover (optional)"
                className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
         <Button size="sm" variant="primary" className="self-start" disabled={busy !== null || mine.trim().length < 8} onClick={() => writeMine()}>
-          {busy === "mine" ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} Write the script
+          {busy === "mine" ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} AI writes it
         </Button>
       </div>
       {(steering || steer) && <div className="border-b border-line px-4 py-2">
@@ -687,6 +687,7 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
         </div>
       )}
       <CheckNote text={video.check_notes} />
+      {video.status === "draft" && (video.takes ?? 0) > 0 && <Takes video={video} />}
       <ScriptEditor video={video} wps={wps} />
       {/* Folded (D199): the whole drop card sat between the script and Approve. */}
       <Fold id={`clips-${video.id}`} title={`Your own clips (optional)${video.mine?.clips.length ? `: ${video.mine.clips.length}` : ""}`}
@@ -743,6 +744,64 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
         </>
       )}
     </div>
+  );
+}
+
+/** The earlier takes beside the one in place, the lines that differ marked, and any one back (D199): Undo only went
+ *  back one step at a time without showing where to. */
+function Takes({ video }: { video: CreateVideo }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState<number | null>(null);
+  const { data: takes = [] } = useQuery({ queryKey: ["takes", video.id, video.takes], enabled: open,
+                                          queryFn: () => createApi.takes(video.id) });
+  const now = video.script.beats.map((b) => b.text);
+  const shown = takes.find((t) => t.index === pick) ?? takes[takes.length - 1];
+  const use = async (k: number) => {
+    try {
+      await createApi.useTake(video.id, k);
+      toast.success("That take is back", { description: "The one it replaced is in Earlier takes, and Undo brings it back." });
+      setPick(null);
+      await qc.invalidateQueries({ queryKey: ["create"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const lines = (list: string[], other: string[]) => (
+    <ol className="flex flex-col gap-1 text-sm">
+      {list.map((l, i) => <li key={i} className={cn("rounded-sm px-1.5", !other.includes(l) && "bg-accent-soft")}>{l}</li>)}
+    </ol>
+  );
+  return (
+    <section>
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+              className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">
+        <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} /> Earlier takes ({video.takes})
+      </button>
+      {open && shown && (
+        <div className="mt-2 flex flex-col gap-3 rounded-md border border-line p-3">
+          <div className="flex flex-wrap gap-1.5">
+            {takes.map((t) => (
+              <button key={t.index} type="button" onClick={() => setPick(t.index)} aria-pressed={t.index === shown.index}
+                      className={cn("h-7 rounded-full border px-2.5 text-xs", t.index === shown.index ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                {t.index + 1}: {t.why}{t.at ? ` · ${t.at.slice(11, 16)}` : ""}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted">Take {shown.index + 1}: {shown.title}</span>
+              {lines(shown.lines, now)}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted">Now: {video.script.title}</span>
+              {lines(now, shown.lines)}
+            </div>
+          </div>
+          <Button size="sm" variant="secondary" className="self-start" onClick={() => use(shown.index)}>Use take {shown.index + 1}</Button>
+        </div>
+      )}
+    </section>
   );
 }
 

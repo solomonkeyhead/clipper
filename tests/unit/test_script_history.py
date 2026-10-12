@@ -48,3 +48,20 @@ def test_a_note_revises_the_last_take_and_no_note_avoids_it():
     fresh = script._previous_block(last, "")
     assert "reusing none of its lines" in fresh
     assert script._previous_block(None, "x") == ""
+
+
+def test_any_earlier_take_can_be_compared_and_brought_back(data_root):
+    """D199: the takes are listed oldest first, and using one keeps the script it replaces."""
+    channel.save(channel.make("physics", "Prof"))
+    with channel.use("prof"):
+        vid = store.add_video(None, Script(title="t", beats=[Beat(text="One.")]).model_dump())
+        store.update_video(vid, status="draft")
+        c = _client()
+        for words in ("Two.", "Three."):
+            c.put(f"/api/create/videos/{vid}/script", json={"script": {"beats": [{"text": words}]}})
+        assert c.get("/api/create").json()["videos"][0]["takes"] == 2
+        assert [t["lines"] for t in c.get(f"/api/create/videos/{vid}/takes").json()] == [["One."], ["Two."]]
+        assert c.post(f"/api/create/videos/{vid}/takes/0/use").json() == {"ok": True}
+        assert [b["text"] for b in store.video(vid)["script"]["beats"]] == ["One."]
+        assert [t["lines"] for t in c.get(f"/api/create/videos/{vid}/takes").json()][-1] == ["Three."]
+        assert c.post(f"/api/create/videos/{vid}/takes/9/use").status_code == 404
