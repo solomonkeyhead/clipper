@@ -361,7 +361,10 @@ def _system(channel: channels.Channel) -> str:
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
             f"{channel.name} ({channel.niche}). Rules:\n{rules}{jokes}\n\n{channels.fill(WRITER_TAIL, channel)}\n\n"
             "The examples are the channel's own scripts, for voice and rhythm only: some break today's "
-            "rules (length, sentence length, structure), and the rules win. Never reuse their jokes or lines.")
+            "rules (length, sentence length, structure), and the rules win. Never reuse their jokes or lines."
+            # Here, not in each request (D199): the system prompt is cached, and five went uncached into both the
+            # write and the rewrite. Three: examples steer more than rules, and the older ones break them.
+            + (f"\n\nThe channel's best scripts:\n\n{channels.examples_block(channel, limit=3)}" if channel.examples else ""))
 
 
 def _director(channel: channels.Channel) -> str:
@@ -472,8 +475,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
                               yields="; the word count, the order of the structure and the output format still apply, "
                                      "and every claim must still be true", never="Never in a script")
     endings = recent_endings()
-    user = (guide + f"The channel's best scripts:\n\n{channels.examples_block(channel)}\n\n"
-            f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
+    user = (guide + f"Write a new script answering: {question}\n" + (f"(The {channel.subject}: {angle})\n" if angle else "")
             + (f"Shape: {shape}\n" if shape else "")
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
@@ -524,6 +526,8 @@ BANNED = [
     (re.compile(r"\bin this video\b", re.I), '"in this video"'),
     (re.compile(r"\blet'?s dive in\b", re.I), '"let\'s dive in"'),
     (re.compile(r"\bsubscribe\b", re.I), "a call to subscribe"),
+    # Filler a viewer hears as padding (D199): video 25 had two.
+    (re.compile(r"\b(?:essentially|basically|literally|fundamentally)\b", re.I), 'filler words ("essentially", "basically")'),
 ]
 HOOK_TEXT_MAX = 6
 
@@ -553,7 +557,33 @@ def lint(script: Script, channel: channels.Channel) -> list[str]:
     for pattern, name in BANNED:
         if pattern.search(script.text):
             problems.append(f"Remove {name}.")
+    # A loop's last line runs into the first (D195, D199): a full stop there makes the voice sound finished.
+    last = script.beats[-1].text.strip() if script.beats else ""
+    if loops_back(script) and len(script.beats) >= 3 and re.search(r"[.!?…]$", last):
+        problems.append(f'The last line must stop on the word before the opening line, with no full stop, question '
+                        f'mark or "...": "{last}"')
+    copied = _copied(script.text, [channel.persona, *channel.jokes, *channel.shapes])
+    if copied:
+        problems.append("Lines copied from the examples you were given: " + " | ".join(copied[:3]) +
+                        ". Write your own words.")
     return problems
+
+
+def _words(text: str) -> list[str]:
+    return re.sub(r"[^a-z0-9' ]+", " ", text.lower()).split()
+
+
+def _copied(text: str, sources: list[str], run: int = 5) -> list[str]:
+    """The quoted example lines in `sources` that the script repeats `run` or more words of in a row (D199; four
+    caught plain physics, "the floor pushes up"): quoted shapes and jokes came back word for word ("Metal or wood: which wins?" ended two scripts)."""
+    said = _words(text)
+    grams = {tuple(said[i:i + run]) for i in range(len(said) - run + 1)}
+    out = []
+    for quote in (q for src in sources for q in re.findall(r'"([^"\n]{12,120})"', src or "")):
+        w = _words(quote)
+        if any(tuple(w[i:i + run]) in grams for i in range(len(w) - run + 1)):
+            out.append(quote)
+    return out
 
 
 #: Short words that end in a full stop without ending the sentence.

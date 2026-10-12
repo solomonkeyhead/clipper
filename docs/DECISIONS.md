@@ -3486,3 +3486,7 @@ last built is kept (`create_videos.built`), and `store.unbuilt` names what chang
 A draft with earlier versions has an "Earlier takes" fold: any take beside the script in place, the lines that
 differ marked, and "Use take N" (`store.use_take`, which keeps the replaced script in the history). The two ways to
 write are named apart: "AI writes it" for your own idea, "Use my own words" for a script you write.
+Scripts: lint now also flags filler ("essentially", "basically"; video 25 had two), a loop's last line that ends
+on a full stop or question mark, and five or more words in a row from a quoted joke, shape or persona line (four
+caught plain physics). The channel's example scripts moved from each request into the writer's system prompt,
+which is cached, and are the best three instead of five.

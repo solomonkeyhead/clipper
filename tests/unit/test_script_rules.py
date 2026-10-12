@@ -95,3 +95,19 @@ def test_an_untouched_physics_channel_moves_to_the_new_rules_and_an_edited_one_k
 
 def test_the_editor_is_another_ai_family_from_the_writer():
     assert _family("claude_code:opus") == _family("anthropic") == "claude" != _family("gemini:gemini-2.5-pro")
+
+
+def test_lint_catches_filler_a_finished_loop_line_and_copied_example_lines():
+    """D199: free checks in code before anyone reads the script."""
+    ch = channel.make("physics", "German Professor")
+    lines = ["Why does the lift make you heavier?", *["The floor pushes up on your feet a little harder."] * 8]
+    loop = Script(title="t", ending="loop", beats=[Beat(text=t) for t in [*lines, "So next time you step in and wonder"]])
+    assert script.lint(loop, ch) == []
+    done = loop.model_copy(update={"beats": [*loop.beats[:-1], Beat(text="So next time, wonder why.")]})
+    assert any(p.startswith("The last line must stop") for p in script.lint(done, ch))
+    joke = next(q for q in ch.jokes if "coffee" in q.lower())
+    copied = loop.model_copy(update={"beats": [*loop.beats[:-2], Beat(text="The car brakes. You continue. Your coffee continues."),
+                                               loop.beats[-1]]})
+    assert any(p.startswith("Lines copied") for p in script.lint(copied, ch)), joke
+    filler = loop.model_copy(update={"beats": [Beat(text="Why is it essentially heavier for you?"), *loop.beats[1:]]})
+    assert any("filler" in p for p in script.lint(filler, ch))

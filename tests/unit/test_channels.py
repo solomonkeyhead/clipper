@@ -161,7 +161,8 @@ def test_a_script_is_steered_by_the_channels_standing_guidance_and_the_owners_no
     channel.save(channel.load().model_copy(update={"script_avoid": ""}))
     with contextlib.suppress(Exception):
         script.write("Why does a spoon flip you?")
-    assert seen["user"].startswith("The channel's best scripts")      # unsteered: the request is as it was
+    assert seen["user"].startswith("Write a new script answering")    # unsteered: the request is as it was
+    assert "The channel's best scripts" not in seen["user"]          # in the cached system prompt now (D199)
 
 
 def test_another_take_passes_the_owners_note_on(data_root, monkeypatch):
