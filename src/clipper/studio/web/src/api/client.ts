@@ -683,6 +683,8 @@ export interface CreateVideo {
   shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string; problem?: string;
   /** The archive (D131): posted videos move there by themselves; any can be moved in or out by hand. */
   archived?: boolean; archived_at?: string | null; posted?: boolean; posts?: CreatePost[];
+  /** What changed since the last build, in words (D199); null when that build's script wasn't kept. */
+  unbuilt?: string[] | null;
   /** What Undo would take back ("Another take", "your edit", "Plan pictures"); "" when there's nothing (D193). */
   undo?: string;
   /** Undo took a script back that Redo can return (D196). */

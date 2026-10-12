@@ -276,6 +276,8 @@ MIGRATIONS = [
     ("create_videos", "history", "ALTER TABLE create_videos ADD COLUMN history TEXT NOT NULL DEFAULT '[]'"),
     # The scripts Undo took back, for Redo (D196); a new change clears them.
     ("create_videos", "future", "ALTER TABLE create_videos ADD COLUMN future TEXT NOT NULL DEFAULT '[]'"),
+    # The script as last built (D199), so the page can say what's changed since.
+    ("create_videos", "built", "ALTER TABLE create_videos ADD COLUMN built TEXT NOT NULL DEFAULT ''"),
 ]
 TRASH_DAYS = 30
 

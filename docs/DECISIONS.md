@@ -3478,3 +3478,8 @@ to two lines; Write it on the ideas is quiet until its row is hovered, and the s
 More ideas; a draft's own clips are folded and its action row stays at the card's foot; a finished video has Open to
 post and Build again, with stats, Clips and New pictures under More (New pictures asks first), and its sound, loop
 and cover controls are folded as Look and sound.
+On a finished video the player stays beside the parts on a wide screen, with a strip of its parts under it to
+jump to, and the part playing lights up in the list. A "Words and voice" fold shows the script, sends the video back
+to its words (asking first; the build stays in Clips, and it leaves the Archive) and takes a new voice. The script as
+last built is kept (`create_videos.built`), and `store.unbuilt` names what changed since (music, the cover, sentence
+4...): Rebuild counts all of it, with the list on hover, and Build again says how many aren't built yet.

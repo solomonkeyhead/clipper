@@ -1248,8 +1248,8 @@ def _build(video_id: int, progress) -> int:
     if idle:
         notes.append("Not used: " + ", ".join(idle) + ".")
     script = remember(script)
-    store.update_video(video_id, status="built", clip_id=clip_id, error="",
-                       script={**script.model_dump(), "take": row["script"].get("take", 1)},
+    saved = {**script.model_dump(), "take": row["script"].get("take", 1)}
+    store.update_video(video_id, status="built", clip_id=clip_id, error="", script=saved, built=saved,
                        check_notes=userclips.with_notes(store.video(video_id)["check_notes"], notes))
     shutil.rmtree(work, ignore_errors=True)
     for old in (shot_cache.glob("*.mp4") if shot_cache.is_dir() else []):

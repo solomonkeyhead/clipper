@@ -16,3 +16,11 @@ def test_the_track_record_adds_platforms_and_skips_new_posts(monkeypatch):
     assert topics.track_record(rows) == ["Q1: 600 views, 53% of it watched on average", "Q3: 300 views",
                                          "Q2: 70 views, 23% of it watched on average"]
     assert topics.track_record(rows[:3]) == []    # two videos say nothing yet
+
+
+def test_what_changed_since_the_last_build_is_named():
+    """D199: the parts list said "No changes yet" after music or a cover changed."""
+    built = {"music": None, "cover": None, "captions": True, "beats": [{"text": "a"}, {"text": "b"}], "title": "t"}
+    now = {**built, "music": True, "cover": 3.5, "title": "new", "beats": [{"text": "a"}, {"text": "b", "nudge": 0.2}]}
+    assert store.unbuilt(now, built) == ["music", "the cover", "sentence 2"]
+    assert store.unbuilt(built, built) == [] and store.unbuilt(now, None) is None

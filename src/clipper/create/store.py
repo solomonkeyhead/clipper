@@ -78,6 +78,25 @@ def _video(row) -> dict:
     out["timings"] = json.loads(out["timings"]) if out["timings"] else None
     out["history"] = json.loads(out.get("history") or "[]")
     out["future"] = json.loads(out.get("future") or "[]")
+    out["built"] = json.loads(out.get("built") or "null")
+    return out
+
+
+#: What a change to each script field is called on the page (D199). Words, title, description and hashtags aren't
+#: here: a change of words sends the video back to its voice, and the rest isn't in the video.
+SHOWN = {"music": "music", "sfx": "sound effects", "zooms": "zoom-ins", "cut_ins": "cut-ins", "loop": "the loop",
+         "transitions": "transitions", "cover": "the cover", "captions": "captions", "caption_size": "caption size",
+         "caption_shift": "caption place", "caption_colour": "caption colour", "hook": "the on-screen hook"}
+
+
+def unbuilt(script: dict, built: dict | None) -> list[str] | None:
+    """What has changed since the last build, in words for the page (D199); None when it wasn't kept (built before
+    D199). The parts list counted only new footage and drawings, and said "No changes yet" after music or a cover."""
+    if not built:
+        return None
+    out = [label for key, label in SHOWN.items() if script.get(key) != built.get(key)]
+    now, then = script.get("beats") or [], built.get("beats") or []
+    out += [f"sentence {i}" for i, (a, b) in enumerate(zip(now, then, strict=False), 1) if a != b]
     return out
 
 
@@ -131,8 +150,8 @@ def add_video(topic_id: int | None, script: dict, check_notes: str = "", ready: 
 
 def update_video(video_id: int, **changes) -> None:
     allowed = {"status", "script", "check_notes", "voice", "timings", "clip_id", "error",
-               "archived_at", "archive_hold", "ready"}
-    sets = {k: (json.dumps(v) if k in ("script", "timings") and not isinstance(v, str) else v)
+               "archived_at", "archive_hold", "ready", "built"}
+    sets = {k: (json.dumps(v) if k in ("script", "timings", "built") and not isinstance(v, str) else v)
             for k, v in changes.items() if k in allowed}
     if "status" in sets and sets["status"] not in VIDEO_STATUSES:
         raise ValueError(f"status must be one of {', '.join(VIDEO_STATUSES)}")

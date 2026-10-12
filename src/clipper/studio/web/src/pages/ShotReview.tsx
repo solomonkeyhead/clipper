@@ -186,8 +186,10 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
 
 /** A finished video, picture by picture (D125): keep what you like, ask for new footage or a new
  *  drawing where you don't, then rebuild. Only the parts you changed are made again. */
-export function ShotReview({ video, seek, onRebuild, rebuilding }: {
+export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
   video: CreateVideo; seek: (t: number) => void; onRebuild: () => void; rebuilding: boolean;
+  /** Where the player is (D199): that part's row lights up. */
+  now?: number | null;
 }) {
   const qc = useQueryClient();
   const drawings = useCreate().data?.channel.drawings !== false;   // a footage-only channel draws nothing (D146)
@@ -196,6 +198,9 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
   const [picking, setPicking] = useState<number | null>(null);
   const beats = video.script.beats;
   const pending = beats.filter((b) => b.visual.redo || b.visual.restyle).length;
+  // Everything since the last build, where the server kept it (D199): music, a cover or captions counted as nothing.
+  const changes = video.unbuilt;
+  const count = changes ? changes.length : pending;
   // Built before Clipper kept its footage (D126): the next build picks every part's footage again.
   const unsaved = (video.shots ?? []).some((shot) => {
     const v = beats[shot.beats[0] - 1]?.visual;
@@ -276,10 +281,12 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
           Everything you don't change stays exactly as it is. Ask for new footage or a new drawing where you don't like a
           part (add a few words to say what you'd rather see), then rebuild.
         </p>
-        <Button variant="primary" disabled={!pending || rebuilding} onClick={onRebuild}>
-          {rebuilding ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-          {pending ? `Rebuild with ${pending} change${pending === 1 ? "" : "s"}` : "No changes yet"}
-        </Button>
+        <Tip label={changes?.length ? `Not built yet: ${changes.join(", ")}` : "Nothing changed since the last build"}>
+          <Button variant="primary" disabled={!count || rebuilding} onClick={onRebuild}>
+            {rebuilding ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            {count ? `Rebuild with ${count} change${count === 1 ? "" : "s"}` : "No changes yet"}
+          </Button>
+        </Tip>
       </div>
       {drawings && old.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-2.5 text-xs text-muted">
@@ -303,8 +310,10 @@ export function ShotReview({ video, seek, onRebuild, rebuilding }: {
           if (!v) return null;
           const text = shot.beats.map((n) => beats[n - 1]?.text).join(" ");
           const mid = (shot.start + shot.end) / 2;
+          const playing = now != null && shot.start <= now && now < shot.end;
           return (
-            <li key={first} className="flex gap-3 py-3">
+            <li key={first} aria-current={playing || undefined}
+                className={cn("flex gap-3 py-3 transition-colors", playing && "-mx-2 rounded-md bg-accent-soft px-2")}>
               <button type="button" onClick={() => seek(shot.start)} aria-label="Play from here"
                       className="group relative aspect-[9/16] w-14 shrink-0 self-start overflow-hidden rounded-md bg-surface-2">
                 <FadeImg src={`/api/create/videos/${video.id}/still?t=${mid.toFixed(2)}&v=${video.clip_id}-${video.updated_at ?? ""}`}

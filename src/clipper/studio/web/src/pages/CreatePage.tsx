@@ -973,7 +973,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
 
 /* ---------- the voice: a file, recorded here, or none (D146) ---------- */
 
-function VoiceStep({ video }: { video: CreateVideo }) {
+function VoiceStep({ video, title = "Add the voice" }: { video: CreateVideo; title?: string }) {
   const qc = useQueryClient();
   const { data: create } = useCreate();
   const input = useRef<HTMLInputElement>(null);
@@ -1001,7 +1001,7 @@ function VoiceStep({ video }: { video: CreateVideo }) {
   const ways: [typeof way, string][] = [["file", "I have the audio"], ["record", "Record it here"], ["none", "No voice"]];
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-accent/30 bg-accent-soft/40 p-4">
-      <h3 className="flex items-center gap-2 text-sm font-semibold"><Mic className="size-4 text-accent" /> Add the voice</h3>
+      <h3 className="flex items-center gap-2 text-sm font-semibold"><Mic className="size-4 text-accent" /> {title}</h3>
       <div className="flex flex-wrap gap-1.5" role="tablist">
         {ways.map(([key, label]) => (
           <button key={key} role="tab" aria-selected={way === key} onClick={() => setWay(key)}
@@ -1189,6 +1189,23 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
   const clip = clips.find((c) => c.id === video.clip_id);
   const player = useRef<HTMLVideoElement>(null);
   const [replan, setReplan] = useState(false);   // New pictures asks first (D199): one click replanned every part
+  const [now, setNow] = useState<number | null>(null);   // where the player is: its part lights up (D199)
+  const [rewording, setRewording] = useState(false);
+  const qc = useQueryClient();
+  /** Back to a draft (D199): approved, then draft, as "Edit the script again" does from approved. The build stays in Clips. */
+  const reword = async () => {
+    try {
+      await createApi.edit(video.id, {});
+      await createApi.edit(video.id, {});
+      if (video.archived) await createApi.archive(video.id, false);   // a draft belongs in Create, not the Archive
+      await qc.invalidateQueries({ queryKey: ["create"] });
+      toast.success("Back to the script", { description: "Change the words, approve them and record the voice again. The last build stays in Clips." });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const shots = video.shots ?? [];
+  const total = shots.length ? shots[shots.length - 1].end : 0;
   const seek = (t: number) => {
     const el = player.current;
     if (!el) return;
@@ -1196,13 +1213,28 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
     void el.play().catch(() => undefined);
   };
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-4">
+    <div className="flex flex-wrap gap-4 lg:flex-nowrap lg:items-start">
+      {/* The player stays in view beside the parts on a wide screen (D199): it scrolled away while you went through
+          10 to 15 of them, and "Play from here" started a player you couldn't see. */}
+      <div className="flex w-56 shrink-0 flex-col gap-2 self-start lg:sticky lg:top-4">
         {clip?.file_exists ? (
-          <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 self-start rounded-xl bg-black" />
+          <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 rounded-xl bg-black"
+                 onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
         ) : <div className="grid aspect-[9/16] w-56 place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
-        {/* At least 16rem: narrower, it drops under the player instead of one word a line (D196). */}
-        <div className="flex min-w-64 flex-1 flex-col gap-2">
+        {shots.length > 1 && total > 0 && (
+          <div className="flex h-2 w-full gap-px overflow-hidden rounded-full">
+            {shots.map((shot) => (
+              <button key={shot.beats[0]} type="button" onClick={() => seek(shot.start)} aria-label={`Play from ${shot.start.toFixed(1)}s`}
+                      style={{ width: `${((shot.end - shot.start) / total) * 100}%` }}
+                      className={cn("h-full bg-surface-3 hover:bg-line-strong",
+                        now != null && shot.start <= now && now < shot.end && "bg-accent hover:bg-accent")} />
+            ))}
+          </div>
+        )}
+      </div>
+      {/* At least 16rem: narrower, it drops under the player instead of one word a line (D196). */}
+      <div className="flex min-w-64 flex-1 flex-col gap-4">
+        <div className="flex flex-col gap-2">
           {video.error && (
             <div className="flex flex-wrap items-center gap-3 rounded-md border border-danger/40 p-3 text-sm text-danger">
               <AlertTriangle className="size-4 shrink-0" />
@@ -1219,6 +1251,7 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
             <Tip label="Same words, voice and pictures, built again; only parts you asked to change, or that had no footage, are made again">
               <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
                 {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
+                {(video.unbuilt?.length ?? 0) > 0 && <span className="text-xs text-muted">· {video.unbuilt!.length} not built yet</span>}
               </Button>
             </Tip>
             <details className="relative">
@@ -1249,7 +1282,6 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
             </div>
           )}
         </div>
-      </div>
       {/* Folded beside Captions (D199): five controls and the cover row sat between the buttons and the parts. */}
       <Fold id={`look-${video.id}`} title="Look and sound">
         <div className="flex flex-col gap-3">
@@ -1258,7 +1290,7 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
         </div>
       </Fold>
       <Fold id={`review-${video.id}`} title="Change parts you don't like" startOpen>
-        <ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} />
+        <ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} now={now} />
       </Fold>
       <Fold id={`captions-${video.id}`} title={`Captions${video.script.captions === false ? " (off)" : ""}`}>
         <CaptionsEditor video={video} />
@@ -1267,6 +1299,25 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
               startOpen={(video.mine?.clips.length ?? 0) > 0}>
         <MyClips video={video} wps={wps} onRebuild={onRebuild} busyRebuild={busy === "rebuild"} />
       </Fold>
+      {/* A built video was a dead end for its words and voice (D199), though the server takes both. */}
+      <Fold id={`words-${video.id}`} title="Words and voice">
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted">{video.script.beats.map((b) => b.text.trim()).join(" ")}</p>
+          {rewording ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-3 text-sm">
+              <span className="flex-1 text-muted">Change the words? You'll record the voice again. This build stays in Clips.</span>
+              <Button size="sm" variant="primary" onClick={() => reword()}><PenLine className="size-3.5" /> Change the words</Button>
+              <Button size="sm" variant="ghost" onClick={() => setRewording(false)}>Keep them</Button>
+            </div>
+          ) : (
+            <Button variant="secondary" className="self-start" disabled={busy !== null} onClick={() => setRewording(true)}>
+              <PenLine className="size-4" /> Change the words
+            </Button>
+          )}
+          <VoiceStep video={video} title="Replace the voice: same words, built again" />
+        </div>
+      </Fold>
+      </div>
     </div>
   );
 }

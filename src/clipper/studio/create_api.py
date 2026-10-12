@@ -170,6 +170,7 @@ def _view() -> dict:
         history = v.pop("history", None) or []   # the page needs only what Undo would undo (D193)
         v["undo"] = history[-1]["why"] if history else ""
         v["redo"] = bool(v.pop("future", None))   # Undo took something back that Redo can return (D196)
+        v["unbuilt"] = store.unbuilt(v["script"], v.pop("built", None)) if v["status"] == "built" else None   # D199
         v["shots"] = _shots(v, timings)
         v["cancelling"] = v["id"] in cancelled
         v["archived"] = bool(v.get("archived_at"))
