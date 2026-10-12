@@ -41,7 +41,8 @@ function CampaignCard({ c }: { c: Campaign }) {
       </div>
       <div className="tabular grid grid-cols-4 gap-2 text-center">
         {(c.submits
-          ? [["Ready", c.counts.ready], ["To submit", c.counts.posted - (c.counts.waiting ?? 0)], ["Submitted", c.counts.submitted], ["Views", formatCount(c.views)]]
+          // Live: posted or submitted (D196); "0 Submitted" read as nothing happening with 15 clips up.
+          ? [["Ready", c.counts.ready], ["Live", c.counts.posted + c.counts.submitted], ["To submit", c.counts.posted - (c.counts.waiting ?? 0)], ["Views", formatCount(c.views)]]
           : [["Ready", c.counts.ready], ["Posted", c.counts.posted + c.counts.submitted], ["Skipped", c.counts.skipped], ["Views", formatCount(c.views)]]
         ).map(([label, value]) => (
           <div key={label} className="rounded-md bg-surface-2 py-2">
@@ -367,7 +368,7 @@ export function CampaignPage() {
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         {brief ? <BriefPanel brief={brief} /> : <div />}
         <div className="min-w-0">
-          <MoneyCard c={c} />
+          {!c.own_channel && <MoneyCard c={c} />}   {/* your own channel has no pay (D196) */}
           <div className="mb-4 flex gap-1 border-b border-line" role="tablist">
             {([["clips", `Clips ${data.clips.length}`], ["posts", `Posts ${posts.length}`]] as const).map(([key, label]) => (
               <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}

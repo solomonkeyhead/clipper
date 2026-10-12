@@ -20,6 +20,7 @@ import math
 import os
 import shutil
 import time
+from collections import Counter
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import NamedTuple
@@ -35,7 +36,7 @@ from ..utils.logging import get_logger
 from . import channel as channels
 from . import compose, diagrams, stock, store, userclips
 from .ai import CreateError
-from .script import FIRST_DIAGRAM_WORDS, Script, Visual, spans
+from .script import FIRST_DIAGRAM_WORDS, Script, Visual, _query_from, loops_back, spans
 from .sketch import draw_all
 from .voice import Timings, folder, nudged
 
@@ -43,7 +44,7 @@ log = get_logger(__name__)
 
 W, H, FPS = 1080, 1920, 30
 PANEL = (compose.W, compose.PANEL_H)   # where the pictures go (D162)
-MAX_SHOT = 4.5
+MAX_SHOT = 3.5   # 4.5 held one clip too long; spares from the same judgement fill the extra parts (D196)
 WATERMARK_WIDTH = 150
 #: D156, from the second research report: shots of at most HOOK_SHOT seconds while the first ~5 s are spoken
 #: (HOOK_WORDS words), the camera move taken in turn so no two shots in a row move alike (the same push-in on
@@ -62,6 +63,26 @@ CHARACTER_START = 2.5
 #: The judge's score footage needs on the opening words (D159): a looser real clip beats a drawing there, as the
 #: viewer's own moment, moving, holds them first (D155); a drawing only when even this finds nothing.
 OPENING_GOOD_ENOUGH = 5
+#: A loop's end (D197): the silence from the last word round to the first, as between two sentences, and the last
+#: LOOP_TAIL seconds played on the opening clip, leading into its first frame.
+LOOP_GAP, LOOP_TAIL = 0.25, 1.5
+
+
+def loops(script: Script, timings: Timings) -> bool:
+    """Whether the video's end runs into its start (D197): the user's switch, else when the script ends on the loop."""
+    return loops_back(script) and len(timings.beats) == len(script.beats) >= 4
+
+
+def loop_timing(timings: Timings) -> Timings:
+    """The video cut LOOP_GAP after the last word, counting the lead before the first (D197): 0.6 s of silence, then
+    the lead, was a pause the loop's viewer heard on every pass."""
+    if not timings.words:
+        return timings
+    end = round(timings.words[-1].end + max(0.08, LOOP_GAP - timings.words[0].start), 3)
+    if end >= timings.duration:
+        return timings
+    beats = [*timings.beats[:-1], (timings.beats[-1][0], end)] if timings.beats else []
+    return timings.model_copy(update={"duration": end, "beats": beats})
 
 
 def _subject_x(src: Path, start: float, seconds: float, hint: float | None) -> float:
@@ -110,6 +131,15 @@ def _frames(at: float | None, seconds: float) -> int:
 shot_info: dict[Path, tuple[int, str]] = {}
 
 
+def _framing(src: Path, seconds: float, center: float | None, skip: float, frame: float | None):
+    """Where in a clip a shot starts and where across it the camera looks (D111, D132, D180); and the clip's probe."""
+    info = probe(src)
+    length = info.duration or seconds
+    offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
+    x = min(1.0, max(0.0, frame if frame is not None else _subject_x(src, offset, seconds, center)))
+    return offset, x, info
+
+
 def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = None, skip: float = 0.0,
                 motion: str = "push", punch: float | None = None, frames: int | None = None,
                 frame: float | None = None) -> Path:
@@ -127,13 +157,11 @@ def _stock_shot(src: Path, seconds: float, out: Path, center: float | None = Non
             compose.photo_panel(img, out, n, compose.Move(kind=motion if motion != "still" else "push", u=x, punch=punch),
                                 look=LOOK)
         return out
-    info = probe(src)
     seconds = n / FPS
-    length = info.duration or seconds
-    offset = min(length * 0.15 + skip, max(0.0, length - seconds - 0.1))
-    x = min(1.0, max(0.0, frame if frame is not None else _subject_x(src, offset, seconds, center)))
+    offset, x, info = _framing(src, seconds, center, skip, frame)
     compose.video_panel(src, out, n, compose.Move(kind=motion, u=x, punch=punch), start=offset,
-                        loop=length < seconds + offset, look=LOOK, source_size=(info.width or W, info.height or H))
+                        loop=(info.duration or seconds) < seconds + offset, look=LOOK,
+                        source_size=(info.width or W, info.height or H))
     return out
 
 
@@ -208,6 +236,20 @@ shot_cache: Path | None = None
 _moves = [0]
 punches: dict[int, list[float]] = {}
 picture_times: list[tuple[float, str]] = []
+#: The video's zooms switch, for the drawings' camera (D197); the opening's first shot (its clip, camera move and
+#: frames), for a loop's lead-in; and where that lead-in starts, in seconds.
+_zooms = [True]
+#: When each drawing's parts arrive, seconds into its shot, for their chalk sounds (D197).
+chalk_at: dict[Path, list[float]] = {}
+opening: list[dict] = []
+loop_cut: list[float | None] = [None]
+
+
+def _shows(word: str, hit: dict) -> bool:
+    """Whether a clip's own words name the highlighted word (D197): a punch-in on "outsourced" or "thirty-seven"
+    zoomed into a ceiling fan and a fireplace for no reason the viewer could see."""
+    tags = stock._words(hit.get("tags", ""))
+    return any(stock._same(w, t) for w in stock._words(word) for t in tags)
 
 
 def _next_motion() -> str:
@@ -233,8 +275,9 @@ def choose_punches(script: Script, timings: Timings) -> dict[int, list[float]]:
     return out
 
 
-RENDER_VERSION = 4   # 2: camera moves, punch-ins and one footage look (D156); 3: the picture panel (D162);
-#: 4: drawings built left to right, coloured by temperature, a graph that moves the way its sentence says (D190)
+RENDER_VERSION = 5   # 2: camera moves, punch-ins and one footage look (D156); 3: the picture panel (D162);
+#: 4: drawings built left to right, coloured by temperature, a graph that moves the way its sentence says (D190);
+#: 5: a gentler punch-in, the drawings' camera after the part is drawn and keeping the title in view (D197)
 used_shots: set[Path] = set()
 #: What a drawing's shot doesn't depend on: set by the app, or used only when the shots are put together (a part's
 #: way in, D171). A change to one of these never draws the drawing again.
@@ -286,12 +329,14 @@ _drawing: dict[Path, tuple[list[Future], list[Path]]] = {}
 _palette = ""
 
 
-def _draw_shot(visual: dict, n: int, said: list, out: str, palette: str, start: int = 0, stop: int | None = None) -> str:
+def _draw_shot(visual: dict, n: int, said: list, out: str, palette: str, start: int = 0, stop: int | None = None,
+               focus: bool = True) -> str:
     """A drawing's shot, or frames `start` to `stop` of it, in a worker process (D179): written beside where it goes,
     then moved in."""
     diagrams.use_palette(palette)
     part = Path(out).with_suffix(".part.mp4")
-    diagrams.render(Visual.model_validate(visual), n / FPS, part, words=said, frames=n, start=start, stop=stop)
+    diagrams.render(Visual.model_validate(visual), n / FPS, part, words=said, frames=n, start=start, stop=stop,
+                    focus=focus)
     part.replace(out)
     return out
 
@@ -331,6 +376,9 @@ def _diagram(visual: Visual, seconds: float, out: Path, said: list, frames: int 
     global _pool
     n = frames or max(1, round(seconds * FPS))
     key = [visual.model_dump(exclude=_RUNTIME), n, [(round(t, 3), w) for t, w in said], diagrams.BOARD]
+    focus = _zooms[0]
+    if not focus:   # zooms off: the camera stays on the whole drawing (D197)
+        key.append("still")
     if shot_cache is not None and DRAW_WORKERS > 1:
         made = _cache_path("diagram", key)
         if not (made.is_file() and made.stat().st_size > 0) and made not in _drawing:
@@ -345,11 +393,14 @@ def _diagram(visual: Visual, seconds: float, out: Path, said: list, frames: int 
                 spans[-2:] = [(spans[-2][0], n)]
             pieces = [made] if len(spans) == 1 else [made.with_name(f"{made.stem}.{k}.mp4") for k in range(len(spans))]
             dumped = visual.model_dump()
-            _drawing[made] = ([_pool.submit(_draw_shot, dumped, n, said, str(p), _palette, a, b)
+            _drawing[made] = ([_pool.submit(_draw_shot, dumped, n, said, str(p), _palette, a, b, focus)
                                for p, (a, b) in zip(pieces, spans, strict=True)], pieces)
     else:
-        made = _kept("diagram", key, out, lambda o: diagrams.render(visual, n / FPS, o, words=said, frames=n))
+        made = _kept("diagram", key, out, lambda o: diagrams.render(visual, n / FPS, o, words=said, frames=n,
+                                                                   focus=focus))
     shot_info[made] = (n, "drawing")
+    d = n / FPS   # the parts on their words (diagrams.stage); the first comes on the schedule, at the start
+    chalk_at[made] = [0.1] + [min(c, max(0.6 * d, d - 1.2)) for c in diagrams.cues(visual, said)[1:] if c is not None]
     return made
 
 
@@ -411,14 +462,17 @@ def _pick_footage(i: int, beat, visual: Visual, seconds: float, script: Script, 
     queries = [q for q in (visual.queries or [visual.query]) if q.strip()]
     group = next((g for g in spans(script) if g[0] == i), [i])
     text = " ".join(script.beats[k].text for k in group)
-    widened = asked or bool(visual.wish)
-    good = ASKED_GOOD_ENOUGH if asked else OPENING_GOOD_ENOUGH if said_before < FIRST_DIAGRAM_WORDS else stock.GOOD_ENOUGH
-    searches = queries or [beat.text]
+    # Fewer than two real searches: written for the sentence (D196), where the sentence's longest words were used.
+    widened = asked or bool(visual.wish) or len(queries) < 2
+    # The opening's looser bar is the first sentence's only (D196): it caught the second too, and a fireplace
+    # scored about 5 for "thirty-seven degrees".
+    good = ASKED_GOOD_ENOUGH if asked else OPENING_GOOD_ENOUGH if i == 0 else stock.GOOD_ENOUGH
+    searches = queries or [_query_from(beat.text)]
     if widened:
         written = stock.plan_searches(text, script.text, wish=visual.wish, tried=queries if asked else None)
-        searches = list(dict.fromkeys([*written, *queries]))[:6] or [beat.text]
+        searches = list(dict.fromkeys([*written, *queries]))[:6] or [_query_from(beat.text)]
     found = stock.choose(searches, parts[0], avoid, sentence=beat.text, context=script.text, good_enough=good,
-                         count=count)
+                         count=count, photos=i > 0)
     log.info("create: footage for sentence %d: %d of %d part(s) found%s", i + 1, len(found), count,
              ", searches written for it" if widened else "")
     return _Footage(parts, [found[k] if k < len(found) else None for k in range(count)], searches)
@@ -514,10 +568,20 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
         # A part with no clip of its own repeats the one before: from where it stopped, not from
         # the same frame, which played the same seconds twice in a row (D132).
         skip = sum(p for p, h in zip(parts[:k], hits[:k], strict=True) if h.get("id") == hit.get("id"))
-        motion = visual.camera if visual.camera in MOTIONS else _next_motion()   # the user's choice first (D162)
+        again = k % 2 == 1 and hits[k - 1].get("id") == hit.get("id")   # no clip of its own: a closer angle, every other part (D196)
         begins = (at + sum(parts[:k])) if at is not None else None
         n = _frames(begins, part)
-        punch = next((t - begins for t in punches.get(i, []) if begins is not None and begins <= t < begins + part), None)
+        # A punch-in only on a word the clip shows, not in its first 0.8 s or last 0.6 s (D197): one on the cut
+        # read as a jolt, and "too soon".
+        mine = [t for t in punches.get(i, []) if begins is not None and begins <= t < begins + part]
+        punch = next((t - begins for t in mine if 0.8 <= t - begins <= part - 0.6 and _shows(beat.emphasis, hit)), None)
+        if mine and punch is None:
+            punches[i] = [t for t in punches[i] if t not in mine]
+        # The user's choice first (D162); a punched shot holds still, so a drift or pull doesn't fight it (D197).
+        motion = visual.camera if visual.camera in MOTIONS else "still" if punch is not None \
+            else "close" if again else _next_motion()
+        if i == 0 and k == 0 and not tag:
+            opening[:] = [{"hit": hit, "motion": motion, "n": n, "frame": visual.frame}]
 
         def make(out: Path, holder=holder, skip=skip, motion=motion, punch=punch, n=n) -> Path:
             h = holder["hit"]
@@ -640,6 +704,8 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
         progress("Choosing footage", 8)
     ahead = _prefetch(script, timings, groups, progress)
     _moves[0] = 0
+    _zooms[0] = script.zooms
+    opening.clear()
     punches.clear()
     punches.update(choose_punches(script, timings) if script.zooms else {})
     picture_times.clear()
@@ -677,29 +743,117 @@ def shots(script: Script, timings: Timings, work: Path, progress=None, own: dict
 
 def _loop_back(made: list[Path], starts: list[int], groups: list[list[int]], script: Script, timings: Timings,
                work: Path) -> list[Path]:
-    """The last sentence over the opening shot again (D155), so the end flows back into the start when the
-    Short loops. Only when the last picture is the writer's plain footage plan (not a drawing being held,
-    not the user's own clip or pick) and the opening is footage too."""
-    last = groups[-1] if groups else []
-    v = script.beats[last[0]].visual if last else None
-    if (len(groups) < 3 or len(last) != 1 or v is None or v.manual or v.clip or v.kind != "stock"
-            or script.beats[0].visual.kind != "stock" or script.beats[0].visual.clip):
+    """A loop's last LOOP_TAIL seconds (D197): the opening clip's own footage from just before the opening's first
+    frame, played up to it, the camera running back into where the opening's move begins, so the restart is no cut at
+    all. The rest of the last sentence keeps its own picture (the user's pick too). D155 played the opening's first
+    1.3 s again, looped, under the whole last sentence, and the camera jumped on every pass. Not when the opening
+    isn't stock footage or the last picture is a drawing."""
+    loop_cut[0] = None
+    if not opening or len(groups) < 3 or not loops(script, timings):
         return made
-    a, b = timings.beats[last[0]]
-    n = _frames(a, b - a)
-    if made[0] in _drawing:   # the opening fell back to a drawing (no footage fit) still being drawn (D179)
-        _finish(made[0])
-    out = compose.repeat_panel(made[0], work / "loop_back.mp4", n)
-    shot_info[out] = (n, shot_info.get(made[0], (0, "footage"))[1])
-    return [*made[:starts[-1]], out]
+    tail_shots = made[starts[-1]:]
+    if any(m in _drawing or shot_info.get(m, (0, ""))[1] == "drawing" for m in tail_shots):
+        return made
+    o = opening[0]
+    a, end = timings.beats[groups[-1][0]][0], timings.duration
+    try:
+        src = stock.fetch(o["hit"])
+    except Exception as exc:  # the opening's clip is gone: the end stays as it is
+        log.info("create: no loop lead-in (%s)", exc)
+        return made
+    photo = src.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")
+    d0 = o["n"] / FPS
+    if photo:
+        offset, x, info = 0.0, min(1.0, max(0.0, o["frame"] if o["frame"] is not None else o["hit"].get("center") or 0.5)), None
+    else:
+        offset, x, info = _framing(src, d0, o["hit"].get("center"), 0.0, o["frame"])
+    want = end - LOOP_TAIL
+    cut = a if end - a < LOOP_TAIL + 0.8 else min((w.start for w in timings.words if a + 0.8 <= w.start <= end - 0.6),
+                                                  key=lambda t: abs(t - want), default=want)
+    if not photo:
+        cut = max(cut, end - offset)   # only `offset` seconds of the clip come before the opening's first frame
+    keep, lead = round(cut * FPS) - round(a * FPS), round(end * FPS) - round(cut * FPS)
+    if lead < round(0.6 * FPS):
+        return made
+    out = work / "loop_lead.mp4"
+    move = compose.Move(kind=o["motion"] if not (photo and o["motion"] == "still") else "push", u=x)
+    if photo:
+        from PIL import Image
+
+        with Image.open(src) as img:
+            compose.photo_panel(img, out, lead, move, look=LOOK, back=d0)
+    else:
+        compose.video_panel(src, out, lead, move, start=max(0.0, offset - lead / FPS), look=LOOK, back=d0,
+                            source_size=(info.width or W, info.height or H))
+    shot_info[out] = (lead, "footage")
+    kept: list[Path] = []
+    for m in tail_shots:   # the last sentence's own shots, up to the cut
+        if keep <= 0:
+            break
+        frames, kind = shot_info.get(m) or (max(1, round((probe(m).duration or 0.0) * FPS)), "footage")
+        shot_info[m] = (min(frames, keep), kind)
+        kept.append(m)
+        keep -= frames
+    loop_cut[0] = cut
+    return [*made[:starts[-1]], *kept, out]
+
+
+#: In a long sentence the talking picture changes at a word about this often, and a pose holds this long at the
+#: end of its sentence (D196): one picture a sentence, 4 s at a time, looked still.
+TALK_SWITCH, POSE_HOLD = 2.0, 2.4
+
+
+def _switches(a: float, b: float, word_starts: list[float]) -> list[float]:
+    """Where a talking picture changes inside (a, b): at word starts, TALK_SWITCH apart, none in the last second."""
+    out, last = [], a
+    for s in word_starts:
+        if s - last >= TALK_SWITCH and b - s >= 1.0:
+            out.append(s)
+            last = s
+    return out
+
+
+def talking_frames(voice: Path, timings: Timings, total: int) -> list[bool]:
+    """The frames his mouth is open (D196): where the voice is loud (its syllables), inside the words. A silent track
+    (no voice, D146) opens and closes through the words at a steady pace. No flicker: a run under 2 frames joins
+    its neighbours."""
+    from .voice import levels
+
+    try:
+        loud = levels(voice, raw=True)
+    except Exception:  # an unreadable track: the words' steady pace
+        loud = []
+    speaking = bool(loud) and float(np.percentile(loud, 95)) > -45
+    top = float(np.percentile(loud, 95)) if speaking else 0.0
+    words = sorted((w.start, w.end) for w in timings.words)
+    out, is_open, i = [False] * total, False, 0
+    for k in range(total):
+        t = k / FPS
+        while i < len(words) and words[i][1] < t:
+            i += 1
+        in_word = i < len(words) and words[i][0] - 0.03 <= t <= words[i][1] + 0.03
+        if not in_word:
+            is_open = False
+        elif speaking:
+            db = loud[min(len(loud) - 1, int(t * 100))] - top
+            is_open = db > -18 if not is_open else db > -26   # opens on a syllable, shuts in the dip after it
+        else:
+            is_open = (k // 4) % 2 == 0
+        out[k] = is_open
+    for k in range(1, total - 1):   # a lone frame either way is a flicker
+        if out[k] != out[k - 1] and out[k] != out[k + 1]:
+            out[k] = out[k - 1]
+    return out
 
 
 def character_plan(script: Script, timings: Timings, channel: channels.Channel, punchline: float,
-                   seed: int) -> list[tuple[Path, list[tuple[float, float]]]]:
+                   seed: int, loop_at: float | None = None) -> list[tuple[Path, list[tuple[float, float]]]]:
     """Which picture of the character shows when (D159), each with its times; together they cover the whole video.
     The opening sentence: the channel's picture. Then per sentence: the writer's pose for it (D158), else the presenting
     picture where the first drawing appears (D157), else the "talking" poses in turn, else the channel's picture.
-    From the punchline: a reaction (D156). He stays, as CodeBullet's does: popping in for 2 s read as a glitch."""
+    From the punchline: a reaction (D156). He stays, as CodeBullet's does: popping in for 2 s read as a glitch.
+    On a loop (`loop_at`, the last line's start, D197): the reaction holds to the last line, he talks through it, and
+    from the lead-in (loop_cut) shows the opening's picture, so the restart doesn't change him."""
     def found(*paths: str) -> list[Path]:
         return [Path(p) for p in paths if p and Path(p).is_file()]
 
@@ -712,21 +866,41 @@ def character_plan(script: Script, timings: Timings, channel: channels.Channel, 
     first = next((t for t, kind in picture_times if kind == "drawing" and CHARACTER_START <= t < punchline - 0.5), None)
     starts = [0.0] + [s for s, _ in timings.beats[1:]] if len(timings.beats) == len(script.beats) else [0.0]
     starts = [s for s in starts if s < punchline] + [punchline]
+    word_starts = [w.start for w in timings.words]
     shows, idle = [], 0
+
+    def talk(a: float, b: float) -> None:   # the talking pictures in turn, changing at words in a long stretch
+        nonlocal idle
+        for x, y in itertools.pairwise([a, *_switches(a, b, word_starts), b]):
+            shows.append((talking[idle % len(talking)], x, y))
+            idle += 1
+
     for i, (a, b) in enumerate(itertools.pairwise(starts)):
         pose = found(channel.poses.get(script.beats[i].pose, "")) if i and script.beats[i].pose else []
         if i == 0:
-            pic = base[0]
-        elif pose:
-            pic = pose[0]
+            shows.append((base[0], a, b))
+        elif pose:   # a long sentence talks first and pulls the pose as it lands, held to its end (a cut-in's there)
+            if talking and b - POSE_HOLD - a >= 1.0:
+                talk(a, b - POSE_HOLD)
+                a = b - POSE_HOLD
+            shows.append((pose[0], a, b))
         elif point and first is not None and a <= first < b:
-            pic = point[0]
+            shows.append((point[0], a, b))
         elif talking:
-            pic, idle = talking[idle % len(talking)], idle + 1
+            talk(a, b)
         else:
-            pic = base[0]
-        shows.append((pic, a, b))
-    shows.append((moods[seed % len(moods)] if moods else base[0], punchline, timings.duration + 1))
+            shows.append((base[0], a, b))
+    react = moods[seed % len(moods)] if moods else base[0]
+    if loop_at is None:
+        shows.append((react, punchline, timings.duration + 1))
+    else:
+        shows.append((react, punchline, loop_at))
+        cut = loop_cut[0] if loop_cut[0] is not None and loop_at < loop_cut[0] < timings.duration else loop_at
+        if talking and cut - loop_at >= 1.0:
+            talk(loop_at, cut)
+        else:
+            cut = loop_at
+        shows.append((base[0], cut, timings.duration + 1))
     plan: dict[Path, list[tuple[float, float]]] = {}
     for pic, a, b in shows:
         times = plan.setdefault(pic, [])
@@ -753,14 +927,15 @@ CUT_INS, CUT_IN_GAP, CUT_IN_SECONDS = 2, 6.0, 0.7
 
 
 def cutaways(script: Script, timings: Timings, punchline: float, total: int,
-             shots: list[compose.Shot] = ()) -> list[compose.Cutaway]:
+             shots: list[compose.Shot] = (), loop_at: float | None = None) -> list[compose.Cutaway]:
     """When the camera cuts in on the Professor (D162): for the last 0.7 s of a sentence tagged with a reaction
     pose (at most CUT_INS, CUT_IN_GAP apart, not in the hook), and on the punchline's last word to the end, the
     deadpan beat, in closer. A hard cut in and out, as a comedy edit does. Never mid-video over a drawing (D190):
     its last part lands at the end of its sentence, and a cut-in there pushed it off the screen before it could
-    be read."""
+    be read. Nor within half of PUNCH_GAP of a punch-in (D197): four zooms in 4.6 s. On a loop (`loop_at`) the last
+    cut-in ends as the last line starts, which runs back into the opening."""
     drawn = [(s.start, s.start + s.frames) for s in shots if s.kind == "drawing"]
-    face_x, face_y = compose.W * 0.44, compose.H * 0.6
+    zooms = [t for ts in punches.values() for t in ts]
     out: list[compose.Cutaway] = []
     last = -CUT_IN_GAP
     if len(timings.beats) == len(script.beats):
@@ -768,13 +943,60 @@ def cutaways(script: Script, timings: Timings, punchline: float, total: int,
             a, b = timings.beats[i]
             over_drawing = any(s < round(b * FPS) and round((b - CUT_IN_SECONDS) * FPS) < e for s, e in drawn)
             if beat.pose in CUT_IN_POSES and a >= CHARACTER_START and b - CUT_IN_SECONDS - last >= CUT_IN_GAP \
-                    and len(out) < CUT_INS and b - a > 1.5 and not over_drawing:
-                out.append(compose.Cutaway(a=round((b - CUT_IN_SECONDS) * FPS), b=round(b * FPS), z=1.28,
-                                           x=face_x, y=face_y))
+                    and len(out) < CUT_INS and b - a > 1.5 and not over_drawing \
+                    and not any(abs(t - (b - CUT_IN_SECONDS)) < PUNCH_GAP / 2 for t in zooms):
+                out.append(compose.Cutaway(a=round((b - CUT_IN_SECONDS) * FPS), b=round(b * FPS), z=1.28))
                 last = b
-    final = [w for w in timings.words if w.start >= punchline]
+    final = [w for w in timings.words if punchline <= w.start < (loop_at if loop_at is not None else timings.duration)]
     if final:
-        out.append(compose.Cutaway(a=round(final[-1].start * FPS), b=total, z=1.5, x=compose.W * 0.5, y=compose.H * 0.56))
+        a, b = round(final[-1].start * FPS), round(loop_at * FPS) if loop_at is not None else total
+        if b - a >= round(0.4 * FPS):
+            out.append(compose.Cutaway(a=a, b=b, z=1.5))
+    return out
+
+
+#: The sound a cut-in on the Professor gets, by the pose he pulls (D197).
+CUT_IN_SOUND = {"shocked": "scratch", "nervous": "scratch", "confused": "boing", "smug": "boing", "laugh": "boing",
+                "facepalm": "bonk", "deadpan": "bonk", "grudge": "bonk"}
+NUMBER_WORDS = {"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+                "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+                "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred", "thousand", "million",
+                "billion", "half", "double", "twice"}
+
+
+def sound_events(shots: list[compose.Shot], script: Script, timings: Timings, cuts: list[compose.Cutaway],
+                 punchline: float, before: float, hook: bool) -> list[tuple[float, str]]:
+    """Every moment of the edit that could take a sound effect (D197), for sound.pick to choose from: the hook's pop,
+    a whoosh on a whip or zoom, a swish where the picture changes on a plain cut, chalk as each part of a drawing comes,
+    a thump on a punch-in that landed, a cut-in's comic sound, a ding on a highlighted number with no punch-in, a riser
+    into the pause before the punchline (`before`), a swell into the loop."""
+    out = [(0.03, "pop")] if hook else []
+    owners = part_owner if len(part_owner) == len(shots) else list(range(len(shots)))
+    for k, s in enumerate(shots):
+        at = s.start / FPS
+        if k and s.enter in ("whip", "zoom"):
+            out.append((at, "whoosh" if s.enter == "whip" else "zoom"))
+        elif k and owners[k] != owners[k - 1]:
+            out.append((at, "swish"))
+        out += [(at + c, "chalk") for c in chalk_at.get(s.path, []) if c < s.frames / FPS]
+    for t in (t for ts in punches.values() for t in ts):
+        if any(s.kind == "footage" and s.start <= t * FPS < s.start + s.frames for s in shots):
+            out.append((t, "thump"))
+    if len(timings.beats) == len(script.beats):
+        for c in cuts:
+            at = c.a / FPS
+            i = next((i for i, (a, b) in enumerate(timings.beats) if a <= at < b), None)
+            if at < punchline and i is not None and (kind := CUT_IN_SOUND.get(script.beats[i].pose)):
+                out.append((at, kind))
+        for i, beat in enumerate(script.beats):
+            key = beat.emphasis.strip(".,!?;:'\"").lower()
+            if key and i not in punches and (any(ch.isdigit() for ch in key) or key.split("-")[0] in NUMBER_WORDS):
+                out += [(w.start, "ding") for w in _words_of(timings, script, i)
+                        if w.text.strip(".,!?;:'\"").lower() == key][:1]
+    if before >= 4.0:
+        out.append((before, "riser"))
+    if timings.words and timings.duration - timings.words[-1].end >= 0.5:
+        out.append((timings.duration, "swell"))
     return out
 
 
@@ -786,7 +1008,10 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
 
     rc = config.render
     seed = int(hashlib.sha1(script.title.encode()).hexdigest()[:8], 16)
-    punchline = timings.beats[-1][0] if timings.beats else timings.duration
+    loop = loops(script, timings)
+    # A loop's punchline is the line before its last, which runs back into the opening (D196, D197).
+    loop_at = timings.beats[-1][0] if loop else None
+    punchline = timings.beats[-2 if loop else -1][0] if timings.beats else timings.duration
     total = max(1, round(timings.duration * FPS))
     shots, at = [], 0
     for path in parts:
@@ -797,11 +1022,15 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     ways_in(shots, script, part_owner)
     palette = diagrams.PALETTES.get(channel.board) or diagrams.PALETTES["slate"]
     edit = compose.Edit(shots=shots, total=total, board=compose.base_board(palette["board"], palette["chalk"]))
-    plan = character_plan(script, timings, channel, punchline, seed)
+    plan = character_plan(script, timings, channel, punchline, seed, loop_at=loop_at)
     if plan:
         shows = sorted(((pic, a, b) for pic, times in plan for a, b in times), key=lambda x: x[1])
-        edit.presenter = compose.Presenter(shows, total)
-        edit.cutaways = cutaways(script, timings, punchline, total, shots) if script.cut_ins else []
+        edit.presenter = compose.Presenter(shows, total, talk=talking_frames(voice, timings, total), seed=seed,
+                                           enter=not loop)
+        edit.cutaways = cutaways(script, timings, punchline, total, shots, loop_at=loop_at) if script.cut_ins else []
+        for s in shots:   # straight out of a cut-in: a plain cut, not a whip on top of it
+            if any(0 <= s.start - c.b <= 2 for c in edit.cutaways):
+                s.enter = "cut"
     lit = tuple(bytes.fromhex(script.caption_colour[1:])) if len(script.caption_colour) == 7 else palette["yellow"]
     edit.captions = compose.Captions(caption_words(script, timings), accent=lit, size=script.caption_size,
                                      shift=script.caption_shift) if script.captions else None
@@ -809,7 +1038,9 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     if hook:
         edit.hook = compose.hook_image(hook)
         edit.hook_frames = round(HOOK_SECONDS * FPS)
-    if channel.signoff:
+        if loop and timings.words:   # back on screen for the last second, so the last frame is the first (D197)
+            edit.hook_again = min(total - 5, max(total - FPS, round(timings.words[-1].start * FPS)))
+    if channel.signoff and not loop:   # a loop has no end card
         edit.signoff, edit.signoff_from = channel.signoff, max(0, total - round(1.4 * FPS))
     mark = Path(channel.watermark) if channel.watermark else None
     if mark and mark.is_file():
@@ -821,18 +1052,27 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     inputs = ["-i", str(voice)]
     graph = (f"[1:a]loudnorm=I={rc.loudness_lufs}:TP={rc.true_peak_dbtp}:LRA=11,"
              f"aresample={rc.audio_rate},apad[vo]")
-    # Music and chalk taps (D156): one track under the voice, levelled for a voice at -14 LUFS, then a limiter.
+    # Music and sound effects (D156, D197): one track under the voice, levelled for a voice at -14 LUFS, then a
+    # limiter, with its auto level off: on, it lifted the whole mix about 1 dB and pushed the peaks to 0 dBFS.
     music = channel.music if script.music is None else script.music
-    taps = channel.sfx if script.sfx is None else script.sfx
-    if music or taps:
-        quiet = max(0.0, max((w.end for w in timings.words if w.end <= punchline), default=punchline))
-        track = sound.bed(timings.duration, words=[(w.start, w.end) for w in timings.words], quiet_from=quiet,
-                          tap_times=sound.taps([t for t, kind in picture_times if kind == "drawing"]) if taps else [],
-                          logo_at=punchline if taps else None, with_music=music, seed=seed,
+    sfx = channel.sfx if script.sfx is None else script.sfx
+    if music or sfx:
+        before = max(0.0, max((w.end for w in timings.words if w.end <= punchline), default=punchline))
+        said_to = loop_at if loop_at is not None else timings.words[-1].end if timings.words else timings.duration
+        # Nothing over the punchline but the logo: the silence is the joke.
+        effects = sound.pick(sound_events(shots, script, timings, edit.cutaways, punchline, before, bool(hook)),
+                             timings.duration, quiet=(before, said_to)) if sfx else []
+        if effects:   # what was placed, for the page (D120)
+            counts = Counter(kind for _, kind in effects)
+            picture_notes.append("Sound effects: " + ", ".join(f"{n} {kind}" for kind, n in counts.most_common()) + ".")
+        # A loop's music plays on to the end, into its start (D197).
+        track = sound.bed(timings.duration, words=[(w.start, w.end) for w in timings.words],
+                          quiet_from=timings.duration if loop else before, effects=effects,
+                          logo_at=punchline if sfx and not loop else None, with_music=music, seed=seed,
                           track=_music_track(channel, seed) if music else None)
         inputs += ["-i", str(sound.write(track, out.with_name("bed.wav")))]
         graph += (f";[2:a]aresample={rc.audio_rate}[bd];[vo][bd]amix=inputs=2:normalize=0:duration=first,"
-                  f"alimiter=limit=0.89[a]")
+                  f"alimiter=limit=0.89:level=0[a]")
     else:
         graph += ";[vo]anull[a]"
     encode = ["-c:a", "aac", "-b:a", rc.audio_bitrate, "-ar", str(rc.audio_rate), "-ac", "2", *reencode_args(config)]
@@ -925,6 +1165,8 @@ def _build(video_id: int, progress) -> int:
     script, timings = Script.model_validate(row["script"]), Timings.model_validate(row["timings"])
     script = retry_opening_footage(script)
     timings = nudged(script, timings)
+    if loops(script, timings):
+        timings = loop_timing(timings)
     channel, config = channels.load(), Config.load()
     diagrams.use_palette(channel.board)   # the channel's board colours, for the sketches' review too (D156)
     global _palette
@@ -935,6 +1177,7 @@ def _build(video_id: int, progress) -> int:
     picture_notes.clear()
     used_shots.clear()
     shot_info.clear()
+    chalk_at.clear()
     global shot_cache
     shot_cache = folder(video_id) / "shots"
     own = userclips.files(video_id)
@@ -951,6 +1194,9 @@ def _build(video_id: int, progress) -> int:
         script = drawn
         store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     notes += failed
+    if not stock._pexels_key():   # D196: it was missing for days, and footage came from one library
+        notes.append("Pexels isn't searched (no PEXELS_API_KEY in .env): footage comes from Pixabay only. "
+                     "A free key from pexels.com/api adds its library.")
     lap("sketches")
     work = folder(video_id) / "work"
     if work.exists():
@@ -968,8 +1214,12 @@ def _build(video_id: int, progress) -> int:
         progress("Choosing the cover", 90)
     # The moment the user chose for the cover, else the best still (D171).
     cover_at = script.cover if script.cover is not None and 0 <= script.cover < timings.duration else pick(out, timings.duration)
-    if cover_at is not None:
-        put_first(out, cover_at, hook=script.title, config=config, work_dir=work, fps=FPS)
+    # A loop with its hook on screen opens on it already: two cover frames put first flashed on every pass, so
+    # only the user's own cover moment is (D197). A cover from the hook's own seconds already shows the hook.
+    looped = loops(script, timings) and config.render.show_hook_text and script.cover is None
+    if cover_at is not None and not looped:
+        put_first(out, cover_at, hook="" if cover_at < HOOK_SECONDS and config.render.show_hook_text else script.title,
+                  config=config, work_dir=work, fps=FPS)
     lap("cover")
     _campaign(channel)
     rel = f"{channel.campaign}/{video_id:03d}_{slugify(script.title, max_length=50)}.mp4"

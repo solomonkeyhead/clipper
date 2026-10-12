@@ -940,9 +940,11 @@ def _box(m, dy: float) -> tuple[float, float, float, float]:
 
 def focus_plan(v: Visual, words: list[tuple[float, str]], seconds: float) -> list:
     """Where the camera moves in while the voice explains a sketch (D162): on a part said a while after the
-    drawing starts, with the labels said with it, for about 1.6 s, then back out to the whole. At most one
-    such move per 4 seconds of drawing (3 at most), never in the last second, never on a part that is most of
-    the drawing anyway."""
+    drawing starts, with the labels said with it, then back out to the whole. At most one such move per 4
+    seconds of drawing (3 at most), never in the last second, never on a part that is most of the drawing anyway.
+    D197: it starts once the part is drawn (it started as the part began, so the camera moved in on nothing), is
+    held until the next part comes (drawn off screen otherwise), and keeps the title and the words already
+    written in view (the title was cropped off)."""
     from .compose import Focus
 
     if v.template != "sketch" or not v.sketch or len(v.sketch.marks) < 4 or seconds < 3.5:
@@ -952,35 +954,50 @@ def focus_plan(v: Visual, words: list[tuple[float, str]], seconds: float) -> lis
     whole = [_box(m, dy) for m in marks]
     area = (max(b[2] for b in whole) - min(b[0] for b in whole)) * (max(b[3] for b in whole) - min(b[1] for b in whole))
     out: list = []
+
+    def placed(b: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+        """Where a box is once the drawing is sized and moved by hand (D171)."""
+        cx, cy, s, dy_ = W / 2, (TOP + BOTTOM) / 2, v.scale, v.shift * H
+        return cx + s * (b[0] - cx), cy + s * (b[1] - cy) + dy_, cx + s * (b[2] - cx), cy + s * (b[3] - cy) + dy_
+
     for i, m in enumerate(marks):
         at = said[i] if i < len(said) else None
         if m.kind == "text" or at is None or at < 1.2 or at > seconds - 1.8:
             continue
         if out and at - out[-1].a < 2.4:
             continue
+        drawn = at + 0.3    # stage(): a part said at `at` is fully drawn 0.3 s later
+        nxt = min((c for c in said if c is not None and c > at), default=None)
+        end = min(nxt - 0.15 if nxt is not None else seconds, drawn + 2.0, seconds - 1.0)
+        if end - drawn < 0.8:
+            continue
         near = [_box(marks[j], dy) for j in range(len(marks))
                 if j == i or (marks[j].kind == "text" and said[j] is not None and abs(said[j] - at) < 0.9)]
-        x0, y0 = min(b[0] for b in near) - 70, min(b[1] for b in near) - 70
-        x1, y1 = max(b[2] for b in near) + 70, max(b[3] for b in near) + 70
-        # Where the part is once the drawing is sized and moved by hand (D171).
-        cx, cy, s, dy_ = W / 2, (TOP + BOTTOM) / 2, v.scale, v.shift * H
-        x0, x1 = cx + s * (x0 - cx), cx + s * (x1 - cx)
-        y0, y1 = cy + s * (y0 - cy) + dy_, cy + s * (y1 - cy) + dy_
+        x0, y0, x1, y1 = placed((min(b[0] for b in near) - 70, min(b[1] for b in near) - 70,
+                                 max(b[2] for b in near) + 70, max(b[3] for b in near) + 70))
         if (x1 - x0) * (y1 - y0) > 0.45 * area:
             continue
-        out.append(Focus(a=at - 0.15, b=min(at + 1.6, seconds - 1.0), box=(x0, y0, x1, y1)))
+        keep = [placed(_box(marks[j], dy)) for j in range(len(marks))
+                if marks[j].kind == "text" and said[j] is not None and said[j] <= at + 0.3]
+        if v.title:
+            span = min(760, len(v.title) * 48)   # about the title's width at 96 px (title())
+            keep.append((W / 2 - span / 2, TOP, W / 2 + span / 2, TOP + 115))
+        box = (min(b[0] for b in keep), min(b[1] for b in keep), max(b[2] for b in keep), max(b[3] for b in keep)) \
+            if keep else None
+        out.append(Focus(a=drawn, b=end, box=(x0, y0, x1, y1), keep=box))
         if len(out) >= min(3, max(1, int(seconds // 4))):
             break
     return out
 
 
 def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] | None = None,
-           frames: int | None = None, start: int = 0, stop: int | None = None) -> Path:
+           frames: int | None = None, start: int = 0, stop: int | None = None, focus: bool = True) -> Path:
     """The diagram as a silent clip of the picture panel, `frames` long (else `seconds`); with the shot's
     spoken `words` ((start, text), seconds into the shot), each label arrives as it's said, and the camera
-    moves in on the parts as they're explained (D162)."""
+    moves in on the parts as they're explained (D162), unless the video's zooms are off (`focus`, D197)."""
     from .compose import drawing_panel
 
     CUES.set(tuple(cues(v, words or [])))
     n = frames or max(1, round(seconds * FPS))
-    return drawing_panel(lambda t, d: frame(v, t, d), out, n, focus_plan(v, words or [], n / FPS), start=start, stop=stop)
+    plan = focus_plan(v, words or [], n / FPS) if focus else []
+    return drawing_panel(lambda t, d: frame(v, t, d), out, n, plan, start=start, stop=stop)

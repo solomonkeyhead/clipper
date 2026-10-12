@@ -2,9 +2,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
-  ExternalLink, Trash2, Undo2, Upload, Wand2, X,
+  ExternalLink, Redo2, Trash2, Undo2, Upload, Wand2, X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
 import {
   createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual,
@@ -24,8 +24,28 @@ function useFactWord() {
   return data?.channel.check_name === "Physics check" ? "physics" : "facts";
 }
 
+/** A toast when a script is written or a Short is built (D196): both run for minutes in the background, and the page
+ *  said nothing if you were looking elsewhere on it. */
+function useDoneToasts(videos: CreateVideo[] | undefined) {
+  const seen = useRef<Map<number, string> | null>(null);
+  useEffect(() => {
+    if (!videos) return;
+    const before = seen.current;
+    seen.current = new Map(videos.map((v) => [v.id, v.status]));
+    if (!before) return;   // the first load: nothing has finished yet
+    for (const v of videos) {
+      const was = before.get(v.id);
+      const title = v.script.title || "Your Short";
+      if (was === "writing" && v.status === "draft") toast.success("Script written", { description: title });
+      if ((was === "building" || was === "voiced") && v.status === "built") toast.success("Short built", { description: title });
+      if (was === "building" && v.status === "failed") toast.error("The build stopped", { description: v.error || title });
+    }
+  }, [videos]);
+}
+
 export function CreatePage() {
   const { data, isLoading } = useCreate();
+  useDoneToasts(data?.videos);
   if (isLoading || !data) return <CreateSkeleton />;
   // The first time: make a channel before anything else (D146).
   if (data.channels.length === 0) {
@@ -342,10 +362,12 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
       setBusy(null);
     }
   };
-  /** Gone from the list as it's clicked (D192); back if the server says no. */
-  const skip = (id: number) => {
-    qc.setQueryData<CreateView>(["create"], (d) => d && { ...d, topics: d.topics.filter((x) => x.id !== id) });
-    return createApi.skip(id).finally(refresh);
+  /** Gone from the list as it's clicked (D192); back if the server says no, or on Undo (D196). */
+  const skip = (t: CreateTopic) => {
+    qc.setQueryData<CreateView>(["create"], (d) => d && { ...d, topics: d.topics.filter((x) => x.id !== t.id) });
+    toast("Idea skipped", { description: t.question, duration: 5000,
+                            action: { label: "Undo", onClick: () => void createApi.skip(t.id, true).finally(refresh) } });
+    return createApi.skip(t.id).finally(refresh);
   };
   const write = async (t: CreateTopic) => {
     setBusy(t.id);
@@ -408,12 +430,12 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => write(t)}>
+              <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => write(t)} aria-label={`Write it: ${t.question}`}>
                 {busy === t.id ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} {busy === t.id ? "Writing…" : "Write it"}
               </Button>
               <Tip label="Not this one">
-                <Button size="icon" variant="ghost" className="size-7 opacity-60 group-hover:opacity-100 focus-visible:opacity-100" aria-label="Skip this idea"
-                        onClick={() => skip(t.id)}>
+                <Button size="icon" variant="ghost" className="size-7 opacity-60 group-hover:opacity-100 focus-visible:opacity-100" aria-label={`Skip: ${t.question}`}
+                        onClick={() => skip(t)}>
                   <X className="size-3.5" />
                 </Button>
               </Tip>
@@ -579,14 +601,24 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
       setBusy(null);
     }
   };
-  const remove = run("delete", () => createApi.remove(video.id), "Removed from Create");
-  /** The script before the last take, edit or picture plan (D193). */
-  const undo = video.undo && (
-    <Tip label={`Back to the script as it was before ${video.undo === "your edit" ? "your last edit" : `the last ${video.undo}`}. Press again to go further back.`}>
-      <Button variant="ghost" disabled={busy !== null} onClick={run("undo", () => createApi.undo(video.id), `Undone: ${video.undo}`)}>
-        <Undo2 className="size-4" /> Undo
-      </Button>
-    </Tip>
+  /** The script before the last take, edit or picture plan (D193), and back again (D196): an undone take isn't lost. */
+  const undo = (video.undo || video.redo) && (
+    <span className="flex items-center gap-1">
+      {video.undo && (
+        <Tip label={`Back to the script as it was before ${video.undo === "your edit" ? "your last edit" : `the last ${video.undo}`}. Press again to go further back.`}>
+          <Button variant="ghost" disabled={busy !== null} onClick={run("undo", () => createApi.undo(video.id), `Undone: ${video.undo}`)}>
+            <Undo2 className="size-4" /> Undo
+          </Button>
+        </Tip>
+      )}
+      {video.redo && (
+        <Tip label="Forward again, to the script you undid">
+          <Button variant="ghost" disabled={busy !== null} onClick={run("forward", () => createApi.forward(video.id), "Redone")}>
+            <Redo2 className="size-4" /> Redo
+          </Button>
+        </Tip>
+      )}
+    </span>
   );
 
   if (video.status === "writing") {   // written in the background, step by step (D188)
@@ -618,7 +650,7 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
   }
   if (video.status === "built" || (video.status === "failed" && video.clip_id)) {
     return <Built video={video} wps={wps} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")}
-                  onRebuild={run("rebuild", () => createApi.build(video.id), "Rebuilding: only the parts that changed are made again")} onRemove={remove} />;
+                  onRebuild={run("rebuild", () => createApi.build(video.id), "Rebuilding: only the parts that changed are made again")} />;
   }
 
   return (
@@ -666,10 +698,8 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
               {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : `Check ${fact}`}
             </Button>
           </Tip>
-          <span className="ml-auto flex items-center gap-2">
-            {undo}
-            <Button variant="ghost" disabled={busy !== null} onClick={remove}><Trash2 className="size-4" /> Delete</Button>
-          </span>
+          {/* Deleting is the card's own trash button, which asks first (D196): this one didn't. */}
+          <span className="ml-auto flex items-center gap-2">{undo}</span>
         </div>
       ) : (
         <>
@@ -688,14 +718,27 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
   );
 }
 
+/** Lines about how a script was made, not about the script: folded under the verdict (D196). */
+const MADE = /^(written by|checked by|drawn by|\(edited by hand|restored from|.*didn't answer|.*out of its quota)/i;
+
+/** The checks' verdict in one line, coloured by what it says, with the findings and how it was made folded under
+ *  it (D196): a fixed script was a wall of orange, a restored one orange for no reason. */
 function CheckNote({ text }: { text: string }) {
-  if (!text) return null;
-  const clean = /check: no problems/.test(text.split("\n")[0]);
+  if (!text.trim()) return null;
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const made = lines.filter((l) => MADE.test(l));
+  const rest = lines.filter((l) => !MADE.test(l));
+  const open = rest.some((l) => /still unsure|^- /.test(l)) && !rest.some((l) => /fixed/i.test(l));
+  const fixed = rest.some((l) => /fixed/i.test(l));
+  const verdict = open ? "Worth a look: the checks found something" : fixed ? "Checked: problems found and fixed in the rewrite"
+    : rest.some((l) => /no problems/i.test(l)) ? "Checked: no problems found" : rest[0] ?? "How it was made";
   return (
-    <div className={cn("rounded-md border p-3 text-xs whitespace-pre-line",
-      clean ? "border-success/40 text-success" : "border-warning/40 text-warning")}>
-      {text}
-    </div>
+    <details className={cn("rounded-md border px-3 py-2 text-xs",
+      open ? "border-warning/40 text-warning" : "border-success/40 text-success")}>
+      <summary className="cursor-pointer font-medium">{verdict}</summary>
+      {rest.length > 0 && <p className="mt-2 whitespace-pre-line text-fg">{rest.join("\n")}</p>}
+      {made.length > 0 && <p className="mt-2 whitespace-pre-line text-subtle">{made.join("\n")}</p>}
+    </details>
   );
 }
 
@@ -987,6 +1030,16 @@ function Recorder({ text, busy, onUse }: { text: string; busy: boolean; onUse: (
   const [error, setError] = useState("");
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const [secs, setSecs] = useState(0);
+  // One link to the take, freed when it's replaced (D196): a new one each render leaked the recording.
+  const takeUrl = useMemo(() => (take ? URL.createObjectURL(take) : ""), [take]);
+  useEffect(() => () => { if (takeUrl) URL.revokeObjectURL(takeUrl); }, [takeUrl]);
+  useEffect(() => {
+    if (!recording) return;
+    setSecs(0);
+    const t = setInterval(() => setSecs((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [recording]);
   const start = async () => {
     setError("");
     try {
@@ -1010,8 +1063,8 @@ function Recorder({ text, busy, onUse }: { text: string; busy: boolean; onUse: (
       <div className="flex flex-wrap items-center gap-2">
         {!recording
           ? <Button variant="primary" onClick={() => start()}><Mic className="size-4" /> {take ? "Record again" : "Start recording"}</Button>
-          : <Button variant="danger" onClick={stop}><span className="size-2.5 animate-pulse rounded-full bg-danger" /> Stop</Button>}
-        {take && !recording && <audio controls src={URL.createObjectURL(take)} className="h-9" />}
+          : <Button variant="danger" onClick={stop}><span className="size-2.5 animate-pulse rounded-full bg-danger" /> Stop · {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}</Button>}
+        {take && !recording && <audio controls src={takeUrl} className="h-9" />}
         {take && !recording && (
           <Button variant="primary" disabled={busy} onClick={() => onUse(new File([take], "recording.webm", { type: take.type }))}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : null} Use this recording
@@ -1051,7 +1104,7 @@ function Fold({ id, title, startOpen = false, children }: { id: string; title: s
   );
 }
 
-/** Music and chalk sounds for this one video (D156), so two videos can differ for an experiment; used on Build again. */
+/** Music and sound effects for this one video (D156, D197), so two videos can differ for an experiment; used on Build again. */
 function SoundChoice({ video }: { video: CreateVideo }) {
   const qc = useQueryClient();
   const { data: create } = useCreate();
@@ -1070,9 +1123,9 @@ function SoundChoice({ video }: { video: CreateVideo }) {
       </label>
     );
   };
-  const style = (key: "zooms" | "cut_ins", label: string) => (
+  const style = (key: "zooms" | "cut_ins" | "loop", label: string, usual = true) => (
     <label className="flex items-center gap-1.5">
-      <input type="checkbox" className="accent-[var(--color-accent)]" checked={video.script[key] ?? true}
+      <input type="checkbox" className="accent-[var(--color-accent)]" checked={video.script[key] ?? usual}
              disabled={video.status === "building"}
              onChange={(e) => void createApi.editStyle(video.id, { [key]: e.target.checked })
                .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))} />
@@ -1081,8 +1134,11 @@ function SoundChoice({ video }: { video: CreateVideo }) {
   );
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-      {pick("music", "Music")}{pick("sfx", "Chalk sounds")}
-      {style("zooms", "Zoom-ins")}{style("cut_ins", "Cut-ins on the Professor")}
+      {pick("music", "Music")}{pick("sfx", "Sound effects")}
+      {style("zooms", "Zoom-ins")}{style("cut_ins", "Cut-ins on the presenter")}
+      <Tip label="The last second and a half plays the opening clip up to its first frame, the hook comes back and the presenter ends as he starts, so the video runs straight into itself">
+        <span>{style("loop", "Seamless loop", video.script.ending === "loop")}</span>
+      </Tip>
       <label className="flex items-center gap-1.5">
         Transitions
         <select value={video.script.transitions ?? "auto"} aria-label="Transitions" disabled={video.status === "building"}
@@ -1098,8 +1154,8 @@ function SoundChoice({ video }: { video: CreateVideo }) {
   );
 }
 
-function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
-  video: CreateVideo; wps: number; busy: string | null; onPictures: () => void; onRebuild: () => void; onRemove: () => void;
+function Built({ video, wps, busy, onPictures, onRebuild }: {
+  video: CreateVideo; wps: number; busy: string | null; onPictures: () => void; onRebuild: () => void;
 }) {
   const { data: clips = [] } = useClips();
   const clip = clips.find((c) => c.id === video.clip_id);
@@ -1116,7 +1172,8 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
         {clip?.file_exists ? (
           <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 self-start rounded-xl bg-black" />
         ) : <div className="grid aspect-[9/16] w-56 place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {/* At least 16rem: narrower, it drops under the player instead of one word a line (D196). */}
+        <div className="flex min-w-64 flex-1 flex-col gap-2">
           {video.error && (
             <div className="flex flex-wrap items-center gap-3 rounded-md border border-danger/40 p-3 text-sm text-danger">
               <AlertTriangle className="size-4 shrink-0" />
@@ -1153,7 +1210,6 @@ function Built({ video, wps, busy, onPictures, onRebuild, onRemove }: {
                 {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
               </Button>
             </Tip>
-            <Button variant="ghost" onClick={onRemove}><Trash2 className="size-4" /> Remove from Create</Button>
           </div>
           <SoundChoice video={video} />
           <CoverChoice video={video} player={player} />

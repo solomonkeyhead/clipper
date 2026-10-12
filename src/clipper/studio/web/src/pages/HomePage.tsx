@@ -34,7 +34,7 @@ function Earnings({ est, paid, views, posts, trend, locked, lockedPosts, window 
         <Tip label="The payouts you've recorded on each campaign's page. Only this is money received.">
           <div className="flex flex-col gap-1 border-l border-dashed border-line-strong pl-4">
             <span className="text-xs font-medium text-muted">Actually paid (all time)</span>
-            <span className="num text-[clamp(2.2rem,4vw,3.4rem)] leading-none text-money">{formatMoney(paid ?? 0)}</span>
+            <span className="num text-[clamp(2.2rem,4vw,3.4rem)] leading-none text-money">{paid == null ? "–" : formatMoney(paid)}</span>
           </div>
         </Tip>
       </div>

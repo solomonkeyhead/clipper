@@ -89,10 +89,12 @@ export function ClipsPage() {
   const { data: clips, isLoading } = useClips();
   const { data: campaigns = [] } = useCampaigns();
   const active = useActive();
-  const status = search.status ?? "ready";
   const campaign = search.campaign ?? "active";
   const mine = (clips ?? []).filter((c) =>
     campaign === "active" ? active.has(c.campaign) : campaign === "all" || c.campaign === campaign);
+  // Ready when it has anything (D78), else the first tab that does (D196): it opened on an empty Ready with 45 clips
+  // in the other tabs.
+  const status = search.status ?? (mine.some((c) => inFilter(c, "ready")) ? "ready" : firstFilter(mine));
   // From Learning's "Rate them" (D154): every clip with no thumbs up or down yet, whatever its status.
   const list = search.rate ? (clips ?? []).filter((c) => c.rating == null) : mine.filter((c) => inFilter(c, status));
 

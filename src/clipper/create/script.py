@@ -119,6 +119,8 @@ class Script(BaseModel):
     zooms: bool = True
     cut_ins: bool = True
     transitions: str = "auto"
+    # The end runs straight into the start (D197): None = when the script ends on the loop.
+    loop: bool | None = None
     # Captions on or off, and the cover's moment in seconds (None: the build picks the best still) (D171).
     captions: bool = True
     cover: float | None = None
@@ -240,11 +242,17 @@ lit in the captions and the camera punches in on it, so pick the word that carri
 #: The writer's closing instructions (D164): the words only; the director plans the pictures after.
 WRITER_TAIL = """Every sentence gets its own picture under it (real footage, or a chalk drawing that shows
 the mechanism), so write concrete sentences a picture can show, and let the explanation go one
-step a sentence. The lines quoted in the rules show the kind of line; never use them.
+step a sentence. Give the viewer a reason to stay within the first three seconds: by the second line the
+obvious answer is shown wrong, or a number or a contradiction makes the question stranger; explain after that.
+Write for the ear, as every line is read aloud: numbers as they are said, rounded, in one unit (never two units,
+never digits with symbols), no abbreviations, no word a narrator would trip on; a technical term only when it is
+the point, said once and explained in plain words. Name a thing before you point back to it.
+Lines quoted in the rules, the shape, the joke shapes, the persona and the example scripts show the kind of line
+only: never reuse three or more words in a row from one, nor its sentence frame with new words in it.
 
 Answer with: lines (the script, one spoken sentence a line, two only if both are very short, in
-order), title (the question, at most 60 characters), hook (the words shown on screen for the first
-second and a half: at most 6 words, the question's core, "Why elevators make you heavier"),
+order), title (the question, at most 60 characters), hook (the words on screen for the first second and a half, read before the question is heard: at most 6 words
+that carry the surprise or the stakes, not the question reworded, "Elevators really do make you heavier"),
 description (the script's idea in 3-5 short lines, in the same voice, ending on its punchline),
 hashtags (3: {hashtags})."""
 
@@ -254,7 +262,19 @@ and recorded; you plan what the viewer sees under each sentence, on a phone. The
 half the explanation: with the sound off, a viewer should still follow it. One clear subject per
 picture, big in the frame. Keep it moving: a real moment, then a drawing that shows how, then a
 close-up; never the same kind of picture for long. Plan the drawings where the words explain HOW,
-and footage where they name a thing or a moment the viewer knows."""
+and footage where they name a thing or a moment the viewer knows. Every beat gets queries and a card, a drawing
+too: when a drawing can't be used there, footage is searched with them. A search names what moves, written like
+a clip's title, a subject doing the action ("water boiling in pot", "man blowing on hands"): a search for a thing
+alone finds it sitting still."""
+#: For a channel that draws (D196): video 25 redrew the same lips on four sentences in a row, each from a blank board.
+ONE_DRAWING = """When two or more sentences in a row explain one mechanism, plan ONE drawing on the first, its idea
+covering all of them, and set hold = true on the rest. Never plan a new drawing that redraws the objects of the
+drawing just before it."""
+#: When the script loops (D196), the director plans the seam away: the last sentence plays over the opening shot.
+LOOP_PICTURE = """This video loops: its last sentence runs back into its first. Give the last beat kind "stock" (never
+a drawing, never hold) and the first beat's queries, and choose the first beat's queries so one moving shot of the
+everyday moment the question is about fits both: the opening shot plays again under the last sentence, so the end
+cuts into the start without a seam."""
 #: For a channel that draws (D188): "Professor's Law No. 1: What cannot punch through simply goes" got footage
 #: searches; nothing scored, and four such lines were drawn one by one at the end of the build.
 UNFILMABLE = """A line with nothing in it a camera could film (a law or rule, a conclusion, a number on its own) gets a
@@ -347,14 +367,21 @@ def _director(channel: channels.Channel) -> str:
     """The director's brief (D164): what the pictures are for, then the channel's picture rules."""
     head = DIRECTOR.replace("{name}", channel.name).replace("{niche}", channel.niche)
     if channel.drawings:
-        head += " " + UNFILMABLE.replace("\n", " ") + " " + AGREE.replace("\n", " ")
+        head += " " + " ".join(t.replace("\n", " ") for t in (UNFILMABLE, AGREE, ONE_DRAWING))
     return f"{head}\n\n{channels.fill(visuals(channel), channel)}"
 
 
 #: How a script ends, one per script in turn (D155): a loop back to the start (rewatches), a "send this
 #: to" (shares) or a one-word question (comments). The same deadpan two-beat ending every time became a tic.
 ENDINGS = {
-    "loop": "a last line that leads straight back into the opening question, so the video loops",
+    # D196: "a last line that leads back" gave a finished last line about a new moment (soup, after lips), so the
+    # restart was heard and seen as a seam.
+    "loop": ("two short beats: the punchline, then one last line that is unfinished and runs straight into the "
+             "opening line, so when the video starts again the two are heard as one sentence. The last line comes "
+             "back to the opening moment (the thing the first picture shows, not a new example), sets the opening "
+             "line up without answering or repeating it, and stops on the word just before it: no full stop, no "
+             "question mark, no \"...\", so the voice doesn't sound finished. Read the last line, then the opening "
+             "line, aloud: if they don't make one natural sentence, rewrite the last line"),
     # No example lines (D168): two scripts, on a spoon in water and on ears on a plane, both ended "Metal or wood:
     # which wins?", the example given here.
     "send": 'a dry "send this to..." line naming, in this video\'s own terms, the person who needs it',
@@ -400,14 +427,15 @@ def next_bit(channel: channels.Channel) -> tuple[str, str]:
 
 
 def recent_endings(limit: int = 10) -> list[str]:
-    """The last lines of the channel's latest scripts, so no joke's shape comes round too soon (D155)."""
+    """The last lines of the channel's latest scripts, so no joke's shape comes round too soon (D155): the last two,
+    as the punchline is the line before a loop's last line (D196)."""
     from . import store
 
     out = []
     for v in store.videos()[:limit]:
         beats = v["script"].get("beats") or []
         if beats:
-            out.append(beats[-1].get("text", ""))
+            out.append(" ".join(b.get("text", "") for b in beats[-2:]))
     return [e for e in out if e]
 
 
@@ -433,7 +461,8 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             + (f"Shape: {shape}\n" if shape else "")
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
-            + ("The channel's latest endings; reuse none of their jokes or their shape:\n"
+            + ("The channel's latest endings. Every video ends on the loop, so vary the rest: reuse none of their "
+               "words or jokes, and lead back into the opening a different way from each:\n"
                + "\n".join(f"- {e}" for e in endings) + "\n" if endings else "")
             + _previous_block(previous, steer)
             + ("\nYour last draft:\n" + "\n".join(b.text for b in draft.beats) + "\n" if feedback and draft else "")
@@ -597,16 +626,31 @@ def spans(script: Script) -> list[list[int]]:
     return groups
 
 
+def loops_back(script: Script) -> bool:
+    """Whether the video's end runs into its start (D197): the user's switch, else when it ends on the loop."""
+    return script.loop if script.loop is not None else script.ending == "loop"
+
+
 def tidy(script: Script) -> Script:
     """Rules the model can bend, put straight: known templates, no diagram first or three
-    in a row, an emphasis word that's really in its beat, at most 5 hashtags."""
+    in a row, an emphasis word that's really in its beat, at most 5 hashtags. A loop ends over the opening's
+    footage (D196)."""
     beats = []
     pictures: list[str] = []   # the kind of each picture so far: a held sentence adds none
     held = 0
     before = 0                 # words said before this sentence
+    last = len(script.beats) - 1
     for i, beat in enumerate(script.beats):
         before, said_before = before + len(beat.text.split()), before
         v = beat.visual
+        if (loops_back(script) and i == last >= 3 and not v.manual and not v.clip
+                and beats and beats[0].visual.kind == "stock"):
+            # The last line runs into the first, so it plays over the opening shot again (build._loop_back): a
+            # drawing or a new example there (soup after lips) was a seam the viewer saw on every loop.
+            first = beats[0].visual
+            v = v.model_copy(update={"kind": "stock", "template": "", "hold": False, "sketch": None,
+                                     "queries": first.queries, "query": first.query, "card": v.card or first.card})
+            beat = beat.model_copy(update={"visual": v})
         if v.hold:
             # Held on: only after a drawing, and not for ever (a picture held past ~15 s goes stale).
             if pictures and pictures[-1] == "diagram" and held < MAX_HOLD:
@@ -614,7 +658,7 @@ def tidy(script: Script) -> Script:
                 beats.append(beat.model_copy(update={"emphasis": _emphasis(beat)}))
                 continue
             v = v.model_copy(update={"hold": False})
-        held = 0
+        held, held_before = 0, held
         if v.manual and (v.kind == "stock" or v.template in (*TEMPLATES, "card")):
             # The user's own pick stands: no rule moves it (a chalk card first, say).
             if v.kind == "stock":
@@ -634,12 +678,28 @@ def tidy(script: Script) -> Script:
         if diagram and v.template == "number" and not any(c.isdigit() for c in v.title):
             diagram = False
         # No drawing in the first 4 seconds (D155): the viewer's own moment, moving, holds them first.
+        root = next((b for b in reversed(beats) if not b.visual.hold), None)
+        if (diagram and pictures[-2:] == ["diagram", "diagram"] and v.template == "sketch" and v.idea.strip()
+                and root and root.visual.template == "sketch" and not root.visual.sketch and not root.visual.manual
+                and held_before < MAX_HOLD):
+            # A third drawing in a row about the same thing (D196): it stays up and builds on the one before, the
+            # new part in its idea, instead of footage searched with the sentence's leftover words.
+            k = beats.index(root)
+            beats[k] = root.model_copy(update={"visual": root.visual.model_copy(update={
+                "idea": f'{root.visual.idea.strip()} Then, as the voice says "{beat.text}": {v.idea.strip()}'})})
+            held = held_before + 1
+            beats.append(beat.model_copy(update={"visual": v.model_copy(update={"hold": True}),
+                                                 "emphasis": _emphasis(beat)}))
+            continue
         if diagram and (i == 0 or said_before < FIRST_DIAGRAM_WORDS or pictures[-2:] == ["diagram", "diagram"]):
             diagram = False
         if not diagram:
-            queries = [q for q in [*v.queries, v.query] if q.strip()] or [_query_from(beat.text)]
+            # Only real searches (D196): the sentence's longest words ("breaths degrees thirty", "surrounding
+            # directly current") found a fireplace; with fewer than two, the build writes them for the sentence.
+            queries = [q for q in [*v.queries, v.query] if q.strip()]
             v = v.model_copy(update={"kind": "stock", "queries": list(dict.fromkeys(queries))[:3],
-                                     "query": queries[0], "card": v.card or beat.emphasis or _query_from(beat.text)})
+                                     "query": queries[0] if queries else "",
+                                     "card": v.card or beat.emphasis or _query_from(beat.text)})
         beats.append(beat.model_copy(update={"visual": v, "emphasis": _emphasis(beat)}))
         pictures.append(v.kind)
     tags = [("#" + t.lstrip("#")).replace(" ", "") for t in script.hashtags if t.strip("# ")][:5]
@@ -688,14 +748,20 @@ mechanism. Return ok=true with no problems if it is correct. Otherwise list each
 
 CRITIC = """You are a short-form video editor reviewing a script for a {subject} Shorts channel before
 it is recorded. Judge only these, each pass or fail:
-1. Hook: the first line is about a concrete moment the viewer knows, short enough to read in two seconds
-   (when the channel opens with a question, it stays a question).
+1. Hook: the first line is about a concrete moment the viewer knows, in words they would use, short enough to read
+   in two seconds (when the channel opens with a question, it stays a question). By the second line the viewer has
+   a reason to stay: the obvious answer shown wrong, or a number or contradiction that makes the question stranger.
 2. First cause early: the real reason starts within about 20 words of the opening line.
-3. Ear: every sentence says one thing and is easy to say and hear aloud.
+3. Ear: every sentence says one thing and is easy to say and hear aloud: numbers as they are said, one unit, no
+   symbols, no word a narrator would trip on, nothing pointed back to before it is named.
 4. Comparison: one everyday comparison that explains the mechanism, not decoration.
-5. Payoff: the question is fully answered by three quarters of the way through.
-6. Ending: it ends the way it was asked to end, in two short beats.
-7. No AI habits: no stock phrases, no lists of three, no "it's not X, it's Y", no over-explaining.
+5. Payoff: the question is fully answered by three quarters of the way through, in one short plain line a viewer
+   could repeat to a friend.
+6. Ending: it ends the way it was asked to end. For a loop, read the last line and then the first line as one:
+   they must make one natural sentence, the last line must not sound finished, and it must be about the same
+   moment as the first line.
+7. No AI habits: no stock phrases, no lists of three (three nouns or adjectives in a row; an escalating three-beat
+   joke is fine), no "it's not X, it's Y", no line that only says again what the line before said.
 Do not judge whether the jokes are funny, and do not check the facts: others do that. Never ask to remove
 what the script was asked to include (its shape, its ending, a running bit). Return ok=true
 with no problems if all pass. Otherwise, for each failure, one sentence saying exactly what to change."""
@@ -892,10 +958,18 @@ def _plan(script: Script, words: bool = False) -> tuple[Script, str, Review | No
     # first ~9 words: one planned there was turned into footage with a search made of its leftover words).
     starts = [sum(len(b.text.split()) for b in script.beats[:i]) for i in range(len(script.beats))]
     beats = "\n".join(f"{i}. ({w} words in) {b.text}" for i, (b, w) in enumerate(zip(script.beats, starts, strict=True), start=1))
+    # The sentences said in the opening words (D196): the second one too, often, which got a drawing that tidy then
+    # emptied into a search made of its longest words ("breaths degrees thirty" found a fireplace).
+    early = [str(n) for n, w in enumerate(starts, 1) if w < FIRST_DIAGRAM_WORDS]
+    opening = (f"Sentence{'s' if len(early) > 1 else ''} {', '.join(early)} {'are' if len(early) > 1 else 'is'} said "
+               f"in the first {FIRST_DIAGRAM_WORDS} words: footage only, with three searches each, even for a "
+               "number.\n") if channel.drawings else ""
     feedback = ""
     for n in range(2):
-        user = (pose_note(channel) + f"Plan the pictures for this script: one beat for each numbered sentence, "
-                f"every sentence kept exactly as written, in order.\n\nTitle: {script.title}\n{beats}\n"
+        user = (pose_note(channel) + "Plan the pictures for this script: one beat for each numbered sentence, "
+                "every sentence kept exactly as written, in order.\n" + opening
+                + (LOOP_PICTURE.replace("\n", " ") + "\n" if script.ending == "loop" else "")
+                + f"\nTitle: {script.title}\n{beats}\n"
                 + (f"\nFix these problems:\n{feedback}\n" if feedback else ""))
         answer = ask(_director(channel), user, _Plan, temperature=0.4, job="script")
         try:

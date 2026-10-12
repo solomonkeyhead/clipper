@@ -94,7 +94,7 @@ export function CommandPalette() {
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
-          <Item icon={<Send />} label="Post queue: one clip at a time" onSelect={go("/post")} />
+          <Item icon={<Send />} label="Post queue: one clip at a time" keys="G P" onSelect={go("/post")} />
           <Item icon={<Send />} label="Clips ready to post" onSelect={go("/clips", { status: "ready" })} />
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
@@ -136,13 +136,13 @@ export function CommandPalette() {
 
 const SHORTCUTS: [string, [string, string][]][] = [
   ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then D", "Dashboard"], ["I", "Ask Clipper"], ["G then C", "Campaigns"],
-    ["G then N", "New clips"], ["G then L", "Clips"], ["G then M", "Create"], ["G then R", "Learning"],
+    ["G then N", "New clips"], ["G then L", "Clips"], ["G then P", "Post queue"], ["G then M", "Create"], ["G then R", "Learning"],
     ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
   ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
     ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"],
     ["Shift / Ctrl click", "Select several"], ["Esc", "Clear selection"]]],
   ["Open clip", [["J / K", "Next / previous clip"], ["Y", "Good"], ["B", "Not good"], ["C", "Copy caption"], ["L", "Copy link"],
-    ["D", "Download"], ["P", "Mark posted"], ["R", "Back to ready"], ["X", "Skip, then next"], ["E", "Edit"], ["F", "Show in folder"],
+    ["D", "Download"], ["P", "Mark posted"], ["S", "Mark submitted"], ["R", "Back to ready"], ["X", "Skip, then next"], ["E", "Edit"], ["F", "Show in folder"],
     ["Delete", "Delete (undo)"], ["Esc", "Close"]]],
 ];
 

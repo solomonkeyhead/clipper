@@ -29,6 +29,16 @@ def test_an_edit_can_be_undone_twice_over(data_root):
         c.post(f"/api/create/videos/{vid}/undo")
         assert [b["text"] for b in store.video(vid)["script"]["beats"]] == ["One."]
         assert c.post(f"/api/create/videos/{vid}/undo").status_code == 400
+        # Redo (D196): forward again, twice, and a new edit clears what's left to redo
+        assert c.get("/api/create").json()["videos"][0]["redo"] is True
+        c.post(f"/api/create/videos/{vid}/undo?forward=true")
+        assert [b["text"] for b in store.video(vid)["script"]["beats"]] == ["Two."]
+        c.put(f"/api/create/videos/{vid}/script", json={"script": {"beats": [{"text": "Four."}]}})
+        assert c.post(f"/api/create/videos/{vid}/undo?forward=true").status_code == 400
+        c.post(f"/api/create/videos/{vid}/undo")
+        assert [b["text"] for b in store.video(vid)["script"]["beats"]] == ["Two."]
+        c.post(f"/api/create/videos/{vid}/undo?forward=true")
+        assert [b["text"] for b in store.video(vid)["script"]["beats"]] == ["Four."]
 
 
 def test_a_note_revises_the_last_take_and_no_note_avoids_it():

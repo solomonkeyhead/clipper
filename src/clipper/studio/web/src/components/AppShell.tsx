@@ -248,12 +248,12 @@ export function AppShell() {
   useHotkeys({
     g: () => { pendingG.current = Date.now(); },
     d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"), m: goto("/create"),
-    s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"),
+    s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"), p: goto("/post"),
     "[": toggle,
     i: () => setAsk(true),
     "?": () => setShortcuts(true),
     "/": () => setPalette(true),
-  });
+  }, { goto: true });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {

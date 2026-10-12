@@ -307,7 +307,7 @@ def test_a_rebuild_keeps_the_footage_it_picked_and_turns_down_what_was_refused(t
     picks = iter([{"id": "a", "url": "u", "center": 0.3}, {"id": "b", "url": "u", "center": 0.6}])
     asked = []
 
-    def choose(queries, part, used, sentence="", context="", good_enough=7, count=1):
+    def choose(queries, part, used, sentence="", context="", good_enough=7, count=1, photos=True):
         asked.append(set(used))
         return [next(picks)]
 
@@ -380,7 +380,7 @@ def test_shots_made_before_are_reused_not_made_again(tmp_path, monkeypatch):
 
     made = []
 
-    def render(v, seconds, out, words=None, frames=None):
+    def render(v, seconds, out, words=None, frames=None, focus=True):
         made.append(seconds)
         out.write_bytes(b"shot")
         return out
@@ -409,7 +409,7 @@ def test_asked_for_footage_and_none_fits_keeps_what_it_had(tmp_path, monkeypatch
     levels = []
     monkeypatch.setattr(stock, "choose", lambda *a, good_enough=7, **k: levels.append(good_enough) or [])
     monkeypatch.setattr(build, "_fallback", lambda *a, **k: (_ for _ in ()).throw(AssertionError("drew instead")))
-    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None, frames=None: out)
+    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None, frames=None, focus=True: out)
     build.chosen.clear()
     build.picture_notes.clear()
     build._planned(0, beat, asked, 2.0, [], s, tmp_path, set())
@@ -432,7 +432,7 @@ def test_a_long_sentence_gets_a_different_clip_for_each_part(tmp_path, monkeypat
     v = Visual(kind="stock", query="sound")
     beat = Beat(text="A long held explanation goes here.", visual=v)
     build.chosen.clear()
-    shots = build._planned(0, beat, v, 12.0, [], Script(title="t", beats=[beat]), tmp_path, set())
+    shots = build._planned(0, beat, v, 10.0, [], Script(title="t", beats=[beat]), tmp_path, set())
     assert len(shots) == 3 and [h["id"] for h in build.chosen[0]["picked"]] == ["a", "b", "c"]
 
 
@@ -545,7 +545,7 @@ def test_asked_footage_that_doesnt_fit_says_so_on_the_part(tmp_path, monkeypatch
     monkeypatch.setattr(build, "_stock_shot", lambda src, part, out, *a, **k: out)
     monkeypatch.setattr(build, "_too_dark", lambda clip: False)
     monkeypatch.setattr(stock, "fetch", lambda hit: tmp_path / "x.mp4")
-    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None, frames=None: out)
+    monkeypatch.setattr(diagrams, "render", lambda v, seconds, out, words=None, frames=None, focus=True: out)
     build.chosen.clear()
     build._planned(0, beat, asked, 2.0, [], s, tmp_path, set())
     assert seen[0] == ({1}, 6)                                        # the old clip is never chosen again; 6 to pass

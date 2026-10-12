@@ -21,6 +21,7 @@ captions always sit on the plain board, never on busy footage.
 from __future__ import annotations
 
 import math
+import random
 import subprocess
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -52,8 +53,10 @@ CAVEAT = REPO_ROOT / "assets" / "fonts" / "Caveat.ttf"
 # over PUNCH_SECONDS on the highlighted word, held.
 PUSH = 0.075
 DRIFT = 0.07
-PUNCH = 0.16
+PUNCH = 0.12   # D156's figure (it had drifted to 0.16, D197)
 PUNCH_SECONDS = 0.2
+#: How far the camera moves in on a part of a drawing, at most (D197): 1.45 cropped the title off the board.
+FOCUS_MAX = 1.2
 #: How much bigger than the panel a clip is decoded, so the camera can move inside real pixels.
 MARGIN = 1.2
 
@@ -195,8 +198,9 @@ def view(img: np.ndarray, z: float, u: float, v: float, size: tuple[int, int] = 
 
 @dataclass
 class Move:
-    """A shot's camera (D162): "push" in, "pull" out, "drift" across toward the subject, or "still"; a punch-in
-    at `punch` seconds, held; (u, v) is the subject's place in the picture, 0-1."""
+    """A shot's camera (D162): "push" in, "pull" out, "drift" across toward the subject, "still", or "close" (a
+    closer angle on a clip the shot before showed, D196); a punch-in at `punch` seconds, held; (u, v) is the
+    subject's place in the picture, 0-1."""
 
     kind: str = "push"
     u: float = 0.5
@@ -214,6 +218,8 @@ class Move:
             z = 1.0 + PUSH
             side = 1 if self.u >= 0.5 else -1   # from away from the subject toward it
             u = self.u + side * DRIFT * (x - 0.5)
+        elif self.kind == "close":
+            z = 1.32 + PUSH * x
         else:
             z = 1.015
         if self.punch is not None:
@@ -239,9 +245,11 @@ def shoot(img: np.ndarray, move: Move, t: float, d: float, size: tuple[int, int]
 
 def video_panel(src: Path, out: Path, n: int, move: Move, *, start: float = 0.0, loop: bool = False,
                 slow: float = 1.0, play: float | None = None, look: str = "",
-                source_size: tuple[int, int] | None = None) -> Path:
+                source_size: tuple[int, int] | None = None, back: float | None = None) -> Path:
     """`n` frames of a video (stock footage, the user's own clip) filling the panel, the camera moving on it.
-    With `play`, only that many seconds of the clip play (stretched by `slow`), then its last frame stays."""
+    With `play`, only that many seconds of the clip play (stretched by `slow`), then its last frame stays.
+    `back` (D197): the camera runs backwards, a move `back` seconds long ending where it starts, so this shot leads
+    into the frame that move begins on (the loop's last shot into the opening's first)."""
     from ..ingest.probe import probe
 
     if source_size is None:
@@ -253,12 +261,13 @@ def video_panel(src: Path, out: Path, n: int, move: Move, *, start: float = 0.0,
     proc = decode(src, size, start=start, seconds=shown, loop=loop and play is None, slow=slow, filters=look)
     with Writer(out, (W, PANEL_H), footage=True) as wr:
         for k, img in enumerate(frames(proc, size, n)):
-            wr.write(shoot(img, move, k / FPS, d))
+            wr.write(shoot(img, move, (n - k) / FPS, back) if back else shoot(img, move, k / FPS, d))
     return out
 
 
-def photo_panel(img: Image.Image, out: Path, n: int, move: Move, look: bool = True) -> Path:
-    """`n` frames of a still photo filling the panel, the camera moving slowly over it (a Ken Burns move)."""
+def photo_panel(img: Image.Image, out: Path, n: int, move: Move, look: bool = True, back: float | None = None) -> Path:
+    """`n` frames of a still photo filling the panel, the camera moving slowly over it (a Ken Burns move); `back` as
+    for video_panel."""
     rgb = img.convert("RGB")
     size = cover_size(*rgb.size, margin=1.35)
     rgb = rgb.resize(size, Image.LANCZOS)
@@ -268,7 +277,7 @@ def photo_panel(img: Image.Image, out: Path, n: int, move: Move, look: bool = Tr
     d = n / FPS
     with Writer(out, (W, PANEL_H), footage=True) as wr:
         for k in range(n):
-            wr.write(shoot(arr, move, k / FPS, d))
+            wr.write(shoot(arr, move, (n - k) / FPS, back) if back else shoot(arr, move, k / FPS, d))
     return out
 
 
@@ -284,11 +293,29 @@ def _look(arr: np.ndarray) -> np.ndarray:
 @dataclass
 class Focus:
     """A part of a drawing the camera moves in on while the voice explains it (D162): from `a` to `b` seconds
-    into the shot, the box (x0, y0, x1, y1) in panel pixels."""
+    into the shot, the box (x0, y0, x1, y1) in panel pixels; `keep`, the box that must stay in view (the title and
+    the words written so far, D197)."""
 
     a: float
     b: float
     box: tuple[float, float, float, float]
+    keep: tuple[float, float, float, float] | None = None
+
+
+def aim(f: Focus) -> tuple[float, float, float]:
+    """Where the camera goes for `f` (u, v, zoom): in on the part, but never so far or so off-centre that the keep
+    box leaves the view (D197); no move at all when that leaves less than a 6% push."""
+    x0, y0, x1, y1 = f.box
+    kx0, ky0, kx1, ky1 = f.keep or f.box
+    kx0, ky0, kx1, ky1 = min(kx0, x0), min(ky0, y0), max(kx1, x1), max(ky1, y1)
+    tz = min(FOCUS_MAX, 0.72 * min(W / max(x1 - x0, 1), PANEL_H / max(y1 - y0, 1)),
+             W / max(kx1 - kx0, 1), PANEL_H / max(ky1 - ky0, 1))
+    if tz < 1.06:
+        return 0.5, 0.5, 1.0
+    hw, hh = W / (2 * tz), PANEL_H / (2 * tz)
+    cx = min(max((x0 + x1) / 2, kx1 - hw), kx0 + hw)
+    cy = min(max((y0 + y1) / 2, ky1 - hh), ky0 + hh)
+    return cx / W, cy / PANEL_H, tz
 
 
 def drawing_panel(render_frame, out: Path, n: int, focus: list[Focus] | None = None, push: float = 0.03,
@@ -307,9 +334,7 @@ def drawing_panel(render_frame, out: Path, n: int, focus: list[Focus] | None = N
             tu, tv, tz = 0.5, 0.5, 1.0
             for f in focus or []:
                 if f.a <= t < f.b:
-                    x0, y0, x1, y1 = f.box
-                    tz = max(1.0, min(1.45, 0.72 * min(W / max(x1 - x0, 1), PANEL_H / max(y1 - y0, 1))))
-                    tu, tv = (x0 + x1) / 2 / W, (y0 + y1) / 2 / PANEL_H
+                    tu, tv, tz = aim(f)
             for _ in range(4):   # sub-steps keep the spring steady
                 dt = 1 / (4 * FPS)
                 for name, target in (("u", tu), ("v", tv), ("z", tz)):
@@ -482,26 +507,49 @@ class Sprite:
     rgb: np.ndarray        # premultiplied colour, float32 0-255
     alpha: np.ndarray      # 0-1, float32
     shadow: np.ndarray     # a soft copy of the alpha, for his shadow on the board
+    box: tuple[int, int, int, int] | None = None   # where it was trimmed from the picture, and the picture's size:
+    canvas: tuple[int, int] | None = None           # its mouth and blink versions are cut the same (D196)
 
     @property
     def size(self) -> tuple[int, int]:
         return self.alpha.shape[1], self.alpha.shape[0]
 
 
-def load_sprite(path: Path, height: int) -> Sprite | None:
-    """A pose picture as a sprite `height` tall: a cut-out (transparent background) trimmed to what's really in
-    it (the faint haze some have at the edges left out); any other picture cut to a round badge with a white
-    ring (a profile picture, D156)."""
+MAGENTA = np.array([255.0, 0.0, 255.0], np.float32)
+
+
+def _key_magenta(img: Image.Image) -> Image.Image:
+    """A picture made on flat magenta (as Gemini makes them, D158) with the magenta taken out (D196): see-through
+    where it's magenta, soft at the edge, the pink tint unmixed from the edge's own colour. Any other picture as
+    it is."""
+    rgb = np.asarray(img.convert("RGB")).astype(np.float32)
+    border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
+    if np.mean(np.linalg.norm(border - MAGENTA, axis=1) < 70) < 0.8:
+        return img
+    alpha = np.clip((np.linalg.norm(rgb - MAGENTA, axis=2) - 60) / 90, 0, 1)
+    a = np.maximum(alpha, 1e-3)[..., None]
+    colour = np.clip((rgb - (1 - a) * MAGENTA) / a, 0, 255)   # C = aF + (1-a)M, so F = (C - (1-a)M) / a
+    return Image.fromarray(np.dstack([colour, alpha * 255]).astype(np.uint8), "RGBA")
+
+
+def load_sprite(path: Path | Image.Image, height: int, box: tuple[int, int, int, int] | None = None) -> Sprite | None:
+    """A pose picture as a sprite `height` tall: a cut-out (transparent background, or flat magenta, D196) trimmed to
+    what's really in it (the faint haze some have at the edges left out), or to `box` (the trim of the picture it
+    is a mouth or blink version of, so the two line up exactly); any other picture cut to a round badge with a
+    white ring (a profile picture, D156)."""
     try:
-        img = Image.open(path).convert("RGBA")
+        img = _key_magenta((path if isinstance(path, Image.Image) else Image.open(path)).convert("RGBA"))
     except OSError:
         return None
+    canvas = img.size
     a = np.asarray(img.getchannel("A"))
     if a.min() < 250:
-        ys, xs = np.where(a > 40)
-        if not len(xs):
-            return None
-        img = img.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
+        if box is None:
+            ys, xs = np.where(a > 40)
+            if not len(xs):
+                return None
+            box = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
+        img = img.crop(box)
     else:
         side = round(min(img.size) * 0.72)
         left, top = (img.width - side) // 2, round(img.height * 0.04)
@@ -516,7 +564,22 @@ def load_sprite(path: Path, height: int) -> Sprite | None:
     arr = np.asarray(img).astype(np.float32)
     alpha = arr[..., 3] / 255.0
     return Sprite(rgb=arr[..., :3] * alpha[..., None], alpha=alpha,
-                  shadow=cv2.GaussianBlur(alpha, (0, 0), 14))
+                  shadow=cv2.GaussianBlur(alpha, (0, 0), 14), box=box, canvas=canvas)
+
+
+def load_variant(path: Path, base: Sprite, height: int) -> Sprite | None:
+    """The mouth-open or blink version of a pose picture (D196), cut exactly as `base` was, at the same size: only
+    the mouth or eyes may differ, or he'd jump. A version made at another size is scaled to the base's first."""
+    if base.box is None or not path.is_file():
+        return None
+    try:
+        img = Image.open(path)
+    except OSError:
+        return None
+    if base.canvas and img.size != base.canvas:
+        img = img.resize(base.canvas, Image.LANCZOS)
+    sprite = load_sprite(img, height, box=base.box)
+    return sprite if sprite and sprite.size == base.size else None
 
 
 def _affine(sprite: Sprite, sx: float, sy: float, angle: float, dest: tuple[float, float]) -> np.ndarray:
@@ -559,13 +622,31 @@ class Presenter:
     the spring that kicked him on every word (D162) and tipped him side to side read as a seizure (D190)."""
 
     POP_FRAMES, ENTER_FRAMES = 9, 10
+    #: A blink every BLINK_EVERY seconds or so, BLINK_FRAMES long (D196).
+    BLINK_EVERY, BLINK_FRAMES = (2.6, 5.2), 4
 
-    def __init__(self, shows: list[tuple[Path, float, float]], total: int):
-        self.total = total
+    def __init__(self, shows: list[tuple[Path, float, float]], total: int, talk: list[bool] | None = None,
+                 seed: int = 0, enter: bool = True):
+        """`talk`: the frames his mouth is open, from the voice (D196); a picture with a `-open` version next to it
+        (professor-talking-1-open.png) shows that on those frames, and its `-blink` version for a blink. `enter`:
+        he slides up into the frame as the video starts; not on a loop, where he'd slide in on every pass (D197)."""
+        self.total, self.enter = total, enter
         self.sprites: dict[Path, Sprite] = {}
+        self.versions: dict[tuple[Path, str], Sprite] = {}
         for pic, _, _ in shows:
             if pic not in self.sprites and (sprite := load_sprite(pic, PRESENTER_H)):
                 self.sprites[pic] = sprite
+                for kind in ("open", "blink"):
+                    if v := load_variant(pic.with_name(f"{pic.stem}-{kind}{pic.suffix}"), sprite, PRESENTER_H):
+                        self.versions[(pic, kind)] = v
+        self.talk = (list(talk) + [False] * total)[:total] if talk else [False] * total
+        rng, self.blink, k = random.Random(seed), [False] * total, 0
+        while True:
+            k += round(rng.uniform(*self.BLINK_EVERY) * FPS)
+            if k >= total:
+                break
+            for j in range(k, min(total, k + self.BLINK_FRAMES)):
+                self.blink[j] = True
         self.pose: list[Path | None] = [None] * total
         for pic, a, b in shows:
             if pic in self.sprites:
@@ -578,15 +659,21 @@ class Presenter:
         self.pose = [p or first for p in self.pose]
         self.changes = {k for k in range(1, total) if self.pose[k] != self.pose[k - 1]}
 
-    def face(self) -> tuple[float, float]:
-        """Where his face is on the frame, about: for the camera cutting in on him."""
-        sprite = next(iter(self.sprites.values()), None)
-        w = sprite.size[0] if sprite else PRESENTER_H * 0.9
-        return PRESENTER_X + w / 2, H + PRESENTER_SINK - PRESENTER_H * 0.74
+    def sprite_at(self, k: int) -> Sprite | None:
+        """The picture on frame `k`: its mouth-open version while he talks, its blink version for a blink (D196)."""
+        k = min(k, self.total - 1)
+        pic = self.pose[k]
+        if pic is None:
+            return None
+        if self.talk[k] and (pic, "open") in self.versions:
+            return self.versions[(pic, "open")]
+        if self.blink[k] and not self.talk[k] and (pic, "blink") in self.versions:
+            return self.versions[(pic, "blink")]
+        return self.sprites.get(pic)
 
-    def draw(self, frame: np.ndarray, k: int) -> None:
-        pic = self.pose[min(k, self.total - 1)]
-        sprite = self.sprites.get(pic) if pic else None
+    def draw(self, frame: np.ndarray, k: int, zoom: float = 1.0) -> None:
+        """`zoom` above 1: a cut-in (D197), him alone, bigger and in the middle."""
+        sprite = self.sprite_at(k)
         if sprite is None:
             return
         t = k / FPS
@@ -595,13 +682,13 @@ class Presenter:
         if since is not None and k - since < self.POP_FRAMES:   # a soft settle, no overshoot past full size
             scale = 0.95 + 0.05 * smooth((k - since) / self.POP_FRAMES)
         y = 0.0
-        if k < self.ENTER_FRAMES:   # slides up into the frame as the video starts
+        if k < self.ENTER_FRAMES and self.enter:   # slides up into the frame as the video starts
             y += (1 - out_back(k / self.ENTER_FRAMES, 1.2)) * 380
         breathe = 0.006 * math.sin(2 * math.pi * t / 3.3)
-        sy = scale * (1 + breathe)
-        sx = scale * (1 - breathe * 0.4)
+        sy = scale * (1 + breathe) * zoom
+        sx = scale * (1 - breathe * 0.4) * zoom
         w = sprite.size[0]
-        dest = (PRESENTER_X + w / 2, H + PRESENTER_SINK + y)
+        dest = (PRESENTER_X + w / 2, H + PRESENTER_SINK + y) if zoom == 1.0 else (W / 2, H + PRESENTER_SINK * zoom)
         m = _affine(sprite, sx, sy, 0.0, dest)
         shadow = m.copy()
         shadow[0, 2] += 16
@@ -626,14 +713,13 @@ class Shot:
 
 @dataclass
 class Cutaway:
-    """The camera cutting in on the Professor (D162): from frame `a` to `b`, zoom `z` on his face, which lands at
-    (`x`, `y`) on the frame. A hard cut in and out, as comedy edits do."""
+    """The camera cutting in on the Professor (D162): from frame `a` to `b`, him alone on the board at `z` times his
+    size. A hard cut in and out, as comedy edits do. The whole frame used to be zoomed, the picture with him, and
+    pinned to its bottom-left corner: the panel's bottom (a bowl's base) filled the screen (D197)."""
 
     a: int
     b: int
     z: float
-    x: float
-    y: float
 
 
 def transitions(shots: list[Shot], seed: int, mode: str = "auto") -> None:
@@ -652,7 +738,8 @@ def transitions(shots: list[Shot], seed: int, mode: str = "auto") -> None:
         turn += 1
         if mode == "auto" and turn % 2:
             continue
-        b.enter = mode if mode != "auto" else "whip" if (turn // 2) % 2 else "zoom"
+        # Never a zoom into a drawing (D197): its board is empty for the first frames, and 1.5x pushed the title off.
+        b.enter = mode if mode != "auto" else "whip" if (turn // 2) % 2 or b.kind == "drawing" else "zoom"
         last = i
 
 
@@ -704,6 +791,7 @@ class Edit:
     captions: Captions | None = None
     hook: np.ndarray | None = None
     hook_frames: int = 0
+    hook_again: int | None = None   # a loop shows the hook again from this frame, so its end meets its start (D197)
     watermark: np.ndarray | None = None
     signoff: str = ""
     signoff_from: int = 0
@@ -737,24 +825,26 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
          *audio_inputs, "-filter_complex", audio_graph, "-map", "0:v", "-map", "[a]", "-t", f"{duration:.3f}",
          *encode, "-pix_fmt", "yuv420p", "-r", str(FPS), "-movflags", "+faststart", str(out)],
         stdin=subprocess.PIPE)
+    plain = None   # the board with no panel edge, for a cut-in
     try:
         for k, panel in _panel_frames(edit):
-            frame = board.copy()
-            frame[:PANEL_H] = panel
-            if edit.presenter:
-                edit.presenter.draw(frame, k)
-            cut = next((c for c in edit.cutaways if c.a <= k < c.b), None)
-            if cut:
-                fx, fy = edit.presenter.face() if edit.presenter else (W / 2, H / 2)
-                # Kept inside the frame (D190): past its bottom edge the copied last row drew his cut-off waist
-                # down the screen in streaks.
-                tx = min(0.0, max(W * (1 - cut.z), cut.x - cut.z * fx))
-                ty = min(0.0, max(H * (1 - cut.z), cut.y - cut.z * fy))
-                m = np.float32([[cut.z, 0, tx], [0, cut.z, ty]])
-                frame = cv2.warpAffine(frame, m, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            cut = next((c for c in edit.cutaways if c.a <= k < c.b), None) if edit.presenter else None
+            if cut:   # him alone, big, on the board (D197)
+                if plain is None:
+                    from . import diagrams
+
+                    plain = np.asarray(diagrams.board((W, H)).convert("RGB"), np.uint8)
+                frame = plain.copy()
+                edit.presenter.draw(frame, k, zoom=cut.z)
+            else:
+                frame = board.copy()
+                frame[:PANEL_H] = panel
+                if edit.presenter:
+                    edit.presenter.draw(frame, k)
             t = k / FPS
-            if edit.hook is not None and k < edit.hook_frames:
-                left = edit.hook_frames - k
+            again = edit.hook_again is not None and k >= edit.hook_again
+            if edit.hook is not None and (k < edit.hook_frames or again):
+                left = k - edit.hook_again + 1 if again else edit.hook_frames - k   # a loop's pops in as the first pops out
                 scale = 1.0 if left > 4 else 0.86 + 0.14 * (left / 4)
                 paste_scaled(frame, edit.hook, W / 2, 285, scale, alpha=1.0 if left > 4 else left / 4)
             if edit.captions:   # up out of the way while the camera is in on his face
@@ -765,7 +855,7 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
                 written = chalk_text(edit.signoff, 84, reveal=(k - edit.signoff_from) / (0.5 * FPS))
                 if written is not None:
                     paste(frame, written, W - written.shape[1] - 46, PANEL_H + 330)
-            if edit.watermark is not None and k >= edit.hook_frames:   # after the hook, which it covered
+            if edit.watermark is not None and k >= edit.hook_frames and not again:   # after the hook, which it covered
                 paste(frame, edit.watermark, W - edit.watermark.shape[1] - 48, 170,
                       0.85 * min(1.0, (k - edit.hook_frames + 1) / 6))
             proc.stdin.write(np.ascontiguousarray(frame).data)

@@ -173,7 +173,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("sfx") as boolean} onChange={(e) => set({ sfx: e.target.checked })} />
-        Chalk taps on drawings and a two-note tap at the punchline
+        Sound effects on the edit: whooshes on transitions, a thump on zoom-ins, chalk as drawings are drawn, a riser into the punchline (D197)
       </label>
       <div className="flex gap-2">
         <Button variant="primary" onClick={() => save()}>Save</Button>

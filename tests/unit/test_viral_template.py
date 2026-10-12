@@ -10,7 +10,7 @@ from clipper.create.voice import TimedWord, Timings
 
 
 def test_chalk_taps_are_few_and_spaced():
-    assert sound.taps([12.0, 1.0, 3.0, 7.0, 20.0, 26.0, 31.0, 37.0, 44.0]) == [1.0, 7.0, 12.0, 20.0, 26.0, 31.0]
+    assert sound.spaced([12.0, 1.0, 3.0, 7.0, 20.0, 26.0, 31.0, 37.0, 44.0], 5.0, 6) == [1.0, 7.0, 12.0, 20.0, 26.0, 31.0]
 
 
 def test_punch_ins_land_on_the_highlighted_word_away_from_the_hook_and_punchline():
@@ -112,3 +112,51 @@ def test_transition_modes():
     assert run("cut") == {"cut"}
     assert run("whip") == {"whip", "cut"} and run("zoom") == {"zoom", "cut"}
     assert {"whip", "zoom"} <= run("auto") | {"whip", "zoom"}
+
+
+def test_a_magenta_picture_is_cut_out_and_its_mouth_version_lines_up(tmp_path):
+    """D196: Gemini's flat magenta comes out by itself, and a -open version is cut exactly as its picture."""
+    from PIL import Image, ImageDraw
+
+    from clipper.create import compose
+
+    def pose(path, mouth):
+        img = Image.new("RGB", (400, 400), (255, 0, 255))
+        d = ImageDraw.Draw(img)
+        d.ellipse((100, 60, 300, 380), fill=(240, 200, 170), outline=(255, 255, 255), width=8)
+        d.rectangle((170, 280, 230, 280 + mouth), fill=(60, 20, 20))
+        img.save(path)
+
+    pose(tmp_path / "p.png", 6)
+    pose(tmp_path / "p-open.png", 40)
+    base = compose.load_sprite(tmp_path / "p.png", 300)
+    assert base.alpha[0, 0] == 0 and base.alpha[150, base.size[0] // 2] == 1   # magenta gone, the face kept
+    assert base.rgb[..., 1].max() > 100                                        # no magenta tint left on the face
+    opened = compose.load_variant(tmp_path / "p-open.png", base, 300)
+    assert opened is not None and opened.size == base.size
+    shows = [(tmp_path / "p.png", 0.0, 2.0)]
+    talk = [k % 6 < 3 for k in range(60)]
+    p = compose.Presenter(shows, 60, talk=talk, seed=1)
+    assert p.sprite_at(0) is p.versions[(tmp_path / "p.png", "open")] and p.sprite_at(4) is p.sprites[tmp_path / "p.png"]
+    assert not p.changes   # the mouth moving is no pose change: no pop
+
+
+def test_the_mouth_opens_on_words_and_long_sentences_change_picture(tmp_path):
+    from clipper.create import channel
+
+    words = [TimedWord(text="w", start=s, end=s + 0.3) for s in (0.2, 0.6, 1.0)]
+    timing = Timings(words=words, beats=[(0, 1.5)], duration=1.5, matched=1.0)
+    mouth = build.talking_frames(tmp_path / "missing.wav", timing, 45)    # no voice: the words' steady pace
+    assert not any(mouth[:4]) and any(mouth[6:15]) and not all(mouth[6:15])
+    names = ["base", *(f"talking-{i}" for i in range(1, 4))]
+    for n in names:
+        (tmp_path / f"{n}.png").write_bytes(b"x")
+    f = {n: tmp_path / f"{n}.png" for n in names}
+    ch = channel.make("physics", "Prof").model_copy(update={
+        "character": str(f["base"]), "poses": {n: str(f[n]) for n in names[1:]}})
+    long_words = [TimedWord(text="w", start=3 + 0.5 * i, end=3.4 + 0.5 * i) for i in range(16)]
+    timing = Timings(words=long_words, beats=[(0.3, 3), (3, 11)], duration=12.0, matched=1.0)
+    build.picture_times[:] = []
+    plan = build.character_plan(Script(title="t", beats=[Beat(text="a"), Beat(text="b")]), timing, ch, 11.0, seed=0)
+    pictures_in_long_sentence = [p for p, times in plan for a, b in times if 3 <= a < 11]
+    assert len(pictures_in_long_sentence) >= 3   # an 8 s sentence isn't one still picture

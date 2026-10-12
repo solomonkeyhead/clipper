@@ -105,7 +105,8 @@ def test_a_rewrite_and_its_pictures_are_checked_in_one_call(data_root, monkeypat
 
 
 def beat_and_script(wish=""):
-    s = Script(title="t", beats=[Beat(text="Like music through a wall.", visual=Visual(queries=["wall music"], wish=wish))])
+    s = Script(title="t", beats=[Beat(text="Like music through a wall.",
+                                      visual=Visual(queries=["wall music", "speaker behind wall"], wish=wish))])
     return s.beats[0], s
 
 
@@ -121,9 +122,15 @@ def test_the_scripts_own_searches_are_judged_once_for_every_part_and_no_searches
 
     monkeypatch.setattr(stock, "choose", choose)
     got = build._pick_footage(0, beat, beat.visual, 5.0, s, set(), False)   # two parts of 2.5 s (the hook)
-    assert asked == [(["wall music"], 2)] and got.hits == [{"id": "a"}, None]   # the second part goes on with it
+    assert asked == [(["wall music", "speaker behind wall"], 2)] and got.hits == [{"id": "a"}, None]   # the second part goes on with it
     monkeypatch.setattr(stock, "choose", lambda q, *a, **k: [])
     assert build._pick_footage(0, beat, beat.visual, 2.0, s, set(), False).hits == [None]   # a drawing instead
+    # One search only (D196): searches are written for the sentence, not made of its longest words
+    monkeypatch.setattr(stock, "plan_searches", lambda *a, **k: ["music through wall"])
+    one = beat.visual.model_copy(update={"queries": ["wall music"]})
+    monkeypatch.setattr(stock, "choose", lambda q, *a, **k: asked.append(list(q)) or [])
+    build._pick_footage(0, beat, one, 2.0, s, set(), False)
+    assert asked[-1] == ["music through wall", "wall music"]
 
 
 def test_a_wish_or_new_footage_goes_straight_to_searches_written_for_it(monkeypatch):

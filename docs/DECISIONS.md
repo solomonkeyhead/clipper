@@ -3419,3 +3419,31 @@ Instagram row of the Post panel now says, in view, to click the crop icon and pi
 Marc likes the loop endings most. `script.turn` now always picks "loop" (a last line leading straight back into the
 opening question); "send this to" and the one-word question are no longer chosen, though old scripts that have
 them still read. Shapes still vary.
+## D196: a livelier presenter, Redo, and fixes from a site review (2026-10-11)
+Marc found the Professor too still and asked for a full review. Each picture can now have `-open` (mouth open) and
+`-blink` versions next to it, found by filename and cut out with the base picture's box (magenta backgrounds are keyed
+out). The mouth opens on the voice's loud syllables, he blinks every 3 to 5 s, and a talking pose changes about every
+2 s inside a long sentence. Scripts get Redo next to Undo (a `future` list; a new change clears it). Script prompts:
+the loop ending is two short beats, the last line unfinished and running into the opening line; the editor checks it
+as one sentence; write for the ear; no copying quoted lines; a reason to stay by line 2. The director gets searches
+on every beat, one drawing per mechanism (held, not redrawn), and the opening sentences named as footage only. tidy no
+longer makes searches from a sentence's longest words; the build writes them. Footage: photos need a point more and
+never open a video, the judge scores by meaning and motion, spares from the same judgement fill a long sentence's
+later parts, a repeated clip cuts to a closer angle, shots are at most 3.5 s, and a build note says when Pexels has
+no key. Page: the CheckNote is one verdict line, toasts when a script or build finishes, Undo after skipping an idea,
+the draft's unconfirmed Delete removed, "Waiting for views" clips no longer say "To submit", the Post queue has Undo,
+G then a key no longer also fires the clip list's key, Clips opens on the first tab with clips, and `buttonClass`.
+
+## D197: zooms where the picture shows the word, a seamless loop, sound effects (2026-10-11)
+Video 25 zoomed 7 times with 5 amounts, 4 in 4.6 s, into a fireplace on "thirty-seven" and a blank board. Now a
+punch-in needs the highlighted word in the clip's own tags, not in a shot's first 0.8 s or last 0.6 s, at 1.12x; a
+drawing's push starts once its part is drawn, holds until the next part, and never crops the title or written words
+(at most 1.2x); auto never zooms into a drawing; the zooms switch also stops drawing pushes; a cut-in shows the
+presenter alone, big, on the board (the whole frame was zoomed into its bottom-left corner) and gives way to a nearby
+punch-in. A loop (Script.loop, default when the script ends on the loop) cuts 0.25 s after the last word, plays the
+opening clip for the last 1.5 s up to its first frame with the camera running back to where it starts, shows the hook
+again, ends on the opening's pose with no slide-in, sign-off or logo, and skips the cover frames put first. Sound
+effects (Script.sfx / channel.sfx, made in sound.py, nothing licensed): whoosh, swish, thump, pop, ding, comic cut-in
+sounds, riser, swell and chalk per drawn part, ranked and spaced by sound.pick, nothing over the punchline; the
+limiter's auto level is off (it lifted the mix 1 dB). Checked on video 25 rebuilt in a scratch folder: first and last
+frames match, one zoom left, -14.8 LUFS as before.

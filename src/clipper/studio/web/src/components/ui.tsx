@@ -11,6 +11,22 @@ import { cn, copyText } from "@/lib/utils";
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "icon";
 
+/** A button's look, for a link that acts as one too (D196): the same long class string was copied a dozen times. */
+export function buttonClass(variant: Variant = "secondary", size: Size = "md") {
+  return cn(
+    "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-medium",
+    "transition-[background-color,border-color,color,transform] duration-[var(--dur-fast)] ease-standard",
+    "active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40",
+    size === "sm" && "h-7 px-2.5 text-xs",
+    size === "md" && "h-9 px-3.5 text-sm",
+    size === "icon" && "size-8 text-sm",
+    variant === "primary" && "bg-accent text-accent-fg hover:bg-accent-hover",
+    variant === "secondary" && "border border-line bg-surface-2 text-fg hover:border-line-strong hover:bg-surface-3",
+    variant === "ghost" && "text-muted hover:bg-surface-2 hover:text-fg",
+    variant === "danger" && "border border-line bg-surface-2 text-danger hover:bg-surface-3",
+  );
+}
+
 /** A click whose action returns a promise (it waits on Clipper) takes no second click until it's done, and
  *  past 100 ms the button's words give way to a spinner at the same size (D192): every click answers at once,
  *  the button pressed is the one that spins, and a double click can't send it twice. */
@@ -40,16 +56,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
     }}
     className={cn(
       busy === 2 && "relative",   // for the spinner; a button placed absolutely keeps its place
-      "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-medium",
-      "transition-[background-color,border-color,color,transform] duration-[var(--dur-fast)] ease-standard",
-      "active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40",
-      size === "sm" && "h-7 px-2.5 text-xs",
-      size === "md" && "h-9 px-3.5 text-sm",
-      size === "icon" && "size-8 text-sm",
-      variant === "primary" && "bg-accent text-accent-fg hover:bg-accent-hover",
-      variant === "secondary" && "border border-line bg-surface-2 text-fg hover:border-line-strong hover:bg-surface-3",
-      variant === "ghost" && "text-muted hover:bg-surface-2 hover:text-fg",
-      variant === "danger" && "border border-line bg-surface-2 text-danger hover:bg-surface-3",
+      buttonClass(variant, size),
       className,
     )}
     {...props}
@@ -153,12 +160,16 @@ export const STATUS_MEANING = {
   skipped: "You passed on it. It stays here, and Clipper learns from why.",
 } as const;
 
-export function StatusChip({ status, own = false }: { status: string; own?: boolean }) {
+/** `waiting`: posted, and the brief wants more views before its link is submitted (D196): it said "To submit" while
+ *  the tab above it said "To submit 0". */
+export function StatusChip({ status, own = false, waiting = false }: { status: string; own?: boolean; waiting?: boolean }) {
   const s = (status in STATUS_TONE ? status : "ready") as keyof typeof STATUS_TONE;
+  const wait = waiting && s === "posted" && !own;
   return (
-    <Chip tone={STATUS_TONE[s]} className="whitespace-nowrap" title={STATUS_MEANING[s]}>
+    <Chip tone={wait ? "neutral" : STATUS_TONE[s]} className="whitespace-nowrap"
+          title={wait ? "Posted. The brief wants more views on it before its link is submitted." : STATUS_MEANING[s]}>
       <span className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden />
-      {own && s === "posted" ? "Posted" : STATUS_LABEL[s]}
+      {wait ? "Waiting for views" : own && s === "posted" ? "Posted" : STATUS_LABEL[s]}
     </Chip>
   );
 }

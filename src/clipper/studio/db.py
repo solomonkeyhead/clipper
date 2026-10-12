@@ -274,6 +274,8 @@ MIGRATIONS = [
     ("create_topics", "sent_back", "ALTER TABLE create_topics ADD COLUMN sent_back INTEGER NOT NULL DEFAULT 0"),
     # The scripts a video had before each change, newest last, for Undo (D193).
     ("create_videos", "history", "ALTER TABLE create_videos ADD COLUMN history TEXT NOT NULL DEFAULT '[]'"),
+    # The scripts Undo took back, for Redo (D196); a new change clears them.
+    ("create_videos", "future", "ALTER TABLE create_videos ADD COLUMN future TEXT NOT NULL DEFAULT '[]'"),
 ]
 TRASH_DAYS = 30
 

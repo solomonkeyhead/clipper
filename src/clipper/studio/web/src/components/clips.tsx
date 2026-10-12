@@ -94,7 +94,7 @@ function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }
 }
 
 /** Mark a clip (all its post links) submitted to its campaign, with a 5-second undo. */
-function useSubmittedWithUndo() {
+export function useSubmittedWithUndo() {
   const mutation = useSetClipSubmitted();
   return (clip: Clip, submitted = true) => {
     mutation.mutate({ id: clip.id, submitted });
@@ -109,6 +109,15 @@ function useSubmittedWithUndo() {
 
 function SubmitButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
   const submit = useSubmittedWithUndo();
+  if (clip.status === "posted" && waitingForViews(clip)) {   // not the one thing to do yet: no lime (D102, D196)
+    return (
+      <Tip label="The brief wants more views first. Submit now anyway?">
+        <Button size={size} variant="ghost" onClick={(e) => { e.stopPropagation(); submit(clip); }}>
+          <CheckCircle2 className="size-3.5" /> Submit early
+        </Button>
+      </Tip>
+    );
+  }
   if (clip.status === "submitted") {
     return (
       <Tip label="Undo: back to not submitted">
@@ -135,7 +144,7 @@ function useCampaignUrl() {
 }
 
 /** Copy the post's link and open the campaign's page to paste it into, in one click. */
-function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy link & submit" }: {
+export function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy link & submit" }: {
   post: Post; campaignUrl: string; size?: "sm" | "md"; label?: string;
 }) {
   if (!campaignUrl) return null;
@@ -501,6 +510,12 @@ function BackToReady({ clip }: { clip: Clip }) {
 
 /* ---------- Card ---------- */
 
+/** Whether a posted clip is still short of the views its brief wants before submitting (D154, D196). */
+function waitingForViews(clip: Clip): boolean {
+  const need = clip.submit_at_views ?? 0;
+  return need > 0 && Math.max(0, ...clip.posts.map((p) => p.views ?? 0)) < need;
+}
+
 /** Posted, but the brief wants more views before the link is submitted (D154): how far it has to go. */
 function WaitingForViews({ clip }: { clip: Clip }) {
   const need = clip.submit_at_views ?? 0;
@@ -557,7 +572,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5">
-            <StatusChip status={clip.status} own={isOwn(clip.campaign)} />
+            <StatusChip status={clip.status} own={isOwn(clip.campaign)} waiting={waitingForViews(clip)} />
             {clip.duplicates.length > 0 && clip.status === "ready" && (
               <Tip label={`Already posted: repeats “${clip.duplicates[0].title}” (${clip.duplicates[0].posted_on.join(", ")})`}>
                 <span aria-label="Already posted" className="text-warning"><AlertTriangle className="size-3.5" /></span>
@@ -612,11 +627,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
 
 /* ---------- Detail sheet ---------- */
 
-/** Platforms a link is filed for without numbers (studio/posts.py). */
-// Platforms with no official way to read a post's numbers (clipper/platforms.py).
-
-
-function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
+function PostStats({ post, campaignUrl, need = 0 }: { post: Post; campaignUrl: string; need?: number }) {
   const na = (why: string) => (
     <Tip label={why}><span className="text-subtle">n/a</span></Tip>
   );
@@ -624,14 +635,14 @@ function PostStats({ post, campaignUrl }: { post: Post; campaignUrl: string }) {
   const noStats = NO_STATS.includes(post.platform);
   return (
     <div className="rounded-md border border-line bg-surface-2 p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm font-medium">
           <PlatformIcon platform={post.platform} />
           {PLATFORM_NAME[post.platform] ?? post.platform}
           {post.account && <span className="text-muted">@{post.account}</span>}
         </span>
-        <span className="flex items-center gap-1.5">
-          {!post.submitted_at && <SubmitLinkButton post={post} campaignUrl={campaignUrl} />}
+        <span className="flex flex-wrap items-center gap-1.5">
+          {!post.submitted_at && (post.views ?? 0) >= need && <SubmitLinkButton post={post} campaignUrl={campaignUrl} />}
           <CopyButton text={post.url} what={`${PLATFORM_NAME[post.platform] ?? post.platform} link`} label="Copy link" />
           <Tip label="Open the post">
             <a href={post.url} target="_blank" rel="noopener noreferrer"
@@ -834,7 +845,7 @@ export function ClipSheet() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <StatusChip status={clip.status} own={isOwn(clip.campaign)} />
+                      <StatusChip status={clip.status} own={isOwn(clip.campaign)} waiting={waitingForViews(clip)} />
                       <span className="text-xs text-muted">
                         <Link to="/campaigns/$name" params={{ name: clip.campaign }} onClick={() => setOpen(null)} className="hover:text-accent hover:underline">{title(clip.campaign)}</Link>
                         {" · "}{clip.source_title} · {formatDuration(clip.duration_s)}
@@ -880,7 +891,7 @@ export function ClipSheet() {
                     <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Posts</h3>
                     {clip.posts.length ? (
                       <div className="flex flex-col gap-2">
-                        {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} />)}
+                        {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} need={clip.submit_at_views ?? 0} />)}
                         <PasteLink key={`paste-${clip.id}`} clip={clip} compact />
                       </div>
                     ) : (

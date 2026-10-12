@@ -654,10 +654,12 @@ export interface CreateBeat { text: string; emphasis: string; pose?: string; vis
 export interface CreateScript { title: string; beats: CreateBeat[]; description: string; hashtags: string[]; take?: number;
   /** On-screen words at the start; the shape and ending it was asked for; the idea's series (D155). */
   hook?: string; shape?: string; ending?: string; series?: string;
-  /** Music and chalk sounds for this video; null or missing: the channel's setting (D156). */
+  /** Music and sound effects for this video; null or missing: the channel's setting (D156, D197). */
   music?: boolean | null; sfx?: boolean | null; bit?: string;
   /** Zooms on footage, cut-ins on the Professor, and the transition (D165). */
   zooms?: boolean; cut_ins?: boolean; transitions?: string;
+  /** The end runs into the start (D197); null or missing: when the script ends on the loop. */
+  loop?: boolean | null;
   /** Captions on or off, and the cover's moment (null: the best still) (D171). */
   captions?: boolean; cover?: number | null;
   /** How the captions look (D180): size, place (a share of the height, + down), the lit word's colour ("" the channel's). */
@@ -676,6 +678,8 @@ export interface CreateVideo {
   archived?: boolean; archived_at?: string | null; posted?: boolean; posts?: CreatePost[];
   /** What Undo would take back ("Another take", "your edit", "Plan pictures"); "" when there's nothing (D193). */
   undo?: string;
+  /** Undo took a script back that Redo can return (D196). */
+  redo?: boolean;
 }
 export interface CreatePost { platform: string; url: string; posted_at: string | null; views: number | null }
 export interface ReadyScript {
@@ -721,7 +725,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 export interface ChannelEdit {
   name?: string; handle?: string; niche?: string; persona?: string; voice?: string; subject?: string; expert?: string;
   areas?: string; idea_focus?: string; idea_avoid?: string; script_focus?: string; script_avoid?: string; watermark?: string; rules?: string[]; drawings?: boolean; words_per_second?: number;
-  /** D156: the character and its reactions, the sign-off, the board's colours, music and chalk sounds by default. */
+  /** D156: the character and its reactions, the sign-off, the board's colours, music and sound effects by default. */
   character?: string; reactions?: string[]; presenter?: string; poses?: Record<string, string> | string; signoff?: string; board?: string; music?: boolean; sfx?: boolean;
 }
 export const createApi = {
@@ -732,16 +736,17 @@ export const createApi = {
   channelDelete: (slug: string) => send("DELETE", `/api/create/channels/${slug}`),
   ideas: (count = 20, steer = "") => send<{ added: number }>("POST", "/api/create/ideas", { count, steer }),
   ownIdea: (question: string, angle = "") => send<{ id: number }>("POST", "/api/create/ideas/own", { question, angle }),
-  skip: (topic: number) => send("POST", `/api/create/topics/${topic}/skip`),
+  skip: (topic: number, undo = false) => send("POST", `/api/create/topics/${topic}/skip${undo ? "?undo=true" : ""}`),
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
   rewrite: (video: number, steer = "") => send("POST", `/api/create/videos/${video}/rewrite`, { steer }),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
-  editStyle: (video: number, body: { zooms?: boolean; cut_ins?: boolean; transitions?: string; captions?: boolean; cover?: number | null;
+  editStyle: (video: number, body: { zooms?: boolean; cut_ins?: boolean; loop?: boolean; transitions?: string; captions?: boolean; cover?: number | null;
                                     caption_size?: number; caption_shift?: number; caption_colour?: string }) =>
     send("PUT", `/api/create/videos/${video}/edit`, body),
   sound: (video: number, body: { music?: boolean | null; sfx?: boolean | null }) => send("PUT", `/api/create/videos/${video}/sound`, body),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
   undo: (video: number) => send<{ undid: string }>("POST", `/api/create/videos/${video}/undo`),
+  forward: (video: number) => send<{ undid: string }>("POST", `/api/create/videos/${video}/undo?forward=true`),
   footage: (video: number, body: { beat: number; wish: string }) => send<FootageOffer>("POST", `/api/create/videos/${video}/footage`, body),
   footageUse: (video: number, body: { beat: number; ids: string[] }) => send("POST", `/api/create/videos/${video}/footage/use`, body),
   camera: (video: number, body: { beat: number; camera: string }) => send("POST", `/api/create/videos/${video}/part`, body),

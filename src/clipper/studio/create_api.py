@@ -169,6 +169,7 @@ def _view() -> dict:
         timings = v.pop("timings", None)
         history = v.pop("history", None) or []   # the page needs only what Undo would undo (D193)
         v["undo"] = history[-1]["why"] if history else ""
+        v["redo"] = bool(v.pop("future", None))   # Undo took something back that Redo can return (D196)
         v["shots"] = _shots(v, timings)
         v["cancelling"] = v["id"] in cancelled
         v["archived"] = bool(v.get("archived_at"))
@@ -488,8 +489,9 @@ def routes(app: FastAPI, publish) -> None:
         return {"id": found["id"]}
 
     @app.post("/api/create/topics/{topic_id}/skip")
-    def create_skip(topic_id: int) -> dict:
-        store.set_topic(topic_id, "skipped")
+    def create_skip(topic_id: int, undo: bool = False) -> dict:
+        """Not this idea (it teaches the planner what to avoid); `undo`: back on the board (D196)."""
+        store.set_topic(topic_id, "new" if undo else "skipped")
         return {"ok": True}
 
     @app.post("/api/create/topics/{topic_id}/script")
@@ -526,7 +528,7 @@ def routes(app: FastAPI, publish) -> None:
 
     @app.put("/api/create/videos/{video_id}/sound")
     def create_sound(video_id: int, body: dict) -> dict:
-        """Music and chalk sounds for one video (D156): true, false, or null for the channel's setting. The voice
+        """Music and sound effects for one video (D156, D197): true, false, or null for the channel's setting. The voice
         and timings stay; the next build uses it."""
         row = video_or_404(video_id)
         _editable(row)
@@ -546,7 +548,7 @@ def routes(app: FastAPI, publish) -> None:
         row = video_or_404(video_id)
         _editable(row)
         script = dict(row["script"])
-        for k in ("zooms", "cut_ins", "captions"):
+        for k in ("zooms", "cut_ins", "captions", "loop"):   # loop: the end runs into the start (D197)
             if k in body:
                 script[k] = bool(body[k])
         if "cover" in body:
@@ -883,15 +885,16 @@ def routes(app: FastAPI, publish) -> None:
         return {"ok": True}
 
     @app.post("/api/create/videos/{video_id}/undo")
-    def create_undo(video_id: int) -> dict:
-        """The script as it was before the last change: a take, an edit or a picture plan (D193)."""
+    def create_undo(video_id: int, forward: bool = False) -> dict:
+        """The script as it was before the last change: a take, an edit or a picture plan (D193); `forward`:
+        Redo, the script Undo took back (D196)."""
         row = video_or_404(video_id)
         _editable(row)
         if row["status"] not in ("draft", "approved"):
             raise HTTPException(400, "a built video's script is what it was built from; undo before it's voiced")
-        last = store.undo(video_id)
+        last = store.undo(video_id, forward=forward)
         if last is None:
-            raise HTTPException(400, "nothing to undo")
+            raise HTTPException(400, "nothing to redo" if forward else "nothing to undo")
         publish("create.changed", {"id": video_id})
         return {"undid": last["why"]}
 
@@ -976,6 +979,7 @@ def routes(app: FastAPI, publish) -> None:
         """Footage to choose from for one part: searches written for it (and the user's words), both
         libraries, the clip it has now and clips used elsewhere in the video left out, every one scored."""
         from ..create import stock
+        from ..create.build import MAX_SHOT
 
         row = video_or_404(video_id)
         _editable(row)
@@ -998,7 +1002,7 @@ def routes(app: FastAPI, publish) -> None:
         except CreateError as exc:
             raise HTTPException(400, str(exc)) from exc
         offered[video_id] = {str(h["id"]): h for h in found}
-        return {"beat": group[0] + 1, "seconds": round(seconds, 2), "clips": max(1, math.ceil(seconds / 4.5 - 1e-6)),
+        return {"beat": group[0] + 1, "seconds": round(seconds, 2), "clips": max(1, math.ceil(seconds / MAX_SHOT - 1e-6)),
                 "searches": queries,
                 "candidates": [{"id": str(h["id"]), "tags": h.get("tags", ""), "duration": h.get("duration", 0),
                                 "tall": h["height"] > h["width"], "score": h.get("score"), "query": h.get("query", ""),

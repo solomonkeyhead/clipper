@@ -779,7 +779,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Skip */
+        /**
+         * Create Skip
+         * @description Not this idea (it teaches the planner what to avoid); `undo`: back on the board (D196).
+         */
         post: operations["create_skip_api_create_topics__topic_id__skip_post"];
         delete?: never;
         options?: never;
@@ -834,7 +837,7 @@ export interface paths {
         get?: never;
         /**
          * Create Sound
-         * @description Music and chalk sounds for one video (D156): true, false, or null for the channel's setting. The voice
+         * @description Music and sound effects for one video (D156, D197): true, false, or null for the channel's setting. The voice
          *     and timings stay; the next build uses it.
          */
         put: operations["create_sound_api_create_videos__video_id__sound_put"];
@@ -1173,7 +1176,8 @@ export interface paths {
         put?: never;
         /**
          * Create Undo
-         * @description The script as it was before the last change: a take, an edit or a picture plan (D193).
+         * @description The script as it was before the last change: a take, an edit or a picture plan (D193); `forward`:
+         *     Redo, the script Undo took back (D196).
          */
         post: operations["create_undo_api_create_videos__video_id__undo_post"];
         delete?: never;
@@ -5458,7 +5462,9 @@ export interface operations {
     };
     create_skip_api_create_topics__topic_id__skip_post: {
         parameters: {
-            query?: never;
+            query?: {
+                undo?: boolean;
+            };
             header?: never;
             path: {
                 topic_id: number;
@@ -6165,7 +6171,9 @@ export interface operations {
     };
     create_undo_api_create_videos__video_id__undo_post: {
         parameters: {
-            query?: never;
+            query?: {
+                forward?: boolean;
+            };
             header?: never;
             path: {
                 video_id: number;

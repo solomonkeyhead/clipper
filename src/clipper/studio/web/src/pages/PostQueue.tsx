@@ -1,11 +1,11 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { CheckCircle2, Download, ExternalLink, PartyPopper, SkipForward, ThumbsDown } from "lucide-react";
+import { CheckCircle2, Download, PartyPopper, SkipForward, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
-import { downloadUrl, useCampaigns, useClips, useSetClipStatus, useSetClipSubmitted, type Clip } from "@/api/client";
+import { downloadUrl, useCampaigns, useClips, type Clip } from "@/api/client";
+import { SubmitLinkButton, useStatusWithUndo, useSubmittedWithUndo } from "@/components/clips";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { PostPanel } from "@/components/posting";
-import { Button, Card, CopyButton, EmptyState, PageHeader, Skeleton } from "@/components/ui";
+import { Button, Card, EmptyState, PageHeader, Skeleton, buttonClass } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,8 +22,9 @@ export function PostQueuePage() {
   const navigate = useNavigate({ from: "/post" });
   const { data: clips, isLoading } = useClips();
   const { data: campaigns = [] } = useCampaigns();
-  const setStatus = useSetClipStatus();
-  const setSubmitted = useSetClipSubmitted();
+  // With the 5-second Undo every other page has (D196).
+  const setStatus = useStatusWithUndo();
+  const submit = useSubmittedWithUndo();
   const [later, setLater] = useState<number[]>([]);          // skipped for now: the back of the line
 
   const archived = useMemo(() => new Set(campaigns.filter((c) => c.archived).map((c) => c.name)), [campaigns]);
@@ -33,6 +34,7 @@ export function PostQueuePage() {
     // Not yet the views the brief wants before submitting: nothing to do on it yet (D154).
     submit: mine.filter((c) => c.status === "posted" && c.submits !== false && !c.submit_at_views),
   };
+  const waiting = mine.filter((c) => c.status === "posted" && c.submits !== false && !!c.submit_at_views).length;
   const step: Step = search.step ?? (lists.post.length ? "post" : "submit");
   const line = [...lists[step].filter((c) => !later.includes(c.id)), ...later.flatMap((id) => lists[step].filter((c) => c.id === id))];
   const clip = line[0];
@@ -57,11 +59,14 @@ export function PostQueuePage() {
       </div>
       {isLoading ? <Skeleton className="h-96" /> : !clip ? (
         <EmptyState icon={<PartyPopper className="size-5 text-money" />}
-          title={step === "post" ? "Nothing waiting to be posted" : "Every posted clip is submitted"}
-          body={step === "post" && lists.submit.length ? `${lists.submit.length} posted clip${lists.submit.length === 1 ? "" : "s"} still need their link submitted.` : undefined}
+          title={step === "post" ? "Nothing waiting to be posted" : waiting ? "Nothing to submit yet" : "Every posted clip is submitted"}
+          body={step === "post" && lists.submit.length ? `${lists.submit.length} posted clip${lists.submit.length === 1 ? "" : "s"} still need their link submitted.`
+            : step === "submit" && waiting ? `${waiting} posted clip${waiting === 1 ? " is" : "s are"} waiting to reach the views their brief wants before submitting.` : undefined}
           action={step === "post" && lists.submit.length
             ? <Button variant="primary" onClick={() => go("submit")}>Submit links</Button>
-            : <Link to="/new" className="inline-flex h-9 items-center rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">Make clips</Link>} />
+            : step === "submit" && waiting
+              ? <Link to="/clips" search={{ status: "posted" }} className={buttonClass("secondary")}>See them</Link>
+              : <Link to="/new" className={buttonClass("primary")}>Make clips</Link>} />
       ) : (
         <div className="grid gap-5 md:grid-cols-[17rem_1fr]">
           <div className="flex flex-col gap-2">
@@ -78,18 +83,17 @@ export function PostQueuePage() {
               <>
                 <div className="flex flex-wrap gap-2">
                   <a href={downloadUrl(clip.id)} download
-                     className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
+                     className={buttonClass("secondary")}>
                     <Download className="size-4" /> Download
                   </a>
                 </div>
                 <PostPanel clip={clip} />
                 <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
-                  <Button variant="primary" onClick={() => setStatus.mutate({ id: clip.id, status: "posted" },
-                    { onSuccess: () => toast.success("Marked posted", { description: "Its link is picked up on the next sync, then it shows under To submit." }) })}>
+                  <Button variant="primary" onClick={() => setStatus(clip, "posted")}>
                     <CheckCircle2 className="size-4" /> I posted it
                   </Button>
                   <Button variant="ghost" onClick={skip}><SkipForward className="size-4" /> Skip for now</Button>
-                  <Button variant="ghost" onClick={() => setStatus.mutate({ id: clip.id, status: "skipped" })}><ThumbsDown className="size-4" /> Won't post this</Button>
+                  <Button variant="ghost" onClick={() => setStatus(clip, "skipped")}><X className="size-4" /> Won't post this</Button>
                 </div>
               </>
             ) : (
@@ -97,21 +101,15 @@ export function PostQueuePage() {
                 <p className="text-sm text-muted">Copy each link into {campaign?.title ?? "the campaign"}'s submission form, then press Mark submitted.</p>
                 <ul className="flex flex-col gap-2">
                   {clip.posts.map((p) => (
-                    <li key={p.url} className="flex items-center gap-2 rounded-sm border border-line bg-surface-1 px-3 py-2 text-sm">
+                    <li key={p.url} className="flex flex-wrap items-center gap-2 rounded-sm border border-line bg-surface-1 px-3 py-2 text-sm">
                       <PlatformIcon platform={p.platform} className="size-4 shrink-0" />
                       <span className="min-w-0 flex-1 truncate">{p.url}</span>
-                      <CopyButton text={p.url} what="Link" label="Copy" />
+                      <SubmitLinkButton post={p} campaignUrl={campaign?.campaign_url ?? ""} />
                     </li>
                   ))}
                 </ul>
                 <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
-                  {campaign?.campaign_url && (
-                    <a href={campaign.campaign_url} target="_blank" rel="noopener noreferrer"
-                       className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
-                      <ExternalLink className="size-4" /> Open the submission page
-                    </a>
-                  )}
-                  <Button variant="primary" onClick={() => setSubmitted.mutate({ id: clip.id, submitted: true })}>
+                  <Button variant="primary" onClick={() => submit(clip)}>
                     <CheckCircle2 className="size-4" /> Mark submitted
                   </Button>
                   <Button variant="ghost" onClick={skip}><SkipForward className="size-4" /> Skip for now</Button>

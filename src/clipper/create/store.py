@@ -77,6 +77,7 @@ def _video(row) -> dict:
     out["script"] = json.loads(out["script"] or "{}")
     out["timings"] = json.loads(out["timings"]) if out["timings"] else None
     out["history"] = json.loads(out.get("history") or "[]")
+    out["future"] = json.loads(out.get("future") or "[]")
     return out
 
 
@@ -86,7 +87,7 @@ HISTORY = 20
 
 def remember(row: dict, why: str) -> None:
     """The script as it is now, kept before a change (`why`: "Another take", "your edit"...) so Undo can bring it
-    back (D193). The same script twice in a row is kept once."""
+    back (D193). The same script twice in a row is kept once. A change clears what Redo would bring back (D196)."""
     if not (row["script"].get("beats") or []):
         return
     past = list(row.get("history") or [])
@@ -94,22 +95,27 @@ def remember(row: dict, why: str) -> None:
         return
     past.append({"script": row["script"], "check_notes": row.get("check_notes") or "", "why": why, "at": db.now()})
     with db.connect() as con:
-        con.execute("UPDATE create_videos SET history=? WHERE id=?", (json.dumps(past[-HISTORY:]), row["id"]))
+        con.execute("UPDATE create_videos SET history=?, future='[]' WHERE id=?", (json.dumps(past[-HISTORY:]), row["id"]))
 
 
-def undo(video_id: int) -> dict | None:
-    """The script before the last change, back in place (and taken off the history); None if there's none."""
+def undo(video_id: int, forward: bool = False) -> dict | None:
+    """The script before the last change, back in place (and taken off the history); None if there's none.
+    The script it replaces goes on the other list, so `forward` (Redo, D196) brings it back again."""
     row = video(video_id)
-    if not row or not row["history"]:
+    take, give = ("future", "history") if forward else ("history", "future")
+    if not row or not row[take]:
         return None
-    last = row["history"].pop()
+    last = row[take].pop()
+    row[give].append({"script": row["script"], "check_notes": row.get("check_notes") or "", "why": last["why"],
+                      "at": db.now()})
     texts = lambda s: [b.get("text") for b in s.get("beats") or []]  # noqa: E731
     changes = {"script": last["script"], "check_notes": last["check_notes"]}
     if texts(last["script"]) != texts(row["script"]):   # other words: a voice made for these no longer fits
         changes.update(voice="", timings="", status="draft")
     update_video(video_id, **changes)
     with db.connect() as con:
-        con.execute("UPDATE create_videos SET history=? WHERE id=?", (json.dumps(row["history"]), video_id))
+        con.execute(f"UPDATE create_videos SET {take}=?, {give}=? WHERE id=?",
+                    (json.dumps(row[take]), json.dumps(row[give][-HISTORY:]), video_id))
     return last
 
 

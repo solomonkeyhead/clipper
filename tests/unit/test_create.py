@@ -22,7 +22,7 @@ class TestTidy:
         s = tidy(script(("Why do you get so dizzy after spinning around?", d), ("Fluid moves.", d), ("It keeps moving.", d),
                         ("And moving.", d), ("Your brain is confused.", Visual(kind="diagram", template="tornado"))))
         assert [b.visual.kind for b in s.beats] == ["stock", "diagram", "diagram", "stock", "stock"]
-        assert s.beats[0].visual.queries and s.beats[0].visual.card  # searches and a chalk card from the sentence
+        assert not s.beats[0].visual.queries and s.beats[0].visual.card  # no made-up searches (D196): the build writes them
 
     def test_emphasis_must_be_in_the_beat_and_at_most_five_hashtags(self):
         s = Script(title="t", beats=[Beat(text="Physics wins.", emphasis="wins"), Beat(text="Dignity does not.", emphasis="pop")],

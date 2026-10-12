@@ -323,7 +323,10 @@ through, not a climbing wall).
 Score EVERY candidate for how instantly a viewer would connect it with what the sentence says: the thing
 itself, or a person plainly experiencing it, big, clear and close enough to read on a phone. A close,
 everyday match counts (headphones for hearing, a microphone for recording); so does real motion that
-matches the sentence (water pouring for "pours").
+matches the sentence (water pouring for "pours"). Judge against what the sentence means in the script, not the
+search words, which can be wrong ("degrees" in a sentence about body heat is a temperature, not a fire). A clip where
+the thing visibly happens (steam rising, a fan spinning, a person blowing) scores higher than the same thing sitting
+still; the library's words often say so.
   9-10 exactly what the sentence says;
   7-8  a clear, natural match a viewer gets at once;
   4-6  related, but loose, generic or needs explaining (a lab for "your voice"); or the right thing but
@@ -331,9 +334,9 @@ matches the sentence (water pouring for "pours").
   0-3  unrelated, confusing, or cheap-looking (cartoonish, a glossy 3D render or CGI, neon audio-visualiser
        rings, a green background, text, a watermark or a logo burned in, mostly black or too dark to read on
        a phone, a posed stock-photo smile at the camera).
-Below 7 a chalkboard drawing is shown instead, which is better than a loose match, so don't round up. Of
-two that fit as well, score the video higher than the photo; a photo of exactly the thing beats a video of
-something near it.
+Below 7 a chalkboard drawing is shown instead, which is better than a loose match, so don't round up. A
+photo never moves: score it below a video that fits as well, and 8 or more only when it shows exactly the moment
+the sentence says.
 For each candidate also give center: where across its thumbnail the subject is, 0 = left edge, 0.5 =
 middle, 1 = right edge (a wide picture is cropped to the panel around it, so put it on the thing the
 sentence is about).
@@ -413,13 +416,17 @@ def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "")
 def _judge(sentence: str, query: str, hits: list[dict], context: str = "",
            good_enough: int = GOOD_ENOUGH) -> tuple[list[dict], list[str]]:
     """The candidates good enough for the sentence, best first ([] if none is), and the better searches the
-    judge suggests when none is."""
+    judge suggests when none is. A photo needs a point more (D196): three of video 25's five footage shots were
+    photos, the opening too. When one passes, the videos a point under the bar follow it as spares for a long
+    sentence's later parts, from the same scores (D196): one clip carried on through a 7 s sentence."""
     scored, better = _scored(sentence, hits, context, query)
-    good = [h for h in scored if h["score"] is not None and h["score"] >= good_enough]
+    good = [h for h in scored if h["score"] is not None and h["score"] >= good_enough + is_photo(h)]
     if not good:
         log.info("create: no footage good enough for %r (best scored %s)", sentence[:60], scored[0]["score"])
         return [], better
-    return good, []
+    spares = [h for h in scored if h not in good and not is_photo(h) and h["score"] is not None
+              and h["score"] >= good_enough - 1]
+    return good + spares, []
 
 
 #: Sentences whose footage was picked by its search words alone, as no model could look (D122).
@@ -464,28 +471,29 @@ def _gather(queries: list[str], exclude: set) -> list[dict]:
     return pool
 
 
-def _shortlist(pool: list[dict], seconds: float, limit: int) -> list[dict]:
+def _shortlist(pool: list[dict], seconds: float, limit: int, photos: bool = True) -> list[dict]:
     """The videos long enough first, then the vertical ones, keeping the search order within each; then up
-    to PHOTOS photos, in the search order (a photo is any length)."""
-    stills = [h for h in pool if is_photo(h)][:PHOTOS]
+    to PHOTOS photos, in the search order (a photo is any length); none when `photos` is off (the opening, D196)."""
+    stills = [h for h in pool if is_photo(h)][:PHOTOS if photos else 0]
     clips = sorted((h for h in pool if not is_photo(h)), key=lambda h: (h["duration"] < seconds + 0.3,
                                                                        h["height"] <= h["width"]))
     return clips[:limit - len(stills)] + stills
 
 
-def _pool(queries: list[str], used: set, seconds: float) -> list[dict]:
-    return _shortlist(_gather(queries, used), seconds, CANDIDATES)
+def _pool(queries: list[str], used: set, seconds: float, photos: bool = True) -> list[dict]:
+    return _shortlist(_gather(queries, used), seconds, CANDIDATES, photos)
 
 
 def choose(queries: list[str], seconds: float, used: set, sentence: str = "", context: str = "",
-           good_enough: int = GOOD_ENOUGH, count: int = 1) -> list[dict]:
+           good_enough: int = GOOD_ENOUGH, count: int = 1, photos: bool = True) -> list[dict]:
     """Up to `count` different unused clips for the parts of a beat, each `seconds` long, best first, judged
     against the sentence (and the whole script, `context`) across all its searches at once. When none is good
     enough the judge's own better searches get one more look (D124), the last (D181): the build's further
     rounds, up to five calls a part, almost never found one. [] when nothing fits: the beat gets a chalkboard
     drawing instead, never a generic stand-in ("science laboratory" opened a video once). `good_enough` is
-    lower when the user asked for footage on that sentence themselves (D126)."""
-    ranked = _pool(queries, used, seconds)
+    lower when the user asked for footage on that sentence themselves (D126). `photos` off: videos only (the
+    opening, which should be the most striking moving picture, D196)."""
+    ranked = _pool(queries, used, seconds, photos)
     if not ranked:
         return []
     if not sentence:
@@ -495,7 +503,7 @@ def choose(queries: list[str], seconds: float, used: set, sentence: str = "", co
         if not good and better:
             tried = {q.lower() for q in queries}
             fresh = [q for q in better if q.lower() not in tried]
-            again = _pool(fresh, used, seconds) if fresh else []
+            again = _pool(fresh, used, seconds, photos) if fresh else []
             if again:
                 log.info("create: footage searched again for %r: %s", sentence[:60], " / ".join(fresh))
                 good, _ = _judge(sentence, " / ".join(fresh), again, context, good_enough)

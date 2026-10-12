@@ -107,8 +107,8 @@ def cuts(words: list[TimedWord], last_from: int) -> list[tuple[float, float]]:
 QUIET, EDGE = 32.0, 0.06
 
 
-def levels(path: Path) -> list[float]:
-    """The voice's loudness every 10 ms, in dB under its loud parts (the 95th percentile)."""
+def levels(path: Path, raw: bool = False) -> list[float]:
+    """The voice's loudness every 10 ms, in dB under its loud parts (the 95th percentile); `raw`: in dB full scale."""
     import subprocess
 
     import numpy as np
@@ -122,7 +122,7 @@ def levels(path: Path) -> list[float]:
     if not n:
         return []
     db = 10 * np.log10((x[: n * 160].reshape(n, 160) ** 2).mean(1) + 1e-10)
-    return (db - np.percentile(db, 95)).tolist()
+    return (db if raw else db - np.percentile(db, 95)).tolist()
 
 
 def quiet_only(gaps: list[tuple[float, float]], loud: list[float]) -> list[tuple[float, float]]:
