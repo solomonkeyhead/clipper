@@ -238,7 +238,7 @@ def fill(text: str, channel: Channel | None = None) -> str:
     """A prompt with the channel's {subject}, {expert}, {areas}, {abstract}, {hashtags} and {scope} filled in."""
     ch = channel or load()
     return (text.replace("{subject}", ch.subject).replace("{expert}", ch.expert).replace("{areas}", ch.areas)
-            .replace("{abstract}", ch.abstract).replace("{hashtags}", ch.hashtags)
+            .replace("{abstract}", ch.abstract).replace("{hook_max}", str(ch.hook_max)).replace("{hashtags}", ch.hashtags)
             .replace("{scope}", ch.scope or ch.subject))
 
 

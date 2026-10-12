@@ -27,16 +27,18 @@ they have personally felt, heard or seen. Most (about 7 in 10) should be about t
 viewer's own body or senses in an everyday moment: driving, flying, cooking, showering,
 sports, weather, sleep, phones, music, the gym. The rest: striking everyday objects or
 events with a surprising mechanism. Spread them across {areas}. Concrete and specific ("Why does your
-voice sound weird on a recording?"), never abstract ("What is entropy?"), never a
+recorded voice sound weird?"), never abstract ("What is entropy?"), never a
 comparison of specs ("torque vs horsepower"). Each must have a real, explainable
 {subject} mechanism. Do not repeat or rephrase any question already listed.
 
-For each: question (at most 14 words, phrased to the viewer: "Why do you..." / "Why does
-your..."), angle (the {subject} behind it in a few words), series (the recurring series it
+For each: question (at most {hook_max} words, since it opens the video; in the words a viewer would say,
+phrased to the viewer where the thing really is theirs: "Why do your ears...", "Why do you...", never a
+forced "your"), angle (the {subject} behind it in a few words), series (the recurring series it
 belongs to, 2-3 words, such as "Kitchen Physics" or "In the Car"; reuse a series already
 listed when one fits), and scores, each 0 to 3: felt (in the viewer's own body or senses),
-common (how many people meet this moment), surprise (how unexpected the answer is), mechanism
-(one clear mechanism, explainable in 40 seconds), showable (footage or a drawing can show it),
+common (how many people meet this moment), surprise (the answer most people would guess is wrong or only half right), mechanism
+(one clear mechanism, explainable in 40 seconds), showable (the moment itself is common stock footage, a person doing an everyday thing, for the
+first second; a drawing can show the rest),
 searched (people type this question into search), fit (it belongs on the channel: {scope};
 never health advice, symptoms or treatments)."""
 
