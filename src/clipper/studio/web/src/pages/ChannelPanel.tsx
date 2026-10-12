@@ -160,7 +160,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
           <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\professor.png" onChange={(e) => set({ character: e.target.value })} /></Field>
         <Field label="Reaction pictures (one per line)" hint="One of these at the punchline, a different one each video. Empty: the character picture.">
           <textarea className={area} rows={3} value={edit.reactionsText ?? data.reactions.join("\n")} onChange={(e) => set({ reactionsText: e.target.value })} /></Field>
-        <Field label="Poses (name = file, one per line)" hint="Clipper tags up to 4 sentences a video with one of these, shown bottom left for about 2 seconds. Names it knows: shocked, facepalm, aha, thinking, smug, shrug, deadpan, confused, nervous, whisper, laugh, coffee, grudge, proud.">
+        <Field label="Poses (name = file, one per line)" hint="Clipper tags up to 4 sentences a video with one of these, shown bottom left for about 2 seconds. Names it knows: shocked, facepalm, aha, thinking, smug, shrug, deadpan, confused, nervous, whisper, laugh, coffee, grudge, proud. talking-1, talking-2 and so on take turns while he talks. A picture with an -open (mouth open) or -blink (eyes closed) version next to it, like professor-talking-1-open.png, talks and blinks.">
           <textarea className={area} rows={5} value={edit.posesText ?? Object.entries(data.poses ?? {}).map(([n, p]) => `${n} = ${p}`).join("\n")}
                     placeholder="shocked = C:\Pictures\professor-shocked.png" onChange={(e) => set({ posesText: e.target.value })} /></Field>
         <Field label="Presenting picture" hint="Shown for a moment as the first drawing appears. Empty: none.">
@@ -173,7 +173,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("sfx") as boolean} onChange={(e) => set({ sfx: e.target.checked })} />
-        Sound effects on the edit: whooshes on transitions, a thump on zoom-ins, chalk as drawings are drawn, a riser into the punchline (D197)
+        Sound effects on the edit: whooshes on transitions, a thump on zoom-ins, chalk as drawings are drawn, a riser into the punchline. Made by Clipper, so nothing for Content ID to match
       </label>
       <div className="flex gap-2">
         <Button variant="primary" onClick={() => save()}>Save</Button>

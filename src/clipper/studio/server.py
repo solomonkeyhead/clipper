@@ -1354,6 +1354,13 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def list_jobs() -> list[dict]:
         return jobs.list()
 
+    @app.post("/api/jobs/{job_id}/stop")
+    def stop_job(job_id: int) -> dict:
+        job = jobs.stop(job_id)
+        if job is None:
+            raise HTTPException(409, "that run isn't waiting or running")
+        return job.view()
+
     @app.post("/api/jobs")
     def start_job(body: dict) -> list[dict]:
         """One job per video, queued and run in turn (D72)."""

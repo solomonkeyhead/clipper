@@ -20,6 +20,9 @@ SETTLING_HOURS = {"instagram": 48, "youtube": 48}
 MIN_MEDIAN = 10
 #: Fewer posts than this and "x your median" means nothing.
 MEDIAN_MIN_POSTS = 3
+#: A post this old at 0 views was never shown to anyone, and this many in a row on one account is the platform
+#: holding the account back, not bad luck (D198).
+ZERO_HOURS, ZERO_RUN = 48, 5
 
 _sync_lock = threading.Lock()
 #: Held by anything that rewrites the performance log, so a sync never overwrites it.
@@ -133,7 +136,7 @@ def run_sync() -> dict:
     try:
         rows = perf.read()
         ensure_create_rows(rows)
-        problems = sync_all(rows)
+        problems = sync_all(rows) + zero_view_runs(rows)
         try:
             perf.write(rows)
         except PermissionError:
@@ -168,6 +171,28 @@ def posts_by_clip(rows: list[dict[str, str]]) -> dict[tuple[str, str, str], list
             post[name] = number if number is not None else (value or None)
         key = (row.get("campaign", ""), row.get("source_id", ""), row.get("clip_id", ""))
         out.setdefault(key, []).append(post)
+    return out
+
+
+def zero_view_runs(rows: list[dict[str, str]], now: datetime | None = None) -> list[str]:
+    """The accounts whose newest posts, ZERO_RUN or more of those over ZERO_HOURS old, all show 0 views (D198):
+    @solomonkeyclips' 19 TikToks since Sep 28 sat at 0 while the same clips had views elsewhere, and nothing said so."""
+    from ..platforms import NAMES
+
+    by_account: dict[tuple[str, str], list[tuple[str, float]]] = {}
+    for found in posts_by_clip(rows).values():
+        for p in found:
+            age = age_hours(p.get("posted_at"), now)
+            if age is not None and age >= ZERO_HOURS and isinstance(p.get("views_latest"), float):
+                by_account.setdefault((p["platform"], p["account"]), []).append((p["posted_at"], p["views_latest"]))
+    out = []
+    for (platform, account), posts in sorted(by_account.items()):
+        posts.sort(reverse=True)
+        run = next((k for k, (_, views) in enumerate(posts) if views), len(posts))
+        if run >= ZERO_RUN:
+            name = NAMES.get(platform, platform)
+            out.append(f"{name} @{account.lstrip('@')}: your last {run} posts show 0 views after two days. Check "
+                       f"{name}'s app for a warning or restriction on the account before posting more there")
     return out
 
 

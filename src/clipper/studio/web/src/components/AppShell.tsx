@@ -55,6 +55,8 @@ function useNav(): NavItem[] {
   ];
 }
 
+const PHONE_TABS = ["/", "/create", "/clips", "/post", "/campaigns"];
+
 const SECONDARY: NavItem[] = [
   { to: "/accounts", label: "Accounts", icon: <UserCircle2 />, keys: "G A" },
   { to: "/settings", label: "Settings", icon: <Settings />, keys: "G ," },
@@ -233,7 +235,10 @@ export function AppShell() {
   const setAsk = useUI((s) => s.setAsk);
   const nav = useNav();
   const [more, setMore] = useState(false);
-  const rest = [...nav.slice(4), ...SECONDARY];
+  // A phone's tabs are the daily jobs (D198): posting is what a phone is for, and Clips and the Post queue sat
+  // under More while New clips (uploading long videos) had a tab.
+  const tabs = PHONE_TABS.map((to) => nav.find((i) => i.to === to)).filter((i): i is NavItem => !!i).slice(0, 4);
+  const rest = [...nav.filter((i) => !tabs.includes(i)), ...SECONDARY];
   const path = useRouterState({ select: (s) => s.location.pathname });
   const moreActive = rest.some((i) => path.startsWith(i.to));
   useBuildNotifications();
@@ -338,7 +343,7 @@ export function AppShell() {
 
         {/* Bottom tabs (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
-          {nav.slice(0, 4).map((item) => (
+          {tabs.map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
                   className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted data-[status=active]:text-accent [&_svg]:size-5">

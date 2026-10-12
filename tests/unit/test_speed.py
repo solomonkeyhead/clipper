@@ -111,6 +111,38 @@ def test_a_job_clipper_closed_on_is_listed_as_stopped_after_a_restart(monkeypatc
     assert not [j for j in after.list() if j["status"] in ("queued", "running")]   # /api/quit isn't blocked by it
 
 
+def test_stop_ends_a_running_job_at_its_next_step_and_a_queued_one_never_starts(monkeypatch, data_root):
+    """D198: there was no way to take back a run but to wait it out or close Clipper."""
+    from clipper import runner
+    from clipper.studio import jobs
+
+    log = logging.getLogger("clipper.runner")
+    started, hold, reached = threading.Event(), threading.Event(), []
+
+    def fake_run(source, **kwargs):
+        started.set()
+        hold.wait(10)
+        log.info("selected 3 clip(s) of 3 requested")   # the next step: Stop takes effect here
+        reached.append(source)
+        return SimpleNamespace(accepted=[1], rejected=[], selection_note="", report={})
+
+    monkeypatch.setattr(runner, "run", fake_run)
+    monkeypatch.setattr(jobs, "JOB_WORKERS", 1)
+    runner_ = jobs.JobRunner(lambda *a, **k: None)
+    a = runner_.submit(SimpleNamespace(name="c"), "a.mp4", 1)
+    b = runner_.submit(SimpleNamespace(name="c"), "b.mp4", 1)
+    assert started.wait(10)
+    assert runner_.stop(b.id).status == "stopped" and runner_.stop(b.id) is None
+    assert runner_.stop(a.id).stopping
+    hold.set()
+    for _ in range(200):
+        if a.status not in ("queued", "running"):
+            break
+        time.sleep(0.05)
+    time.sleep(0.2)
+    assert a.status == "stopped" and reached == [] and b.status == "stopped"
+
+
 class OutOfQuota(LLMBackend):
     """Gemini's free tier on 2026-10-08: "retry in 20h25m", and each call asked again (D168)."""
     name = "quota"

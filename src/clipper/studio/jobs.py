@@ -38,7 +38,8 @@ class Job:
     ranges: list[tuple[float, float]] = field(default_factory=list)
     # Clips made in the editor (editing.ClipEdit as dicts, D103); a manual job.
     edits: list[dict] = field(default_factory=list)
-    status: str = "queued"          # queued | running | done | failed
+    status: str = "queued"          # queued | running | done | failed | stopped
+    stopping: bool = False          # Stop was pressed: it ends at its next step (D198)
     stage: str = "Waiting to start"
     pct: float = 0.0
     clips: int = 0
@@ -71,6 +72,10 @@ STAGES = [
 RENDER_FROM, RENDER_TO = 70, 98
 
 
+class Stopped(Exception):
+    """Stop pressed on a running job (D198)."""
+
+
 class _Progress(logging.Handler):
     """Turns the pipeline's INFO lines for one job into stage + percent."""
 
@@ -85,6 +90,8 @@ class _Progress(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if record.threadName != self.thread and not record.threadName.startswith(self.thread + "-"):
             return
+        if self.job.stopping:   # raised at the pipeline's next log line on this job's threads: its next step (D198)
+            raise Stopped
         try:
             text = record.getMessage().strip()
         except Exception:
@@ -253,6 +260,21 @@ class JobRunner:
         job.report = {"source_id": info.source_id}
         job.status, job.pct, job.stage = "done", 100.0, "Ready to edit"
 
+    def stop(self, job_id: int) -> Job | None:
+        """Stop a job (D198): a queued one never starts, a running one ends at its next step. There was no way to
+        take back a run started on the wrong video or campaign but to wait it out or close Clipper."""
+        job = self.jobs.get(job_id)
+        if job is None or job.status not in ("queued", "running"):
+            return None
+        if job.status == "queued":
+            job.status, job.stage = "stopped", "Stopped before it started"
+            job.finished = datetime.now().strftime("%Y-%m-%d %H:%M")
+            _keep(job)
+        else:
+            job.stopping, job.stage = True, "Stopping after this step"
+        self.publish("job.progress", job.view())
+        return job
+
     def list(self) -> list[dict]:
         live = {j.id: j.view() for j in self.jobs.values()}
         merged = {**self._done, **live}
@@ -264,6 +286,8 @@ class JobRunner:
                 job = self._queue.get(timeout=5)
             except queue.Empty:
                 return
+            if job.status != "queued":   # stopped while it waited
+                continue
             # The thread carries the job's id, so its log lines (and those of
             # the threads it starts) reach only this job's progress.
             threading.current_thread().name = f"clip-job-{job.id}"
@@ -312,6 +336,8 @@ class JobRunner:
             if result.rejected:
                 notes.append(f"{len(result.rejected)} failed quality checks and were left out")
             job.message = ". ".join(n for n in notes if n)
+        except Stopped:
+            job.status, job.stage, job.message = "stopped", "Stopped", ""
         except Exception as exc:  # shown on the page, and in the log for debugging
             job.status, job.stage, job.message = "failed", "Failed", failure(exc)
             log.error("clip job %s failed:\n%s", job.id, traceback.format_exc())

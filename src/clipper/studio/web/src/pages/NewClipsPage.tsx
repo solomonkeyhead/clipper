@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Fi
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  sourceVideoUrl, startJob, uploadVideo, useCampaignTitle, useCampaigns, useJobs, useSettings, useSetup, useSources,
+  sourceVideoUrl, startJob, stopJob, uploadVideo, useCampaignTitle, useCampaigns, useJobs, useSettings, useSetup, useSources,
   type Job, type JobMode, type Source,
 } from "@/api/client";
 import { JobResults, LinkImport } from "@/components/footage";
@@ -32,26 +32,29 @@ function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; c
   const [progress, setProgress] = useState<{ name: string; pct: number } | null>(null);
   const qc = useQueryClient();
 
-  const send = async (file: File | undefined) => {
-    if (!file) return;
-    setProgress({ name: file.name, pct: 0 });
-    try {
-      const source = await uploadVideo(file, (f) => setProgress({ name: file.name, pct: f * 100 }), campaign);
-      await qc.invalidateQueries({ queryKey: ["sources"] });
-      toast.success(`${file.name} uploaded`);
-      onUploaded(source);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setProgress(null);
+  /** One after another (D198): a batch of episodes went in one at a time, waiting on each. */
+  const send = async (files: FileList | null | undefined) => {
+    const list = Array.from(files ?? []);
+    for (const [k, file] of list.entries()) {
+      const name = list.length > 1 ? `${file.name} (${k + 1} of ${list.length})` : file.name;
+      setProgress({ name, pct: 0 });
+      try {
+        const source = await uploadVideo(file, (f) => setProgress({ name, pct: f * 100 }), campaign);
+        await qc.invalidateQueries({ queryKey: ["sources"] });
+        toast.success(`${file.name} uploaded`);
+        onUploaded(source);
+      } catch (e) {
+        toast.error(`${file.name}: ${(e as Error).message}`);
+      }
     }
+    setProgress(null);
   };
 
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); setOver(true); }}
       onDragLeave={() => setOver(false)}
-      onDrop={(e) => { e.preventDefault(); setOver(false); void send(e.dataTransfer.files[0]); }}
+      onDrop={(e) => { e.preventDefault(); setOver(false); void send(e.dataTransfer.files); }}
       onClick={() => !progress && input.current?.click()}
       role="button"
       tabIndex={0}
@@ -61,8 +64,8 @@ function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; c
         over ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong hover:bg-surface-2",
       )}
     >
-      <input ref={input} type="file" accept="video/*,.mov,.mkv" hidden
-             onChange={(e) => void send(e.target.files?.[0])} />
+      <input ref={input} type="file" accept="video/*,.mov,.mkv" hidden multiple
+             onChange={(e) => { void send(e.target.files); e.target.value = ""; }} />
       {progress ? (
         <div className="w-full max-w-md">
           <div className="mb-2 truncate text-sm">Uploading {progress.name}…</div>
@@ -72,7 +75,7 @@ function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; c
       ) : (
         <>
           <UploadCloud className="size-7 text-muted" />
-          <div className="text-sm font-medium">Drop the campaign's video here, or click to choose</div>
+          <div className="text-sm font-medium">Drop the campaign's videos here, or click to choose</div>
           <div className="text-xs text-muted">MP4, MOV or MKV · any size · saved to Clipper's uploads folder</div>
         </>
       )}
@@ -170,6 +173,7 @@ const CLIP_STEPS: Step[] = [
 
 function JobCard({ job }: { job: Job }) {
   const title = useCampaignTitle();
+  const qc = useQueryClient();
   const running = job.status === "running" || job.status === "queued";
   return (
     <Card className="flex flex-col gap-2 p-4">
@@ -182,7 +186,20 @@ function JobCard({ job }: { job: Job }) {
           ? <Chip tone="success" className="pop-in"><CheckCircle2 className="size-3.5" /> {job.clips} made</Chip>
           : <Chip tone="warning">No clips</Chip>)}
         {job.status === "failed" && <Chip tone="danger"><AlertTriangle className="size-3.5" /> Failed</Chip>}
-        {running && <Chip tone="accent"><Loader2 className="size-3.5 animate-spin" /> {job.status === "queued" ? "Queued" : "Working"}</Chip>}
+        {job.status === "stopped" && <Chip>Stopped</Chip>}
+        {running && (
+          <span className="flex shrink-0 items-center gap-2">
+            <Chip tone="accent"><Loader2 className="size-3.5 animate-spin" /> {job.stopping ? "Stopping" : job.status === "queued" ? "Queued" : "Working"}</Chip>
+            {!job.stopping && (
+              <Tip label={job.status === "queued" ? "Take it out of the queue" : "Stop this run at its next step"}>
+                <Button size="sm" variant="ghost" aria-label={`Stop clipping ${job.name}`}
+                        onClick={() => stopJob(job.id).then(() => qc.invalidateQueries({ queryKey: ["jobs"] }))}>
+                  <X className="size-4" /> Stop
+                </Button>
+              </Tip>
+            )}
+          </span>
+        )}
       </div>
       {running && (
         <JobProgress pct={job.status === "queued" ? null : job.pct} size="sm" label={`Clipping ${job.name}`}

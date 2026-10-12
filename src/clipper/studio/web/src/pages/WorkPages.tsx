@@ -86,8 +86,10 @@ function useActive() {
 export function ClipsPage() {
   const search = useSearch({ from: "/clips" });
   const navigate = useNavigate({ from: "/clips" });
-  const { data: clips, isLoading } = useClips();
-  const { data: campaigns = [] } = useCampaigns();
+  const { data: clips, isLoading: clipsLoading } = useClips();
+  const { data: campaigns = [], isLoading: campaignsLoading } = useCampaigns();
+  // Both, or "active campaigns" is empty for a moment and every tab reads 0 over a blank page (D198).
+  const isLoading = clipsLoading || campaignsLoading;
   const active = useActive();
   const campaign = search.campaign ?? "active";
   const mine = (clips ?? []).filter((c) =>
@@ -100,7 +102,7 @@ export function ClipsPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="Clips" subtitle={<>Every clip you've made. <Kbd>J</Kbd> <Kbd>K</Kbd> to move, <Kbd>Enter</Kbd> to open.</>}
+      <PageHeader title="Clips" subtitle={<>Every clip you've made.<span className="pointer-coarse:hidden"> <Kbd>J</Kbd> <Kbd>K</Kbd> to move, <Kbd>Enter</Kbd> to open.</span></>}
         actions={<>
           {(status === "ready" || status === "posted") && list.length > 0 && (
             <Link to="/post" search={{ step: status === "ready" ? "post" : "submit", campaign: campaign !== "active" && campaign !== "all" ? campaign : undefined }}
@@ -125,7 +127,7 @@ export function ClipsPage() {
                      onChange={(key) => void navigate({ search: (s) => ({ ...s, status: key }) })} />
       )}
       {isLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] sm:gap-4">
           {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="aspect-[9/19]" />)}
         </div>
       ) : list.length ? (

@@ -357,7 +357,7 @@ export function SelectionBar({ clips, onClear }: { clips: Clip[]; onClear: () =>
   const count = (n: number) => n < clips.length ? ` ${n}` : "";
   return (
     <div role="toolbar" aria-label="Picked clips"
-      className="fade-in fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-xl border border-line-strong bg-surface-1 p-1.5 pl-4 shadow-3">
+      className="fade-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex md:bottom-6 -translate-x-1/2 items-center gap-1.5 rounded-xl border border-line-strong bg-surface-1 p-1.5 pl-4 shadow-3">
       <span className="tabular mr-2 text-sm font-medium whitespace-nowrap">{clips.length} selected</span>
       {ready.length > 0 && (
         <Button size="sm" variant="secondary" onClick={act(() => bulk.setStatus(ready, "posted"))}>
@@ -563,7 +563,8 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
             onClick={(e) => { e.stopPropagation(); onSelect(e); }}
             className={cn("absolute top-5 left-5 z-10 grid size-5 place-items-center rounded-[5px] border transition-opacity duration-[var(--dur-fast)]",
               selected ? "border-accent bg-accent text-accent-fg" : "border-white/70 bg-black/40 text-transparent hover:bg-black/60",
-              selected || selecting ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100")}>
+              // A touch screen has no hover: the box always shows there (D198).
+              selected || selecting ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100")}>
             <Check className="size-3.5" strokeWidth={3} />
           </button>
         </Tip>

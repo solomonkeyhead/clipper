@@ -180,18 +180,24 @@ function NicheFilter({ found, niche, setNiche }: { found: FoundCampaign[]; niche
   );
 }
 
+const FIRST_FOUND = 10;
+
 export function FindCampaigns() {
   const { data: found = [] } = useFound();
   const [niche, setNicheState] = useState<string>(() => { try { return localStorage.getItem(NICHE_KEY) ?? ""; } catch { return ""; } });
   const setNiche = (n: string) => { setNicheState(n); try { localStorage.setItem(NICHE_KEY, n); } catch { /* fine */ } };
   // A remembered niche with nothing in it now shows everything rather than an empty list.
   const active = niche && found.some((f) => f.niche === niche) ? niche : "";
-  // Good fits first, then maybes; the poor fits fold away behind one button (D154).
+  // Good fits first, then maybes; the poor fits fold away behind one button (D154). Within each, the best pay, then
+  // the newest; ten at first (D198): 40 rows made a page to scroll past before the campaigns themselves.
   const rank = (f: FoundCampaign) => (f.fit === "yes" ? 0 : f.fit === "maybe" ? 1 : 2);
-  const inNiche = (active ? found.filter((f) => f.niche === active) : found).slice().sort((a, b) => rank(a) - rank(b));
+  const inNiche = (active ? found.filter((f) => f.niche === active) : found).slice()
+    .sort((a, b) => rank(a) - rank(b) || (b.rate_per_1k_usd ?? -1) - (a.rate_per_1k_usd ?? -1) || b.found_at.localeCompare(a.found_at));
   const [showPoor, setShowPoor] = useState(false);
+  const [all, setAll] = useState(false);
   const poor = inNiche.filter((f) => rank(f) === 2);
-  const shown = showPoor ? inNiche : inNiche.filter((f) => rank(f) < 2);
+  const fitting = showPoor ? inNiche : inNiche.filter((f) => rank(f) < 2);
+  const shown = all ? fitting : fitting.slice(0, FIRST_FOUND);
   return (
     <>
     <CampaignAlerts />
@@ -202,6 +208,9 @@ export function FindCampaigns() {
           <h2 className="mb-3 text-md font-semibold">New campaigns from your alerts</h2>
           <NicheFilter found={found} niche={active} setNiche={setNiche} />
           {shown.map((f) => <FoundRow key={f.key} found={f} />)}
+          {fitting.length > shown.length && (
+            <Button size="sm" variant="ghost" className="mt-2" onClick={() => setAll(true)}>Show {fitting.length - shown.length} more</Button>
+          )}
           {poor.length > 0 && (
             <Button size="sm" variant="ghost" className="mt-2" onClick={() => setShowPoor(!showPoor)}>
               {showPoor ? "Hide the poor fits" : `Show ${poor.length} poor fit${poor.length === 1 ? "" : "s"}`}

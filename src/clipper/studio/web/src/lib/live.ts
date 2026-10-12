@@ -6,6 +6,9 @@ import { notify } from "./notify";
 import { useUI } from "./store";
 
 /** Server-Sent Events: the server says what changed, the page refetches just that. */
+/** The sync problems already shown as a toast this session. */
+const toasted = new Set<string>();
+
 export function useLiveUpdates() {
   const qc = useQueryClient();
   const setSyncing = useUI((s) => s.setSyncing);
@@ -43,7 +46,9 @@ export function useLiveUpdates() {
         refreshClips();
         qc.invalidateQueries({ queryKey: keys.status });
         const data = JSON.parse((e as MessageEvent).data || "{}") as { problems?: string[] };
-        data.problems?.forEach((p) => toast.warning(p, { duration: 8000 }));
+        // Once a session each (D198): a problem that lasts, like an account at 0 views, came back every sync. The
+        // sync button keeps showing them.
+        data.problems?.filter((p) => !toasted.has(p)).forEach((p) => { toasted.add(p); toast.warning(p, { duration: 8000 }); });
       });
       source.addEventListener("clips.changed", refreshClips);
       source.addEventListener("job.progress", (e) => {

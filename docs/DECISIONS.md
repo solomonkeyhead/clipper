@@ -3447,3 +3447,19 @@ effects (Script.sfx / channel.sfx, made in sound.py, nothing licensed): whoosh, 
 sounds, riser, swell and chalk per drawn part, ranked and spaced by sound.pick, nothing over the punchline; the
 limiter's auto level is off (it lifted the mix 1 dB). Checked on video 25 rebuilt in a scratch folder: first and last
 frames match, one zoom left, -14.8 LUFS as before.
+
+## D198: a zero-views warning, Stop for clipping runs, phone tabs, and the rest of the site review (2026-10-11)
+All 19 of @solomonkeyclips' TikToks since Sep 28 sat at 0 views while the same clips had views on Instagram and
+YouTube, and nothing said so. After each sync, `stats.zero_view_runs` names any account whose newest posts, 5 or more
+of those over two days old, all show 0 views; it shows on the sync button and as one toast a session (sync problems
+toasted every 15 minutes before). A clipping run can be stopped: a queued one never starts, a running one ends at its
+next step (the progress handler raises `Stopped` at the pipeline's next log line on that job's threads; Python can't
+kill a thread). A phone's tabs are Dashboard, Create, Clips and Post queue (Campaigns and New clips moved to More),
+clips show two a row there, the select box shows without hover on a touch screen, the selection bar sits above the
+tabs, and the keyboard hints are hidden on touch. Clips waits for campaigns before showing its tabs (they read 0 over a
+blank page for a moment). Find campaigns counts good fits only, sorts by fit, pay and age, and shows ten at first.
+New clips takes several videos at once, uploaded in turn. Create's AI and footage cards leave Settings when Create is
+off. Channel settings explains the talking, -open and -blink pictures, and no longer shows a D-number.
+The idea planner now gets the channel's track record (`topics.track_record`: each posted video's views on every
+platform and the share watched, best first, once two days old) and the month, so it leans toward what worked here
+instead of only its built-in guess; its system prompt (the fixture) is unchanged.

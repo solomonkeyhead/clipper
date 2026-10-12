@@ -25,16 +25,16 @@ is the order I'd build them.
 | Redo one picture | "New pictures" redoes all of them | On a built video: per part, "New footage" or "New drawing" (with optional words), undo, and a rebuild that keeps every other part as it was | **Done** (D125) | |
 | Diagram contents | Templates and sketches are generated; a sketch is kept out of the button corner and its words moved off its lines (D182) | A template's title and labels, a sketch's words, per part (D171); a sketch's words and arrows coloured, its arrows turned round, a forces diagram's arrows pointed (D180); numbers, a template's colours | Partial | S |
 | Framing of footage | Faces, else the judge's guess | Per part, left edge to right edge or on its subject (D180); no push-in is the camera's "hold still" (D164) | **Done** | |
-| Shot lengths and cuts | Cuts land where each sentence starts; footage over 4.5s is split | Nudge a cut earlier or later per part (D171); set the longest a shot may last | Partial | S |
+| Shot lengths and cuts | Cuts land where each sentence starts; footage over 3.5s is split, with a closer angle or the judge's next clip (D196) | Nudge a cut earlier or later per part (D171); set the longest a shot may last | Partial | S |
 | Voice timing | Speech recognition times every word | Nudge a sentence's start (D171); captions show the script's spelling or your own text, so a misheard word never shows | Done | - |
 | Captions | One style from settings | On or off and each sentence's text per video (D171); size, place and the said word's colour (D180) | **Done** | |
 | On-screen hook | The writer's 6-word hook (else the title) for 1.5 s (D155) | Its own text per video in the script editor; length and on/off | Partial | S |
 | Script shape and ending | Taken in turn per script (D155) | Pick the shape and ending before writing | Gap | S |
 | Editor's read of a script | Another AI lists fixes and the script is rewritten once (D155); shown in the notes | Edit the script; skip the editor | Gap | S |
 | Pauses in the voice | Pauses over 0.25 s cut, 0.6 s kept before the last sentence (D155) | Off, or the pause lengths | Gap | S |
-| Last shot | The opening footage again under the last sentence, so it loops (D155) | Pick the last picture yourself (any manual pick stops it) | Done | - |
+| Last shot and the loop | A loop-ending script ends a quarter second after its last word, and its last 1.5 s play the opening clip up to its first frame with the hook back (D197) | "Seamless loop" on or off per video; pick the last picture yourself | Done | - |
 | Camera moves and punch-ins | Moves in turn; punch-ins on highlighted words (D156, D162) | The move per sentence in the script editor, and per part on a built video (D164); punch-ins (Zoom-ins) off per video (D165) | Done | - |
-| Cut-ins on the presenter | The camera cuts in on his face on reaction poses and the punchline's last word (D162) | Off per video (D165); pick the sentences | Partial | S |
+| Cut-ins on the presenter | The presenter alone and big on the board on reaction poses and the punchline's last word, never beside a punch-in (D162, D197) | Off per video (D165); pick the sentences | Partial | S |
 | Transitions | Cut, whip or zoom where the kind of picture changes (D162) | Per video: automatic, plain cuts, whip or zoom (D165); per part (D171) | Done | - |
 | Photos among the footage | Up to 3 photos offered with each part's clips, shown with a camera move (D163) | Pick or pass over them in the footage picker | Done | - |
 | Drawing size on the board | A template's drawing scaled to fill the board (D162) | Size and place per drawing (D171) | Done | - |
@@ -44,6 +44,7 @@ is the order I'd build them.
 | Character, sign-off, board colours | Channel settings (D156) | Per video on or off | Partial | S |
 | Poses on sentences | The writer tags up to 4 sentences (D158) | Pose picker on every sentence; poses per channel | Done | - |
 | Music and chalk sounds | Off; Clipper's own tune or your tracks folder (D156) | On, off or channel default per video | Done | - |
+| Sound effects | Off until turned on in Channel settings; made by Clipper on transitions, punch-ins, drawings, the hook, cut-ins and before the punchline, spaced and never over the punchline (D197) | On, off or channel default per video; which effects and where | Partial | S |
 | Cover frame | Best still picked automatically | Pause the player and "Use this frame" (D171) | Done | - |
 | Watermark | Channel setting | On/off and corner per video | Gap | S |
 | Loudness and music | Always normalised; no music | Normalisation off or a level; an optional music bed with ducking under the voice | Gap | M |

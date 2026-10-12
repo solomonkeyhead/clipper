@@ -85,6 +85,7 @@ function NewCampaignButton() {
 export function CampaignsPage() {
   const { data, isLoading } = useCampaigns();
   const { data: found = [] } = useFound();
+  const goodFits = found.filter((f) => f.fit === "yes").length;
   const search = useSearch({ from: "/campaigns" });
   const navigate = useNavigate({ from: "/campaigns" });
   const uses = useUses();
@@ -108,7 +109,8 @@ export function CampaignsPage() {
             <Button variant={finding ? "secondary" : "ghost"}
                     onClick={() => navigate({ search: { find: finding ? undefined : "1" } })}>
               <Search className="size-4" /> Find campaigns
-              {found.length > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent">{found.length}</span>}
+              {/* Good fits only (D198): the poor ones it counted are folded away on the list. */}
+              {goodFits > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent">{goodFits}</span>}
             </Button>
           )}
           <NewCampaignButton />

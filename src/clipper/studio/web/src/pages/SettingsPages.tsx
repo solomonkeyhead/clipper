@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   connectInstagram, connectX, instagramConnectState, runSystemCheck, startInstagramConnect, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
-  useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
+  useSetKeys, useSetSettings, useSettings, useSetup, useUses, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
 import { GroupsCard } from "@/components/groups";
@@ -795,6 +795,7 @@ function SystemCheck() {
 
 export function SettingsPage() {
   const { data: settings } = useSettings();
+  const uses = useUses();
   const save = useSetSettings();
   const qc = useQueryClient();
   const theme = useUI((s) => s.theme);
@@ -812,10 +813,12 @@ export function SettingsPage() {
       <AIKey />
       <Card className="px-5 py-3"><h2 className="text-md font-semibold">Who does what: clipping</h2>
         <p className="mt-0.5 mb-1 text-sm text-muted">Pick the AI for each job, or leave it on Automatic.</p><WhoDoesWhat part="clipping" /></Card>
-      {/* Create's AI and its footage libraries, together (D154). */}
-      <Card className="px-5 py-3" id="create-ai"><h2 className="text-md font-semibold">Who does what: Create</h2>
-        <p className="mt-0.5 mb-1 text-sm text-muted">For your own channel's Shorts.</p><WhoDoesWhat part="create" /></Card>
-      <FootageKeys />
+      {/* Create's AI and its footage libraries, together (D154); gone with Create turned off, like the rest of it (D198). */}
+      {uses.create && <>
+        <Card className="px-5 py-3" id="create-ai"><h2 className="text-md font-semibold">Who does what: Create</h2>
+          <p className="mt-0.5 mb-1 text-sm text-muted">For your own channel's Shorts.</p><WhoDoesWhat part="create" /></Card>
+        <FootageKeys />
+      </>}
       <Card className="divide-y divide-line px-5">
         <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />
         <Row title="What you use Clipper for" body="Parts you turn off are hidden everywhere, so the app only shows what you do." control={<Uses />} />

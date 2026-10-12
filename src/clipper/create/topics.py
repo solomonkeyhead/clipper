@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 
 from pydantic import BaseModel
 
@@ -97,6 +98,36 @@ def viewer_comments(channel, videos: int = 10) -> list[str]:
         return []
 
 
+#: Fewer posted videos than this and "what worked" is noise.
+RECORD_MIN = 3
+
+
+def track_record(rows: list[dict[str, str]] | None = None) -> list[str]:
+    """How the channel's posted videos did, best first (D198): views on every platform together, and the share of
+    each video watched where the platform says, once two days old. The planner only had its built-in guess of what works; video 19 got
+    73 views and 23% watched on YouTube, video 18 got 613 and 53%, and nothing told it which was which."""
+    from ..learn import log as perf
+    from ..studio.stats import ZERO_HOURS, age_hours
+
+    titles = {f"create-{v['id']}": v["script"].get("title") or "" for v in store.videos() if v.get("script")}
+    views: dict[str, float] = {}
+    watched: dict[str, float] = {}
+    for r in perf.read() if rows is None else rows:
+        cid = r.get("clip_id") or ""
+        if not titles.get(cid):
+            continue
+        if (age := age_hours(r.get("posted_at"))) is not None and age < ZERO_HOURS:   # too new to say how it did
+            continue
+        if (n := perf.number(r.get("views_latest") or "")) is not None:
+            views[cid] = views.get(cid, 0) + n
+        if (pct := perf.number(r.get("avg_view_pct") or "")) is not None:
+            watched[cid] = pct
+    if len(views) < RECORD_MIN:
+        return []
+    return [f"{titles[c]}: {round(views[c])} views" + (f", {round(watched[c])}% of it watched on average" if c in watched else "")
+            for c in sorted(views, key=lambda c: -views[c])]
+
+
 def generate(count: int = 30, steer: str = "") -> int:
     """Add `count` new ideas to the backlog; returns how many were new."""
     channel = channels.load()
@@ -104,11 +135,17 @@ def generate(count: int = 30, steer: str = "") -> int:
     skipped = [t["question"] for t in store.topics(status="skipped")]
     series = sorted({t["series"] for t in store.topics(status=None) if t.get("series")})
     heard = viewer_comments(channel)
+    record = track_record()
     user = (steering(channel, steer, skipped) + f"Channel: {channel.name} ({channel.niche}).\n"
             f"Already made or planned, don't repeat:\n" + "\n".join(f"- {q}" for q in done) +
             (f"\n\nSeries so far: {', '.join(series)}." if series else "") +
             (("\n\nWhat viewers said under recent videos. A real question here is a good idea: answer it, and put "
               "it in the series \"You Asked\":\n" + "\n".join(f"- {c}" for c in heard[:60])) if heard else "") +
+            (("\n\nHow this channel's posted videos did, best first. Lean toward what the best have in common (the kind "
+              "of moment, the shape of the question) and away from what the weakest share:\n" +
+              "\n".join(f"- {line}" for line in record[:20])) if record else "") +
+            # The month (D198): a few ideas about what people are doing now (cold mornings, a holiday) catch a wave.
+            f"\n\nIt is {date.today():%B}. A few ideas about what people meet this month are welcome." +
             f"\n\nGive {count} new ideas.")
     answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9, job="topics")
     try:

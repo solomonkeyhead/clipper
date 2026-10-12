@@ -66,7 +66,8 @@ export function ClipGrid({ clips, showCampaign = false }: { clips: Clip[]; showC
 
   return (
     <>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+      {/* Two a row on a phone (D198): one filled the screen. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] sm:gap-4">
         {clips.map((clip, i) => (
           <ClipCard key={clip.id} clip={clip} showCampaign={showCampaign} focused={i === focus}
                     selected={picked.has(clip.id)} selecting={picked.size > 0} onSelect={(e) => pick(i, e)} />

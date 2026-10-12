@@ -246,8 +246,10 @@ export interface Job {
   mode: JobMode | "prepare"; ranges: [number, number][];
   /** Clips made in the editor (D103); a "prepare" job reads a video for it. */
   edits?: unknown[];
-  status: "queued" | "running" | "done" | "failed"; stage: string; pct: number;
+  status: "queued" | "running" | "done" | "failed" | "stopped"; stage: string; pct: number;
   clips: number; message: string; created: string; finished: string;
+  /** Stop was pressed on a running job (D198): it ends at its next step. */
+  stopping?: boolean;
   /** Epoch seconds it began running (D189); 0 until then. */
   started?: number;
   report?: RunReport | { source_id?: string } | Record<string, never>;
@@ -267,6 +269,9 @@ export async function startJob(campaign: string, sources: string | string[], mod
   if (!res.ok) throw new Error(data.detail || res.statusText);
   return data as Job[];
 }
+
+/** A queued run never starts, a running one ends at its next step (D198). */
+export const stopJob = (id: number) => send<Job>("POST", `/api/jobs/${id}/stop`);
 
 /** Upload with progress (fetch can't report upload progress; XHR can). */
 export function uploadVideo(file: File, onProgress: (fraction: number) => void, campaign = ""): Promise<Source> {
