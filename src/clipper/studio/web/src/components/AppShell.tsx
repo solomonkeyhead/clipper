@@ -71,18 +71,18 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       className={cn(
         "group flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted",
         "transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-fg",
-        // The page you're on is the lit word.
-        active && "bg-accent font-bold text-accent-fg hover:bg-accent-hover hover:text-accent-fg",
+        // The page you're on: its icon is the lit word (D211). A full lime row was the loudest thing on every page
+        // and outshouted the one thing to do on it.
+        active && "bg-surface-2 font-semibold text-fg",
         collapsed && "justify-center px-0",
       )}
     >
-      <span className="[&>svg]:size-[18px] [&>svg]:stroke-[1.9]">{item.icon}</span>
+      <span className={cn("[&>svg]:size-[18px] [&>svg]:stroke-[1.9]", active && "text-accent")}>{item.icon}</span>
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
       {!collapsed && item.badge ? (
         <span className={cn(
           "tabular min-w-5 rounded-full px-1.5 text-center text-[12px] leading-5 font-semibold",
-          active ? "bg-accent-fg/15 text-accent-fg"
-            : item.tone === "accent" ? "bg-accent-soft text-accent"
+          item.tone === "accent" ? "bg-surface-3 text-fg"
             : item.tone === "warning" ? "bg-[color-mix(in_oklch,var(--warning)_16%,transparent)] text-warning"
             : "bg-surface-3 text-muted",
         )} title={item.hint}>{item.badge}</span>
@@ -103,7 +103,7 @@ function ClippingPill() {
     : `${working.length} queued`;
   return (
     <Tip label={now ? `${now.name}: ${now.stage}` : "Waiting to start"}>
-      <Link to="/new" className="flex h-8 items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 text-xs font-medium text-accent hover:border-accent"
+      <Link to="/new" className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium text-fg hover:border-line-strong"
             aria-label={label}>
         <Loader2 className="size-3.5 animate-spin" /> {label}
       </Link>
@@ -120,7 +120,7 @@ function BuildPill() {
   const label = building.stage ? `Short: ${building.stage}` : "Building a Short";
   return (
     <Tip label={`${building.script.title || "Building"}${building.stage ? `: ${building.stage}` : ""}`}>
-      <Link to="/create" className="flex h-8 max-w-64 items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 text-xs font-medium whitespace-nowrap text-accent hover:border-accent" aria-label={label}>
+      <Link to="/create" className="flex h-8 max-w-64 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium whitespace-nowrap text-fg hover:border-line-strong" aria-label={label}>
         <Loader2 className="size-3.5 shrink-0 animate-spin" /> <span className="truncate">{label}</span>
       </Link>
     </Tip>
@@ -148,12 +148,14 @@ function useBuildNotifications() {
 function AIPill() {
   const { data: ai } = useCreateAI();
   const { data: setup } = useSetup();
+  const path = useRouterState({ select: (s) => s.location.pathname });
   if (!ai) return null;
   const claude = (ai.order[0] ?? "").startsWith("claude_code") || (ai.order[0] ?? "").startsWith("anthropic");
   const paid = (ai.order[0] ?? "").startsWith("anthropic");
   const noKey = setup ? !setup.ai_ready : false;
   const problem = ai.problem || (noKey ? "Gemini isn't set up: clipping and Create can't write or watch without it." : "");
   const label = noKey ? "Add an AI key" : problem ? "Fix the AI" : claude ? "Claude + Gemini" : "Gemini";
+  if (noKey && path === "/") return null;   // the Dashboard's setup list has it as a step (D211)
   return (
     <Tip label={problem || (claude
       ? `Claude ${paid ? "(paid API, drawing only)" : "on your plan"} judges moments and draws; Gemini does ${ai.gemini_jobs.join(", ") || "the rest"} and watches the video.`
@@ -319,7 +321,7 @@ export function AppShell() {
             <Tip label="Ask about your clips, campaigns and trends" keys="I">
               <button onClick={() => setAsk(true)} aria-label="Ask Clipper"
                       className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium text-muted hover:border-line-strong hover:text-fg">
-                <Sparkles className="size-3.5 text-accent" /> <span className="hidden sm:inline">Ask</span>
+                <Sparkles className="size-3.5" /> <span className="hidden sm:inline">Ask</span>
               </button>
             </Tip>
             <AccountScope />
@@ -348,19 +350,19 @@ export function AppShell() {
           {tabs.map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
-                  className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] text-muted data-[status=active]:text-accent [&_svg]:size-5">
+                  className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] text-muted data-[status=active]:font-semibold data-[status=active]:text-fg data-[status=active]:[&_svg]:text-accent [&_svg]:size-5">
               {item.icon}
               {item.label}
-              {item.badge ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-accent" /> : null}
+              {item.badge ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-fg" /> : null}
             </Link>
           ))}
           {/* The rest of the pages: a phone had no way to Stats, Settings and the others (D161). */}
           <button onClick={() => setMore(!more)} aria-expanded={more} aria-haspopup="menu"
                   className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] text-muted [&_svg]:size-5",
-                    (more || moreActive) && "text-accent")}>
+                    (more || moreActive) && "font-semibold text-fg [&_svg]:text-accent")}>
             <MoreHorizontal />
             More
-            {rest.some((i) => i.badge) ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-accent" /> : null}
+            {rest.some((i) => i.badge) ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-fg" /> : null}
           </button>
         </nav>
         {more && <>

@@ -236,6 +236,11 @@ with sync_playwright() as p:
     assert heads.index("Next up") < heads.index("Since you were last here"), heads
     assert page.get_by_text("What will you use Clipper for").count() == 0, "the old questionnaire is back"
     print("dashboard:", heads)
+    # D211: one lime fill on the whole screen, shell included (the nav item lights its icon only)
+    fills = page.evaluate("""() => [...document.querySelectorAll('body *')].filter(e => e.getClientRects().length
+        && getComputedStyle(e).backgroundColor === 'rgb(215, 255, 58)').length""")
+    assert fills <= 1, f"{fills} lime fills on the Dashboard"
+    assert page.get_by_role("link", name="Add an AI key").count() == 0, "the AI fix shows twice on the Dashboard"
     # the footage libraries card in Settings (D130)
     page.goto("http://127.0.0.1:8799/settings")
     expect(page.get_by_text("Footage libraries for Create")).to_be_visible()

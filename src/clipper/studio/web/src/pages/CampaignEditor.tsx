@@ -256,7 +256,7 @@ export function CampaignEditorPage() {
                 {[...MARKETS, "other"].map((m) => (
                   <button key={m} type="button" onClick={() => setMarket(m)}
                     className={cn("h-9 rounded-md border px-3 text-sm font-medium",
-                      market === m ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                      market === m ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
                     {m === "other" ? "Somewhere else" : m}
                   </button>
                 ))}

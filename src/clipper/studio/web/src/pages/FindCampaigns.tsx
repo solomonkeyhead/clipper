@@ -171,7 +171,7 @@ function NicheFilter({ found, niche, setNiche }: { found: FoundCampaign[]; niche
       {options.map(([value, label, count]) => (
         <button key={label} role="radio" aria-checked={niche === value} onClick={() => setNiche(value)}
           className={cn("flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
-            niche === value ? "border-accent bg-accent text-accent-fg" : "border-line text-muted hover:text-fg")}>
+            niche === value ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
           {label} <span className="tabular opacity-70">{count}</span>
         </button>
       ))}

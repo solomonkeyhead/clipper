@@ -93,7 +93,7 @@ function GroupEditor({ group, accounts, onDone }: { group: AccountGroup; account
   const toggle = (list: string[], set: (v: string[]) => void, value: string) =>
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   const chip = (on: boolean) => cn("inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
-    on ? "border-accent bg-accent-soft text-fg" : "border-line text-muted hover:text-fg");
+    on ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg");
   return (
     <div className="flex flex-col gap-3 rounded-md border border-dashed border-line p-3">
       <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name, e.g. Movies" aria-label="Group name" autoFocus />

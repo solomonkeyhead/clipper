@@ -399,7 +399,7 @@ export function CampaignPage() {
             {([["clips", `Clips ${data.clips.length}`], ["posts", `Posts ${posts.length}`]] as const).map(([key, label]) => (
               <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
                 className={cn("-mb-px border-b-2 px-3 py-2 text-sm font-medium",
-                  tab === key ? "border-accent text-fg" : "border-transparent text-muted hover:text-fg")}>
+                  tab === key ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg")}>
                 {label}
               </button>
             ))}

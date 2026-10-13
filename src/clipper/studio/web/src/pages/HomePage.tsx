@@ -64,7 +64,7 @@ function RangeToggle({ value, onChange }: { value: Range; onChange: (r: Range) =
       {RANGES.map(([key, label]) => (
         <button key={key} type="button" role="radio" aria-checked={value === key} onClick={() => onChange(key)}
           className={cn("rounded-sm px-2.5 py-1 text-xs font-medium transition-colors",
-            value === key ? "bg-accent-soft text-fg" : "text-muted hover:bg-surface-2 hover:text-fg")}>
+            value === key ? "bg-surface-3 text-fg" : "text-muted hover:bg-surface-2 hover:text-fg")}>
           {label}
         </button>
       ))}
@@ -325,7 +325,7 @@ export function DashboardPage() {
         <h2 className="mb-1 text-md font-semibold">Next up</h2>
         {m.ready > 0 && (
           <Link to="/clips" search={{ status: "ready" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
-            <Send className="size-4 text-accent" />
+            <Send className="size-4 text-info" />
             <span className="flex-1 text-sm">{m.ready} clip{m.ready === 1 ? "" : "s"} ready to post</span>
             <ArrowRight className="size-4 text-subtle" />
           </Link>
@@ -397,7 +397,7 @@ export function DashboardPage() {
       <div>
         <Card className="flex flex-col gap-4 p-5">
           <h2 className="flex items-center gap-2 text-md font-semibold">
-            <Sparkles className="size-4 text-accent" /> Since you were last here
+            <Sparkles className="size-4 text-muted" /> Since you were last here
           </h2>
           {since ? (
             <div className="grid gap-4 sm:grid-cols-3">

@@ -82,7 +82,7 @@ export function CreatePage() {
             archived.length ? <p className="text-sm text-muted">Nothing in progress: everything you've made is in the Archive below.</p>
               : <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (a minute or two), or write your own script." />
           )}
-          {work.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} wps={data.channel.words_per_second} />)}
+          {work.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} lead={v.id === active} wps={data.channel.words_per_second} />)}
           {archived.length > 0 && <ArchiveList videos={archived} wps={data.channel.words_per_second} />}
         </div>
       </div>
@@ -524,7 +524,7 @@ function Steps({ status }: { status: CreateVideo["status"] }) {
   );
 }
 
-function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: boolean; wps: number }) {
+function VideoCard({ video, open: startOpen, wps, lead = false }: { video: CreateVideo; open: boolean; wps: number; lead?: boolean }) {
   const qc = useQueryClient();
   // Remembered per video, so a card moving into or out of the Archive stays as it was (D131).
   const [open, setOpenState] = useState(() => folds.get(`card-${video.id}`) ?? startOpen);
@@ -639,14 +639,14 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           </>
         )}
       </div>
-      {open && <div className="border-t border-line p-4"><Body video={video} wps={wps} /></div>}
+      {open && <div className="border-t border-line p-4"><Body video={video} wps={wps} lead={lead} /></div>}
     </Card>
   );
 }
 
 const words = (s: CreateScript) => (s.beats ?? []).reduce((n, b) => n + b.text.split(/\s+/).filter(Boolean).length, 0);
 
-function Body({ video, wps }: { video: CreateVideo; wps: number }) {
+function Body({ video, wps, lead = false }: { video: CreateVideo; wps: number; lead?: boolean }) {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["create"] });
   const fact = useFactWord();
@@ -714,7 +714,7 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
     );
   }
   if (video.status === "built" || (video.status === "failed" && video.clip_id)) {
-    return <Built video={video} wps={wps} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")}
+    return <Built video={video} wps={wps} lead={lead} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")}
                   onRebuild={run("rebuild", () => createApi.build(video.id), "Rebuilding: only the parts that changed are made again")} />;
   }
 
@@ -1333,8 +1333,8 @@ function SoundChoice({ video }: { video: CreateVideo }) {
   );
 }
 
-function Built({ video, wps, busy, onPictures, onRebuild }: {
-  video: CreateVideo; wps: number; busy: string | null; onPictures: () => void; onRebuild: () => void;
+function Built({ video, wps, lead, busy, onPictures, onRebuild }: {
+  video: CreateVideo; wps: number; lead: boolean; busy: string | null; onPictures: () => void; onRebuild: () => void;
 }) {
   const { data: clips = [] } = useClips();
   const clip = clips.find((c) => c.id === video.clip_id);
@@ -1398,7 +1398,8 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
           <CheckNote text={video.check_notes} />
           {/* One main button and one other (D199); the rest under More: six equal buttons sat over the parts. */}
           <div className="flex flex-wrap items-center gap-2">
-            {clip && <Button variant="primary" onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
+            {/* Lime only when this is the video to act on (D211): beside an open draft, Approve is the one. */}
+            {clip && <Button variant={lead ? "primary" : "secondary"} onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
             <Tip label="Same words, voice and pictures, built again; only parts you asked to change, or that had no footage, are made again">
               <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
                 {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again

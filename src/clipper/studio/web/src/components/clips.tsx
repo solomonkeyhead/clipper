@@ -554,7 +554,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
         "group relative flex cursor-pointer flex-col gap-3 rounded-lg border border-line bg-surface-1 p-3 shadow-1 outline-none",
         "transition-[border-color,background-color] duration-[var(--dur-base)] hover:border-line-strong hover:bg-surface-2",
         focused && "border-accent ring-1 ring-accent",
-        selected && "border-accent bg-accent-soft hover:bg-accent-soft",
+        selected && "border-fg/60 bg-surface-2 hover:bg-surface-2",
       )}
     >
       {onSelect && (
@@ -562,7 +562,7 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
           <button type="button" role="checkbox" aria-checked={selected} aria-label="Select"
             onClick={(e) => { e.stopPropagation(); onSelect(e); }}
             className={cn("absolute top-5 left-5 z-10 grid size-5 place-items-center rounded-[5px] border transition-opacity duration-[var(--dur-fast)]",
-              selected ? "border-accent bg-accent text-accent-fg" : "border-white/70 bg-black/40 text-transparent hover:bg-black/60",
+              selected ? "border-fg bg-fg text-bg" : "border-white/70 bg-black/40 text-transparent hover:bg-black/60",
               // A touch screen has no hover: the box always shows there (D198).
               selected || selecting ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100")}>
             <Check className="size-3.5" strokeWidth={3} />

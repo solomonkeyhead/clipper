@@ -585,7 +585,7 @@ export function NewClipsPage() {
                 {counts.map((n) => (
                   <button key={n} onClick={() => setTop(n)}
                     className={cn("h-9 min-w-11 rounded-md border px-3 text-sm font-medium",
-                      top === n ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                      top === n ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
                     {n}
                   </button>
                 ))}

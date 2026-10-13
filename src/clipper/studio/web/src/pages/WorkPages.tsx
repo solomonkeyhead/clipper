@@ -32,7 +32,7 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
         {FILTERS.map(([key, label]) => (
           <button key={key} role="tab" aria-selected={value === key} onClick={() => onChange(key)}
                   className={cn("h-8 rounded-full border px-3 text-sm font-medium transition-colors",
-                    value === key ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                    value === key ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
             {label} <span className="tabular ml-1 opacity-70">{clips.filter((c) => inFilter(c, key) && !(key === "posted" && c.submit_at_views)).length}</span>
             {/* Posts still short of the campaign's view minimum are listed here but can't be submitted yet:
                 counted apart, as the Dashboard and the Post queue do (D161). */}

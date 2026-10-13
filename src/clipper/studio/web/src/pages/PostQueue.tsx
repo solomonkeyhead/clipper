@@ -49,7 +49,7 @@ export function PostQueuePage() {
         {(["post", "submit"] as const).map((s) => (
           <button key={s} role="tab" aria-selected={step === s} onClick={() => go(s)}
                   className={cn("h-8 rounded-full border px-3 text-sm font-medium transition-colors",
-                    step === s ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                    step === s ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
             {LABEL[s]} <span className="tabular ml-1 opacity-70">{lists[s].length}</span>
           </button>
         ))}

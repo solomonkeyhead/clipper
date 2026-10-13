@@ -250,9 +250,9 @@ export function Switch({ checked, onChange, label, id }: {
       checked={checked}
       onCheckedChange={onChange}
       aria-label={label}
-      className="relative h-5 w-9 shrink-0 rounded-full bg-surface-3 transition-colors duration-[var(--dur-base)] data-[state=checked]:bg-accent"
+      className="relative h-5 w-9 shrink-0 rounded-full bg-surface-3 transition-colors duration-[var(--dur-base)] data-[state=checked]:bg-fg"
     >
-      <RadixSwitch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white shadow-1 transition-transform duration-[var(--dur-base)] ease-standard data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-accent-fg" />
+      <RadixSwitch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white shadow-1 transition-transform duration-[var(--dur-base)] ease-standard data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-bg" />
     </RadixSwitch.Root>
   );
 }

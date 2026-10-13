@@ -3644,3 +3644,12 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - `--text-sm` (body) is 14px and `--text-xs` (labels, metadata) 13px, one step under it so the two still read as
   different jobs; the 11px chips are 12px. In a part's row, Adjust and Undo are icons with their name in the tip and
   as the label a screen reader reads; New footage and New drawing keep their words, they're the row's actions.
+
+## D211: lime out of the shell: the nav lights its icon, selections and switches go neutral (2026-10-13)
+- The second critique (26/40) found D207 had quieted Create but not the shell: the page you're on was a full lime
+  row, the loudest thing on every screen, and filter pills, tabs, switches, badges, the job pills and the Ask icon
+  were lime too. With a draft and a finished video open, Approve and Open to post were both lime.
+- The current nav item is a neutral row with a lime icon (the phone tabs the same). Selected filters and tabs, on
+  switches, clip selection, count badges, the running-job pills and the Ask icon are neutral. The finished card's
+  Open to post is lime only when it's the video to act on. On the Dashboard the header's "Add an AI key" is hidden
+  while the setup list shows it as a step. Each page now has one lime button (Create also its current step).
