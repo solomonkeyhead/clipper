@@ -3606,3 +3606,13 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - Two columns now start at xl (ideas 300 to 360px); below it the video in progress comes first, full width. At xl the
   ideas column is sticky and scrolls by itself. The open sentence's box is three lines. The finished player is 288px
   wide at xl (224 before) and the finished card's poster 80px tall with a frame (48px, a strip, before).
+
+## D207: lime for the next thing to do, pills for labels, rectangles for buttons (2026-10-13)
+- The critique counted lime on six kinds of thing on Create: the Approve button, every "Diagram" chip, the chosen
+  way to start, the done steps, the take picker, the section icons. styles.css says lime is the word being said; it
+  had stopped marking anything.
+- Lime now stays on the next action (the one filled button, the current step, the voice step when it's due), the
+  current nav item, the "Short" in the heading and the part of the video playing. A filled button whose form is
+  empty or has no changes is secondary until it can go. Picture labels, done steps and section icons are neutral.
+- One shape rule: a borderless pill is a label or a status (Chip lost its neutral border), a bordered rectangle is
+  something to press (the take, voice-way and most-viewed toggles were pills).

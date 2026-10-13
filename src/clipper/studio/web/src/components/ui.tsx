@@ -145,7 +145,7 @@ export const Chip = ({ children, tone = "neutral", className, title }: {
     title={title}
     className={cn(
       "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs font-medium",
-      tone === "neutral" && "border-line bg-surface-2 text-muted",
+      tone === "neutral" && "border-transparent bg-surface-2 text-muted",
       tone === "accent" && "border-transparent bg-accent-soft text-accent",
       tone === "money" && "border-transparent bg-[color-mix(in_oklch,var(--money)_14%,transparent)] text-money",
       tone === "warning" && "border-transparent bg-[color-mix(in_oklch,var(--warning)_14%,transparent)] text-warning",

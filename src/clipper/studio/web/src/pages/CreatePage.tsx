@@ -127,7 +127,7 @@ function ArchiveList({ videos, wps }: { videos: CreateVideo[]; wps: number }) {
             <span>Videos move here once they're posted (found on your channel, or marked posted in Clips). You can also archive any video yourself.</span>
             {total > 0 && (
               <button type="button" aria-pressed={byViews} onClick={() => setByViews((b) => !b)}
-                      className={cn("rounded-full border px-2 py-0.5", byViews ? "border-accent bg-accent-soft text-accent" : "border-line hover:text-fg")}>
+                      className={cn("rounded-sm border px-2 py-0.5", byViews ? "border-line-strong bg-surface-3 text-fg" : "border-line hover:text-fg")}>
                 Most viewed first
               </button>
             )}
@@ -251,12 +251,12 @@ function NewShort({ wps }: { wps: number }) {
   ];
   return (
     <Card className="flex flex-col gap-3 p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold"><Plus className="size-4 text-accent" /> New Short</h2>
+      <h2 className="flex items-center gap-2 text-sm font-semibold"><Plus className="size-4 text-muted" /> New Short</h2>
       <div className={cn("grid gap-2", ways.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")} role="radiogroup" aria-label="How to start a Short">
         {ways.map(([key, title, hint]) => (
           <button key={key} type="button" role="radio" aria-checked={way === key} onClick={() => setWay(key)}
                   className={cn("flex flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors",
-                    way === key ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
+                    way === key ? "border-fg/50 bg-surface-2" : "border-line hover:bg-surface-2")}>
             <span className="text-sm font-medium">{title}</span>
             <span className="text-xs text-muted">{hint}</span>
           </button>
@@ -297,7 +297,8 @@ function MyIdea() {
              placeholder="e.g. Why does a spoon flip your reflection?" className={field} />
       <input value={mineAngle} onChange={(e) => setMineAngle(e.target.value)} aria-label="Angle (optional)"
              placeholder="Angle or what to cover (optional)" className={field} />
-      <Button variant="primary" className="self-start" disabled={busy || mine.trim().length < 8} onClick={() => writeMine()}>
+      {/* Lime only once it can go (D207): an empty form's dimmed lime button competed with the draft's Approve. */}
+      <Button variant={mine.trim().length < 8 ? "secondary" : "primary"} className="self-start" disabled={busy || mine.trim().length < 8} onClick={() => writeMine()}>
         {busy ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />} {busy ? "Writing…" : "AI writes it"}
       </Button>
     </div>
@@ -347,7 +348,7 @@ function OwnWords({ wps }: { wps: number }) {
         <input type="checkbox" className="mt-1" checked={plan} onChange={(e) => setPlan(e.target.checked)} />
         <span>Plan the pictures and check the {fact} for me. Your words are never changed. Leave it off to choose every picture yourself.</span>
       </label>
-      <Button variant="primary" className="self-start" disabled={busy || !text.trim()} onClick={() => create()}>
+      <Button variant={text.trim() ? "primary" : "secondary"} className="self-start" disabled={busy || !text.trim()} onClick={() => create()}>
         {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy ? (plan ? "Planning…" : "Creating…") : "Use my own words"}
       </Button>
     </div>
@@ -439,7 +440,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
   return (
     <Card className="flex max-h-[78vh] flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="size-4 text-accent" /> Ideas <span className="font-normal text-subtle">{topics.length}</span></h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="size-4 text-muted" /> Ideas <span className="font-normal text-subtle">{topics.length}</span></h2>
         <span className="flex items-center gap-0.5">
           <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => more()}>
             {busy === "more" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} More ideas
@@ -512,7 +513,7 @@ function Steps({ status }: { status: CreateVideo["status"] }) {
         <span key={label} className="flex items-center gap-1.5">
           <span aria-current={i === at && status !== "built" ? "step" : undefined}
                 className={cn("rounded-full px-2 py-0.5 font-semibold",
-            i < at || status === "built" ? "bg-accent-soft text-accent" : i === at ? "bg-accent text-accent-fg" : "bg-surface-2 text-subtle",
+            i < at || status === "built" ? "bg-surface-2 text-muted" : i === at ? "bg-accent text-accent-fg" : "text-subtle",
             status === "failed" && i === at && "bg-[color-mix(in_oklch,var(--danger)_18%,transparent)] text-danger")}>
             {label}{(i < at || status === "built") && <span className="sr-only"> (done)</span>}
           </span>
@@ -813,7 +814,7 @@ function Takes({ video }: { video: CreateVideo }) {
   };
   const lines = (list: string[], other: string[]) => (
     <ol className="flex flex-col gap-1 text-sm">
-      {list.map((l, i) => <li key={i} className={cn("rounded-sm px-1.5", !other.includes(l) && "bg-accent-soft")}>{l}</li>)}
+      {list.map((l, i) => <li key={i} className={cn("rounded-sm px-1.5", !other.includes(l) && "bg-surface-3")}>{l}</li>)}
     </ol>
   );
   return (
@@ -827,7 +828,7 @@ function Takes({ video }: { video: CreateVideo }) {
           <div className="flex flex-wrap gap-1.5">
             {takes.map((t) => (
               <button key={t.index} type="button" onClick={() => setPick(t.index)} aria-pressed={t.index === shown.index}
-                      className={cn("h-7 rounded-full border px-2.5 text-xs", t.index === shown.index ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                      className={cn("h-7 rounded-sm border px-2.5 text-xs", t.index === shown.index ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
                 {t.index + 1}: {t.why}{t.at ? ` · ${t.at.slice(11, 16)}` : ""}
               </button>
             ))}
@@ -1063,7 +1064,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
   if (visual.hold && !visual.clip) {
     return (
       <Tip label="The drawing above stays on screen through this sentence, its parts arriving as they're said.">
-        <span className="flex items-center gap-1.5 self-start rounded-md border border-accent/40 px-2 py-1.5 text-xs text-accent">
+        <span className="flex max-w-full items-center gap-1.5 self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs text-muted">
           <Shapes className="size-3.5 shrink-0" /><span className="truncate">Same drawing, continued</span>
         </span>
       </Tip>
@@ -1072,7 +1073,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
   if (visual.clip) {
     return (
       <Tip label="Your own clip. The planned picture fills any time it doesn't cover.">
-        <span className="flex items-center gap-1.5 self-start rounded-md border border-accent bg-accent-soft px-2 py-1.5 text-xs text-accent">
+        <span className="flex max-w-full items-center gap-1.5 self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs text-fg">
           <Film className="size-3.5 shrink-0" /><span className="truncate">Your clip</span>
         </span>
       </Tip>
@@ -1083,8 +1084,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
     : `Stock footage: ${(visual.queries?.length ? visual.queries : [visual.query]).join(" / ")}${visual.card ? `. If none fits, "${visual.card}" on the board` : ""}`;
   return (
     <Tip label={tip}>
-      <span className={cn("flex items-center gap-1.5 self-start rounded-md border px-2 py-1.5 text-xs",
-        diagram ? "border-accent/40 text-accent" : "border-line text-muted")}>
+      <span className="flex max-w-full items-center gap-1.5 self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs text-muted">
         {diagram ? <Shapes className="size-3.5 shrink-0" /> : <Film className="size-3.5 shrink-0" />}
         <span className="truncate">{diagram ? `Diagram: ${visual.title || visual.template}` : visual.query}</span>
       </span>
@@ -1129,7 +1129,7 @@ function VoiceStep({ video, title = "Add the voice" }: { video: CreateVideo; tit
       <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you give the voice">
         {ways.map(([key, label]) => (
           <button key={key} type="button" role="radio" aria-checked={way === key} onClick={() => setWay(key)}
-                  className={cn("h-8 rounded-full border px-3 text-sm font-medium", way === key ? "border-accent bg-accent-soft text-accent" : "border-line text-muted hover:text-fg")}>
+                  className={cn("h-8 rounded-sm border px-3 text-sm font-medium", way === key ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
             {label}
           </button>
         ))}
@@ -1230,7 +1230,7 @@ function Recorder({ text, busy, onUse }: { text: string; busy: boolean; onUse: (
 
 const Step = ({ n, children }: { n: number; children: ReactNode }) => (
   <div className="flex items-center gap-3 text-sm">
-    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-accent-fg">{n}</span>
+    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-3 text-xs font-bold text-fg">{n}</span>
     {children}
   </div>
 );

@@ -282,7 +282,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
           part (add a few words to say what you'd rather see), then rebuild.
         </p>
         <Tip label={changes?.length ? `Not built yet: ${changes.join(", ")}` : "Nothing changed since the last build"}>
-          <Button variant="primary" disabled={!count || rebuilding} onClick={onRebuild}>
+          <Button variant={count ? "primary" : "secondary"} disabled={!count || rebuilding} onClick={onRebuild}>
             {rebuilding ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
             {count ? `Rebuild with ${count} change${count === 1 ? "" : "s"}` : "No changes yet"}
           </Button>

@@ -32,6 +32,11 @@ with sync_playwright() as p:
     expect(page.get_by_label("Description")).to_have_count(0)                # folded
     print("draft: one sentence's controls at a time, they follow a moved sentence")
     page.screenshot(path=f"{OUT}/0_draft.png", full_page=True)
+    # D207: lime marks the next thing to do, not every chip: the heading, the current step and Approve
+    lime = page.evaluate("""() => [...document.querySelectorAll('main *')].filter(e => { const s = getComputedStyle(e);
+        return e.getClientRects().length && ([s.backgroundColor, s.borderTopColor].includes('rgb(215, 255, 58)')
+          || (s.color === 'rgb(215, 255, 58)' && !e.children.length && e.textContent.trim())); }).length""")
+    assert lime <= 3, f"{lime} lime things on a draft"
     draft.click()
     built = cards.nth(1)                        # the newest (a draft) first, the built one second
     if built.get_attribute("aria-expanded") == "false":
