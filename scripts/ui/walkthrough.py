@@ -39,6 +39,9 @@ with sync_playwright() as p:
     review = page.get_by_role("button", name="Change parts you don't like")
     expect(review).to_be_visible()
     print("review open:", review.get_attribute("aria-expanded"))
+    # D206: the finished card's poster reads, and the player is bigger on a wide window
+    assert page.locator("img[src^='/thumb/']").first.bounding_box()["height"] >= 79, "the finished card's poster is a strip again"
+    assert page.locator("video").first.bounding_box()["width"] >= 287, "the player is narrow on a wide window"
     footage = page.get_by_role("button", name="New footage")
     print("parts listed:", footage.count())
     page.screenshot(path=f"{OUT}/1_open.png", full_page=True)

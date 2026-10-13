@@ -3599,3 +3599,10 @@ their transcripts and frames, then a research report; Marc picked what to build.
   with a picture choice, a highlight word, camera, pose and four order buttons open at once, about 40 controls.
 - Each sentence now shows its words and its picture only. Clicking or tabbing into one opens its controls, and they
   follow it when it moves. Description and hashtags are folded under the script. Nothing was removed (D120).
+
+## D206: Create's two columns from xl, the ideas held in view, a bigger player and poster (2026-10-13)
+- From the same critique: at lg the script sat in a 460px column beside the ideas, and beside a long open video the
+  ideas column ended in a screen of nothing.
+- Two columns now start at xl (ideas 300 to 360px); below it the video in progress comes first, full width. At xl the
+  ideas column is sticky and scrolls by itself. The open sentence's box is three lines. The finished player is 288px
+  wide at xl (224 before) and the finished card's poster 80px tall with a frame (48px, a strip, before).

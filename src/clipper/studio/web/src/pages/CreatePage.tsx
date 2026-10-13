@@ -71,10 +71,12 @@ export function CreatePage() {
         <AIStrip />
         <div className="mt-3"><ChannelBar data={data} /></div>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
-        {/* The video in progress comes first on a phone-width window; the ideas wait below it. */}
-        <div className="order-2 lg:order-1"><Ideas topics={data.topics} /></div>
-        <div className="order-1 flex flex-col gap-4 lg:order-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
+        {/* The video in progress comes first below a wide window; the ideas wait below it. Two columns only from xl
+            and the ideas held in view there (D206): at lg the script got a 460px column, and beside a long open
+            video the ideas column ended in a screen of nothing. */}
+        <div className="order-2 xl:sticky xl:top-4 xl:order-1 xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto xl:pr-1"><Ideas topics={data.topics} /></div>
+        <div className="order-1 flex flex-col gap-4 xl:order-2">
           <NewShort wps={data.channel.words_per_second} />
           {work.length === 0 && (
             archived.length ? <p className="text-sm text-muted">Nothing in progress: everything you've made is in the Archive below.</p>
@@ -94,9 +96,9 @@ function CreateSkeleton() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2"><Skeleton className="h-10 w-72" /><Skeleton className="h-4 w-full max-w-xl" /><Skeleton className="h-4 w-56" /></div>
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
-        <div className="order-2 flex flex-col gap-2 lg:order-1"><Skeleton className="h-12" />{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}</div>
-        <div className="order-1 flex flex-col gap-4 lg:order-2"><Skeleton className="h-10 w-48" /><Skeleton className="h-28" /><Skeleton className="h-72" /></div>
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
+        <div className="order-2 flex flex-col gap-2 xl:order-1"><Skeleton className="h-12" />{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}</div>
+        <div className="order-1 flex flex-col gap-4 xl:order-2"><Skeleton className="h-10 w-48" /><Skeleton className="h-28" /><Skeleton className="h-72" /></div>
       </div>
     </div>
   );
@@ -587,7 +589,8 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
                 {video.posts?.length ? video.posts.map((p) => `${PLATFORM_NAME[p.platform] ?? p.platform} ${p.views == null ? "–" : formatCount(p.views)}`).join(" · ")
                   : video.posted ? "Posted" : "Not posted yet"}
               </span>
-              <img src={`/thumb/${video.clip_id}`} alt="" loading="lazy" className="aspect-[9/16] h-12 rounded-[4px] bg-black object-cover" />
+              {/* A poster you can read (D206): at 48px tall it was a strip. */}
+              <img src={`/thumb/${video.clip_id}`} alt="" loading="lazy" className="aspect-[9/16] h-20 rounded-md bg-black object-cover ring-1 ring-line" />
             </span>
           ) : <Steps status={video.status} />}
         </button>
@@ -989,7 +992,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                className={cn("flex flex-col gap-1.5", !locked && "rounded-md border p-2",
                              !locked && (open === i ? "border-line bg-surface-2/40" : "border-transparent"))}>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_200px]">
-              <textarea rows={2} value={b.text} disabled={locked} aria-label={`Sentence ${i + 1}`}
+              <textarea rows={!locked && open === i ? 3 : 2} value={b.text} disabled={locked} aria-label={`Sentence ${i + 1}`}
                         onChange={(e) => setBeats(beats.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
                         onBlur={() => b.text !== s.beats[i]?.text && void save({ beats })}
                         className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
@@ -1348,11 +1351,11 @@ function Built({ video, wps, busy, onPictures, onRebuild }: {
     <div className="flex flex-wrap gap-4 lg:flex-nowrap lg:items-start">
       {/* The player stays in view beside the parts on a wide screen (D199): it scrolled away while you went through
           10 to 15 of them, and "Play from here" started a player you couldn't see. */}
-      <div className="flex w-56 shrink-0 flex-col gap-2 self-start lg:sticky lg:top-4">
+      <div className="flex w-56 shrink-0 flex-col gap-2 self-start lg:sticky lg:top-4 xl:w-72">
         {clip?.file_exists ? (
-          <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-56 rounded-xl bg-black"
+          <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-full rounded-xl bg-black"
                  onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
-        ) : <div className="grid aspect-[9/16] w-56 place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
+        ) : <div className="grid aspect-[9/16] w-full place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
         {shots.length > 1 && total > 0 && (
           <div className="flex h-2 w-full gap-px overflow-hidden rounded-full">
             {shots.map((shot) => (
