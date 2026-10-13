@@ -64,7 +64,7 @@ function CampaignCard({ c }: { c: Campaign }) {
         ).map(([label, value]) => (
           <div key={label} className="rounded-md bg-surface-2 py-2">
             <div className="text-md font-semibold">{value}</div>
-            <div className="truncate px-1 text-[11px] text-muted">{label}</div>
+            <div className="truncate px-1 text-[12px] text-muted">{label}</div>
           </div>
         ))}
       </div>
@@ -134,7 +134,7 @@ export function CampaignsPage() {
                     onClick={() => navigate({ search: { find: finding ? undefined : "1" } })}>
               <Search className="size-4" /> Find campaigns
               {/* Good fits only (D198): the poor ones it counted are folded away on the list. */}
-              {goodFits > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent">{goodFits}</span>}
+              {goodFits > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[12px] font-semibold text-accent">{goodFits}</span>}
             </Button>
           )}
           <NewCampaignButton />

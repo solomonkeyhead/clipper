@@ -101,8 +101,8 @@ function rateText(found: FoundCampaign) {
 }
 
 function FitChip({ fit }: { fit: string }) {
-  if (fit === "yes") return <Chip tone="success" className="h-5 text-[11px]">Good fit</Chip>;
-  if (fit === "maybe") return <Chip tone="warning" className="h-5 text-[11px]">Maybe</Chip>;
+  if (fit === "yes") return <Chip tone="success" className="h-5 text-[12px]">Good fit</Chip>;
+  if (fit === "maybe") return <Chip tone="warning" className="h-5 text-[12px]">Maybe</Chip>;
   return null;
 }
 
@@ -128,7 +128,7 @@ function FoundRow({ found }: { found: FoundCampaign }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">{found.name || "Unnamed campaign"}</span>
             <FitChip fit={found.fit} />
-            {found.niche && <Chip className="h-5 text-[11px]">{found.niche}</Chip>}
+            {found.niche && <Chip className="h-5 text-[12px]">{found.niche}</Chip>}
           </div>
           <div className="text-xs text-muted">
             {[found.source !== "other" && found.source[0].toUpperCase() + found.source.slice(1), rateText(found),

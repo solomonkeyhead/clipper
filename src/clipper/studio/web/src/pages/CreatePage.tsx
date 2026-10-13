@@ -381,8 +381,8 @@ function ReadyMade({ ready }: { ready: { name: string; title: string; about: str
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium">{r.title}</span>
-                {posted > 0 && <Chip tone="success" className="h-5 shrink-0 text-[11px]">in the Archive</Chip>}
-                {going > 0 && <Chip className="h-5 shrink-0 text-[11px]">{going === 1 ? "made, below" : `${going} made, below`}</Chip>}
+                {posted > 0 && <Chip tone="success" className="h-5 shrink-0 text-[12px]">in the Archive</Chip>}
+                {going > 0 && <Chip className="h-5 shrink-0 text-[12px]">{going === 1 ? "made, below" : `${going} made, below`}</Chip>}
               </div>
               <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
             </div>
@@ -458,7 +458,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
                onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void more(); }}
                placeholder="Steer the next batch, e.g. only light and sound, no biology"
                className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
-        <p className="mt-1 text-[11px] text-subtle">Lasting guidance is under Channel settings. Skipping an idea teaches it what to avoid.</p>
+        <p className="mt-1 text-[12px] text-subtle">Lasting guidance is under Channel settings. Skipping an idea teaches it what to avoid.</p>
       </div>}
       {(topics.length > 10 || find) && (
         <div className="border-b border-line px-4 py-2">
@@ -478,7 +478,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
                 <span>{t.angle}</span>
                 {/* The planner's score of 21 and series (D155); clicking a series shows only its ideas. */}
                 {t.score != null && <Tip label="The planner's score out of 21: felt, common, surprise, one mechanism, showable, searched, fits the channel"><span className="tabular-nums text-subtle">{t.score}/21</span></Tip>}
-                {t.series && <button type="button" onClick={() => setFind(t.series ?? "")} className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] hover:text-fg">{t.series}</button>}
+                {t.series && <button type="button" onClick={() => setFind(t.series ?? "")} className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] hover:text-fg">{t.series}</button>}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -1001,7 +1001,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                onBlur={() => hook !== (s.hook ?? "") && void save({ hook: hook.trim() })} aria-label="On-screen hook"
                className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
         <span className={cn("text-xs", hookWords > 6 ? "text-warning" : "text-subtle")}>{hookWords} of 6 words on screen</span>
-        {s.series && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">{s.series}</span>}
+        {s.series && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-muted">{s.series}</span>}
       </div>
       <div className="flex flex-col gap-2">
         {beats.map((b, i) => (

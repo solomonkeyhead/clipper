@@ -459,7 +459,7 @@ function Preview({ clip, className }: { clip: Clip; className?: string }) {
                className="fade-in absolute inset-0 size-full object-cover" />
       )}
       {clip.duration_s ? (
-        <span className="tabular absolute right-1.5 bottom-1.5 rounded-[4px] bg-black/70 px-1.5 py-px text-[11px] font-medium text-white">
+        <span className="tabular absolute right-1.5 bottom-1.5 rounded-[4px] bg-black/70 px-1.5 py-px text-[12px] font-medium text-white">
           {formatDuration(clip.duration_s)}
         </span>
       ) : null}
@@ -523,7 +523,7 @@ function WaitingForViews({ clip }: { clip: Clip }) {
   return (
     <Tip label={`The brief says to submit once a post passes ${need.toLocaleString()} views. Your best post here has ${best.toLocaleString()}.`}>
       <div className="flex flex-col gap-1">
-        <div className="flex justify-between text-[11px] text-muted">
+        <div className="flex justify-between text-[12px] text-muted">
           <span>Submit at {formatCount(need)} views</span>
           <span className="tabular">best post {formatCount(best)}</span>
         </div>

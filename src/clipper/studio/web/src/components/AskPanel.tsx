@@ -163,7 +163,7 @@ function Conversation({ threadId, onThread }: { threadId?: number; onThread: (id
             {pending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
           </Button>
         </div>
-        <p className="mt-1 text-center text-[11px] text-subtle">AI answers can be wrong; check sources before acting on them.</p>
+        <p className="mt-1 text-center text-[12px] text-subtle">AI answers can be wrong; check sources before acting on them.</p>
       </div>
     </>
   );

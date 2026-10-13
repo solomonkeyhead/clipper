@@ -80,7 +80,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
       {!collapsed && item.badge ? (
         <span className={cn(
-          "tabular min-w-5 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold",
+          "tabular min-w-5 rounded-full px-1.5 text-center text-[12px] leading-5 font-semibold",
           active ? "bg-accent-fg/15 text-accent-fg"
             : item.tone === "accent" ? "bg-accent-soft text-accent"
             : item.tone === "warning" ? "bg-[color-mix(in_oklch,var(--warning)_16%,transparent)] text-warning"
@@ -348,7 +348,7 @@ export function AppShell() {
           {tabs.map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
-                  className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted data-[status=active]:text-accent [&_svg]:size-5">
+                  className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] text-muted data-[status=active]:text-accent [&_svg]:size-5">
               {item.icon}
               {item.label}
               {item.badge ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-accent" /> : null}
@@ -356,7 +356,7 @@ export function AppShell() {
           ))}
           {/* The rest of the pages: a phone had no way to Stats, Settings and the others (D161). */}
           <button onClick={() => setMore(!more)} aria-expanded={more} aria-haspopup="menu"
-                  className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] text-muted [&_svg]:size-5",
+                  className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] text-muted [&_svg]:size-5",
                     (more || moreActive) && "text-accent")}>
             <MoreHorizontal />
             More

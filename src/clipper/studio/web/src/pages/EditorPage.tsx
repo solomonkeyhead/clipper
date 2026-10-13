@@ -448,7 +448,7 @@ function Stage({ view, video, zoom, edit, words, t, inClip, onEnded, onSeeked }:
         )}
       </div>
       {!inClip && <span className="absolute top-2 left-2 rounded-md bg-black/70 px-2 py-0.5 text-xs text-white/80">Outside the clip</span>}
-      <span className="absolute right-2 bottom-2 rounded-md bg-black/70 px-2 py-0.5 text-[11px] text-white/70">Framing follows faces when it renders · Preview shows it exactly</span>
+      <span className="absolute right-2 bottom-2 rounded-md bg-black/70 px-2 py-0.5 text-[12px] text-white/70">Framing follows faces when it renders · Preview shows it exactly</span>
     </div>
   );
 }
@@ -513,7 +513,7 @@ const Transcript = memo(function Transcript({ words, edit, range, setRange, seek
            onMouseUp={() => { drag.current = null; }} onMouseLeave={() => { drag.current = null; }}>
         {paras.map((ids) => (
           <p key={ids[0]} className="mb-2">
-            <button className="tabular mr-1.5 align-middle text-[11px] text-subtle hover:text-accent" onClick={() => seek(words[ids[0]].start)}>{clock(words[ids[0]].start)}</button>
+            <button className="tabular mr-1.5 align-middle text-[12px] text-subtle hover:text-accent" onClick={() => seek(words[ids[0]].start)}>{clock(words[ids[0]].start)}</button>
             {ids.map((i) => {
               const w = words[i];
               const text = shownText(edit, w);
@@ -583,7 +583,7 @@ function Panel({ view, edit, commit, len, problems, rules, blocked, why }: {
                   className="resize-none rounded-md border border-line bg-surface-2 px-2.5 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-50" />
         {view.hooks.length > 0 && !blocked("added_text") && (
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] text-subtle">The brief's lines</span>
+            <span className="text-[12px] text-subtle">The brief's lines</span>
             {view.hooks.slice(0, 6).map((h) => (
               <button key={h} onClick={() => commit({ ...edit, hook: h })}
                       className={cn("truncate rounded-md border px-2 py-1 text-left text-xs", edit.hook === h ? "border-accent text-accent" : "border-line text-muted hover:text-fg")}>
@@ -736,7 +736,7 @@ function Timeline({ view, edit, t, seek, commit, piece, setPiece, words, playing
         {visibleWords.length > 0 && (
           <div className="relative h-5 overflow-hidden">
             {visibleWords.map((w) => (
-              <span key={w.start} className={cn("absolute top-0.5 truncate text-[11px]", kept(edit, w) ? "text-fg" : "text-subtle")}
+              <span key={w.start} className={cn("absolute top-0.5 truncate text-[12px]", kept(edit, w) ? "text-fg" : "text-subtle")}
                     style={{ left: x(w.start), width: Math.max(4, x(w.end) - x(w.start)) }}>{shownText(edit, w)}</span>
             ))}
           </div>

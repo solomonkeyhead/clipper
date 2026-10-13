@@ -3637,3 +3637,10 @@ their transcripts and frames, then a research report; Marc picked what to build.
   columns say what's missing ("Nothing to post." with Make clips), and "All caught up" offers the next thing to make.
 - The header pill reads "Add an AI key" (or "Fix the AI") with an arrow and opens Settings at the AI card, only when
   something is missing; otherwise it stays the quiet "Gemini" / "Claude + Gemini" (D143). Never synced reads "Sync now".
+
+## D210: 14px body, 13px labels, the parts' secondary controls as icons (2026-10-13)
+- From the critique: most of the page's text was 13px and a quarter of it 12px, on a desktop tool used for long
+  sessions; each finished part's row carried six labelled controls.
+- `--text-sm` (body) is 14px and `--text-xs` (labels, metadata) 13px, one step under it so the two still read as
+  different jobs; the 11px chips are 12px. In a part's row, Adjust and Undo are icons with their name in the tip and
+  as the label a screen reader reads; New footage and New drawing keep their words, they're the row's actions.

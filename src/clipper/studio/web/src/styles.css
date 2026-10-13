@@ -109,8 +109,9 @@
   --shadow-3: var(--shadow-3);
   --ease-standard: var(--ease-standard);
   --ease-decelerate: var(--ease-decelerate);
-  --text-xs: 12px;
-  --text-sm: 13px;
+  /* 14px body, 13px labels (D210): 13 and 12 read small through a long session on a desktop tool. */
+  --text-xs: 13px;
+  --text-sm: 14px;
   --text-base: 14px;
   --text-md: 16px;
   --text-lg: 20px;

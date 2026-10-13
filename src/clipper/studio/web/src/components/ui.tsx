@@ -99,7 +99,7 @@ export function Tip({ label, keys, children, side = "top" }: {
 }
 
 export const Kbd = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <kbd className={cn("rounded-[4px] border border-line-strong bg-surface-2 px-1.5 py-px font-mono text-[11px] text-muted", className)}>
+  <kbd className={cn("rounded-[4px] border border-line-strong bg-surface-2 px-1.5 py-px font-mono text-[12px] text-muted", className)}>
     {children}
   </kbd>
 );

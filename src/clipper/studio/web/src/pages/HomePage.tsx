@@ -194,7 +194,7 @@ function Setup({ done }: { done: Record<string, boolean> }) {
             <li key={step.key} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0">
               <div className="flex items-center gap-3">
                 {finished ? <CheckCircle2 className="size-5 shrink-0 text-success" aria-label="Done" />
-                  : <span className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold", open ? "bg-fg text-bg" : "bg-surface-3")}>{i + 1}</span>}
+                  : <span className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[12px] font-bold", open ? "bg-fg text-bg" : "bg-surface-3")}>{i + 1}</span>}
                 <span className={cn("flex-1 text-sm", open ? "font-semibold" : finished ? "text-muted line-through" : "text-muted")}>{step.title}</span>
                 {!finished && !open && step.to && <Link to={step.to} className="text-xs text-muted hover:text-fg">{step.action}</Link>}
               </div>

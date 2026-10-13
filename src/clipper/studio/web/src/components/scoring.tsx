@@ -25,7 +25,7 @@ export function ScoreBadge({ clip }: { clip: Clip }) {
   if (clip.score == null) return null;
   return (
     <Tip label={`Clipper's score out of 10${clip.pool_rank && clip.pool ? `, #${clip.pool_rank} of ${clip.pool} moments in the video` : ""}`}>
-      <span className={cn("tabular rounded-[4px] bg-surface-2 px-1.5 py-px text-[11px] font-semibold", scoreTone(clip.score))}>
+      <span className={cn("tabular rounded-[4px] bg-surface-2 px-1.5 py-px text-[12px] font-semibold", scoreTone(clip.score))}>
         {clip.score.toFixed(1)}
       </span>
     </Tip>

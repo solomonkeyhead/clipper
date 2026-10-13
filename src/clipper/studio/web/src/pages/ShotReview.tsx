@@ -161,10 +161,10 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
                       <span className="absolute bottom-1 left-1 rounded-sm bg-black/70 px-1 text-[10px] text-white/80">
                         {c.source === "photo" ? `Photo · ${c.id.split("-")[1] === "pexels" ? "Pexels" : "Pixabay"}` : <>{c.source === "pexels" ? "Pexels" : c.source === "coverr" ? "Coverr" : c.source === "nasa" ? "NASA" : "Pixabay"} · {Math.round(c.duration)}s</>}
                       </span>
-                      {n >= 0 && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-accent text-[11px] font-bold text-accent-fg">{offer.clips > 1 ? n + 1 : <Check className="size-3" />}</span>}
+                      {n >= 0 && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-accent text-[12px] font-bold text-accent-fg">{offer.clips > 1 ? n + 1 : <Check className="size-3" />}</span>}
                     </span>
-                    <span className={cn("text-[11px] font-medium", tone)}>{label}</span>
-                    <span className="line-clamp-2 text-[11px] text-muted">{c.tags || c.query}</span>
+                    <span className={cn("text-[12px] font-medium", tone)}>{label}</span>
+                    <span className="line-clamp-2 text-[12px] text-muted">{c.tags || c.query}</span>
                   </button>
                 );
               })}
@@ -362,16 +362,18 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
                       </select>
                     </Tip>
                   )}
-                  <Tip label="How it comes in, where its cut falls, its framing, and a drawing's size, place, words, arrows and colours">
-                    <Button size="sm" variant={adjusting === first ? "primary" : "ghost"} aria-expanded={adjusting === first}
+                  {/* Icons, named in the tip and to a screen reader (D210): the words made a row of six labels. */}
+                  <Tip label="Adjust: how it comes in, where its cut falls, its framing, and a drawing's size, place, words, arrows and colours">
+                    <Button size="icon" variant="ghost" aria-label="Adjust" aria-expanded={adjusting === first}
+                            className={cn(adjusting === first && "bg-surface-3 text-fg")}
                             disabled={rebuilding} onClick={() => setAdjusting((a) => (a === first ? null : first))}>
-                      <SlidersHorizontal className="size-3.5" /> Adjust
+                      <SlidersHorizontal className="size-4" />
                     </Button>
                   </Tip>
                   {v.previous && (
-                    <Tip label="Keep what this part had">
-                      <Button size="sm" variant="ghost" disabled={busy !== null || rebuilding} onClick={() => ask(first, "undo")}>
-                        <Undo2 className="size-3.5" /> Undo
+                    <Tip label="Undo: keep what this part had">
+                      <Button size="icon" variant="ghost" aria-label="Undo" disabled={busy !== null || rebuilding} onClick={() => ask(first, "undo")}>
+                        <Undo2 className="size-4" />
                       </Button>
                     </Tip>
                   )}
