@@ -37,6 +37,9 @@ with sync_playwright() as p:
         return e.getClientRects().length && ([s.backgroundColor, s.borderTopColor].includes('rgb(215, 255, 58)')
           || (s.color === 'rgb(215, 255, 58)' && !e.children.length && e.textContent.trim())); }).length""")
     assert lime <= 3, f"{lime} lime things on a draft"
+    # D208: the bar says the step and what Approve locks; a checked (ready-made) script has Approve as its filled button
+    expect(page.get_by_text("Step 1 of 4, the script.")).to_be_visible()
+    expect(page.get_by_role("button", name="Check physics again")).to_be_visible()
     draft.click()
     built = cards.nth(1)                        # the newest (a draft) first, the built one second
     if built.get_attribute("aria-expanded") == "false":

@@ -579,7 +579,7 @@ function VideoCard({ video, open: startOpen, wps }: { video: CreateVideo; open: 
           <span className="min-w-0">
             <span className="line-clamp-2 font-semibold">{s.title || "Untitled"}</span>
             <span className="text-xs text-muted">
-              {video.status === "writing" ? "Being written…" : `${s.beats?.length ?? 0} beats · ~${Math.round(words(s) / wps)}s${s.length === "short" ? " · short take" : ""}`}
+              {video.status === "writing" ? "Being written…" : `${s.beats?.length ?? 0} sentences · ~${Math.round(words(s) / wps)}s${s.length === "short" ? " · short take" : ""}`}
               {video.archived && video.archived_at ? ` · archived ${video.archived_at.slice(0, 10)}` : ""}
             </span>
           </span>
@@ -718,6 +718,14 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
                   onRebuild={run("rebuild", () => createApi.build(video.id), "Rebuilding: only the parts that changed are made again")} />;
   }
 
+  const checked = isChecked(video.check_notes);
+  const checkButton = (
+    <Tip label={`The AI reads the script for ${fact === "physics" ? "physics mistakes" : "factual mistakes"} and tells you; it changes nothing.`}>
+      <Button variant={checked ? "secondary" : "primary"} disabled={busy !== null} onClick={run("check", () => createApi.check(video.id), "Checked")}>
+        {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : checked ? `Check ${fact} again` : `Check ${fact}`}
+      </Button>
+    </Tip>
+  );
   return (
     <div className="flex flex-col gap-4">
       {video.status === "draft" && video.error && (
@@ -749,8 +757,16 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
                placeholder="Steer Another take: shorter, funnier opening, use a kitchen example, less jargon…"
                className="h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none placeholder:text-subtle focus:border-accent" />
       )}
+        {/* Which step this is and what Approve does (D208): three equal buttons gave no order, and nothing said
+            Approve locks the words. The check goes first until the script has one; it isn't run by itself, it uses AI. */}
+        <p className="text-xs text-muted">
+          <b className="font-medium text-fg">Step 1 of 4, the script.</b>{" "}
+          {checked ? "Approve locks the words so you can record them in step 2; Edit the script again unlocks them."
+            : `Check the ${fact} first, then approve: that locks the words so you can record them in step 2.`}
+        </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" disabled={busy !== null} onClick={run("approve", () => createApi.approve(video.id))}>
+          {!checked && checkButton}
+          <Button variant={checked ? "primary" : "secondary"} disabled={busy !== null} onClick={run("approve", () => createApi.approve(video.id))}>
             <CheckCircle2 className="size-4" /> Approve script
           </Button>
           {video.topic_id !== null && (
@@ -765,11 +781,7 @@ function Body({ video, wps }: { video: CreateVideo; wps: number }) {
               {busy === "plan" ? <Loader2 className="size-4 animate-spin" /> : <Shapes className="size-4" />} {busy === "plan" ? "Planning…" : "Plan pictures"}
             </Button>
           </Tip>
-          <Tip label={`The AI reads the script for ${fact === "physics" ? "physics mistakes" : "factual mistakes"} and tells you; it changes nothing.`}>
-            <Button variant="secondary" disabled={busy !== null} onClick={run("check", () => createApi.check(video.id), "Checked")}>
-              {busy === "check" ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy === "check" ? "Checking…" : `Check ${fact}`}
-            </Button>
-          </Tip>
+          {checked && checkButton}
           {/* Deleting is the card's own trash button, which asks first (D196): this one didn't. */}
           <span className="ml-auto flex items-center gap-2">{undo}</span>
         </div>
@@ -850,6 +862,10 @@ function Takes({ video }: { video: CreateVideo }) {
   );
 }
 
+/** Whether the script carries a check's verdict (D208), from the AI's writing or Check: a script written by hand or
+ *  restored without one starts with Check as its next step; a ready-made one was checked when it was made. */
+const isChecked = (notes: string) => /no problems|fixed|still unsure|^- |checked by|^a ready-made script/im.test(notes);
+
 /** Lines about how a script was made, not about the script: folded under the verdict (D196). */
 const MADE = /^(written by|checked by|drawn by|\(edited by hand|restored from|.*didn't answer|.*out of its quota)/i;
 
@@ -915,7 +931,7 @@ function PictureChoice({ visual, emphasis, onChange, canHold, canBuild }: {
         <option value="stock">Footage I search for</option>
         <option value="card">Chalk phrase</option>
         {(drawings || kind === "sketch") && <option value="sketch">Drawing I describe</option>}
-        {drawings && (canHold || kind === "hold") && <option value="hold">Keep the drawing above, building on</option>}
+        {drawings && (canHold || kind === "hold") && <option value="hold">Keep the drawing above and add to it</option>}
       </select>
       {kind !== "auto" && kind !== "hold" && (
         <input key={`${kind}-${value}`} defaultValue={value} placeholder={placeholder} aria-label={placeholder}
@@ -1065,7 +1081,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
     return (
       <Tip label="The drawing above stays on screen through this sentence, its parts arriving as they're said.">
         <span className="flex max-w-full items-center gap-1.5 self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs text-muted">
-          <Shapes className="size-3.5 shrink-0" /><span className="truncate">Same drawing, continued</span>
+          <Shapes className="size-3.5 shrink-0" /><span className="truncate">Keeps the drawing above</span>
         </span>
       </Tip>
     );
@@ -1094,7 +1110,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
 
 /* ---------- the voice: a file, recorded here, or none (D146) ---------- */
 
-function VoiceStep({ video, title = "Add the voice" }: { video: CreateVideo; title?: string }) {
+function VoiceStep({ video, title = "Step 2 of 4: add the voice" }: { video: CreateVideo; title?: string }) {
   const qc = useQueryClient();
   const { data: create } = useCreate();
   const input = useRef<HTMLInputElement>(null);

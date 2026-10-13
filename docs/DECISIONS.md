@@ -3616,3 +3616,13 @@ their transcripts and frames, then a research report; Marc picked what to build.
   empty or has no changes is secondary until it can go. Picture labels, done steps and section icons are neutral.
 - One shape rule: a borderless pill is a label or a status (Chip lost its neutral border), a bordered rectangle is
   something to press (the take, voice-way and most-viewed toggles were pills).
+
+## D208: the draft's bar says the step, what Approve locks, and the check comes first (2026-10-13)
+- From the critique: Approve, Plan pictures and Check physics sat in a row with Approve filled, nothing said which
+  comes first or that Approve locks the words, and "beats" and "Same drawing, continued" were the pipeline's words.
+- The bar now opens with "Step 1 of 4, the script." and one line on what Approve does. Until the script carries a
+  check's verdict (the AI's writing, Check, or a ready-made script), Check is first and filled and Approve is
+  outlined; after it, Approve is filled and Check reads "Check physics again". The check is not run by itself on
+  opening a draft: it uses AI, and Marc decides when that's spent. Approving unchecked stays one click (D120).
+- The voice card is "Step 2 of 4: add the voice". "beats" on a card is "sentences"; the held drawing's label is
+  "Keeps the drawing above", its option "Keep the drawing above and add to it".
