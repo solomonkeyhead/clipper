@@ -123,6 +123,9 @@ class Script(BaseModel):
     zooms: bool = True
     cut_ins: bool = True
     transitions: str = "auto"
+    # When the presenter is on screen (D203): "all" the whole video (D159), "ends" the opening sentence and from the
+    # punchline, so the drawings carry the middle alone, as in the channel's best three.
+    on_screen: str = "all"
     # The end runs straight into the start (D197): None = when the script ends on the loop.
     loop: bool | None = None
     # Captions on or off, and the cover's moment in seconds (None: the build picks the best still) (D171).
@@ -238,6 +241,17 @@ TEMPLATES = {
 """,
 }
 
+#: When the viewer gets a reason to stay (WRITER_TAIL's {reason}): in the opening line on a channel that opens on the
+#: surprise (D202), else by the second line, after the question (D203).
+REASON_FIRST = ("Give the viewer a reason to stay within the first two seconds: the first line already shows the\n"
+                "obvious answer wrong, or gives a number or a contradiction that makes the moment strange; explain after that.")
+REASON_SECOND = ("Give the viewer a reason to stay within the first three seconds: by the second line the\n"
+                 "obvious answer is shown wrong, or a number or a contradiction makes the question stranger; explain after that.")
+#: D203: Pursed lips said "37 degrees Celsius or 98.6 Fahrenheit" in its second line, and viewers of the elevator
+#: Short left at 13 s, as "mass times gravity plus mass times acceleration" began.
+NUMBERS_LATE = ("No number in the first ten seconds except one surprising figure in the first two lines, and no formula "
+                "before the halfway point: say what happens in plain words first.")
+
 VISUALS_TAIL = """  Keep every label under 4 words.
 For each beat also give emphasis: the single most important word in it, copied exactly. It is
 lit in the captions and the camera punches in on it, so pick the word that carries the point
@@ -246,8 +260,7 @@ lit in the captions and the camera punches in on it, so pick the word that carri
 #: The writer's closing instructions (D164): the words only; the director plans the pictures after.
 WRITER_TAIL = """Every sentence gets its own picture under it (real footage, or a chalk drawing that shows
 the mechanism), so write concrete sentences a picture can show, and let the explanation go one
-step a sentence. Give the viewer a reason to stay within the first two seconds: the first line already shows the
-obvious answer wrong, or gives a number or a contradiction that makes the moment strange; explain after that.
+step a sentence. {reason}
 Write for the ear, as every line is read aloud: numbers as they are said, rounded, in one unit (never two units,
 never digits with symbols), no abbreviations, no word a narrator would trip on; a technical term only when it is
 the point, said once and explained in plain words. Name a thing before you point back to it.
@@ -338,7 +351,7 @@ def pose_note(channel: channels.Channel) -> str:
     if not names:
         return ""
     return (f"Poses for the on-screen presenter: set a beat's pose to one of these on at most {MAX_POSES} sentences "
-            f"where it fits what is said (the first sentence too: he reacts to the surprise as the video opens), and leave it empty "
+            f"where it fits what is said (the first sentence too: he reacts as the video opens), and leave it empty "
             f"elsewhere. The last sentence needs none. Poses: {names}.\n")
 
 
@@ -364,7 +377,8 @@ def _system(channel: channels.Channel) -> str:
     if not channel.bits:   # the owner took the coffee cup, the grudges and "Class dismissed" out (D190)
         jokes += ("\n\nNo running gags carried from video to video: no catchphrase, no named law or rule of the "
                   "presenter's, no recurring object or grudge, no sign-off line. Each video stands on its own.")
-    tail = channels.fill(WRITER_TAIL, channel)
+    reason = (REASON_FIRST if channel.open_surprise else REASON_SECOND) + ("\n" + NUMBERS_LATE if channel.numbers_late else "")
+    tail = channels.fill(WRITER_TAIL.replace("{reason}", reason), channel)
     if not channel.drawings:   # a footage-only channel was told of chalk drawings it never makes (D199)
         tail = tail.replace(" (real footage, or a chalk drawing that shows\nthe mechanism)", " (real footage)")
     return (f"{channel.persona}\n\nYou write the scripts for the YouTube Shorts channel "
@@ -539,6 +553,18 @@ BANNED = [
     (re.compile(r"\b(?:essentially|basically|literally|fundamentally)\b", re.I), 'filler words ("essentially", "basically")'),
 ]
 HOOK_TEXT_MAX = 6
+#: A number as said or written, or a unit that only comes with one (D203); one, two and ten are everyday words.
+_NUMBER = re.compile(r"\d|\b(?:eleven|twelve|(?:thir|four|fif|six|seven|eigh|nine)teen|(?:twen|thir|for|fif|six|seven|"
+                     r"eigh|nine)ty|hundred|thousand|million|billion|degrees?|celsius|fahrenheit|kelvin|joules?|newtons?|"
+                     r"watts?|volts?|amps?|pascals?|percent|hertz|decibels?)\b", re.I)
+#: A formula said in words: two of these in one sentence ("mass times gravity plus mass times acceleration"). One
+#: alone is plain speech ("several times faster", "vapour pressure equals the air's").
+_OPERATOR = re.compile(r"\b(?:equals|times|divided by|multiplied by|squared|plus|minus)\b", re.I)
+#: The same quantity in two units, which the writer is told never to give (D203: "37 degrees Celsius or 98.6
+#: Fahrenheit").
+_UNITS = [[re.compile(rf"\b(?:{u})\b", re.I) for u in family] for family in (
+    ("celsius", "fahrenheit", "kelvin"), (r"miles?", r"kilomet(?:re|er)s?"), (r"pounds?", r"kilo(?:gram)?s?"),
+    ("feet|foot", r"met(?:re|er)s?"))]
 
 
 def _sentences(text: str) -> list[str]:
@@ -572,6 +598,7 @@ def lint(script: Script, channel: channels.Channel) -> list[str]:
     for pattern, name in BANNED:
         if pattern.search(script.text):
             problems.append(f"Remove {name}.")
+    problems += _numbers(sentences, channel)
     # A loop's last line runs into the first (D195, D199): a full stop there makes the voice sound finished.
     last = script.beats[-1].text.strip() if script.beats else ""
     if loops_back(script) and len(script.beats) >= 3 and re.search(r"[.!?…]$", last):
@@ -582,6 +609,23 @@ def lint(script: Script, channel: channels.Channel) -> list[str]:
         problems.append("Lines copied from the examples you were given: " + " | ".join(copied[:3]) +
                         ". Write your own words.")
     return problems
+
+
+def _numbers(sentences: list[str], channel: channels.Channel) -> list[str]:
+    """Numbers, units and formulas before the viewer knows why they matter (D203): a quantity in two units anywhere;
+    with `numbers_late`, a number in the first ten seconds past the first two lines, and a formula in the first half."""
+    out, said, total = [], 0, sum(len(s.split()) for s in sentences)
+    for i, s in enumerate(sentences):
+        if any(sum(bool(u.search(s)) for u in family) > 1 for family in _UNITS):
+            out.append(f'One unit only: "{s}".')
+        if channel.numbers_late and i >= 2 and said < 10 * channel.words_per_second and _NUMBER.search(s):
+            out.append(f'A number in the first ten seconds: "{s}". Only one surprising figure, in the first two lines; '
+                       "the rest after the reason is clear.")
+        if channel.numbers_late and said < total / 2 and len(_OPERATOR.findall(s)) >= 2:
+            out.append(f'A formula before the halfway point: "{s}". Say what happens in plain words first, and give '
+                       "the formula after the viewer knows why it matters, or leave it out.")
+        said += len(s.split())
+    return out
 
 
 def _words(text: str) -> list[str]:

@@ -80,7 +80,7 @@ OPEN_ON_SURPRISE = ("Open on the surprise, not the question: the first line, at 
                     "(\"you\" or \"your\"), is the strange true fact, the number or the contradiction about a concrete "
                     "moment they have felt or seen (\"The elevator makes you heavier. Really.\"). The question may "
                     "follow as the second line, or never be asked. Never start with \"Why\" or a question.")
-PHYSICS_RULES = [
+PHYSICS_RULES_D202 = [
     PHYSICS_RULES_D155[0],
     OPEN_ON_SURPRISE,
     PHYSICS_RULES_D155[2],
@@ -90,8 +90,12 @@ PHYSICS_RULES = [
     "clear. Every joke carries a fact (\"2,000 newtons of politeness\").",
     *PHYSICS_RULES_D155[7:],
 ]
+#: D203: back to the question. In the channel's 15 Shorts with stats the five that held viewers best all opened on the
+#: question, over a picture of the moment, and the three worst on a joke, a quote or an abstract picture; none had
+#: opened on a surprise, so D202 was a guess the numbers didn't back.
+PHYSICS_RULES = PHYSICS_RULES_D156
 #: Rule sets a physics channel may still have word for word; read, it moves to PHYSICS_RULES.
-PHYSICS_RULES_BEFORE = [PHYSICS_RULES_BEFORE_D155, PHYSICS_RULES_D155, PHYSICS_RULES_D156]
+PHYSICS_RULES_BEFORE = [PHYSICS_RULES_BEFORE_D155, PHYSICS_RULES_D155, PHYSICS_RULES_D202]
 
 #: Joke shapes for the writer to follow, never lines to copy (D156, the second report's patterns).
 PHYSICS_JOKES = [
@@ -100,25 +104,25 @@ PHYSICS_JOKES = [
     "Understatement of a huge number (\"The Sun loses 4 million tonnes a second. It is having a difficult week.\")",
     "An absurd but exact comparison (\"This raindrop of fluid decides whether you feel seasick.\")",
     "Three beats, escalating (\"The car brakes. You continue. Your coffee continues further.\")",
-    "A callback: the ending reuses a word from the opening line with a new meaning",
+    "A callback: the ending reuses a word from the opening question with a new meaning",
     "A polite correction of the viewer (\"Cold does not come in. Heat leaves. Without saying goodbye.\")",
 ]
 
 #: The German Professor's script shapes, one per script in turn (D155): one shape every time reads as a
-#: template, which YouTube's July 2025 rules on mass-produced content name.
+#: template, which YouTube's July 2025 rules on mass-produced content name. Each opens on the question (D203).
 PHYSICS_SHAPES = [
-    "Myth-bust: open on what people believe, shown wrong in one dry line (\"You say centrifugal force. "
+    "Myth-bust: the question, then what people believe in one dry line (\"You say centrifugal force. "
     "I say careful.\"), then the real chain of causes.",
-    "Walk-through: open on the strange part of the moment, then follow the viewer through it in the second "
-    "person, step by step (\"You press the button. The floor pushes up.\"), saying what the physics does at each step.",
-    "One number: open on one surprising true figure that frames it (\"On Everest, water "
+    "Walk-through: the question, then follow the viewer through the moment in the second person, step "
+    "by step (\"You press the button. The floor pushes up.\"), saying what the physics does at each step.",
+    "One number: the question, then one surprising true figure that frames it (\"On Everest, water "
     "boils at about 70 degrees.\"), then why that number makes it happen.",
     # D156: three more, so the shapes can't be learned after three videos.
-    "What if not: open on what would happen if the physics did not work this way (\"If the "
+    "What if not: the question, then what would happen if the physics did not work this way (\"If the "
     "floor didn't push harder, you'd keep the elevator's speed... downward.\"), then why it does.",
-    "Scale jump: open on the moment, then zoom to the tiny scale where it happens (molecules, air, light), or "
+    "Scale jump: the question, then zoom to the tiny scale where it happens (molecules, air, light), or "
     "out to the huge one, then back to the viewer's moment.",
-    "Two things: open on the same physics in two everyday moments side by side (the elevator "
+    "Two things: the question, then the same physics in two everyday moments side by side (the elevator "
     "and the car), then the one cause they share.",
 ]
 
@@ -150,6 +154,7 @@ class Pack(BaseModel):
     hook_max: int = 14
     hook_you: bool = False             # the opening line must say "you" or "your"
     open_surprise: bool = False        # the opening line is the surprise, never a question (D202)
+    numbers_late: bool = False         # no number in the first 10 s past the opening, no early formula (D203)
     shapes: list[str] = Field(default_factory=list)   # script shapes used in turn; none: the rules' one
     scope: str = ""                    # what an idea may be about, for the planner's fit score; "" = subject
     jokes: list[str] = Field(default_factory=list)   # joke shapes for the writer (D156)
@@ -186,7 +191,7 @@ English, short sentences, the rhythm of someone explaining with a raised eyebrow
     subject="everyday science and how things work", expert="a teacher who knows the subject well",
     areas="the body, the home, food, money, technology, nature, travel, work",
     abstract='"concept", "idea",\n  "theory"', hashtags="#learn,\n#howitworks and one specific",
-    words=[85, 115], sentence_max=13, hook_max=10, hook_you=True, open_surprise=True)
+    words=[85, 115], sentence_max=13, hook_max=10, hook_you=True, open_surprise=True, numbers_late=True)
 
 STORIES = Pack(
     key="stories", label="History and true stories",
@@ -237,7 +242,7 @@ PHYSICS = Pack(
     subject="physics", expert="a physics professor",
     areas="mechanics, heat, sound, light, electricity, fluids and pressure, materials",
     abstract='"pressure", "physics",\n  "energy"', hashtags="#physics,\n#science and one specific",
-    templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True, open_surprise=True,
+    templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True, numbers_late=True,
     shapes=list(PHYSICS_SHAPES), jokes=list(PHYSICS_JOKES),   # no running bits, no sign-off (D190)
     scope="any STEM subject, physics first, then chemistry, engineering, earth and space, maths, technology")
 

@@ -544,7 +544,8 @@ def routes(app: FastAPI, publish) -> None:
     @app.put("/api/create/videos/{video_id}/edit")
     def create_edit_style(video_id: int, body: dict) -> dict:
         """The edit's flourishes for one video (D165): zooms, cut-ins and captions on or off (D171), the transition
-        (auto, cut, whip, zoom), the cover's moment in seconds (null: the best still), and how the captions look
+        (auto, cut, whip, zoom), when the presenter shows (on_screen: all, or ends, D203), the cover's moment in
+        seconds (null: the best still), and how the captions look
         (D180): caption_size (0.7-1.3), caption_shift (a share of the height, + down) and caption_colour (the lit
         word's, "#rrggbb" or "" for the channel's). The next build uses them."""
         row = video_or_404(video_id)
@@ -562,6 +563,10 @@ def routes(app: FastAPI, publish) -> None:
             if body["transitions"] not in ("auto", "cut", "whip", "zoom"):
                 raise HTTPException(400, "transitions are auto, cut, whip or zoom")
             script["transitions"] = body["transitions"]
+        if "on_screen" in body:   # the presenter the whole video, or the opening and the punchline only (D203)
+            if body["on_screen"] not in ("all", "ends"):
+                raise HTTPException(400, "on_screen is all or ends")
+            script["on_screen"] = body["on_screen"]
         try:
             if "caption_size" in body:
                 script["caption_size"] = round(min(1.3, max(0.7, float(body["caption_size"]))), 2)

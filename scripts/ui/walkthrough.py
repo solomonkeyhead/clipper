@@ -140,6 +140,16 @@ with sync_playwright() as p:
     print("caption size, place and colour set (D180)")
     page.get_by_role("button", name="Look and sound").first.click()   # sound, the loop and the cover, folded (D199)
     page.get_by_label("Seamless loop").first.check()
+    page.get_by_label("Presenter").first.select_option("ends")   # the opening and the punchline only (D203)
+    for _ in range(20):
+        if page.evaluate("async () => (await (await fetch('/api/create')).json()).videos"
+                         ".some(v => v.script?.on_screen === 'ends')"):
+            break
+        time.sleep(0.5)
+    else:
+        raise AssertionError("the presenter choice wasn't saved")
+    expect(page.get_by_text("the presenter").first).to_be_visible()   # the Build bar lists it as not built yet
+    print("presenter: opening and punchline")
     page.get_by_role("button", name="Use this frame").first.click()
     expect(page.get_by_text("Cover: the frame at").first).to_be_visible()
     print("cover frame chosen")

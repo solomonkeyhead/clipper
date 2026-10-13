@@ -24,3 +24,6 @@ def test_what_changed_since_the_last_build_is_named():
     now = {**built, "music": True, "cover": 3.5, "title": "new", "beats": [{"text": "a"}, {"text": "b", "nudge": 0.2}]}
     assert store.unbuilt(now, built) == ["music", "the cover", "sentence 2"]
     assert store.unbuilt(built, built) == [] and store.unbuilt(now, None) is None
+    # D203: a build from before the presenter choice is no change until the choice moves off its default
+    assert store.unbuilt({**built, "on_screen": "all"}, built) == []
+    assert store.unbuilt({**built, "on_screen": "ends"}, built) == ["the presenter"]

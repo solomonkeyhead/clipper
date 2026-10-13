@@ -145,6 +145,30 @@ def test_a_magenta_picture_is_cut_out_and_its_mouth_version_lines_up(tmp_path):
     assert not p.changes   # the mouth moving is no pose change: no pop
 
 
+def test_the_presenter_can_go_away_and_come_back(tmp_path):
+    """D203: "opening and punchline" takes him off screen between them, sliding out and back in."""
+    import numpy as np
+    from PIL import Image, ImageDraw
+
+    from clipper.create import compose
+
+    img = Image.new("RGB", (400, 400), (255, 0, 255))
+    ImageDraw.Draw(img).ellipse((100, 60, 300, 380), fill=(240, 200, 170))
+    img.save(tmp_path / "p.png")
+    shows = [(tmp_path / "p.png", 0.0, 1.0), (tmp_path / "p.png", 2.0, 3.0)]
+    p = compose.Presenter(shows, 90, gaps=True)
+    assert p.runs == [(0, 30), (60, 90)] and p.sprite_at(45) is None and not p.changes
+
+    def shown(k):
+        frame = np.zeros((compose.H, compose.W, 3), np.uint8)
+        p.draw(frame, k)
+        return int((frame.sum(axis=2) > 0).sum())
+
+    assert shown(15) > shown(25) > shown(28) and shown(45) == 0   # in full, sliding down, gone
+    assert shown(61) < shown(75)                                  # rising back in for the punchline
+    assert compose.Presenter(shows, 90).runs == [(0, 90)]         # without gaps he stays all video
+
+
 def test_the_mouth_opens_on_words_and_long_sentences_change_picture(tmp_path):
     from clipper.create import channel
 

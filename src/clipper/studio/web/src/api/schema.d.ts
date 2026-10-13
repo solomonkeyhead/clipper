@@ -859,7 +859,8 @@ export interface paths {
         /**
          * Create Edit Style
          * @description The edit's flourishes for one video (D165): zooms, cut-ins and captions on or off (D171), the transition
-         *     (auto, cut, whip, zoom), the cover's moment in seconds (null: the best still), and how the captions look
+         *     (auto, cut, whip, zoom), when the presenter shows (on_screen: all, or ends, D203), the cover's moment in
+         *     seconds (null: the best still), and how the captions look
          *     (D180): caption_size (0.7-1.3), caption_shift (a share of the height, + down) and caption_colour (the lit
          *     word's, "#rrggbb" or "" for the channel's). The next build uses them.
          */

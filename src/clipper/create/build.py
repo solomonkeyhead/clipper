@@ -1094,9 +1094,16 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     plan = character_plan(script, timings, channel, punchline, seed, loop_at=loop_at)
     if plan:
         shows = sorted(((pic, a, b) for pic, times in plan for a, b in times), key=lambda x: x[1])
+        ends = script.on_screen == "ends"
+        if ends:   # away from the second sentence to the punchline (D203)
+            opened = timings.beats[1][0] if len(timings.beats) > 1 else punchline
+            shows = ([(p, a, min(b, opened)) for p, a, b in shows if a < opened]
+                     + [(p, max(a, punchline), b) for p, a, b in shows if b > punchline])
         edit.presenter = compose.Presenter(shows, total, talk=talking_frames(voice, timings, total), seed=seed,
-                                           enter=not loop)
+                                           enter=not loop, gaps=ends)
         edit.cutaways = cutaways(script, timings, punchline, total, shots, loop_at=loop_at) if script.cut_ins else []
+        if ends:   # no cut-in on him while he's away
+            edit.cutaways = [c for c in edit.cutaways if c.a >= round(punchline * FPS)]
         for s in shots:   # straight out of a cut-in: a plain cut, not a whip on top of it
             if any(0 <= s.start - c.b <= 2 for c in edit.cutaways):
                 s.enter = "cut"

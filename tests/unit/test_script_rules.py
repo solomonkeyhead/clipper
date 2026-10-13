@@ -15,17 +15,40 @@ def _script(*sentences: str, hook: str = "") -> Script:
 
 def test_lint_holds_a_script_to_the_channels_countable_rules():
     ch = channel.make("physics", "German Professor")
-    clean = _script("The lift really does make you heavier.", *["The floor pushes up on your feet a little harder."] * 9,
+    clean = _script("Why does the lift make you heavier?", *["The floor pushes up on your feet a little harder."] * 9,
                     hook="The scale reads more")
     assert 85 <= clean.words <= 110 and script.lint(clean, ch) == []
     bad = _script("Why do elevators accelerate upward so strangely sometimes at all?",
                   "It's not gravity, it's the floor — and here's the thing about floors and their very strong push.",
                   hook="Why do elevators make everyone feel heavy?")
     problems = " ".join(script.lint(bad, ch))
-    for said in ("words; it must be 85 to 110", "Sentences over 12", "opening line is 10 words",
+    for said in ("words; it must be 85 to 110", "Sentences over 12", "opening question is 10 words",
                  '"you" or "your"', "on-screen hook is 7", "em dash", "it's not X", "here's the thing",
-                 "Open on the surprise, not a question", "says what the title or the voice says"):
+                 "says what the title or the voice says"):
         assert said in problems, said
+    assert "Open on the surprise" not in problems   # the physics channel opens on the question again (D203)
+    surprise = channel.make("explainer", "Any")       # the Explainer pack still opens on the surprise (D202)
+    assert any("Open on the surprise" in p for p in script.lint(clean, surprise))
+
+
+def test_numbers_and_formulas_wait_until_the_viewer_knows_why_they_matter():
+    """D203: pursed lips' "37 degrees Celsius or 98.6 Fahrenheit", the elevator's formula as viewers left at 13 s."""
+    ch = channel.make("physics", "German Professor")
+    filler = ["The floor pushes up on your feet a little harder."] * 8
+    clean = _script("Why does the lift make you heavier?", "Up a mountain, your pasta water stops at ninety degrees.", *filler)
+    assert script.lint(clean, ch) == []   # one figure in the first two lines is the surprise
+    late = _script("Why does the lift make you heavier?", "You feel it at once.", "It pushes at thirty newtons.", *filler)
+    assert any(p.startswith("A number in the first ten seconds") for p in script.lint(late, ch))
+    two = _script("Why does your breath feel cool?", "Your breath leaves at 37 degrees Celsius or 98.6 Fahrenheit.", *filler)
+    assert any(p.startswith("One unit only") for p in script.lint(two, ch))
+    formula = _script("Why does the lift make you heavier?", *filler[:3], "So force is mass times gravity plus mass times lift.",
+                      *filler[3:])
+    assert any(p.startswith("A formula before the halfway point") for p in script.lint(formula, ch))
+    plain = _script("Why does the lift make you heavier?", *filler[:3], "It boils when vapour pressure equals the air's.",
+                    "The wind takes heat several times faster.", *filler[3:])
+    assert not any("formula" in p for p in script.lint(plain, ch))   # one operator word is plain speech
+    own = ch.model_copy(update={"numbers_late": False})   # a channel without the rule keeps only the one-unit check
+    assert not any(p.startswith(("A number", "A formula")) for p in script.lint(late, own) + script.lint(formula, own))
 
 
 def test_the_on_screen_hook_must_add_to_what_is_heard():
@@ -98,14 +121,19 @@ def test_a_cut_keeps_a_word_tail_the_recognizer_missed():
 def test_an_untouched_physics_channel_moves_to_the_new_rules_and_an_edited_one_keeps_its_own(data_root):
     old = channel.make("physics", "Prof").model_dump()
     for slug, rules in (("prof", packs.PHYSICS_RULES_BEFORE_D155), ("d156", packs.PHYSICS_RULES_D156),
-                        ("mine", ["my own rule"])):
+                        ("d202", packs.PHYSICS_RULES_D202), ("mine", ["my own rule"])):
         raw = {k: v for k, v in old.items() if k not in channel.LIMITS} | {"slug": slug, "rules": list(rules)}
+        if slug == "d202":   # saved while on the surprise rules, with their limits
+            raw |= {"open_surprise": True, "shapes": ["Myth-bust: open on what people believe"]}
         (channel.channels_dir() / f"{slug}.json").write_text(json.dumps(raw), encoding="utf-8")
     prof, mine = channel.load("prof"), channel.load("mine")
     assert prof.rules == packs.PHYSICS_RULES and (prof.words, prof.hook_max, len(prof.shapes)) == ([85, 110], 8, 6)
-    d156 = channel.load("d156")   # Marc's channel's rules before D202: the surprise first, and the shapes with it
-    assert d156.rules == packs.PHYSICS_RULES and d156.open_surprise and d156.shapes == packs.PHYSICS_SHAPES
+    for slug in ("d156", "d202"):   # Marc's channel's rules: the question first again (D203), the shapes with it
+        got = channel.load(slug)
+        assert got.rules == packs.PHYSICS_RULES and not got.open_surprise and got.numbers_late, slug
+        assert got.shapes == packs.PHYSICS_SHAPES, slug
     assert mine.rules == ["my own rule"] and (mine.words, mine.hook_max, mine.shapes) == ([80, 125], 14, [])
+    assert not mine.numbers_late
 
 
 def test_the_editor_is_another_ai_family_from_the_writer():

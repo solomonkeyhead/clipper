@@ -1289,6 +1289,17 @@ function SoundChoice({ video }: { video: CreateVideo }) {
           <option value="whip">Whip</option><option value="zoom">Zoom</option>
         </select>
       </label>
+      <Tip label="Opening and punchline: he slides away after the first sentence and comes back for the punchline, so the drawings carry the middle. Try it on every other video and compare how long viewers stay">
+        <label className="flex items-center gap-1.5">
+          Presenter
+          <select value={video.script.on_screen ?? "all"} aria-label="Presenter" disabled={video.status === "building"}
+                  className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                  onChange={(e) => void createApi.editStyle(video.id, { on_screen: e.target.value })
+                    .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
+            <option value="all">Whole video</option><option value="ends">Opening and punchline</option>
+          </select>
+        </label>
+      </Tip>
       <span className="text-subtle">Changes show on Build again.</span>
     </div>
   );

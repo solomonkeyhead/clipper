@@ -645,10 +645,12 @@ class Presenter:
     BLINK_EVERY, BLINK_FRAMES = (2.6, 5.2), 4
 
     def __init__(self, shows: list[tuple[Path, float, float]], total: int, talk: list[bool] | None = None,
-                 seed: int = 0, enter: bool = True):
+                 seed: int = 0, enter: bool = True, gaps: bool = False):
         """`talk`: the frames his mouth is open, from the voice (D196); a picture with a `-open` version next to it
         (professor-talking-1-open.png) shows that on those frames, and its `-blink` version for a blink. `enter`:
-        he slides up into the frame as the video starts; not on a loop, where he'd slide in on every pass (D197)."""
+        he slides up into the frame as the video starts; not on a loop, where he'd slide in on every pass (D197).
+        `gaps`: he is away where `shows` has none, sliding down out of the frame and back up (D203); else a gap keeps
+        the picture before it."""
         self.total, self.enter = total, enter
         self.sprites: dict[Path, Sprite] = {}
         self.versions: dict[tuple[Path, str], Sprite] = {}
@@ -671,12 +673,23 @@ class Presenter:
             if pic in self.sprites:
                 for k in range(max(0, round(a * FPS)), min(total, round(b * FPS))):
                     self.pose[k] = pic
-        for k in range(1, total):   # any gap keeps the picture before it
+        if not gaps:
+            for k in range(1, total):   # any gap keeps the picture before it
+                if self.pose[k] is None:
+                    self.pose[k] = self.pose[k - 1]
+            first = next((p for p in self.pose if p is not None), None)
+            self.pose = [p or first for p in self.pose]
+        self.changes = {k for k in range(1, total)
+                        if self.pose[k] is not None and self.pose[k - 1] is not None and self.pose[k] != self.pose[k - 1]}
+        self.runs, k = [], 0   # the stretches he is on screen, [start, end) in frames
+        while k < total:
             if self.pose[k] is None:
-                self.pose[k] = self.pose[k - 1]
-        first = next((p for p in self.pose if p is not None), None)
-        self.pose = [p or first for p in self.pose]
-        self.changes = {k for k in range(1, total) if self.pose[k] != self.pose[k - 1]}
+                k += 1
+                continue
+            start = k
+            while k < total and self.pose[k] is not None:
+                k += 1
+            self.runs.append((start, k))
 
     def sprite_at(self, k: int) -> Sprite | None:
         """The picture on frame `k`: its mouth-open version while he talks, its blink version for a blink (D196)."""
@@ -701,8 +714,12 @@ class Presenter:
         if since is not None and k - since < self.POP_FRAMES:   # a soft settle, no overshoot past full size
             scale = 0.95 + 0.05 * smooth((k - since) / self.POP_FRAMES)
         y = 0.0
-        if k < self.ENTER_FRAMES and self.enter:   # slides up into the frame as the video starts
-            y += (1 - out_back(k / self.ENTER_FRAMES, 1.2)) * 380
+        start, end = next(((a, b) for a, b in self.runs if a <= k < b), (0, self.total))
+        away = PRESENTER_H + PRESENTER_LIFT   # all the way out of the frame
+        if k - start < self.ENTER_FRAMES and (start > 0 or self.enter):   # slides up into the frame
+            y += (1 - out_back((k - start) / self.ENTER_FRAMES, 1.2)) * (380 if start == 0 else away)
+        if end < self.total and end - k <= self.ENTER_FRAMES:   # and down out of it, when he goes away (D203)
+            y += (1 - smooth((end - k - 1) / self.ENTER_FRAMES)) * away
         breathe = 0.006 * math.sin(2 * math.pi * t / 3.3)
         sy = scale * (1 + breathe) * zoom
         sx = scale * (1 - breathe * 0.4) * zoom

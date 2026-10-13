@@ -666,6 +666,8 @@ export interface CreateScript { title: string; beats: CreateBeat[]; description:
   music?: boolean | null; sfx?: boolean | null; bit?: string;
   /** Zooms on footage, cut-ins on the Professor, and the transition (D165). */
   zooms?: boolean; cut_ins?: boolean; transitions?: string;
+  /** The presenter the whole video ("all") or the opening and the punchline only ("ends") (D203). */
+  on_screen?: string;
   /** The end runs into the start (D197); null or missing: when the script ends on the loop. */
   loop?: boolean | null;
   /** Captions on or off, and the cover's moment (null: the best still) (D171). */
@@ -754,7 +756,8 @@ export const createApi = {
   script: (topic: number) => send<{ id: number }>("POST", `/api/create/topics/${topic}/script`),
   rewrite: (video: number, steer = "") => send("POST", `/api/create/videos/${video}/rewrite`, { steer }),
   edit: (video: number, script: Partial<CreateScript>) => send("PUT", `/api/create/videos/${video}/script`, { script }),
-  editStyle: (video: number, body: { zooms?: boolean; cut_ins?: boolean; loop?: boolean; transitions?: string; captions?: boolean; cover?: number | null;
+  editStyle: (video: number, body: { zooms?: boolean; cut_ins?: boolean; loop?: boolean; transitions?: string; on_screen?: string;
+                                    captions?: boolean; cover?: number | null;
                                     caption_size?: number; caption_shift?: number; caption_colour?: string }) =>
     send("PUT", `/api/create/videos/${video}/edit`, body),
   sound: (video: number, body: { music?: boolean | null; sfx?: boolean | null }) => send("PUT", `/api/create/videos/${video}/sound`, body),

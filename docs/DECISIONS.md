@@ -3560,3 +3560,29 @@ Decided, all five (Marc: "go for all of them"):
 Not checked on a real build: that needs a new script, a recording and footage judging (Marc's AI usage). Built videos
 keep their openings until they are written and recorded again. The "Viewed vs swiped away" box is empty for every post,
 so whether this helps can only be told once Marc types it in from YouTube Studio.
+
+## D203: back to the question, numbers later, the Professor only at the ends, and how long pictures hold (2026-10-13)
+Marc's 15 Shorts with YouTube Studio stats (8 made by hand in February, 7 by Clipper in October) were read through
+their transcripts and frames, then a research report; Marc picked what to build.
+- Openings: the five that held viewers best (stayed to watch 47 to 64 %) all opened on the question over a picture of
+  the moment, the three worst (13 to 20 %) on a joke, a quote or an abstract picture, and none on a surprise, so D202's
+  surprise-first was a guess the numbers didn't back. Marc: "open on the questions instead". The physics pack's rules
+  are D156's again (`packs.PHYSICS_RULES`, shapes "the question, then..."), `open_surprise` off; a channel on the D202
+  rules word for word moves back. The writer's "reason to stay" line follows the channel: the first line on a surprise
+  channel, by the second line on a question one (`script.REASON_FIRST` / `REASON_SECOND`). The Explainer pack keeps
+  D202 (no data for it). Kept from D202: the sharper first shot, the hook text that adds, the 0.1 s opening pauses.
+- Numbers later (`Channel.numbers_late`, physics and Explainer packs): lint flags a number past the first two lines in
+  the first ten seconds, a formula (two of equals, times, divided by, squared, plus, minus in one sentence) before the
+  halfway point, and on any channel one quantity in two units ("37 degrees Celsius or 98.6 Fahrenheit", video 25). The
+  writer is told the same up front, so it rarely costs a rewrite. Why: the elevator Short lost viewers at 13 s as its
+  formula began, and pursed lips opened on two units.
+- The Professor at the ends (`Script.on_screen`: "all", or "ends"; Look and sound, "Presenter"): he slides out after
+  the opening sentence and back in at the punchline, with no cut-in on him between (`Presenter(gaps=True)`). The
+  channel's three best Clipper videos (12, 17, 18) had no Professor on screen; the two built with him there all video
+  (23, 25) held viewers less. A test, every other video, not a new default.
+- Measured, not built: frames 0.1 s apart in the picture area. Every hand-made video changes picture at least every
+  0.9 s (one 2.8 s hold); Clipper's are still 15 to 41 % of the time, with two holds over 3 s (a finished drawing held
+  through a sentence that adds nothing to draw: wind 8.2 to 12.2 s, ears pop 8.2 to 11.3 s). Among Clipper's videos
+  stillness doesn't follow retention (ears pop is 34 % still and held best), so no hold rule yet.
+- Not taken from the report: random layouts to dodge YouTube's inauthentic-content checks, captions off over drawings,
+  "so" banned from the last line (it would break the loop), and its unsourced thresholds and pixel sizes.
