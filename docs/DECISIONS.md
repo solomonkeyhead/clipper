@@ -3661,3 +3661,11 @@ their transcripts and frames, then a research report; Marc picked what to build.
   success's mint and nowhere near lime. Sparklines take a colour, grey by default and money's sage on Earnings; a
   post's views line is grey. The account filter's selection and the Clips info icon lost their lime too. The
   Clipper mark keeps its lime bar (D102).
+
+## D213: polish: no stale ready-made note, grey when a button can't go, a way to the ideas on a phone (2026-10-13)
+- Leftovers from the second critique that were refinements, not redesigns.
+- The ready-made note ("Footage is searched for when you build") folds under "How it was made" with the other
+  how-it-was-made lines, so a built video no longer leads with it; that note is grey, green only for a passed check.
+- A disabled primary button is grey (`buttonClass`): dimmed lime, as on Settings' Save, still read as the thing to do.
+- Below xl, "press Write it on one of the ideas" adds "(below)", which scrolls to them; the ideas stay under the
+  videos there (D206). The fold rows (Earlier takes, Description and hashtags, Your own clips) are 44px tall on a phone.

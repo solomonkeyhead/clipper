@@ -20,7 +20,8 @@ export function buttonClass(variant: Variant = "secondary", size: Size = "md") {
     size === "sm" && "h-7 px-2.5 text-xs",
     size === "md" && "h-9 px-3.5 text-sm",
     size === "icon" && "size-8 text-sm",
-    variant === "primary" && "bg-accent text-accent-fg hover:bg-accent-hover",
+    // A primary that can't go yet isn't lit (D213): dimmed lime still read as the one thing to do.
+    variant === "primary" && "bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-surface-3 disabled:text-subtle disabled:opacity-100",
     variant === "secondary" && "border border-line bg-surface-2 text-fg hover:border-line-strong hover:bg-surface-3",
     variant === "ghost" && "text-muted hover:bg-surface-2 hover:text-fg",
     variant === "danger" && "border border-line bg-surface-2 text-danger hover:bg-surface-3",

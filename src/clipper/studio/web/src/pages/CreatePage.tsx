@@ -75,7 +75,7 @@ export function CreatePage() {
         {/* The video in progress comes first below a wide window; the ideas wait below it. Two columns only from xl
             and the ideas held in view there (D206): at lg the script got a 460px column, and beside a long open
             video the ideas column ended in a screen of nothing. */}
-        <div className="order-2 xl:sticky xl:top-4 xl:order-1 xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto xl:pr-1"><Ideas topics={data.topics} /></div>
+        <div id="ideas" className="order-2 scroll-mt-4 xl:sticky xl:top-4 xl:order-1 xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto xl:pr-1"><Ideas topics={data.topics} /></div>
         <div className="order-1 flex flex-col gap-4 xl:order-2">
           <NewShort wps={data.channel.words_per_second} />
           {work.length === 0 && (
@@ -265,7 +265,10 @@ function NewShort({ wps }: { wps: number }) {
       {way === "idea" && <MyIdea />}
       {way === "words" && <OwnWords wps={wps} />}
       {way === "ready" && <ReadyMade ready={ready} />}
-      <p className="text-xs text-subtle">Or press Write it on one of the ideas.</p>
+      {/* Below xl the ideas wait under the videos (D206): the hint says where, and goes there (D213). */}
+      <p className="text-xs text-subtle">Or press Write it on one of the ideas<span className="xl:hidden">{" "}
+        (<a href="#ideas" onClick={(e) => { e.preventDefault(); document.getElementById("ideas")?.scrollIntoView({ behavior: "smooth" }); }}
+            className="text-muted underline underline-offset-2 hover:text-fg">below</a>)</span>.</p>
     </Card>
   );
 }
@@ -832,7 +835,7 @@ function Takes({ video }: { video: CreateVideo }) {
   return (
     <section>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
-              className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">
+              className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted hover:text-fg md:min-h-0">
         <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} /> Earlier takes ({video.takes})
       </button>
       {open && shown && (
@@ -867,7 +870,8 @@ function Takes({ video }: { video: CreateVideo }) {
 const isChecked = (notes: string) => /no problems|fixed|still unsure|^- |checked by|^a ready-made script/im.test(notes);
 
 /** Lines about how a script was made, not about the script: folded under the verdict (D196). */
-const MADE = /^(written by|checked by|drawn by|\(edited by hand|restored from|.*didn't answer|.*out of its quota)/i;
+// The ready-made note too (D213): "Footage is searched for when you build" still headed a video already built.
+const MADE = /^(written by|checked by|drawn by|\(edited by hand|restored from|a ready-made script|.*didn't answer|.*out of its quota)/i;
 
 /** The checks' verdict in one line, coloured by what it says, with the findings and how it was made folded under
  *  it (D196): a fixed script was a wall of orange, a restored one orange for no reason. */
@@ -882,7 +886,8 @@ function CheckNote({ text }: { text: string }) {
     : rest.some((l) => /no problems/i.test(l)) ? "Checked: no problems found" : rest[0] ?? "How it was made";
   return (
     <details className={cn("rounded-md border px-3 py-2 text-xs",
-      open ? "border-warning/40 text-warning" : "border-success/40 text-success")}>
+      // Green only for a check that passed (D213): "How it was made" alone read as a success.
+      open ? "border-warning/40 text-warning" : fixed || rest.some((l) => /no problems/i.test(l)) ? "border-success/40 text-success" : "border-line text-muted")}>
       <summary className="cursor-pointer font-medium">{verdict}</summary>
       {rest.length > 0 && <p className="mt-2 whitespace-pre-line text-fg">{rest.join("\n")}</p>}
       {made.length > 0 && <p className="mt-2 whitespace-pre-line text-subtle">{made.join("\n")}</p>}
@@ -1264,7 +1269,7 @@ function Fold({ id, title, startOpen = false, children }: { id: string; title: s
   return (
     <section className="mt-1">
       <button type="button" onClick={toggle} aria-expanded={open}
-              className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-fg">
+              className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted hover:text-fg md:min-h-0">
         <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} /> {title}
       </button>
       {open && <div className="mt-2">{children}</div>}
