@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, Send, Sparkles, TrendingUp, Wand2 } from "lucide-react";
-import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetSettings, useSetTask, useSettings, useUses, type Clip } from "@/api/client";
+import { useCampaigns, useClips, useCreate, useHome, usePosts, useSetSettings, useSetTask, useUses, type Clip } from "@/api/client";
 import { Button, Card, Metric, PageHeader, Skeleton, Sparkline, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatCount, formatMoney } from "@/lib/utils";
@@ -72,9 +72,17 @@ function RangeToggle({ value, onChange }: { value: Range; onChange: (r: Range) =
   );
 }
 
+/** What an empty column says, and the step that fills it (D209): "Nothing here" left you nowhere to go. */
+const EMPTY: Record<"ready" | "posted" | "submitted", [string, string?, string?]> = {
+  ready: ["Nothing to post.", "/new", "Make clips"],
+  posted: ["Nothing to submit: post a clip first."],
+  submitted: ["None submitted yet."],
+};
+
 function PipelineColumn({ title, status, clips, tone }: {
   title: string; status: "ready" | "posted" | "submitted"; clips: Clip[]; tone: string;
 }) {
+  const [empty, to, action] = EMPTY[status];
   const open = useUI((s) => s.setOpenClip);
   return (
     <div className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface-1 p-3">
@@ -95,7 +103,12 @@ function PipelineColumn({ title, status, clips, tone }: {
         {clips.length > 5 && (
           <Link to="/clips" search={{ status }} className="px-1.5 text-xs text-subtle hover:text-accent">+{clips.length - 5} more</Link>
         )}
-        {clips.length === 0 && <span className="px-1.5 py-2 text-xs text-subtle">Nothing here</span>}
+        {clips.length === 0 && (
+          <span className="flex flex-wrap items-center gap-2 px-1.5 py-2 text-xs text-subtle">
+            {empty}
+            {to && <Link to={to} className="inline-flex items-center gap-1 font-medium text-fg hover:underline">{action} <ArrowRight className="size-3" /></Link>}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -107,49 +120,8 @@ const USES: { key: string; title: string; body: string }[] = [
   { key: "use_finder", title: "Find campaigns for me", body: "Watch your inbox, Discord or Whop for new campaigns that fit what you clip." },
 ];
 
-/** The one question asked once: what do you use Clipper for? Parts you don't use stay out of the way (D145). */
-function Welcome() {
-  const { data: settings } = useSettings();
-  const save = useSetSettings();
-  const [picked, setPicked] = useState<Record<string, boolean>>({ use_campaigns: true, use_create: false, use_finder: false });
-  const [about, setAbout] = useState("");
-  const done = () => save.mutate({
-    onboarded: "1", alert_profile: about.trim(),
-    ...Object.fromEntries(USES.map((u) => [u.key, picked[u.key] ? "1" : "0"])),
-  });
-  if (!settings) return null;
-  return (
-    <Card className="flex flex-col gap-4 p-5">
-      <div>
-        <h2 className="text-md font-semibold">Welcome. What will you use Clipper for?</h2>
-        <p className="mt-1 text-sm text-muted">Pick what applies. Anything you leave out stays hidden, and you can change it later in Settings.</p>
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        {USES.map((u) => (
-          <label key={u.key} className={cn("flex cursor-pointer flex-col gap-1.5 rounded-md border p-4", picked[u.key] ? "border-accent bg-accent-soft/50" : "border-line")}>
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              <input type="checkbox" className="accent-[var(--color-accent)]" checked={picked[u.key]}
-                     onChange={(e) => setPicked({ ...picked, [u.key]: e.target.checked })} /> {u.title}
-            </span>
-            <span className="text-xs text-muted">{u.body}</span>
-          </label>
-        ))}
-      </div>
-      {picked.use_finder && (
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">What do you clip? (so only campaigns that fit are shown)</span>
-          <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={2}
-                    placeholder="e.g. A TikTok account for TV comedy clips. Not interested in crypto or supplements."
-                    className="rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-accent" />
-        </label>
-      )}
-      <div><Button variant="primary" disabled={save.isPending || !Object.values(picked).some(Boolean)} onClick={done}>Continue <ArrowRight className="size-4" /></Button></div>
-    </Card>
-  );
-}
-
 /** Where today's Short stands and the one thing to do next, with a button to it (D118). */
-function ChannelCard() {
+function ChannelCard({ quiet = false }: { quiet?: boolean }) {
   const { data } = useCreate();
   if (!data) return null;
   const video = data.videos.find((v) => v.status !== "built");
@@ -167,7 +139,9 @@ function ChannelCard() {
         <div className="text-xs font-medium text-muted">{data.channel.name}</div>
         <div className="text-sm">{text}</div>
       </div>
-      <Link to="/create" className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+      {/* Outlined while setting up (D209): one lime button on the page, the setup step's. */}
+      <Link to="/create" className={cn("inline-flex h-9 items-center gap-1.5 rounded-sm px-3.5 text-sm font-medium",
+        quiet ? "border border-line bg-surface-2 hover:bg-surface-3" : "bg-accent text-accent-fg hover:bg-accent-hover")}>
         {action} <ArrowRight className="size-3.5" />
       </Link>
     </Card>
@@ -185,37 +159,78 @@ const STEPS: { key: string; title: string; body: string; to: string; action: str
     to: "/accounts", action: "Connect" },
 ];
 
-function GetStarted({ done }: { done: Record<string, boolean> }) {
+/** Setting up, as one list (D209): what you'll use is its first step (D145), then the steps for what you picked; the
+ *  next one is open with its button, the rest are a line each, and the list goes when all are done. The question used
+ *  to be a card of its own above a second card of four equal steps. */
+function Setup({ done }: { done: Record<string, boolean> }) {
   const uses = useUses();
-  // Only the steps that match what you said you'd use (D145).
-  const STEPS_SHOWN = STEPS.filter((s) => s.key === "ai" || s.key === "accounts" || uses.campaigns);
-  const next = STEPS_SHOWN.find((s) => !done[s.key]);
-  const count = STEPS_SHOWN.filter((s) => done[s.key]).length;
+  const save = useSetSettings();
+  const [picked, setPicked] = useState<Record<string, boolean>>({ use_campaigns: true, use_create: false, use_finder: false });
+  const [about, setAbout] = useState("");
+  const choose = () => save.mutate({
+    onboarded: "1", alert_profile: about.trim(),
+    ...Object.fromEntries(USES.map((u) => [u.key, picked[u.key] ? "1" : "0"])),
+  });
+  const campaigns = uses.onboarded ? uses.campaigns : picked.use_campaigns;
+  const steps = [
+    { key: "uses", title: "Choose what you'll use", body: "Anything you leave out stays hidden; you can change it in Settings.", to: "", action: "" },
+    ...STEPS.filter((s) => s.key === "ai" || s.key === "accounts" || campaigns),
+  ];
+  const isDone = (key: string) => (key === "uses" ? uses.onboarded : Boolean(done[key]));
+  const next = steps.find((s) => !isDone(s.key));
+  if (!next) return null;
+  const count = steps.filter((s) => isDone(s.key)).length;
   return (
     <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-md font-semibold">Get started</h2>
-        <span className="tabular text-xs text-muted">{count} of {STEPS_SHOWN.length} done</span>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-md font-semibold">Set up Clipper</h2>
+        <span className="tabular text-xs text-muted">{count} of {steps.length} done</span>
       </div>
-      <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {STEPS_SHOWN.map((step, i) => {
-          const isDone = Boolean(done[step.key]);
-          const isNext = step === next;
+      <ol className="flex flex-col divide-y divide-line">
+        {steps.map((step, i) => {
+          const finished = isDone(step.key);
+          const open = step === next;
           return (
-            <li key={step.key} className={cn("flex flex-col gap-2 rounded-md border p-4",
-              isNext ? "border-accent bg-accent-soft/50" : "border-line", isDone && "opacity-60")}>
-              <div className="flex items-center gap-2">
-                {isDone ? <CheckCircle2 className="size-5 text-success" />
-                  : <span className="grid size-5 place-items-center rounded-full bg-surface-3 text-[11px] font-bold">{i + 1}</span>}
-                <span className={cn("text-sm font-semibold", isDone && "line-through")}>{step.title}</span>
+            <li key={step.key} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0">
+              <div className="flex items-center gap-3">
+                {finished ? <CheckCircle2 className="size-5 shrink-0 text-success" aria-label="Done" />
+                  : <span className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold", open ? "bg-fg text-bg" : "bg-surface-3")}>{i + 1}</span>}
+                <span className={cn("flex-1 text-sm", open ? "font-semibold" : finished ? "text-muted line-through" : "text-muted")}>{step.title}</span>
+                {!finished && !open && step.to && <Link to={step.to} className="text-xs text-muted hover:text-fg">{step.action}</Link>}
               </div>
-              <p className="flex-1 text-xs text-muted">{step.body}</p>
-              {!isDone && (
-                <Link to={step.to}
-                      className={cn("inline-flex h-8 w-fit items-center gap-1.5 rounded-sm px-3 text-sm font-medium",
-                        isNext ? "bg-accent text-accent-fg hover:bg-accent-hover" : "border border-line bg-surface-2 hover:bg-surface-3")}>
-                  {step.action} <ArrowRight className="size-3.5" />
-                </Link>
+              {open && (
+                <div className="flex flex-col gap-3 pl-8">
+                  <p className="text-sm text-muted">{step.body}</p>
+                  {step.key === "uses" ? (
+                    <>
+                      <div className="grid gap-2 md:grid-cols-3">
+                        {USES.map((u) => (
+                          <label key={u.key} className={cn("flex cursor-pointer flex-col gap-1 rounded-md border p-3", picked[u.key] ? "border-fg/50 bg-surface-2" : "border-line")}>
+                            <span className="flex items-center gap-2 text-sm font-medium">
+                              <input type="checkbox" className="accent-[var(--color-accent)]" checked={picked[u.key]}
+                                     onChange={(e) => setPicked({ ...picked, [u.key]: e.target.checked })} /> {u.title}
+                            </span>
+                            <span className="text-xs text-muted">{u.body}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {picked.use_finder && (
+                        <label className="flex flex-col gap-1.5 text-sm">
+                          <span className="font-medium">What do you clip? (so only campaigns that fit are shown)</span>
+                          <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={2}
+                                    placeholder="e.g. A TikTok account for TV comedy clips. Not interested in crypto or supplements."
+                                    className="rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-accent" />
+                        </label>
+                      )}
+                      <div><Button variant="primary" disabled={save.isPending || !Object.values(picked).some(Boolean)} onClick={choose}>Continue <ArrowRight className="size-4" /></Button></div>
+                    </>
+                  ) : (
+                    <Link to={step.to} hash={step.key === "ai" ? "ai" : undefined}
+                          className="inline-flex h-9 w-fit items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                      {step.action} <ArrowRight className="size-3.5" />
+                    </Link>
+                  )}
+                </div>
               )}
             </li>
           );
@@ -300,12 +315,58 @@ export function DashboardPage() {
       <PageHeader
         title={!firstRun && toPost.length ? `${greeting()} ${toPost.length} clip${toPost.length === 1 ? "" : "s"} to post` : greeting()}
         hi={`${toPost.length} clip`}
-        subtitle={firstRun ? "Welcome to Clipper. Four steps and you're clipping." : `${week ? `${week} ` : ""}Here's where your clips stand.`}
+        subtitle={firstRun || !uses.onboarded ? "Welcome to Clipper. A few steps and you're ready." : `${week ? `${week} ` : ""}Here's where your clips stand.`}
         actions={next && <Button variant="primary" size="md" onClick={next.run}>{next.label} <ArrowRight className="size-4" /></Button>} />
-      {uses.loaded && !uses.onboarded && <Welcome />}
-      {uses.create && <ChannelCard />}
-      {firstRun && uses.onboarded && <GetStarted done={home.first_run} />}
+      {uses.loaded && (!uses.onboarded || firstRun) && <Setup done={home.first_run} />}
+      {uses.create && <ChannelCard quiet={!uses.onboarded || firstRun} />}
       {home.first_run.clips && <>
+      {/* First on the page (D209): what to do now was a button in the header and a list under the stats. */}
+      <Card className="flex flex-col gap-2 p-5">
+        <h2 className="mb-1 text-md font-semibold">Next up</h2>
+        {m.ready > 0 && (
+          <Link to="/clips" search={{ status: "ready" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
+            <Send className="size-4 text-accent" />
+            <span className="flex-1 text-sm">{m.ready} clip{m.ready === 1 ? "" : "s"} ready to post</span>
+            <ArrowRight className="size-4 text-subtle" />
+          </Link>
+        )}
+        {by("posted").length > 0 && (
+          <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
+            <Inbox className="size-4 text-warning" />
+            <span className="flex-1 text-sm">{by("posted").length} clip{by("posted").length === 1 ? "" : "s"} to submit</span>
+            <ArrowRight className="size-4 text-subtle" />
+          </Link>
+        )}
+        {waitingViews.length > 0 && (
+          <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 text-muted hover:bg-surface-2">
+            <Inbox className="size-4" />
+            <span className="flex-1 text-sm">{waitingViews.length} posted, waiting for enough views to submit</span>
+            <ArrowRight className="size-4 text-subtle" />
+          </Link>
+        )}
+        {due.slice(0, 3).map(({ post, task }) => (
+          <div key={`${post.url}-${task.views}`} className="flex items-start gap-3 rounded-md p-2 hover:bg-surface-2">
+            <ListChecks className="mt-0.5 size-4 shrink-0 text-warning" />
+            <button type="button" className="min-w-0 flex-1 text-left text-sm" onClick={() => open(post.clip)}
+                    title={task.task}>
+              <span className="line-clamp-1">{post.clip_title}</span>
+              <span className="line-clamp-1 text-xs text-muted">Passed {formatCount(task.views)} views: {task.task}</span>
+            </button>
+            <Button size="sm" variant="ghost" onClick={() => setTask.mutateAsync({ url: post.url, views: task.views, done: true })}>
+              Done
+            </Button>
+          </div>
+        ))}
+        {due.length > 3 && <span className="px-2 text-xs text-subtle">+{due.length - 3} more brief tasks</span>}
+        {m.ready === 0 && by("posted").length === 0 && !waitingViews.length && !due.length && (
+          <p className="flex flex-wrap items-center gap-2 p-2 text-sm text-muted">
+            <CheckCircle2 className="size-4 text-success" /> All caught up.
+            <Link to={uses.campaigns ? "/new" : "/create"} className="inline-flex items-center gap-1 font-medium text-fg hover:underline">
+              {uses.campaigns ? "Make more clips" : "Make a Short"} <ArrowRight className="size-3.5" />
+            </Link>
+          </p>
+        )}
+      </Card>
 
       <RangeToggle value={range} onChange={setRange} />
       <div className="-mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -333,8 +394,8 @@ export function DashboardPage() {
         </Tip>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="flex flex-col gap-4 p-5 lg:col-span-2">
+      <div>
+        <Card className="flex flex-col gap-4 p-5">
           <h2 className="flex items-center gap-2 text-md font-semibold">
             <Sparkles className="size-4 text-accent" /> Since you were last here
           </h2>
@@ -365,49 +426,6 @@ export function DashboardPage() {
           )}
         </Card>
 
-        <Card className="flex flex-col gap-2 p-5">
-          <h2 className="mb-1 text-md font-semibold">Next up</h2>
-          {m.ready > 0 && (
-            <Link to="/clips" search={{ status: "ready" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
-              <Send className="size-4 text-accent" />
-              <span className="flex-1 text-sm">{m.ready} clip{m.ready === 1 ? "" : "s"} ready to post</span>
-              <ArrowRight className="size-4 text-subtle" />
-            </Link>
-          )}
-          {by("posted").length > 0 && (
-            <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 hover:bg-surface-2">
-              <Inbox className="size-4 text-warning" />
-              <span className="flex-1 text-sm">{by("posted").length} clip{by("posted").length === 1 ? "" : "s"} to submit</span>
-              <ArrowRight className="size-4 text-subtle" />
-            </Link>
-          )}
-          {waitingViews.length > 0 && (
-            <Link to="/clips" search={{ status: "posted" }} className="flex items-center gap-3 rounded-md p-2 text-muted hover:bg-surface-2">
-              <Inbox className="size-4" />
-              <span className="flex-1 text-sm">{waitingViews.length} posted, waiting for enough views to submit</span>
-              <ArrowRight className="size-4 text-subtle" />
-            </Link>
-          )}
-          {due.slice(0, 3).map(({ post, task }) => (
-            <div key={`${post.url}-${task.views}`} className="flex items-start gap-3 rounded-md p-2 hover:bg-surface-2">
-              <ListChecks className="mt-0.5 size-4 shrink-0 text-warning" />
-              <button type="button" className="min-w-0 flex-1 text-left text-sm" onClick={() => open(post.clip)}
-                      title={task.task}>
-                <span className="line-clamp-1">{post.clip_title}</span>
-                <span className="line-clamp-1 text-xs text-muted">Passed {formatCount(task.views)} views: {task.task}</span>
-              </button>
-              <Button size="sm" variant="ghost" onClick={() => setTask.mutateAsync({ url: post.url, views: task.views, done: true })}>
-                Done
-              </Button>
-            </div>
-          ))}
-          {due.length > 3 && <span className="px-2 text-xs text-subtle">+{due.length - 3} more brief tasks</span>}
-          {m.ready === 0 && by("posted").length === 0 && !waitingViews.length && !due.length && (
-            <p className="flex items-center gap-2 p-2 text-sm text-muted">
-              <CheckCircle2 className="size-4 text-success" /> All caught up.
-            </p>
-          )}
-        </Card>
       </div>
 
       <section>

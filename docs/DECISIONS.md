@@ -3626,3 +3626,14 @@ their transcripts and frames, then a research report; Marc picked what to build.
   opening a draft: it uses AI, and Marc decides when that's spent. Approving unchecked stays one click (D120).
 - The voice card is "Step 2 of 4: add the voice". "beats" on a card is "sentences"; the held drawing's label is
   "Keeps the drawing above", its option "Keep the drawing above and add to it".
+
+## D209: the Dashboard sets up in one list, leads with Next up; the header names the AI fix (2026-10-13)
+- From the critique: a first open showed a "What will you use Clipper for?" card, a second card of four equal steps
+  and an amber "AI needs setup" pill that said something was wrong, not what to do; "Next up" sat under the stats.
+- One "Set up Clipper" list: choosing what you'll use is step 1 (D145, same choices), then the steps for what you
+  picked. The next step is open with the one lime button, the others are a line each with a quiet link, and the list
+  goes when all are done. The Short card's button is outlined until then.
+- "Next up" is the first card after setup; "Since you were last here" is full width under the stats. Empty pipeline
+  columns say what's missing ("Nothing to post." with Make clips), and "All caught up" offers the next thing to make.
+- The header pill reads "Add an AI key" (or "Fix the AI") with an arrow and opens Settings at the AI card, only when
+  something is missing; otherwise it stays the quiet "Gemini" / "Claude + Gemini" (D143). Never synced reads "Sync now".

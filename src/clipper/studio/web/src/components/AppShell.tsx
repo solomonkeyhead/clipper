@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, BarChart3, Bot, Film, Send, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
+  AlertTriangle, ArrowRight, BarChart3, Bot, Film, Send, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
   MoreHorizontal, Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -143,22 +143,24 @@ function useBuildNotifications() {
   }, [data]);
 }
 
-/** Which AI is doing the work, on every page; a click opens Settings (D143). */
+/** Which AI is doing the work, on every page; a click opens Settings (D143). When something's missing it names the fix
+ *  and goes to it (D209): "AI needs setup" in amber said something was wrong, not what to do. */
 function AIPill() {
   const { data: ai } = useCreateAI();
   const { data: setup } = useSetup();
   if (!ai) return null;
   const claude = (ai.order[0] ?? "").startsWith("claude_code") || (ai.order[0] ?? "").startsWith("anthropic");
   const paid = (ai.order[0] ?? "").startsWith("anthropic");
-  const problem = ai.problem || (setup && !setup.ai_ready ? "Gemini isn't set up" : "");
-  const label = problem ? "AI needs setup" : claude ? "Claude + Gemini" : "Gemini";
+  const noKey = setup ? !setup.ai_ready : false;
+  const problem = ai.problem || (noKey ? "Gemini isn't set up: clipping and Create can't write or watch without it." : "");
+  const label = noKey ? "Add an AI key" : problem ? "Fix the AI" : claude ? "Claude + Gemini" : "Gemini";
   return (
     <Tip label={problem || (claude
       ? `Claude ${paid ? "(paid API, drawing only)" : "on your plan"} judges moments and draws; Gemini does ${ai.gemini_jobs.join(", ") || "the rest"} and watches the video.`
       : "Gemini is doing everything: Claude isn't set up.")}>
-      <Link to="/settings" className={cn("hidden h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs whitespace-nowrap hover:border-line-strong lg:flex",
-        problem ? "text-warning" : "text-muted hover:text-fg")}>
-        <Bot className="size-3.5" /> {label}
+      <Link to="/settings" hash="ai" className={cn("hidden h-8 items-center gap-1.5 rounded-full border px-3 text-xs whitespace-nowrap lg:flex",
+        problem ? "border-warning/50 font-medium text-warning hover:border-warning" : "border-line bg-surface-1 text-muted hover:border-line-strong hover:text-fg")}>
+        <Bot className="size-3.5" /> {label}{problem && <ArrowRight className="size-3" />}
       </Link>
     </Tip>
   );
@@ -187,7 +189,7 @@ function SyncPill() {
         {problems.length ? <AlertTriangle className="size-3.5 text-warning" />
           : <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />}
         <span className="tabular whitespace-nowrap">
-          {busy ? "Syncing…" : <><span className="hidden sm:inline">Synced </span>{ago(status?.last_synced)}</>}
+          {busy ? "Syncing…" : !status?.last_synced ? "Sync now" : <><span className="hidden sm:inline">Synced </span>{ago(status.last_synced)}</>}
         </span>
       </button>
     </Tip>

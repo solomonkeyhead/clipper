@@ -229,6 +229,13 @@ with sync_playwright() as p:
     assert page.evaluate("window.__sent") == sent + 1, "a second click on a waiting button was sent"
     page.wait_for_timeout(1700)
     print("slow server: the archive moved at once, a waiting button spun and took one click")
+    # D209: the Dashboard leads with one setup list, then Next up; the header names the AI fix and goes to it
+    page.goto("http://127.0.0.1:8799/")
+    expect(page.get_by_role("heading", name="Set up Clipper")).to_be_visible()
+    heads = page.locator("main h2").all_inner_texts()
+    assert heads.index("Next up") < heads.index("Since you were last here"), heads
+    assert page.get_by_text("What will you use Clipper for").count() == 0, "the old questionnaire is back"
+    print("dashboard:", heads)
     # the footage libraries card in Settings (D130)
     page.goto("http://127.0.0.1:8799/settings")
     expect(page.get_by_text("Footage libraries for Create")).to_be_visible()
