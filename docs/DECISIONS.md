@@ -3586,3 +3586,10 @@ their transcripts and frames, then a research report; Marc picked what to build.
   stillness doesn't follow retention (ears pop is 34 % still and held best), so no hold rule yet.
 - Not taken from the report: random layouts to dodge YouTube's inauthentic-content checks, captions off over drawings,
   "so" banned from the last line (it would break the loop), and its unsourced thresholds and pixel sizes.
+
+## D204: the Professor's mouth stays open the whole time he speaks (2026-10-13)
+- D196 opened his mouth on each loud syllable and shut it in the dips, so it flapped through every sentence. Marc
+  wants it open for as long as he speaks and shut only in the pauses.
+- `build.talking_frames` now opens on every frame inside a word, and words closer than 0.3 s apart are one stretch
+  (a breath between words isn't a pause). A silent track still alternates through the words (D146). The voice's
+  loudness is only used to tell a real voice from a silent track.

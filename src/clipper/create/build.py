@@ -883,22 +883,20 @@ def talking_frames(voice: Path, timings: Timings, total: int) -> list[bool]:
     except Exception:  # an unreadable track: the words' steady pace
         loud = []
     speaking = bool(loud) and float(np.percentile(loud, 95)) > -45
-    top = float(np.percentile(loud, 95)) if speaking else 0.0
-    words = sorted((w.start, w.end) for w in timings.words)
-    out, is_open, i = [False] * total, False, 0
+    words: list[list[float]] = []
+    for s, e in sorted((w.start, w.end) for w in timings.words):
+        if words and s - words[-1][1] < 0.3:   # a breath between words isn't a pause: he stays open (D204)
+            words[-1][1] = max(words[-1][1], e)
+        else:
+            words.append([s, e])
+    out, i = [False] * total, 0
     for k in range(total):
         t = k / FPS
         while i < len(words) and words[i][1] < t:
             i += 1
         in_word = i < len(words) and words[i][0] - 0.03 <= t <= words[i][1] + 0.03
-        if not in_word:
-            is_open = False
-        elif speaking:
-            db = loud[min(len(loud) - 1, int(t * 100))] - top
-            is_open = db > -18 if not is_open else db > -26   # opens on a syllable, shuts in the dip after it
-        else:
-            is_open = (k // 4) % 2 == 0
-        out[k] = is_open
+        # open the whole time he speaks, shut only in the pauses; a silent track alternates (D146)
+        out[k] = in_word and (speaking or (k // 4) % 2 == 0)
     for k in range(1, total - 1):   # a lone frame either way is a flicker
         if out[k] != out[k - 1] and out[k] != out[k + 1]:
             out[k] = out[k - 1]
