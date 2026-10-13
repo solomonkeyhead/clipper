@@ -6,8 +6,8 @@
 /* Design tokens (docs: research spec section b). Dark is the default; `.light`
    overrides. Never use raw colours in components: use these via Tailwind. */
 /* Design tokens. Clipper's look (D102): ink and lime, headings set like the
-   captions burned into a clip. Lime marks the one thing that matters in a view
-   (and money), like the word being spoken in a caption. Dark is the default;
+   captions burned into a clip. Lime marks the one thing to do in a view, like the
+   word being spoken in a caption; money has its own calm sage (D212). Dark is the default;
    `.light` overrides. Never use raw colours in components: use these via Tailwind. */
 :root {
   --bg: #0A0A0D;
@@ -25,7 +25,7 @@
   --accent-fg: #0A0A0D;
   --accent-soft: rgb(215 255 58 / 0.13);
   --focus-ring: #D7FF3A;
-  --money: #D7FF3A;
+  --money: #A8D5A2;
   --success: #5BE3A6;
   --warning: #FFC857;
   --danger: #FF6B5A;
@@ -61,7 +61,7 @@
   --accent-fg: #FFFFFF;
   --accent-soft: rgb(79 107 0 / 0.10);
   --focus-ring: #4F6B00;
-  --money: #3F7A12;
+  --money: #2F6B4A;
   /* Darker than they were (D192): the warning and success words fell under 4.5:1 on the grey surfaces. */
   --success: #137446;
   --warning: #955800;

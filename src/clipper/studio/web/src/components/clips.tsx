@@ -728,7 +728,7 @@ function ViewsLine({ post }: { post: Post }) {
   return (
     <div className="mt-2 flex items-center gap-3 text-xs text-muted">
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="shrink-0 overflow-visible" aria-hidden>
-        <path d={path} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+        <path d={path} fill="none" stroke="var(--text-muted)" strokeWidth="1.5" />
       </svg>
       <span>{gain > 0 ? <><b className="text-money">+{formatCount(gain)}</b> in the last day</> : "No new views in the last day"}</span>
     </div>

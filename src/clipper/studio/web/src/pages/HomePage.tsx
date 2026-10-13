@@ -38,7 +38,7 @@ function Earnings({ est, paid, views, posts, trend, locked, lockedPosts, window 
           </div>
         </Tip>
       </div>
-      {trend.length >= 2 && <Sparkline values={trend} className="h-10" />}
+      {trend.length >= 2 && <Sparkline values={trend} className="h-10" color="var(--money)" />}
       <div className="flex flex-col gap-1 border-t border-dashed border-line-strong pt-3 text-sm text-muted">
         <span>
           {est === null ? "Add a campaign's pay rate to see an estimate"

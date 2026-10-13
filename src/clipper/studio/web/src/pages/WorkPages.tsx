@@ -43,7 +43,7 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
       </div>
       {hints && HINTS[value] && (
         <Card className="mb-5 flex items-start gap-2.5 border-dashed p-3.5 text-sm text-muted">
-          <Info className="mt-0.5 size-4 shrink-0 text-accent" /><p>{HINTS[value]}</p>
+          <Info className="mt-0.5 size-4 shrink-0 text-info" /><p>{HINTS[value]}</p>
         </Card>
       )}
     </>

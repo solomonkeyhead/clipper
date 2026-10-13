@@ -3653,3 +3653,11 @@ their transcripts and frames, then a research report; Marc picked what to build.
   switches, clip selection, count badges, the running-job pills and the Ask icon are neutral. The finished card's
   Open to post is lime only when it's the video to act on. On the Dashboard the header's "Add an AI key" is hidden
   while the setup list shows it as a step. Each page now has one lime button (Create also its current step).
+
+## D212: money in its own calm sage, charts grey, lime for the next thing to do only (2026-10-13)
+- `--money` was the same lime as `--accent` (styles.css said lime marked "the one thing that matters (and money)"),
+  so earnings, paid figures and every sparkline lit up like a button. Marc chose a separate colour for money.
+- `--money` is #A8D5A2 on dark (12:1 on the ink) and #2F6B4A on light: a soft sage, yellower and calmer than
+  success's mint and nowhere near lime. Sparklines take a colour, grey by default and money's sage on Earnings; a
+  post's views line is grey. The account filter's selection and the Clips info icon lost their lime too. The
+  Clipper mark keeps its lime bar (D102).

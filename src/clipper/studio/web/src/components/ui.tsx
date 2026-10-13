@@ -312,8 +312,8 @@ export function PageHeader({ title, hi, subtitle, actions }: {
   );
 }
 
-/** A small line of how a number moved, lime, no axes: the shape, not the values. */
-export function Sparkline({ values, className }: { values: number[]; className?: string }) {
+/** A small line of how a number moved, no axes: the shape, not the values. Grey, or money's sage for money (D212). */
+export function Sparkline({ values, className, color = "var(--text-muted)" }: { values: number[]; className?: string; color?: string }) {
   if (values.length < 2) return null;
   const W = 120, H = 32, lo = Math.min(...values), hi = Math.max(...values);
   const x = (i: number) => (i / (values.length - 1)) * W;
@@ -321,8 +321,8 @@ export function Sparkline({ values, className }: { values: number[]; className?:
   const line = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={cn("h-8 w-full overflow-visible", className)} aria-hidden>
-      <path d={`${line}L${W},${H}L0,${H}Z`} fill="var(--accent)" opacity="0.12" />
-      <path d={line} fill="none" stroke="var(--accent)" strokeWidth="1.75" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <path d={`${line}L${W},${H}L0,${H}Z`} fill={color} opacity="0.12" />
+      <path d={line} fill="none" stroke={color} strokeWidth="1.75" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }

@@ -38,7 +38,7 @@ export function AccountScope() {
   const item = (value: string, children: React.ReactNode) => (
     <button key={value} type="button" role="menuitemradio" aria-checked={scope === value} onClick={() => choose(value)}
             className={cn("flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-surface-2",
-              scope === value && "bg-accent-soft text-fg")}>
+              scope === value && "bg-surface-3 text-fg")}>
       {children}
     </button>
   );
@@ -48,7 +48,7 @@ export function AccountScope() {
       <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
               aria-label={`Showing ${label}`}
               className={cn("flex h-8 max-w-48 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
-                scope === "all" ? "border-line bg-surface-1 text-muted hover:text-fg" : "border-accent bg-accent-soft text-fg")}>
+                scope === "all" ? "border-line bg-surface-1 text-muted hover:text-fg" : "border-line-strong bg-surface-3 text-fg")}>
         {account ? <PlatformIcon platform={account.platform} className="size-3.5" /> : group ? <Layers className="size-3.5" /> : <Users className="size-3.5" />}
         {/* The name only fits beside the other pills from tablet width up. */}
         <span className="hidden truncate sm:inline">{label}</span>
