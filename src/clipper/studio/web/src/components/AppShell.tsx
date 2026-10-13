@@ -339,7 +339,7 @@ export function AppShell() {
           </div>
         )}
 
-        <main className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
+        <main className="min-h-0 flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">
             <Outlet />
           </div>

@@ -608,7 +608,7 @@ export function NewClipsPage() {
         </Step>
 
         {/* Held in view (D199): with a season of videos listed it sat 1,400 px down. Above a phone's tabs. */}
-        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 -mx-4 flex items-center justify-end gap-3 border-t border-line bg-bg/95 px-4 py-3 backdrop-blur md:bottom-0 md:-mx-8 md:px-8">
+        <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end gap-3 border-t border-line bg-bg/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
           {!ready && (
             <span className="text-xs text-muted">
               {!campaign ? "Pick a campaign" : !picked.length ? "Pick a video"

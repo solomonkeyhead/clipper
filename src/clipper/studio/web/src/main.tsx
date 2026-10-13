@@ -1,11 +1,11 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, redirect, RouterProvider,
 } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { AppShell } from "./components/AppShell";
 import { AlertTriangle, MapPinOff } from "lucide-react";
 import { Button, EmptyState, Skeleton } from "./components/ui";
@@ -17,7 +17,18 @@ import { PostQueuePage } from "./pages/PostQueue";
 import { ClipsPage, type ClipFilter } from "./pages/WorkPages";
 import "./styles.css";
 
-const queryClient = new QueryClient({
+// A first load that fails says so, with a retry (D214): pages show a skeleton until data comes, so a failed fetch
+// looked like loading forever. One toast for all of them; a refetch that fails keeps the data already shown.
+const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (_e, query) => {
+      if (query.state.data !== undefined) return;
+      toast.error("Couldn't load part of this page", {
+        id: "query-error", description: "Clipper didn't answer.",
+        action: { label: "Try again", onClick: () => queryClient.refetchQueries({ type: "active", predicate: (q) => q.state.status === "error" }) },
+      });
+    },
+  }),
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1 } },
 });
 

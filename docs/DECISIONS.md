@@ -3669,3 +3669,16 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - A disabled primary button is grey (`buttonClass`): dimmed lime, as on Settings' Save, still read as the thing to do.
 - Below xl, "press Write it on one of the ideas" adds "(below)", which scrolls to them; the ideas stay under the
   videos there (D206). The fold rows (Earlier takes, Description and hashtags, Your own clips) are 44px tall on a phone.
+
+## D214: Three bugs from the third critique: delete wording, the phone action bar, a failed load
+- Create's delete confirm read "Delete and its clip / Keep the clip / Keep". "Keep the clip" deleted the video and
+  sat beside "Keep" (cancel). Now "Delete video and clip / Delete video only / Cancel".
+- The sticky action bars (Create's draft and shot review, New clips) sat 3.5rem above the bottom on a phone, on top of
+  `main`'s own bottom padding, so they floated about 80px over the tab bar with the script showing under them. They are
+  `bottom-0` now and `main`'s padding (4rem plus the safe area) alone clears the tabs.
+- Pages show a skeleton until their data comes, with no error branch, so a request that failed looked like loading
+  forever. One QueryCache `onError` in `main.tsx` shows "Couldn't load part of this page" with Try again when a first
+  load fails; a refetch that fails keeps what is already shown. A server that is down is already covered by the
+  "Lost connection" banner.
+- The other findings (lime and sage drift, Create's order, shot review density, empty grids) wait for the redesign:
+  `docs/REDESIGN_NOTES.md`.

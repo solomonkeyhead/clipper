@@ -609,13 +609,14 @@ function VideoCard({ video, open: startOpen, wps, lead = false }: { video: Creat
             <span className="text-muted">{building ? "Stop and delete?" : "Delete?"}</span>
             {video.clip_id ? (
               <>
-                <Button size="sm" variant="danger" onClick={() => remove(true)}>Delete and its clip</Button>
-                <Button size="sm" variant="secondary" onClick={() => remove(false)}>Keep the clip</Button>
+                {/* Both delete the video (D214): "Keep the clip" sat beside "Keep" (cancel) and read like it. */}
+                <Button size="sm" variant="danger" onClick={() => remove(true)}>Delete video and clip</Button>
+                <Button size="sm" variant="secondary" onClick={() => remove(false)}>Delete video only</Button>
               </>
             ) : (
               <Button size="sm" variant="danger" onClick={() => remove()}>Delete</Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Keep</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
           </span>
         ) : (
           <>
@@ -753,7 +754,7 @@ function Body({ video, wps, lead = false }: { video: CreateVideo; wps: number; l
       </Fold>
       {video.status === "draft" && (
         // Held in view at the card's foot (D199): Approve sat below a long script; above a phone's tabs.
-        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 -mx-4 -mb-4 flex flex-col gap-2 rounded-b-lg border-t border-line bg-surface-1/95 px-4 py-3 backdrop-blur md:bottom-0">
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-col gap-2 rounded-b-lg border-t border-line bg-surface-1/95 px-4 py-3 backdrop-blur">
       {video.topic_id !== null && (
         <input value={note} onChange={(e) => setNote(e.target.value)} aria-label="Tell it what to change for the next take"
                onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void run("rewrite", () => again(), "A new take")(); }}
@@ -1477,7 +1478,7 @@ function Built({ video, wps, lead, busy, onPictures, onRebuild }: {
       {/* One Build bar (D200): every change not built yet, with the button, held in view at the foot while you work
           down the parts; the other rebuild buttons sat wherever you had made the change. */}
       {(video.unbuilt?.length ?? 0) > 0 && (
-        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-md border border-line-strong bg-surface-1/95 px-3 py-2 text-sm shadow-2 backdrop-blur md:bottom-2">
+        <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-md border border-line-strong bg-surface-1/95 px-3 py-2 text-sm shadow-2 backdrop-blur md:bottom-2">
           <span className="min-w-0 flex-1 text-muted">
             <b className="text-fg">{video.unbuilt!.length} change{video.unbuilt!.length === 1 ? "" : "s"} not built yet</b>: {video.unbuilt!.slice(0, 4).join(", ")}{video.unbuilt!.length > 4 ? "…" : ""}
           </span>
