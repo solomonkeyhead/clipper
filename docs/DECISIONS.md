@@ -3593,3 +3593,9 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - `build.talking_frames` now opens on every frame inside a word, and words closer than 0.3 s apart are one stretch
   (a breath between words isn't a pause). A silent track still alternates through the words (D146). The voice's
   loudness is only used to tell a real voice from a silent track.
+
+## D205: a draft shows one sentence's controls at a time (2026-10-13)
+- A design critique (impeccable) scored the page 28/40 and named the draft script the worst spot: nine sentences, each
+  with a picture choice, a highlight word, camera, pose and four order buttons open at once, about 40 controls.
+- Each sentence now shows its words and its picture only. Clicking or tabbing into one opens its controls, and they
+  follow it when it moves. Description and hashtags are folded under the script. Nothing was removed (D120).

@@ -961,7 +961,11 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
     const next = [...beats];
     [next[i], next[i + by]] = [next[i + by], next[i]];
     commit(next);
+    setOpen(i + by);
   };
+  // One sentence's controls at a time (D205): nine rows of six controls each was a wall; the words and the
+  // picture stay in view for every sentence, its picture, highlight, camera, pose and order open on click or Tab.
+  const [open, setOpen] = useState<number | null>(null);
   const n = words({ ...s, beats });
   const seconds = Math.round(n / wps);
   const locked = video.status !== "draft";
@@ -981,7 +985,9 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
       </div>
       <div className="flex flex-col gap-2">
         {beats.map((b, i) => (
-          <div key={i} className={cn("flex flex-col gap-1.5", !locked && "rounded-md border border-line p-2")}>
+          <div key={i} onFocus={() => setOpen(i)} onClick={() => setOpen(i)} data-open={!locked && open === i}
+               className={cn("flex flex-col gap-1.5", !locked && "rounded-md border p-2",
+                             !locked && (open === i ? "border-line bg-surface-2/40" : "border-transparent"))}>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_200px]">
               <textarea rows={2} value={b.text} disabled={locked} aria-label={`Sentence ${i + 1}`}
                         onChange={(e) => setBeats(beats.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
@@ -989,7 +995,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                         className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
               <Picture visual={b.visual} />
             </div>
-            {!locked && (
+            {!locked && open === i && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <PictureChoice visual={b.visual} emphasis={b.emphasis} canBuild={beats.slice(0, i).some((x) => x.visual.kind === "diagram")} canHold={i > 0 && (beats[i - 1].visual.kind === "diagram" || !!beats[i - 1].visual.hold)} onChange={(v, emphasis) => patch(i, { visual: v, ...(emphasis !== undefined ? { emphasis } : {}) })} />
                 <Tip label="The word shown highlighted in the captions">
@@ -1017,12 +1023,12 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                   </Tip>
                 )}
                 <span className="ml-auto flex items-center">
-                  <Tip label="Move up"><Button size="icon" variant="ghost" className={small} aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="size-3.5" /></Button></Tip>
-                  <Tip label="Move down"><Button size="icon" variant="ghost" className={small} aria-label="Move down" disabled={i === beats.length - 1} onClick={() => move(i, 1)}><ArrowDown className="size-3.5" /></Button></Tip>
+                  <Tip label="Move up"><Button size="icon" variant="ghost" className={small} aria-label="Move up" disabled={i === 0} onClick={(e) => { e.stopPropagation(); move(i, -1); }}><ArrowUp className="size-3.5" /></Button></Tip>
+                  <Tip label="Move down"><Button size="icon" variant="ghost" className={small} aria-label="Move down" disabled={i === beats.length - 1} onClick={(e) => { e.stopPropagation(); move(i, 1); }}><ArrowDown className="size-3.5" /></Button></Tip>
                   <Tip label="Add a sentence below"><Button size="icon" variant="ghost" className={small} aria-label="Add a sentence below"
-                    onClick={() => commit([...beats.slice(0, i + 1), { text: "New sentence.", emphasis: "", visual: blankVisual() }, ...beats.slice(i + 1)])}><Plus className="size-3.5" /></Button></Tip>
+                    onClick={(e) => { e.stopPropagation(); commit([...beats.slice(0, i + 1), { text: "New sentence.", emphasis: "", visual: blankVisual() }, ...beats.slice(i + 1)]); setOpen(i + 1); }}><Plus className="size-3.5" /></Button></Tip>
                   <Tip label="Remove this sentence"><Button size="icon" variant="ghost" className={small} aria-label="Remove this sentence" disabled={beats.length <= 1}
-                    onClick={() => commit(beats.filter((_, j) => j !== i))}><X className="size-3.5" /></Button></Tip>
+                    onClick={(e) => { e.stopPropagation(); commit(beats.filter((_, j) => j !== i)); setOpen(null); }}><X className="size-3.5" /></Button></Tip>
                 </span>
               </div>
             )}
@@ -1033,6 +1039,8 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
         {n} words · about {seconds}s read aloud{n > 130 ? " · long for a Short" : n < 70 ? " · short for a Short" : ""}
         {s.ending && <span className="text-subtle"> · ends with {ENDING_NAME[s.ending] ?? s.ending}</span>}
       </p>
+      {/* Folded (D205): the post's words aren't the script's, and sat open under every draft. */}
+      <Fold id={`post-${video.id}`} title="Description and hashtags">
       <div className="grid gap-2 sm:grid-cols-2">
         <textarea rows={2} value={description} disabled={locked} aria-label="Description" placeholder="Description for the post"
                   onChange={(e) => setDescription(e.target.value)}
@@ -1043,6 +1051,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                   onBlur={() => tags !== (s.hashtags ?? []).join(" ") && void save({ hashtags: tags.split(/[\s,]+/).filter(Boolean) })}
                   className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
       </div>
+      </Fold>
     </div>
   );
 }

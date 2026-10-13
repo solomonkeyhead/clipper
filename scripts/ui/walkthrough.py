@@ -16,7 +16,24 @@ with sync_playwright() as p:
     page.wait_for_selector("text=Make a Short")
     cards = page.locator("button[aria-expanded]", has_text="Why does your voice")
     print("cards", cards.count())
-    built = cards.nth(1)                         # the newest (a draft) first, the built one second
+    # D205: a draft's sentences show their words and picture only; one sentence's controls open on click
+    draft = cards.nth(0)
+    if draft.get_attribute("aria-expanded") == "false":
+        draft.click()
+    expect(page.get_by_label("Sentence 3")).to_be_visible()
+    assert page.get_by_label("Picture", exact=True).count() == 0, "a draft opened with every sentence's controls"
+    page.get_by_label("Sentence 3").click()
+    expect(page.get_by_label("Picture", exact=True)).to_have_count(1)
+    three = page.get_by_label("Sentence 3").input_value()
+    page.get_by_role("button", name="Move down").click()
+    expect(page.get_by_label("Sentence 4")).to_have_value(three)
+    expect(page.locator("[data-open=true] textarea")).to_have_value(three)   # the controls went with it
+    page.get_by_role("button", name="Move up").click()
+    expect(page.get_by_label("Description")).to_have_count(0)                # folded
+    print("draft: one sentence's controls at a time, they follow a moved sentence")
+    page.screenshot(path=f"{OUT}/0_draft.png", full_page=True)
+    draft.click()
+    built = cards.nth(1)                        # the newest (a draft) first, the built one second
     if built.get_attribute("aria-expanded") == "false":
         built.click()
     review = page.get_by_role("button", name="Change parts you don't like")
