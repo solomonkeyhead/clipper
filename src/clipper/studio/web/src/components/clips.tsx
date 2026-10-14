@@ -20,7 +20,7 @@ import { CaptionChoice, HookControl } from "./lines";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { FadeImg } from "./progress";
-import { Button, Chip, CopyButton, Kbd, MenuItem, MoreMenu, StatusChip, Tip } from "./ui";
+import { Button, Chip, CopyButton, Kbd, MenuItem, MoreMenu, StatusChip, Tip, buttonClass } from "./ui";
 
 const STATUS_WORD: Record<ClipStatus, string> = {
   ready: "ready to post", posted: "posted", submitted: "submitted", skipped: "skipped",
@@ -823,7 +823,7 @@ export function ClipSheet() {
                 <div className="flex gap-2">
                   {clip.file_exists && (
                     <a href={downloadUrl(clip.id)} download
-                       className="inline-flex h-10 flex-1 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
+                       className={cn(buttonClass("primary"), "flex-1")}>
                       <Download className="size-4" /> Download <Kbd className="ml-auto border-accent-fg/30 bg-accent-fg/10 text-accent-fg">D</Kbd>
                     </a>
                   )}

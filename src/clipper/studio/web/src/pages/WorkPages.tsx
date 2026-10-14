@@ -2,7 +2,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Film, Info, PartyPopper } from "lucide-react";
 import { useCampaigns, useClips, type Clip } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
-import { Card, EmptyState, Kbd, PageHeader, Skeleton, StatusLegend } from "@/components/ui";
+import { Card, EmptyState, Kbd, PageHeader, Skeleton, StatusLegend, buttonClass } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 // In the order a clip moves through them, opening on what's waiting to be posted; All last (D78).
@@ -50,7 +50,7 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
   );
 }
 
-const linkClass = "inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11";
+const linkClass = buttonClass("primary");
 
 /** What a filtered list shows when it's empty: what puts a clip here, and a link to do it (D143). */
 export function NoClips({ filter, campaign }: { filter: ClipFilter; campaign?: string }) {

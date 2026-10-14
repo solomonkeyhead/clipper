@@ -10,7 +10,7 @@ import {
 } from "@/api/client";
 import { cn, ago, openTab } from "@/lib/utils";
 import { Field, NumberInput, Segmented, TextArea, TextInput } from "./form";
-import { Button, Card, CopyButton } from "./ui";
+import { Button, Card, CopyButton, buttonClass } from "./ui";
 
 const PORTAL = "https://discord.com/developers/applications";
 
@@ -172,7 +172,7 @@ function DiscordSetup({ alerts }: { alerts: Alerts }) {
           <div className="flex flex-wrap items-center gap-2">
             {bot ? (
               <a href={bot.invite} target="_blank" rel="noopener noreferrer"
-                 className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-accent px-3 text-xs font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
+                 className={buttonClass("primary", "sm")}>
                 Add the bot to your server <ExternalLink className="size-3.5" />
               </a>
             ) : <Hint>(Finish step 1 first.)</Hint>}

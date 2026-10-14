@@ -7,7 +7,7 @@ import {
 } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { BackLink, Button, Card, Chip, CopyButton, EmptyState, PageHeader, Skeleton, Tip } from "@/components/ui";
+import { BackLink, Button, Card, Chip, CopyButton, EmptyState, PageHeader, Skeleton, Tip, buttonClass } from "@/components/ui";
 import { FindCampaigns } from "./FindCampaigns";
 import { PostTable } from "./StatsPage";
 import { ClipFilters, NoClips, firstFilter, inFilter, type ClipFilter } from "./WorkPages";
@@ -93,7 +93,7 @@ function CampaignCard({ c }: { c: Campaign }) {
 function NewCampaignButton() {
   return (
     <Link to="/campaigns/new"
-          className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
+          className={buttonClass("primary")}>
       <Plus className="size-4" /> New campaign
     </Link>
   );
@@ -360,10 +360,10 @@ export function CampaignPage() {
         actions={<>
           {/* The next step from here: clip this campaign's footage, or (your own channel) write a Short. */}
           {!c.archived && (c.own_channel
-            ? <Link to="/create" className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
+            ? <Link to="/create" className={buttonClass("primary")}>
                 <Wand2 className="size-4" /> Make a Short
               </Link>
-            : <Link to="/new" search={{ campaign: c.name }} className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
+            : <Link to="/new" search={{ campaign: c.name }} className={buttonClass("primary")}>
                 <Scissors className="size-4" /> Make clips
               </Link>)}
           {posts.length > 0 && (

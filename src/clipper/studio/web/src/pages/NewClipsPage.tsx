@@ -10,7 +10,7 @@ import { JobResults, LinkImport } from "@/components/footage";
 import { Segmented, TextInput } from "@/components/form";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { JobProgress, ProgressBar, type Step } from "@/components/progress";
-import { Button, Card, Chip, EmptyState, PageHeader, Tip } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, PageHeader, Tip, buttonClass } from "@/components/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { ago, cn } from "@/lib/utils";
 
@@ -305,7 +305,7 @@ function OpenEditor({ source, campaign }: { source: string; campaign: string }) 
       </div>
       {ready ? (
         <Link to="/edit" search={{ source, campaign }}
-              className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
+              className={buttonClass("primary")}>
           <Scissors className="size-4" /> Open in the editor
         </Link>
       ) : <span className="text-xs text-muted">{campaign ? "Pick a video first" : "Pick a campaign first"}</span>}
@@ -519,7 +519,7 @@ export function NewClipsPage() {
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-muted">Clipper follows a campaign's rules, so add the campaign first.</p>
               <Link to="/campaigns/new"
-                    className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
+                    className={buttonClass("primary")}>
                 <Plus className="size-4" /> Add a campaign
               </Link>
             </div>

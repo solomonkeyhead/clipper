@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { keys, setStayed, useCampaignTitle, useCampaigns, useClips, usePosts, type Post } from "@/api/client";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Chip, CopyButton, EmptyState, Metric, PageHeader, Skeleton, Tip } from "@/components/ui";
+import { Chip, CopyButton, EmptyState, Metric, PageHeader, Skeleton, Tip, buttonClass } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, ago, cn, formatCount, formatMoney } from "@/lib/utils";
 
@@ -107,7 +107,7 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
   if (!posts.length) {
     return <EmptyState icon={<BarChart3 className="size-5" />} title="No posts yet"
       body="Post a clip with its caption and the next sync picks it up, with its link and numbers."
-      action={<Link to="/clips" search={{ status: "ready" }} className="inline-flex h-10 items-center rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">See clips ready to post</Link>} />;
+      action={<Link to="/clips" search={{ status: "ready" }} className={buttonClass("primary")}>See clips ready to post</Link>} />;
   }
   const header = (key: Key, label: string, tip?: string) => {
     const th = (

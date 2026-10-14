@@ -277,21 +277,20 @@ export function Mark({ className }: { className?: string }) {
   );
 }
 
-/** A page's title in the condensed face, upper case (D215). `hi` is kept for the callers; it no longer lights a
- *  word: one highlight colour, only for the next action (D120). */
+/** A page's title in the condensed face, upper case (D215). One highlight colour, only for the next action (D120), so no word of it is lit. */
 export function CaptionTitle({ text, as: Tag = "h1", className }: {
-  text: ReactNode; hi?: string; as?: "h1" | "h2"; className?: string;
+  text: ReactNode; as?: "h1" | "h2"; className?: string;
 }) {
   return <Tag className={cn("cap text-balance", className)}>{text}</Tag>;
 }
 
-export function PageHeader({ title, hi, subtitle, actions }: {
-  title: ReactNode; hi?: string; subtitle?: ReactNode; actions?: ReactNode;
+export function PageHeader({ title, subtitle, actions }: {
+  title: ReactNode; subtitle?: ReactNode; actions?: ReactNode;
 }) {
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <CaptionTitle text={title} hi={hi} className="text-[clamp(2.1rem,3.6vw,3.1rem)]" />
+        <CaptionTitle text={title} className="text-[clamp(2.1rem,3.6vw,3.1rem)]" />
         {subtitle && <p className="mt-2 text-sm text-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

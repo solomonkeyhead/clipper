@@ -150,8 +150,6 @@ body {
   letter-spacing: 0.005em;
   line-height: 0.92;
 }
-.cap-hi { color: inherit; }
-.cap-word { display: inline; }
 /* Big numbers (money, views) in the display face. */
 .num { font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0; }
 .tabular { font-variant-numeric: tabular-nums; }

@@ -51,7 +51,7 @@ export function CreatePage() {
   if (data.channels.length === 0) {
     return (
       <div className="fade-in flex max-w-3xl flex-col gap-6">
-        <CaptionTitle text="Make a Short" hi="Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+        <CaptionTitle text="Make a Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
         <NewChannel data={data} onDone={() => undefined} first />
       </div>
     );
@@ -63,7 +63,7 @@ export function CreatePage() {
   return (
     <div className="fade-in flex flex-col gap-6">
       <div>
-        <CaptionTitle text="Make a Short" hi="Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+        <CaptionTitle text="Make a Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
         <p className="mt-2 text-sm text-muted">
           For <b className="text-fg">{data.channel.name}</b>{data.channel.handle && ` (${data.channel.handle})`}. Pick an idea or write your own script, approve it,
           add your voice: Clipper builds the rest. Every step has a manual option.

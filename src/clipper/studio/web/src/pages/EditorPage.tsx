@@ -53,7 +53,7 @@ function Preparing({ view }: { view: EditorView }) {
   return (
     <div className="mx-auto mt-10 flex max-w-lg flex-col items-center gap-4 text-center">
       <div className="grid h-[72px] w-[41px] place-items-center rounded-[10px] border-2 border-line-strong"><Loader2 className="size-5 animate-spin text-fg" /></div>
-      <CaptionTitle text="Getting it ready" hi="ready" className="text-3xl" />
+      <CaptionTitle text="Getting it ready" className="text-3xl" />
       <p className="text-sm text-muted">
         Clipper reads and transcribes <b className="text-fg">{view.name}</b> once, so you can cut it by its words. A few minutes for an episode;
         you can leave this page and come back.
@@ -321,7 +321,7 @@ function Workbench({ view }: { view: EditorView }) {
           <button onClick={() => window.history.back()} className="mb-2 flex items-center gap-1 text-xs text-muted hover:text-fg">
             <ArrowLeft className="size-3.5" /> Back
           </button>
-          <CaptionTitle text={view.clip_id != null ? "Edit the clip" : "Cut a clip"} hi="clip" className="text-[clamp(1.6rem,2.6vw,2.2rem)]" />
+          <CaptionTitle text={view.clip_id != null ? "Edit the clip" : "Cut a clip"} className="text-[clamp(1.6rem,2.6vw,2.2rem)]" />
           <p className="mt-1 truncate text-sm text-muted">{view.name}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
