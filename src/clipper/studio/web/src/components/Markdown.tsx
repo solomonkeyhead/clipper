@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 export default function Markdown({ children }: { children: string }) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]}
-      components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{children}</a> }}>
+      components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="link">{children}</a> }}>
       {children}
     </ReactMarkdown>
   );

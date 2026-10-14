@@ -11,7 +11,7 @@ const FILL_LABEL: Record<ClipFill, string> = {
   auto: "Fill automatically", planned: "Planned footage or diagram", loop: "Repeat the clip", slow: "Slow it down", hold: "Hold the last picture",
 };
 const FILL_HINT = "When a clip is shorter than its sentence";
-const select = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none disabled:opacity-60";
+const select = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none disabled:opacity-60";
 
 const seconds = (n: number) => `${n.toFixed(1)}s`;
 /** "2", "2 and 3", "2 to 5": the sentences a clip is on. */
@@ -124,9 +124,9 @@ export function MyClips({ video, wps, onRebuild, busyRebuild }: {
   );
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line p-4">
+    <div className="flex flex-col gap-3 rounded-md bg-surface-2 p-4">
       <div>
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4 text-accent" /> Your own clips</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Film className="size-4 text-muted" /> Your own clips</h3>
         <p className="mt-0.5 text-xs text-muted">
           Drop in clips you like. Clipper puts each on the sentence it fits, cuts it to the voice, and fills any time
           they don't cover with the planned footage and diagrams. Their sound isn't used, only your voice.
@@ -138,7 +138,7 @@ export function MyClips({ video, wps, onRebuild, busyRebuild }: {
            onClick={() => !busy && input.current?.click()} role="button" tabIndex={0}
            onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !busy) { e.preventDefault(); input.current?.click(); } }}
            className={cn("flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-4 text-sm",
-             over ? "border-accent bg-accent-soft text-fg" : "border-line-strong text-muted hover:border-accent hover:text-fg",
+             over ? "border-line-strong bg-surface-3 text-fg" : "border-line-strong text-muted hover:border-fg hover:text-fg",
              busy && "cursor-wait opacity-70")}>
         {adding ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
         {adding ?? "Drop video clips here, or click to choose them"}

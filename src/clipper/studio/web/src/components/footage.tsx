@@ -25,7 +25,7 @@ function ImportRow({ item }: { item: FootageImport }) {
       ) : (
         <div>
           <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
-            <span className="flex min-w-0 items-center gap-1.5"><Loader2 className="size-3.5 shrink-0 animate-spin text-accent" />
+            <span className="flex min-w-0 items-center gap-1.5"><Loader2 className="size-3.5 shrink-0 animate-spin text-fg" />
               <span className="truncate">Downloading {item.current || item.names[0]}</span>
               {item.names.length > 1 && <span>({item.files_done + 1} of {item.names.length})</span>}
             </span>
@@ -91,7 +91,7 @@ export function LinkImport({ onImported, campaign = "" }: { onImported: (names: 
         <div className="relative flex-1">
           <Link2 className="pointer-events-none absolute top-2.5 left-3 size-4 text-subtle" />
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://drive.google.com/… or https://www.dropbox.com/…"
-                 aria-label="Footage link" className="h-9 w-full rounded-sm border border-line bg-surface-1 pr-3 pl-9 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
+                 aria-label="Footage link" className="h-9 w-full rounded-sm border border-line bg-surface-1 pr-3 pl-9 text-sm placeholder:text-subtle focus:border-line-strong focus:outline-none" />
         </div>
         <Button type="submit" variant="secondary" disabled={busy || !url.trim()}>
           {busy && <Loader2 className="size-4 animate-spin" />} Import

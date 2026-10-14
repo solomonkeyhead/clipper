@@ -80,7 +80,7 @@ export function CommandPalette() {
       label="Command menu"
       filter={matchWords}
       overlayClassName="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
-      contentClassName="fixed top-[14vh] left-1/2 z-50 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-xl border border-line-strong bg-surface-1/95 shadow-3 backdrop-blur-xl fade-in"
+      contentClassName="fixed top-[14vh] left-1/2 z-50 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-md border border-line-strong bg-surface-1/95 shadow-3 backdrop-blur-xl fade-in"
     >
       <Command.Input
         placeholder="Type a command or search…"
@@ -154,7 +154,7 @@ export function ShortcutSheet() {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
         <Dialog.Content aria-describedby={undefined}
-          className="fade-in fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[min(720px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line-strong bg-surface-1 p-6 shadow-3">
+          className="fade-in fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[min(720px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md border border-line-strong bg-surface-1 p-6 shadow-3">
           <Dialog.Title className="mb-4 text-lg font-semibold">Keyboard shortcuts</Dialog.Title>
           <div className="grid gap-6 sm:grid-cols-3">
             {SHORTCUTS.map(([section, items]) => (

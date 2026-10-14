@@ -3682,3 +3682,41 @@ their transcripts and frames, then a research report; Marc picked what to build.
   "Lost connection" banner.
 - The other findings (lime and sage drift, Create's order, shot review density, empty grids) wait for the redesign:
   `docs/REDESIGN_NOTES.md`.
+
+## D215: the Studio redesign: a poster wall instead of the dark dashboard (2026-10-13)
+- Three critiques called the look generic AI (dark ink, a lime accent, rounded cards on cards, pill chips, Bricolage
+  headings), and `docs/REDESIGN_NOTES.md` listed nine usability problems. Marc wanted it calm, quiet and sharp, general
+  (nothing of one channel), easy to keep using, in light, dark and on a phone. Of three directions he picked the
+  streaming-catalog wall: clips as 9:16 posters in rows by status.
+- The world: a blue-black ground (light mode a cool daylight grey), flat surfaces separated by space, not boxes; the
+  posters carry the colour. Amber is the one highlight and means the next thing to do (D120): the primary button and
+  the ring on the poster in focus. Green is money and nothing else; "done" and "good" are plain strong text. Sofia
+  Sans Condensed, tall and upper case, for titles and row names; Sofia Sans for the rest (15px body, 13px labels).
+  Corners are 4px on controls, 6px on posters. Tokens in `styles.css`; `DESIGN.md` describes the system.
+- The one move: the poster in focus (hover, J/K, or the next one to post) lifts and takes the amber ring while the rest
+  of its row steps back, and a line under its title says what a click does ("Open to post"). CSS only (`.poster`,
+  `[data-tile]`, `:has`, `.tile-more`), in `components/wall.tsx` and the Clips grid. A Clips tile's Good, Not good and
+  Delete are named under its More, not three icons; each keeps its undo. The score is plain text.
+- Dashboard: the first clip of the post queue shown large with "Post the next clip", then rows (Ready to post, To
+  submit, Submitted) that scroll sideways. The Next up card and the Pipeline columns that repeated the same counts are
+  gone; brief tasks and "waiting for views" stay as a short list. Money and views are lines of text under "Money and
+  views" (estimate, paid in green, earned not paid, under the minimum, views, median per platform), not four boxes and
+  a trend line; before anything has synced they are one line. What has actually been paid sits in green in the top
+  bar, on a phone too. Stats hides a number it has nothing for.
+- Pills went: tags are coloured words, tabs are underlined words, toggles are square grey slabs, links in sentences
+  are underlined text (`.link`). Cards are flat, with no border or shadow; boxes inside boxes went to plain insets.
+- Create: the work in progress first, New Short after it (one button while there is work). The step names are
+  words with the current one underlined, not a lime pill. A draft shows its step's button, Another take, and More
+  (Plan pictures, Check again, Undo, Redo). A card's archive, back-to-ideas and delete are named items under More
+  (`MoreMenu` in `ui.tsx`), not three icons. A built video that isn't posted has "Open to post" as its amber button
+  and its player ringed. Shot review: pick a part ("Change this part"), then its tools open under it; the other rows
+  are the picture and its words. A draft's sentences are rows of text, not boxes inside the card, and the check's
+  verdict is a line. On a phone the draft's bar sits flush on the tabs.
+- Touch: buttons, selects and tabs are 44px on a touch screen, switches hit 44px around a 24px track, and links in a
+  sentence reach above and below the line. The AI problem in the top bar shows at every width. Plain words for
+  developer ones: the provider's name instead of its model id, "Camera moves on its own" for "camera: auto", "Comes
+  in on its own" for "way in: auto", "in the older look" for "made before the new style".
+- The heading rule (`h2, h3` in the condensed face) is in the base layer, so a heading's own classes win over it.
+- Not done: an undo after deleting a Short or skipping an idea would need the server to restore from the Recycle Bin;
+  deletes still ask first, inline. `scripts/ui/walkthrough.py` is updated for the new controls but wasn't run here
+  (it needs a cloud session's Chromium).

@@ -22,7 +22,7 @@ export function EditorPage() {
   const search = useSearch({ from: "/edit" });
   const { data: view, error, isLoading } = useEditor(search);
   if (search.clip === undefined && !(search.source && search.campaign)) {
-    return <Message title="Nothing to edit" body={<>Open a clip's editor from the clip, or pick a video under <Link to="/new" className="text-accent hover:underline">New clips → I'll pick them</Link>.</>} />;
+    return <Message title="Nothing to edit" body={<>Open a clip's editor from the clip, or pick a video under <Link to="/new" className="link">New clips → I'll pick them</Link>.</>} />;
   }
   if (error) return <Message title="Can't open the editor" body={(error as Error).message} />;
   if (isLoading || !view) return <div className="flex flex-col gap-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-[60vh]" /></div>;
@@ -52,7 +52,7 @@ function Preparing({ view }: { view: EditorView }) {
   }, [job, view.campaign, view.source]);
   return (
     <div className="mx-auto mt-10 flex max-w-lg flex-col items-center gap-4 text-center">
-      <div className="grid h-[72px] w-[41px] place-items-center rounded-[10px] border-2 border-line-strong"><Loader2 className="size-5 animate-spin text-accent" /></div>
+      <div className="grid h-[72px] w-[41px] place-items-center rounded-[10px] border-2 border-line-strong"><Loader2 className="size-5 animate-spin text-fg" /></div>
       <CaptionTitle text="Getting it ready" hi="ready" className="text-3xl" />
       <p className="text-sm text-muted">
         Clipper reads and transcribes <b className="text-fg">{view.name}</b> once, so you can cut it by its words. A few minutes for an episode;
@@ -351,8 +351,8 @@ function Workbench({ view }: { view: EditorView }) {
 
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex gap-1 self-start rounded-md bg-surface-2 p-1 text-sm">
-            <button className={cn("rounded-[7px] px-3 py-1 font-medium", tab === "source" ? "bg-surface-1 text-fg shadow-1" : "text-muted")} onClick={() => setTab("source")}>Edit</button>
-            <button disabled={!preview} className={cn("rounded-[7px] px-3 py-1 font-medium disabled:opacity-40", tab === "preview" ? "bg-surface-1 text-fg shadow-1" : "text-muted")}
+            <button className={cn("rounded-sm px-3 py-1 font-medium", tab === "source" ? "bg-surface-1 text-fg shadow-1" : "text-muted")} onClick={() => setTab("source")}>Edit</button>
+            <button disabled={!preview} className={cn("rounded-sm px-3 py-1 font-medium disabled:opacity-40", tab === "preview" ? "bg-surface-1 text-fg shadow-1" : "text-muted")}
                     onClick={() => setTab("preview")}>Preview{stale ? " (old)" : ""}</button>
           </div>
           <div className={cn(tab !== "source" && "hidden")}>
@@ -361,7 +361,7 @@ function Workbench({ view }: { view: EditorView }) {
           </div>
           {tab === "preview" && preview && (
             <div className="flex flex-col items-center gap-2">
-              <video key={preview.url} src={preview.url} controls autoPlay playsInline className="aspect-[9/16] max-h-[62vh] rounded-xl bg-black" />
+              <video key={preview.url} src={preview.url} controls autoPlay playsInline className="aspect-[9/16] max-h-[62vh] rounded-md bg-black" />
               {stale && <p className="text-xs text-warning">You've changed the edit since. Press <Kbd>P</Kbd> for a new preview.</p>}
             </div>
           )}
@@ -370,7 +370,7 @@ function Workbench({ view }: { view: EditorView }) {
               {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
             </Button>
             <span className="tabular text-sm"><b>{clock(t, true)}</b><span className="text-muted"> / {clock(duration)}</span></span>
-            {rate !== 1 && <span className="tabular text-xs text-accent">{rate}×</span>}
+            {rate !== 1 && <span className="tabular text-xs font-bold text-fg">{rate}×</span>}
             <span className="tabular text-xs text-muted">{at !== null ? `clip ${clock(at, true)}` : "outside the clip"}</span>
             <span className="ml-auto flex flex-wrap gap-1.5">
               <Tool label="Start here" keys="I" onClick={act.in}>Start</Tool>
@@ -427,13 +427,13 @@ function Stage({ view, video, zoom, edit, words, t, inClip, onEnded, onSeeked }:
   const hookUp = inClip && edit.hook && (clipTime(edit, t) ?? 99) < 3;
   if (!view.proxy_ready) {
     return (
-      <div className="grid aspect-video place-items-center rounded-xl border border-dashed border-line-strong text-center text-sm text-muted">
-        <span className="flex flex-col items-center gap-2"><Loader2 className="size-5 animate-spin text-accent" />Making a light copy to scrub through (about a minute)…</span>
+      <div className="grid aspect-video place-items-center rounded-md border border-dashed border-line-strong text-center text-sm text-muted">
+        <span className="flex flex-col items-center gap-2"><Loader2 className="size-5 animate-spin text-fg" />Making a light copy to scrub through (about a minute)…</span>
       </div>
     );
   }
   return (
-    <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
+    <div className="relative aspect-video overflow-hidden rounded-md bg-black">
       <video ref={video} src={`/api/editor/${view.source_id}/proxy`} preload="auto" playsInline onEnded={onEnded}
              onSeeked={(e) => onSeeked(e.currentTarget.currentTime)}
              className="absolute inset-0 size-full object-contain transition-transform duration-150"
@@ -443,7 +443,7 @@ function Stage({ view, video, zoom, edit, words, t, inClip, onEnded, onSeeked }:
         {hookUp && <div className="cap absolute inset-x-[6%] top-[12%] text-center text-[clamp(0.7rem,1.6vw,1.05rem)] text-white">{edit.hook}</div>}
         {line.length > 0 && (
           <div className="cap absolute inset-x-[6%] top-[55%] text-center text-[clamp(0.8rem,1.9vw,1.3rem)] text-white">
-            {line.map((w, i) => <span key={i} className={cn(w.now && "text-accent")}>{w.text} </span>)}
+            {line.map((w, i) => <span key={i} className={cn(w.now && "font-bold text-fg underline underline-offset-4")}>{w.text} </span>)}
           </div>
         )}
       </div>
@@ -513,7 +513,7 @@ const Transcript = memo(function Transcript({ words, edit, range, setRange, seek
            onMouseUp={() => { drag.current = null; }} onMouseLeave={() => { drag.current = null; }}>
         {paras.map((ids) => (
           <p key={ids[0]} className="mb-2">
-            <button className="tabular mr-1.5 align-middle text-[12px] text-subtle hover:text-accent" onClick={() => seek(words[ids[0]].start)}>{clock(words[ids[0]].start)}</button>
+            <button className="tabular mr-1.5 align-middle text-[12px] text-subtle hover:text-fg" onClick={() => seek(words[ids[0]].start)}>{clock(words[ids[0]].start)}</button>
             {ids.map((i) => {
               const w = words[i];
               const text = shownText(edit, w);
@@ -523,7 +523,7 @@ const Transcript = memo(function Transcript({ words, edit, range, setRange, seek
               if (fixing === i) {
                 return (
                   <input key={i} autoFocus defaultValue={text} aria-label="Fix this word"
-                         className="mx-0.5 w-24 rounded border border-accent bg-surface-2 px-1 text-sm"
+                         className="mx-0.5 w-24 rounded border border-fg bg-surface-2 px-1 text-sm"
                          onBlur={(e) => { commit(setFix(edit, w, e.target.value.trim())); setFixing(null); }}
                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setFixing(null); }} />
                 );
@@ -534,10 +534,10 @@ const Transcript = memo(function Transcript({ words, edit, range, setRange, seek
                       onMouseEnter={() => drag.current !== null && setRange([drag.current, i])}
                       onDoubleClick={() => canFix && setFixing(i)}
                       title={canFix ? "Double-click to fix the caption" : undefined}
-                      className={cn("cursor-pointer rounded-[4px] px-[1px] transition-colors [&.word-now]:bg-accent [&.word-now]:text-accent-fg",
+                      className={cn("cursor-pointer rounded-[4px] px-[1px] transition-colors [&.word-now]:bg-fg [&.word-now]:text-bg",
                         isKept ? "text-fg" : inside ? "text-subtle line-through" : "text-muted",
-                        picked && "bg-accent-soft outline outline-1 outline-accent/50",
-                        text !== w.text && "underline decoration-accent decoration-dotted underline-offset-4")}>
+                        picked && "bg-surface-3 outline outline-1 outline-[var(--border-strong)]",
+                        text !== w.text && "underline decoration-fg decoration-dotted underline-offset-4")}>
                   {text || <s className="text-subtle">{w.text}</s>}{" "}
                 </span>
               );
@@ -562,7 +562,7 @@ function Panel({ view, edit, commit, len, problems, rules, blocked, why }: {
     <div className="flex flex-col gap-3">
       <Card className="flex flex-col gap-1 p-4">
         <span className="text-xs text-muted">Clip length</span>
-        <span className={cn("num text-4xl leading-none", edit.pieces.length ? (ok ? "text-money" : "text-warning") : "text-subtle")}>{clock(len, true)}</span>
+        <span className={cn("num text-4xl leading-none", edit.pieces.length ? (ok ? "text-fg" : "text-warning") : "text-subtle")}>{clock(len, true)}</span>
         <span className="text-xs text-muted">
           {view.min_seconds || view.max_seconds ? `The campaign wants ${view.min_seconds ?? 0}–${view.max_seconds ?? "∞"}s` : "No length rule"}
           {cuts(edit) ? ` · ${cuts(edit)} cut${cuts(edit) === 1 ? "" : "s"}` : ""}
@@ -580,13 +580,13 @@ function Panel({ view, edit, commit, len, problems, rules, blocked, why }: {
         <textarea id="hook" rows={2} value={edit.hook} disabled={blocked("added_text")} maxLength={120}
                   placeholder="The line at the top for the first seconds"
                   onChange={(e) => commit({ ...edit, hook: e.target.value })}
-                  className="resize-none rounded-md border border-line bg-surface-2 px-2.5 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-50" />
+                  className="resize-none rounded-md border border-line bg-surface-2 px-2.5 py-2 text-sm focus:border-line-strong focus:outline-none disabled:opacity-50" />
         {view.hooks.length > 0 && !blocked("added_text") && (
           <div className="flex flex-col gap-1">
             <span className="text-[12px] text-subtle">The brief's lines</span>
             {view.hooks.slice(0, 6).map((h) => (
               <button key={h} onClick={() => commit({ ...edit, hook: h })}
-                      className={cn("truncate rounded-md border px-2 py-1 text-left text-xs", edit.hook === h ? "border-accent text-accent" : "border-line text-muted hover:text-fg")}>
+                      className={cn("truncate rounded-md border px-2 py-1 text-left text-xs", edit.hook === h ? "border-fg text-fg" : "border-line text-muted hover:text-fg")}>
                 {h}
               </button>
             ))}
@@ -753,22 +753,22 @@ function Timeline({ view, edit, t, seek, commit, piece, setPiece, words, playing
           ))}
           {edit.pieces.map((p, i) => (
             <div key={`${p.start}-${i}`}
-                 className={cn("group absolute inset-y-1 rounded-md border-2 bg-accent/15",
-                   piece === i ? "border-accent" : "border-accent/60 hover:border-accent")}
+                 className={cn("group absolute inset-y-1 rounded-md border-2 bg-fg/10",
+                   piece === i ? "border-fg" : "border-fg/40 hover:border-fg")}
                  style={{ left: x(p.start), width: Math.max(3, x(p.end) - x(p.start)) }}
                  onPointerDown={(e) => { if (e.target === e.currentTarget) { setPiece(i); dragging.current = { kind: "seek" }; seek(pointer(e)); } }}>
-              {p.zoom !== 1 && <span className="absolute top-0.5 left-1.5 rounded bg-accent px-1 text-[10px] font-bold text-accent-fg">{p.zoom}×</span>}
+              {p.zoom !== 1 && <span className="absolute top-0.5 left-1.5 rounded bg-fg px-1 text-[10px] font-bold text-bg">{p.zoom}×</span>}
               {(["start", "end"] as const).map((edge) => (
                 <span key={edge} aria-label={`Drag the ${edge}`}
-                      className={cn("absolute inset-y-0 w-2 cursor-ew-resize rounded-sm bg-accent/0 group-hover:bg-accent/70", edge === "start" ? "-left-1" : "-right-1")}
+                      className={cn("absolute inset-y-0 w-2 cursor-ew-resize rounded-sm bg-fg/0 group-hover:bg-fg/70", edge === "start" ? "-left-1" : "-right-1")}
                       onPointerDown={(e) => { e.stopPropagation(); (e.target as HTMLElement).setPointerCapture?.(e.pointerId); setPiece(i); dragging.current = { kind: "trim", i, edge, base: edit, moved: false }; }} />
               ))}
             </div>
           ))}
         </div>
         {/* the playhead */}
-        <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-accent" style={{ left: x(t) }}>
-          <span className="absolute -top-1 -left-[5px] size-3 rotate-45 rounded-[2px] bg-accent" />
+        <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-fg" style={{ left: x(t) }}>
+          <span className="absolute -top-1 -left-[5px] size-3 rotate-45 rounded-[2px] bg-fg" />
         </div>
       </div>
     </Card>

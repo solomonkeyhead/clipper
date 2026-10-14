@@ -47,8 +47,8 @@ export function AccountScope() {
     <div ref={box} className="relative">
       <button type="button" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
               aria-label={`Showing ${label}`}
-              className={cn("flex h-8 max-w-48 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
-                scope === "all" ? "border-line bg-surface-1 text-muted hover:text-fg" : "border-line-strong bg-surface-3 text-fg")}>
+              className={cn("flex h-9 max-w-48 items-center gap-1.5 rounded-sm px-2.5 text-xs font-semibold pointer-coarse:h-11",
+                scope === "all" ? "text-muted hover:bg-surface-2 hover:text-fg" : "bg-surface-3 text-fg")}>
         {account ? <PlatformIcon platform={account.platform} className="size-3.5" /> : group ? <Layers className="size-3.5" /> : <Users className="size-3.5" />}
         {/* The name only fits beside the other pills from tablet width up. */}
         <span className="hidden truncate sm:inline">{label}</span>

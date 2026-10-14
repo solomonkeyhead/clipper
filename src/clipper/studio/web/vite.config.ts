@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
+const api = process.env.CLIPPER_API ?? "http://127.0.0.1:8765";
+
 // Built into ../static, which the FastAPI server serves. `npm run dev` proxies
 // the API to a running `clipper studio`.
 export default defineConfig({
@@ -24,10 +26,11 @@ export default defineConfig({
   },
   server: {
     port: 5178,
+    // CLIPPER_API points the page at another server, e.g. scripts/ui/serve.py's test one on 8799.
     proxy: {
-      "/api": { target: "http://127.0.0.1:8765", changeOrigin: false },
-      "/media": "http://127.0.0.1:8765",
-      "/thumb": "http://127.0.0.1:8765",
+      "/api": { target: api, changeOrigin: false },
+      "/media": api,
+      "/thumb": api,
     },
   },
 });

@@ -10,7 +10,7 @@ import { cn, formatCount, PLATFORM_NAME } from "@/lib/utils";
 
 const VERDICT: Record<string, { text: string; tone: string }> = {
   strong: { text: "Strong", tone: "text-success" },
-  moderate: { text: "Moderate", tone: "text-accent" },
+  moderate: { text: "Moderate", tone: "text-fg" },
   weak: { text: "Weak", tone: "text-warning" },
   none: { text: "No link yet", tone: "text-warning" },
   backwards: { text: "Backwards", tone: "text-danger" },
@@ -69,7 +69,7 @@ function insights(r: Report): React.ReactNode[] {
   }
   if (r.unrated > 0) {
     out.push(<>{r.unrated} clip{r.unrated === 1 ? " has" : "s have"} no rating. Rating them, especially ones you like, is the fastest way to teach it.{" "}
-      <Link to="/clips" search={{ rate: true }} className="font-medium text-accent hover:underline">Rate them →</Link></>);
+      <Link to="/clips" search={{ rate: true }} className="font-medium link">Rate them →</Link></>);
   }
   return out;
 }
@@ -114,7 +114,7 @@ function WhatsWorkingCard() {
   return (
     <Card className="flex flex-col gap-4 p-5">
       <div>
-        <h2 className="flex items-center gap-2 text-md font-semibold"><FlaskConical className="size-4 text-accent" /> What's working</h2>
+        <h2 className="flex items-center gap-2 text-md font-semibold"><FlaskConical className="size-4 text-muted" /> What's working</h2>
         <p className="mt-0.5 text-sm text-muted">
           Views {data.age_hours} hours after posting, compared within each platform (medians, so one viral post doesn't decide it).
           A verdict needs {data.min_each} posts on each side.
@@ -123,14 +123,14 @@ function WhatsWorkingCard() {
       {waiting.length > 0 && (
         <p className="text-xs text-muted">
           Waiting for more posts: {waiting.map((c) => c.title).join(", ")}.{" "}
-          <button type="button" className="font-medium text-accent hover:underline" onClick={() => setShowAll(!showAll)}>
+          <button type="button" className="font-medium link" onClick={() => setShowAll(!showAll)}>
             {showAll ? "Hide them" : "Show them"}
           </button>
         </p>
       )}
       <div className="grid gap-3 lg:grid-cols-2">
         {(showAll ? data.comparisons : ready).map((c) => (
-          <div key={c.key} className="flex flex-col gap-2 rounded-lg border border-line p-3">
+          <div key={c.key} className="flex flex-col gap-2 rounded-md bg-surface-2 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">{c.title}</h3>
               {c.key === "disclosed" && (
@@ -139,7 +139,7 @@ function WhatsWorkingCard() {
                   <input type="date" value={since} aria-label="Switch on since"
                          onChange={(e) => e.target.value && save.mutate({ tiktok_disclosed_since: `${e.target.value} 00:00` },
                            { onSuccess: () => void qc.invalidateQueries({ queryKey: ["whats-working"] }) })}
-                         className="h-7 rounded-md border border-line bg-surface-2 px-1.5 text-xs" />
+                         className="h-8 pointer-coarse:h-11 rounded-sm border border-line bg-surface-2 px-1.5 text-xs" />
                 </label>
               )}
             </div>
@@ -151,7 +151,7 @@ function WhatsWorkingCard() {
                   <SideCell label={c.yes_label} side={r.yes} />
                   <SideCell label={c.no_label} side={r.no} />
                   <span className={cn("col-span-3 text-xs font-medium",
-                    better ? "text-money" : worse ? "text-warning" : "text-muted")}>{r.verdict}</span>
+                    better ? "font-bold text-fg" : worse ? "text-warning" : "text-muted")}>{r.verdict}</span>
                 </div>
               );
             }) : <p className="text-xs text-subtle">No posts on either side yet.</p>}
@@ -165,13 +165,13 @@ function WhatsWorkingCard() {
             {[...hookGroups.entries()].map(([key, rows]) => {
               const top = Math.max(1, ...rows.map((r) => r.median_views));
               return (
-                <div key={key} className="flex flex-col gap-1.5 rounded-lg border border-line p-3">
+                <div key={key} className="flex flex-col gap-1.5 rounded-md bg-surface-2 p-3">
                   <span className="flex items-center gap-1.5 text-xs text-muted"><PlatformIcon platform={rows[0].platform} className="size-3.5" />{campaigns.find((c) => c.name === rows[0].campaign)?.title ?? rows[0].campaign} · {PLATFORM_NAME[rows[0].platform] ?? rows[0].platform}</span>
                   {rows.slice(0, 6).map((h) => (
                     <div key={h.hook} className="flex items-center gap-2 text-xs">
                       <span className="min-w-0 flex-1 truncate" title={h.hook}>{h.hook}</span>
                       <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-surface-3">
-                        <span className="block h-full rounded-full bg-accent" style={{ width: `${(h.median_views / top) * 100}%` }} />
+                        <span className="block h-full rounded-full bg-[var(--text-muted)]" style={{ width: `${(h.median_views / top) * 100}%` }} />
                       </span>
                       <span className="tabular w-16 shrink-0 text-right">{formatCount(h.median_views)} <span className="text-subtle">×{h.posts}</span></span>
                     </div>
@@ -214,7 +214,7 @@ function TastePanel({ have, need }: { have: number; need: number }) {
       <div className="text-sm">
         {have < need ? (
           <><b>Teach it your taste:</b> you've rated {have} of {need} clips it needs before its scores start following you.{" "}
-            <Link to="/clips" search={{ status: "ready" }} className="font-medium text-accent hover:underline">Rate clips →</Link></>
+            <Link to="/clips" search={{ status: "ready" }} className="font-medium link">Rate clips →</Link></>
         ) : <><b>It has learnt from {have} scored clips.</b> Export what it learnt to keep, or to start another install from.</>}
       </div>
       <div className="flex gap-2">
@@ -278,11 +278,11 @@ function Experiments() {
                     margin: draft.margin, rule: draft.rule, pairs: [] }]);
     setDraft(blank);
   };
-  const field = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  const field = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none";
   return (
     <Card className="flex flex-col gap-3 p-5">
       <div>
-        <h2 className="flex items-center gap-2 text-md font-semibold"><FlaskConical className="size-4 text-accent" /> Experiments</h2>
+        <h2 className="flex items-center gap-2 text-md font-semibold"><FlaskConical className="size-4 text-muted" /> Experiments</h2>
         <p className="mt-0.5 text-sm text-muted">
           Change one thing between two videos (A and B) on the same kind of topic, post them at the same hour, and pair them
           here. Compare "viewed vs swiped away" (type it in on Stats) where you can: it's the steadiest number for a small channel.
@@ -398,10 +398,10 @@ export function LearningPage() {
           the right way. Taste and the experiments (about your own channel's videos) last, the experiments folded. */}
       {insights(report).length > 0 && (
         <Card className="flex flex-col gap-2 p-5">
-          <h2 className="flex items-center gap-2 text-md font-semibold"><Lightbulb className="size-4 text-accent" /> What it's seeing</h2>
+          <h2 className="flex items-center gap-2 text-md font-semibold"><Lightbulb className="size-4 text-muted" /> What it's seeing</h2>
           <ul className="flex flex-col gap-1.5 text-sm">
             {insights(report).map((line, i) => (
-              <li key={i} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent" />{line}</li>
+              <li key={i} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--text-subtle)]" />{line}</li>
             ))}
           </ul>
         </Card>
@@ -495,7 +495,7 @@ export function LearningPage() {
               <div key={d.key} className="flex items-center gap-3 text-sm">
                 <span className="w-36 shrink-0">{d.label}</span>
                 <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-3">
-                  <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.min(100, d.learned * 200)}%` }} />
+                  <span className="block h-full rounded-full bg-[var(--text-muted)]" style={{ width: `${Math.min(100, d.learned * 200)}%` }} />
                 </span>
                 <span className="tabular w-24 text-right text-xs">
                   {Math.round(d.learned * 100)}%
@@ -512,7 +512,7 @@ export function LearningPage() {
             <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Reasons you give most</h3>
             <div className="flex flex-wrap gap-1.5">
               {report.reasons.map((r) => (
-                <span key={r.key} className="rounded-full border border-line px-2.5 py-1 text-xs">{r.label} <b className="tabular">{r.count}</b></span>
+                <span key={r.key} className="text-xs text-muted">{r.label} <b className="tabular text-fg">{r.count}</b></span>
               ))}
             </div>
           </div>
@@ -523,7 +523,7 @@ export function LearningPage() {
             <p className="mb-1.5 text-xs text-subtle">About how a clip was made, not which moment: kept out of your taste so good moments aren't avoided.</p>
             <div className="flex flex-wrap gap-1.5">
               {(report.edit_problems ?? []).map((r) => (
-                <span key={r.key} className="rounded-full border border-warning/40 px-2.5 py-1 text-xs">{r.label} <b className="tabular">{r.count}</b></span>
+                <span key={r.key} className="text-xs text-warning">{r.label} <b className="tabular">{r.count}</b></span>
               ))}
             </div>
           </div>

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
-  ExternalLink, MoreHorizontal, Redo2, Trash2, Undo2, Upload, Wand2, X,
+  ExternalLink, Redo2, Trash2, Undo2, Upload, Wand2, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import {
   createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual,
 } from "@/api/client";
 import { JobProgress, type Step } from "@/components/progress";
-import { Button, CaptionTitle, Card, Chip, EmptyState, Skeleton, Tip, buttonClass } from "@/components/ui";
+import { Button, CaptionTitle, Card, Chip, EmptyState, MenuItem, MoreMenu, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, cn, copyText, formatCount } from "@/lib/utils";
 import { ChannelBar, NewChannel } from "./ChannelPanel";
@@ -77,12 +77,14 @@ export function CreatePage() {
             video the ideas column ended in a screen of nothing. */}
         <div id="ideas" className="order-2 scroll-mt-4 xl:sticky xl:top-4 xl:order-1 xl:max-h-[calc(100dvh-8rem)] xl:overflow-y-auto xl:pr-1"><Ideas topics={data.topics} /></div>
         <div className="order-1 flex flex-col gap-4 xl:order-2">
-          <NewShort wps={data.channel.words_per_second} />
+          {/* The work in progress first (REDESIGN_NOTES 2): the New Short form came first and filled a phone's
+              first screen, the draft below it. With work under way the form is one button until it's wanted. */}
+          {work.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} lead={v.id === active} wps={data.channel.words_per_second} />)}
+          <NewShort wps={data.channel.words_per_second} folded={work.length > 0} />
           {work.length === 0 && (
             archived.length ? <p className="text-sm text-muted">Nothing in progress: everything you've made is in the Archive below.</p>
               : <EmptyState icon={<Wand2 />} title="No videos yet" body="Pick an idea on the left and press Write it (a minute or two), or write your own script." />
           )}
-          {work.map((v) => <VideoCard key={v.id} video={v} open={v.id === active} lead={v.id === active} wps={data.channel.words_per_second} />)}
           {archived.length > 0 && <ArchiveList videos={archived} wps={data.channel.words_per_second} />}
         </div>
       </div>
@@ -149,7 +151,7 @@ function PostedLine({ video }: { video: CreateVideo }) {
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
       <CheckCircle2 className="size-4 text-success" />
       {posts.length === 0 ? <span>Marked posted in Clips.</span> : posts.map((p: CreatePost) => (
-        <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-accent hover:underline">
+        <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 link">
           {PLATFORMS[p.platform] ?? p.platform}{p.views != null ? ` · ${p.views.toLocaleString()} views` : ""}
           <ExternalLink className="size-3.5" />
         </a>
@@ -229,35 +231,40 @@ function AIStrip() {
   const claude = first.startsWith("claude_code") || first.startsWith("anthropic");
   const miss = Object.entries(ai.misses)[0];
   const text = ai.problem ? ai.problem
-    : claude ? `Drawings by ${first.split(":").pop()} ${first.startsWith("anthropic") ? `on your paid Claude API key (it does only: ${ai.paid_api_jobs.join(", ")})` : "on your Claude plan"}.${ai.gemini_jobs.length ? ` Gemini does ${ai.gemini_jobs.join(", ")}.` : ""}`
-    : `Claude isn't set up: ${first.split(":").pop() || "no AI"} will write and draw.`;
+    // The provider's name, not its model id (REDESIGN_NOTES 8): "claude-sonnet-4-5" is a developer's word.
+    : claude ? `Drawings by Claude ${first.startsWith("anthropic") ? `on your paid Claude API key (it does only: ${ai.paid_api_jobs.join(", ")})` : "on your Claude plan"}.${ai.gemini_jobs.length ? ` Gemini does ${ai.gemini_jobs.join(", ")}.` : ""}`
+    : `Claude isn't set up: ${PROVIDER[first.split(":")[0]] ?? (first.split(":")[0] || "no AI")} will write and draw.`;
   return (
-    <p className={cn("mt-1 flex flex-wrap items-center gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>
-      {claude && !ai.problem ? <CheckCircle2 className="size-3.5 text-success" /> : <AlertTriangle className="size-3.5" />}
-      {text}
-      {miss && <span className="text-subtle">{PROVIDER[miss[0].split(":")[0]] ?? miss[0].split(":")[0]} had a problem {minutesAgo(ai.missed_ago_s[miss[0]])}: {miss[1]}</span>}
+    <p className={cn("mt-1 flex items-start gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>
+      {claude && !ai.problem ? <CheckCircle2 className="mt-px size-3.5 shrink-0 text-success" /> : <AlertTriangle className="mt-px size-3.5 shrink-0" />}
+      <span>{text}
+      {miss && <span className="text-subtle"> {PROVIDER[miss[0].split(":")[0]] ?? miss[0].split(":")[0]} had a problem {minutesAgo(ai.missed_ago_s[miss[0]])}: {miss[1]}</span>}</span>
     </p>
   );
 }
 
 /** One place to start a Short (D200): your own idea for the AI to write, your own words, or a ready-made script.
  *  The ideas the planner offers are the list beside it. Before this there were three cards with near-identical names. */
-function NewShort({ wps }: { wps: number }) {
+function NewShort({ wps, folded = false }: { wps: number; folded?: boolean }) {
   const [way, setWay] = useState<"idea" | "words" | "ready">("idea");
+  const [shown, setShown] = useState(false);
   const { data: ready = [] } = useQuery({ queryKey: ["create", "ready"], queryFn: createApi.ready, staleTime: 60_000 });
   const ways: ["idea" | "words" | "ready", string, string][] = [
     ["idea", "My idea, AI writes it", "Type the question"], ["words", "My own words", "Paste your script"],
     ...(ready.length > 0 ? [["ready", "Ready-made", "Written and drawn already"] as ["ready", string, string]] : []),
   ];
+  if (folded && !shown) {
+    return <Button variant="secondary" className="self-start" onClick={() => setShown(true)} aria-expanded={false}><Plus className="size-4" /> New Short</Button>;
+  }
   return (
     <Card className="flex flex-col gap-3 p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold"><Plus className="size-4 text-muted" /> New Short</h2>
+      <h2 className="flex items-center gap-2 text-md"><Plus className="size-4 text-muted" /> New Short</h2>
       <div className={cn("grid gap-2", ways.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")} role="radiogroup" aria-label="How to start a Short">
         {ways.map(([key, title, hint]) => (
           <button key={key} type="button" role="radio" aria-checked={way === key} onClick={() => setWay(key)}
-                  className={cn("flex flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors",
-                    way === key ? "border-fg/50 bg-surface-2" : "border-line hover:bg-surface-2")}>
-            <span className="text-sm font-medium">{title}</span>
+                  className={cn("flex flex-col items-start gap-0.5 rounded-sm px-3 py-2.5 text-left transition-colors",
+                    way === key ? "bg-surface-3" : "bg-surface-2 hover:bg-surface-3")}>
+            <span className="text-sm font-semibold">{title}</span>
             <span className="text-xs text-muted">{hint}</span>
           </button>
         ))}
@@ -292,7 +299,7 @@ function MyIdea() {
       setBusy(false);
     }
   };
-  const field = "h-9 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-sm outline-none placeholder:text-subtle focus:border-accent";
+  const field = "h-9 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-sm outline-none placeholder:text-subtle focus:border-line-strong";
   return (
     <div className="flex flex-col gap-2">
       <input value={mine} onChange={(e) => setMine(e.target.value)} aria-label="Your own idea"
@@ -333,7 +340,7 @@ function OwnWords({ wps }: { wps: number }) {
       setBusy(false);
     }
   };
-  const field = "rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-accent focus:outline-none";
+  const field = "rounded-md border border-line bg-surface-2 px-3 py-2 text-sm focus:border-line-strong focus:outline-none";
   return (
     <div className="flex flex-col gap-3">
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional: the first sentence is used)" aria-label="Title" className={cn(field, "font-semibold")} />
@@ -449,7 +456,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
             {busy === "more" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} More ideas
           </Button>
           <Tip label="Steer the next batch">
-            <Button size="icon" variant="ghost" className="size-7" aria-label="Steer the next batch" aria-expanded={steering || !!steer}
+            <Button size="icon" variant="ghost" className="size-8" aria-label="Steer the next batch" aria-expanded={steering || !!steer}
                     onClick={() => setSteering((v) => !v)}>
               <ChevronRight className={cn("size-3.5 transition-transform", (steering || steer) && "rotate-90")} />
             </Button>
@@ -460,14 +467,14 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
         <input value={steer} onChange={(e) => setSteer(e.target.value)} aria-label="Steer the next ideas" autoFocus
                onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void more(); }}
                placeholder="Steer the next batch, e.g. only light and sound, no biology"
-               className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
+               className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-line-strong" />
         <p className="mt-1 text-[12px] text-subtle">Lasting guidance is under Channel settings. Skipping an idea teaches it what to avoid.</p>
       </div>}
       {(topics.length > 10 || find) && (
         <div className="border-b border-line px-4 py-2">
           <input value={find} onChange={(e) => setFind(e.target.value)} aria-label="Search the ideas" type="search"
                  placeholder={`Search ${topics.length} ideas`}
-                 className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-accent" />
+                 className="h-8 w-full rounded-sm border border-line bg-surface-2 px-2.5 text-xs outline-none placeholder:text-subtle focus:border-line-strong" />
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
@@ -481,7 +488,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
                 <span>{t.angle}</span>
                 {/* The planner's score of 21 and series (D155); clicking a series shows only its ideas. */}
                 {t.score != null && <Tip label="The planner's score out of 21: felt, common, surprise, one mechanism, showable, searched, fits the channel"><span className="tabular-nums text-subtle">{t.score}/21</span></Tip>}
-                {t.series && <button type="button" onClick={() => setFind(t.series ?? "")} className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] hover:text-fg">{t.series}</button>}
+                {t.series && <button type="button" onClick={() => setFind(t.series ?? "")} className="font-semibold text-muted underline decoration-[var(--border-strong)] underline-offset-2 hover:text-fg">{t.series}</button>}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -491,7 +498,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
                 {busy === t.id ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} {busy === t.id ? "Writing…" : "Write it"}
               </Button>
               <Tip label="Not this one">
-                <Button size="icon" variant="ghost" className="size-7 opacity-60 group-hover:opacity-100 focus-visible:opacity-100" aria-label={`Skip: ${t.question}`}
+                <Button size="icon" variant="ghost" className="size-8 opacity-60 group-hover:opacity-100 focus-visible:opacity-100" aria-label={`Skip: ${t.question}`}
                         onClick={() => skip(t)}>
                   <X className="size-3.5" />
                 </Button>
@@ -515,9 +522,10 @@ function Steps({ status }: { status: CreateVideo["status"] }) {
       {STEPS.map(([label], i) => (
         <span key={label} className="flex items-center gap-1.5">
           <span aria-current={i === at && status !== "built" ? "step" : undefined}
-                className={cn("rounded-full px-2 py-0.5 font-semibold",
-            i < at || status === "built" ? "bg-surface-2 text-muted" : i === at ? "bg-accent text-accent-fg" : "text-subtle",
-            status === "failed" && i === at && "bg-[color-mix(in_oklch,var(--danger)_18%,transparent)] text-danger")}>
+                // The step you're on is white and underlined, never amber (REDESIGN_NOTES 1): it's a place, not a button.
+                className={cn("border-b-2 py-0.5 font-semibold",
+            i < at || status === "built" ? "border-transparent text-muted" : i === at ? "border-fg text-fg" : "border-transparent text-subtle",
+            status === "failed" && i === at && "border-danger text-danger")}>
             {label}{(i < at || status === "built") && <span className="sr-only"> (done)</span>}
           </span>
           {i < STEPS.length - 1 && <span className="h-px w-3 bg-line-strong" />}
@@ -576,7 +584,7 @@ function VideoCard({ video, open: startOpen, wps, lead = false }: { video: Creat
     }
   };
   return (
-    <Card className={cn("flex flex-col", open && "ring-1 ring-line-strong")}>
+    <Card className="flex flex-col">
       <div className="flex items-center gap-2 p-4">
         <button className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span className="min-w-0">
@@ -601,7 +609,7 @@ function VideoCard({ video, open: startOpen, wps, lead = false }: { video: Creat
         {confirm === "ideas" ? (
           <span className="flex shrink-0 items-center gap-1 text-xs">
             <span className="text-muted">Back to ideas? This video goes to the Recycle Bin.</span>
-            <Button size="sm" variant="primary" onClick={() => toIdeas()}>Back to ideas</Button>
+            <Button size="sm" variant="secondary" onClick={() => toIdeas()}>Back to ideas</Button>
             <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Keep</Button>
           </span>
         ) : confirm ? (
@@ -619,28 +627,17 @@ function VideoCard({ video, open: startOpen, wps, lead = false }: { video: Creat
             <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
           </span>
         ) : (
-          <>
-          {!building && (
-            <Tip label={video.archived ? "Back to Create: out of the Archive, into the list above" : "Move to the Archive (posted videos go there by themselves)"}>
-              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={`${video.archived ? "Back to Create" : "Move to the Archive"}: ${s.title || "Untitled"}`}
-                      onClick={() => archive(!video.archived)}>
-                {video.archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}
-              </Button>
-            </Tip>
-          )}
-          {!busyNow && (
-            <Tip label="Back to the idea board: the idea comes back to write again later, this video goes">
-              <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={`Back to ideas: ${s.title || "Untitled"}`} onClick={() => setConfirm("ideas")}>
-                <Lightbulb className="size-4" />
-              </Button>
-            </Tip>
-          )}
-          <Tip label={building ? "Stop the build and delete this video" : "Delete this video"}>
-            <Button size="icon" variant="ghost" className="size-8 shrink-0" aria-label={`Delete this video: ${s.title || "Untitled"}`} onClick={() => setConfirm("delete")}>
-              <Trash2 className="size-4" />
-            </Button>
-          </Tip>
-          </>
+          // In words under More (REDESIGN_NOTES 5): three icons (an archive box, a lightbulb, a bin) said nothing until hovered.
+          <MoreMenu align="right" className="shrink-0">
+            {!building && (
+              <MenuItem onClick={() => archive(!video.archived)}>
+                {video.archived ? <ArchiveRestore /> : <Archive />}
+                {video.archived ? "Back to Create" : "Move to the Archive"}
+              </MenuItem>
+            )}
+            {!busyNow && <MenuItem onClick={() => setConfirm("ideas")}><Lightbulb /> Back to the idea board</MenuItem>}
+            <MenuItem danger onClick={() => setConfirm("delete")}><Trash2 /> {building ? "Stop the build and delete" : "Delete this video"}</MenuItem>
+          </MoreMenu>
         )}
       </div>
       {open && <div className="border-t border-line p-4"><Body video={video} wps={wps} lead={lead} /></div>}
@@ -754,12 +751,12 @@ function Body({ video, wps, lead = false }: { video: CreateVideo; wps: number; l
       </Fold>
       {video.status === "draft" && (
         // Held in view at the card's foot (D199): Approve sat below a long script; above a phone's tabs.
-        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-col gap-2 rounded-b-lg border-t border-line bg-surface-1/95 px-4 py-3 backdrop-blur">
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-col gap-2 rounded-b-md border-t border-line bg-surface-1 px-4 py-3">
       {video.topic_id !== null && (
         <input value={note} onChange={(e) => setNote(e.target.value)} aria-label="Tell it what to change for the next take"
                onKeyDown={(e) => { if (e.key === "Enter" && busy === null) void run("rewrite", () => again(), "A new take")(); }}
                placeholder="Steer Another take: shorter, funnier opening, use a kitchen example, less jargon…"
-               className="h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none placeholder:text-subtle focus:border-accent" />
+               className="h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none placeholder:text-subtle focus:border-line-strong" />
       )}
         {/* Which step this is and what Approve does (D208): three equal buttons gave no order, and nothing said
             Approve locks the words. The check goes first until the script has one; it isn't run by itself, it uses AI. */}
@@ -768,6 +765,8 @@ function Body({ video, wps, lead = false }: { video: CreateVideo; wps: number; l
           {checked ? "Approve locks the words so you can record them in step 2; Edit the script again unlocks them."
             : `Check the ${fact} first, then approve: that locks the words so you can record them in step 2.`}
         </p>
+        {/* The step's one button, one other, the rest under More (REDESIGN_NOTES 4): five buttons and Undo sat in
+            a row with three icons on the card above. */}
         <div className="flex flex-wrap items-center gap-2">
           {!checked && checkButton}
           <Button variant={checked ? "primary" : "secondary"} disabled={busy !== null} onClick={run("approve", () => createApi.approve(video.id))}>
@@ -780,14 +779,24 @@ function Body({ video, wps, lead = false }: { video: CreateVideo; wps: number; l
               </Button>
             </Tip>
           )}
-          <Tip label={`The AI plans a picture for each sentence you haven't chosen one for, and checks the ${fact}. Your words stay as written.`}>
-            <Button variant="secondary" disabled={busy !== null} onClick={run("plan", () => createApi.plan(video.id), "Pictures planned")}>
-              {busy === "plan" ? <Loader2 className="size-4 animate-spin" /> : <Shapes className="size-4" />} {busy === "plan" ? "Planning…" : "Plan pictures"}
-            </Button>
-          </Tip>
-          {checked && checkButton}
-          {/* Deleting is the card's own trash button, which asks first (D196): this one didn't. */}
-          <span className="ml-auto flex items-center gap-2">{undo}</span>
+          <MoreMenu>
+            <MenuItem disabled={busy !== null} onClick={run("plan", () => createApi.plan(video.id), "Pictures planned")}>
+              {busy === "plan" ? <Loader2 className="animate-spin" /> : <Shapes />} {busy === "plan" ? "Planning…" : "Plan pictures"}
+            </MenuItem>
+            {checked && (
+              <MenuItem disabled={busy !== null} onClick={run("check", () => createApi.check(video.id), "Checked")}>
+                {busy === "check" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} {busy === "check" ? "Checking…" : `Check ${fact} again`}
+              </MenuItem>
+            )}
+            {video.undo && (
+              <MenuItem disabled={busy !== null} onClick={run("undo", () => createApi.undo(video.id), `Undone: ${video.undo}`)}>
+                <Undo2 /> Undo {video.undo === "your edit" ? "your last edit" : `the last ${video.undo}`}
+              </MenuItem>
+            )}
+            {video.redo && (
+              <MenuItem disabled={busy !== null} onClick={run("forward", () => createApi.forward(video.id), "Redone")}><Redo2 /> Redo</MenuItem>
+            )}
+          </MoreMenu>
         </div>
         </div>
       )}
@@ -840,11 +849,11 @@ function Takes({ video }: { video: CreateVideo }) {
         <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} /> Earlier takes ({video.takes})
       </button>
       {open && shown && (
-        <div className="mt-2 flex flex-col gap-3 rounded-md border border-line p-3">
+        <div className="mt-2 flex flex-col gap-3">
           <div className="flex flex-wrap gap-1.5">
             {takes.map((t) => (
               <button key={t.index} type="button" onClick={() => setPick(t.index)} aria-pressed={t.index === shown.index}
-                      className={cn("h-7 rounded-sm border px-2.5 text-xs", t.index === shown.index ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
+                      className={cn("h-8 pointer-coarse:h-11 rounded-sm border px-2.5 text-xs", t.index === shown.index ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
                 {t.index + 1}: {t.why}{t.at ? ` · ${t.at.slice(11, 16)}` : ""}
               </button>
             ))}
@@ -886,9 +895,9 @@ function CheckNote({ text }: { text: string }) {
   const verdict = open ? "Worth a look: the checks found something" : fixed ? "Checked: problems found and fixed in the rewrite"
     : rest.some((l) => /no problems/i.test(l)) ? "Checked: no problems found" : rest[0] ?? "How it was made";
   return (
-    <details className={cn("rounded-md border px-3 py-2 text-xs",
-      // Green only for a check that passed (D213): "How it was made" alone read as a success.
-      open ? "border-warning/40 text-warning" : fixed || rest.some((l) => /no problems/i.test(l)) ? "border-success/40 text-success" : "border-line text-muted")}>
+    <details className={cn("py-1 text-xs",
+      // Green only for a check that passed (D213): "How it was made" alone read as a success. A line, not a box (D215).
+      open ? "text-warning" : fixed || rest.some((l) => /no problems/i.test(l)) ? "text-success" : "text-muted")}>
       <summary className="cursor-pointer font-medium">{verdict}</summary>
       {rest.length > 0 && <p className="mt-2 whitespace-pre-line text-fg">{rest.join("\n")}</p>}
       {made.length > 0 && <p className="mt-2 whitespace-pre-line text-subtle">{made.join("\n")}</p>}
@@ -929,7 +938,7 @@ function PictureChoice({ visual, emphasis, onChange, canHold, canBuild }: {
     if (kind === "card") return onChange({ ...visual, title: t });
     if (kind === "sketch") return onChange({ ...visual, idea: t, sketch: null });
   };
-  const field = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  const field = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none";
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <select value={kind} aria-label="Picture" className={field} onChange={(e) => pick(e.target.value as PictureKind)}>
@@ -948,7 +957,7 @@ function PictureChoice({ visual, emphasis, onChange, canHold, canBuild }: {
       {kind === "sketch" && canBuild && (
         <Tip label="Starts from the drawing an earlier sentence made, with its marks already on the board, and draws only what this sentence adds. For when footage came in between.">
           <label className="flex items-center gap-1.5 text-xs text-muted">
-            <input type="checkbox" className="accent-[var(--color-accent)]" checked={!!visual.builds}
+            <input type="checkbox" className="accent-[var(--text)]" checked={!!visual.builds}
                    onChange={(e) => onChange({ ...visual, builds: e.target.checked, sketch: null })} />
             Goes on with an earlier drawing
           </label>
@@ -995,30 +1004,30 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
   const n = words({ ...s, beats });
   const seconds = Math.round(n / wps);
   const locked = video.status !== "draft";
-  const small = "size-7";
+  const small = "size-8";
   return (
     <div className="flex flex-col gap-2">
       <input value={title} disabled={locked} onChange={(e) => setTitle(e.target.value)}
              onBlur={() => title !== s.title && void save({ title })} aria-label="Title"
-             className="rounded-md border border-line bg-surface-2 px-3 py-2 font-semibold focus:border-accent focus:outline-none disabled:opacity-80" />
+             className="rounded-md border border-line bg-surface-2 px-3 py-2 font-semibold focus:border-line-strong focus:outline-none disabled:opacity-80" />
       {/* The words on screen for the first second and a half (D155); empty shows the title. */}
       <div className="flex flex-wrap items-center gap-2">
         <input value={hook} disabled={locked} onChange={(e) => setHook(e.target.value)} placeholder={`On-screen hook (empty: the title)`}
                onBlur={() => hook !== (s.hook ?? "") && void save({ hook: hook.trim() })} aria-label="On-screen hook"
-               className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+               className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2.5 text-sm focus:border-line-strong focus:outline-none disabled:opacity-80" />
         <span className={cn("text-xs", hookWords > 6 ? "text-warning" : "text-subtle")}>{hookWords} of 6 words on screen</span>
-        {s.series && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-muted">{s.series}</span>}
+        {s.series && <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">{s.series}</span>}
       </div>
-      <div className="flex flex-col gap-2">
+      {/* Sentences as rows of words, not boxes in a box (D215): the open one sits on a slab, the rest are text. */}
+      <div className="flex flex-col gap-1">
         {beats.map((b, i) => (
           <div key={i} onFocus={() => setOpen(i)} onClick={() => setOpen(i)} data-open={!locked && open === i}
-               className={cn("flex flex-col gap-1.5", !locked && "rounded-md border p-2",
-                             !locked && (open === i ? "border-line bg-surface-2/40" : "border-transparent"))}>
+               className={cn("-mx-2 flex flex-col gap-1.5 rounded-md px-2 py-1.5", !locked && open === i && "bg-surface-2")}>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_200px]">
               <textarea rows={!locked && open === i ? 3 : 2} value={b.text} disabled={locked} aria-label={`Sentence ${i + 1}`}
                         onChange={(e) => setBeats(beats.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
                         onBlur={() => b.text !== s.beats[i]?.text && void save({ beats })}
-                        className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+                        className="-mx-1 resize-none rounded-sm bg-transparent px-1 py-1 [field-sizing:content] text-[15px] leading-relaxed hover:bg-surface-3/50 focus:bg-bg/40 focus:outline-none disabled:opacity-80" />
               <Picture visual={b.visual} />
             </div>
             {!locked && open === i && (
@@ -1028,13 +1037,13 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                   <input key={b.emphasis} defaultValue={b.emphasis} placeholder="highlight word" aria-label={`Highlight word, sentence ${i + 1}`}
                          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
                          onBlur={(e) => e.target.value.trim() !== b.emphasis && patch(i, { emphasis: e.target.value.trim() })}
-                         className="h-8 w-32 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
+                         className="h-8 w-32 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none" />
                 </Tip>
                 {b.visual.kind === "stock" && !b.visual.hold && (
                   <Tip label="How the camera moves on this sentence's footage. Automatic takes the moves in turn.">
                     <select aria-label={`Camera, sentence ${i + 1}`} value={b.visual.camera ?? ""}
                             onChange={(e) => patch(i, { visual: { ...b.visual, camera: e.target.value } })}
-                            className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none">
+                            className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none">
                       {CAMERAS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </Tip>
@@ -1042,7 +1051,7 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
                 {poses.length > 0 && i < beats.length - 1 && (
                   <Tip label="The presenter's pose while this sentence is said (about 2 seconds, bottom left)">
                     <select aria-label={`Pose, sentence ${i + 1}`} value={b.pose ?? ""} onChange={(e) => patch(i, { pose: e.target.value })}
-                            className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none">
+                            className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none">
                       <option value="">no pose</option>
                       {poses.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
@@ -1071,11 +1080,11 @@ function ScriptEditor({ video, wps }: { video: CreateVideo; wps: number }) {
         <textarea rows={2} value={description} disabled={locked} aria-label="Description" placeholder="Description for the post"
                   onChange={(e) => setDescription(e.target.value)}
                   onBlur={() => description !== (s.description ?? "") && void save({ description })}
-                  className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+                  className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-line-strong focus:outline-none disabled:opacity-80" />
         <textarea rows={2} value={tags} disabled={locked} aria-label="Hashtags" placeholder="#hashtags, up to 5"
                   onChange={(e) => setTags(e.target.value)}
                   onBlur={() => tags !== (s.hashtags ?? []).join(" ") && void save({ hashtags: tags.split(/[\s,]+/).filter(Boolean) })}
-                  className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-accent focus:outline-none disabled:opacity-80" />
+                  className="resize-none rounded-md border border-line bg-surface-1 px-3 py-2 text-sm focus:border-line-strong focus:outline-none disabled:opacity-80" />
       </div>
       </Fold>
     </div>
@@ -1086,7 +1095,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
   if (visual.hold && !visual.clip) {
     return (
       <Tip label="The drawing above stays on screen through this sentence, its parts arriving as they're said.">
-        <span className="flex max-w-full items-center gap-1.5 self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs text-muted">
+        <span className="flex max-w-full items-center gap-1.5 self-start text-xs font-semibold text-muted">
           <Shapes className="size-3.5 shrink-0" /><span className="truncate">Keeps the drawing above</span>
         </span>
       </Tip>
@@ -1095,7 +1104,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
   if (visual.clip) {
     return (
       <Tip label="Your own clip. The planned picture fills any time it doesn't cover.">
-        <span className="flex max-w-full items-center gap-1.5 self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs text-fg">
+        <span className="flex max-w-full items-center gap-1.5 self-start text-xs font-semibold text-fg">
           <Film className="size-3.5 shrink-0" /><span className="truncate">Your clip</span>
         </span>
       </Tip>
@@ -1106,7 +1115,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
     : `Stock footage: ${(visual.queries?.length ? visual.queries : [visual.query]).join(" / ")}${visual.card ? `. If none fits, "${visual.card}" on the board` : ""}`;
   return (
     <Tip label={tip}>
-      <span className="flex max-w-full items-center gap-1.5 self-start rounded-full bg-surface-2 px-2.5 py-1 text-xs text-muted">
+      <span className="flex max-w-full items-center gap-1.5 self-start text-xs font-semibold text-muted">
         {diagram ? <Shapes className="size-3.5 shrink-0" /> : <Film className="size-3.5 shrink-0" />}
         <span className="truncate">{diagram ? `Diagram: ${visual.title || visual.template}` : visual.query}</span>
       </span>
@@ -1146,8 +1155,8 @@ function VoiceStep({ video, title = "Step 2 of 4: add the voice" }: { video: Cre
   const upload = (file: File | undefined) => file && gotIt(() => createApi.voice(video.id, file), "Got the voice");
   const ways: [typeof way, string][] = [["file", "I have the audio"], ["record", "Record it here"], ["none", "No voice"]];
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-accent/30 bg-accent-soft/40 p-4">
-      <h3 className="flex items-center gap-2 text-sm font-semibold"><Mic className="size-4 text-accent" /> {title}</h3>
+    <div className="flex flex-col gap-3 rounded-md bg-surface-2 p-4">
+      <h3 className="flex items-center gap-2 text-sm font-semibold"><Mic className="size-4 text-muted" /> {title}</h3>
       <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="How you give the voice">
         {ways.map(([key, label]) => (
           <button key={key} type="button" role="radio" aria-checked={way === key} onClick={() => setWay(key)}
@@ -1176,7 +1185,7 @@ function VoiceStep({ video, title = "Step 2 of 4: add the voice" }: { video: Cre
             onClick={() => input.current?.click()} role="button" tabIndex={0}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.current?.click(); } }}
             className={cn("flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-6 text-sm",
-              over ? "border-accent bg-accent-soft text-fg" : "border-line-strong text-muted hover:border-accent hover:text-fg")}>
+              over ? "border-line-strong bg-surface-3 text-fg" : "border-line-strong text-muted hover:border-fg hover:text-fg")}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
             {busy ? "Uploading…" : "Drop the audio here, or click to choose it"}
             <input ref={input} type="file" accept="audio/*" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
@@ -1268,9 +1277,10 @@ function Fold({ id, title, startOpen = false, children }: { id: string; title: s
   const [open, setOpen] = useState(() => folds.get(id) ?? startOpen);
   const toggle = () => setOpen((o) => { folds.set(id, !o); return !o; });
   return (
-    <section className="mt-1">
+    // A fold reads as a row of the wall (D215): its name in the condensed face over a rule.
+    <section className="border-t border-line pt-2">
       <button type="button" onClick={toggle} aria-expanded={open}
-              className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted hover:text-fg md:min-h-0">
+              className="flex min-h-11 items-center gap-1.5 font-display text-[17px] font-bold tracking-[0.02em] text-muted uppercase hover:text-fg">
         <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} /> {title}
       </button>
       {open && <div className="mt-2">{children}</div>}
@@ -1289,7 +1299,7 @@ function SoundChoice({ video }: { video: CreateVideo }) {
       <label className="flex items-center gap-1.5">
         {label}
         <select value={mine == null ? "" : mine ? "on" : "off"} aria-label={label} disabled={video.status === "building"}
-                className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                className="h-8 pointer-coarse:h-11 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
                 onChange={(e) => void createApi.sound(video.id, { [key]: e.target.value === "" ? null : e.target.value === "on" })
                   .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
           <option value="">Channel ({usual})</option><option value="on">On</option><option value="off">Off</option>
@@ -1299,7 +1309,7 @@ function SoundChoice({ video }: { video: CreateVideo }) {
   };
   const style = (key: "zooms" | "cut_ins" | "loop", label: string, usual = true) => (
     <label className="flex items-center gap-1.5">
-      <input type="checkbox" className="accent-[var(--color-accent)]" checked={video.script[key] ?? usual}
+      <input type="checkbox" className="accent-[var(--text)]" checked={video.script[key] ?? usual}
              disabled={video.status === "building"}
              onChange={(e) => void createApi.editStyle(video.id, { [key]: e.target.checked })
                .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))} />
@@ -1316,7 +1326,7 @@ function SoundChoice({ video }: { video: CreateVideo }) {
       <label className="flex items-center gap-1.5">
         Transitions
         <select value={video.script.transitions ?? "auto"} aria-label="Transitions" disabled={video.status === "building"}
-                className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                className="h-8 pointer-coarse:h-11 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
                 onChange={(e) => void createApi.editStyle(video.id, { transitions: e.target.value })
                   .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
           <option value="auto">Automatic</option><option value="cut">Plain cuts</option>
@@ -1327,7 +1337,7 @@ function SoundChoice({ video }: { video: CreateVideo }) {
         <label className="flex items-center gap-1.5">
           Presenter
           <select value={video.script.on_screen ?? "all"} aria-label="Presenter" disabled={video.status === "building"}
-                  className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                  className="h-8 pointer-coarse:h-11 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
                   onChange={(e) => void createApi.editStyle(video.id, { on_screen: e.target.value })
                     .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
             <option value="all">Whole video</option><option value="ends">Opening and punchline</option>
@@ -1375,16 +1385,17 @@ function Built({ video, wps, lead, busy, onPictures, onRebuild }: {
           10 to 15 of them, and "Play from here" started a player you couldn't see. */}
       <div className="flex w-56 shrink-0 flex-col gap-2 self-start lg:sticky lg:top-4 xl:w-72">
         {clip?.file_exists ? (
-          <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline className="aspect-[9/16] w-full rounded-xl bg-black"
+          <video ref={player} key={clip.video} src={clip.video} poster={clip.thumb} controls playsInline data-focus={(lead && !video.posted) || undefined}
+                 className="poster w-full bg-black"
                  onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
-        ) : <div className="grid aspect-[9/16] w-full place-items-center rounded-xl bg-surface-2 text-sm text-muted">Video not found</div>}
+        ) : <div className="poster grid w-full place-items-center text-sm text-muted">Video not found</div>}
         {shots.length > 1 && total > 0 && (
           <div className="flex h-2 w-full gap-px overflow-hidden rounded-full">
             {shots.map((shot) => (
               <button key={shot.beats[0]} type="button" onClick={() => seek(shot.start)} aria-label={`Play from ${shot.start.toFixed(1)}s`}
                       style={{ width: `${((shot.end - shot.start) / total) * 100}%` }}
                       className={cn("h-full bg-surface-3 hover:bg-line-strong",
-                        now != null && shot.start <= now && now < shot.end && "bg-accent hover:bg-accent")} />
+                        now != null && shot.start <= now && now < shot.end && "bg-fg hover:bg-fg")} />
             ))}
           </div>
         )}
@@ -1404,31 +1415,25 @@ function Built({ video, wps, lead, busy, onPictures, onRebuild }: {
           <CheckNote text={video.check_notes} />
           {/* One main button and one other (D199); the rest under More: six equal buttons sat over the parts. */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Lime only when this is the video to act on (D211): beside an open draft, Approve is the one. */}
-            {clip && <Button variant={lead ? "primary" : "secondary"} onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
+            {/* Amber when this is the video to act on and it isn't posted yet (D211, REDESIGN_NOTES 2): built is the
+                moment to post it. Beside an open draft, Approve is the one. */}
+            {clip && <Button variant={lead && !video.posted ? "primary" : "secondary"} onClick={() => useUI.getState().setOpenClip(clip.id)}>Open to post</Button>}
             <Tip label="Same words, voice and pictures, built again; only parts you asked to change, or that had no footage, are made again">
               <Button variant="secondary" disabled={busy !== null} onClick={onRebuild}>
                 {busy === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />} Build again
                 {(video.unbuilt?.length ?? 0) > 0 && <span className="text-xs text-muted">· {video.unbuilt!.length} not built yet</span>}
               </Button>
             </Tip>
-            <details className="relative">
-              <summary className={cn(buttonClass("ghost"), "cursor-pointer list-none [&::-webkit-details-marker]:hidden")}>
-                <MoreHorizontal className="size-4" /> More
-              </summary>
-              <div className="absolute left-0 z-20 mt-1 flex w-60 flex-col rounded-md border border-line bg-surface-1 p-1 text-sm shadow-3">
-                {/* Where this video goes next, and where its numbers are (D143). */}
-                {clip && (clip.posts.length > 0 || video.posted) && (
-                  <Link to="/stats" search={{ campaign: clip.campaign }} className="rounded-sm px-3 py-2 hover:bg-surface-2">See its stats</Link>
-                )}
-                {clip && (
-                  <Link to="/clips" search={{ campaign: clip.campaign, status: "all" }} className="rounded-sm px-3 py-2 hover:bg-surface-2">All your Shorts in Clips</Link>
-                )}
-                <button type="button" disabled={busy !== null}
-                        onClick={(e) => { setReplan(true); e.currentTarget.closest("details")?.removeAttribute("open"); }}
-                        className="rounded-sm px-3 py-2 text-left hover:bg-surface-2 disabled:opacity-50">New pictures for every part…</button>
-              </div>
-            </details>
+            <MoreMenu>
+              {/* Where this video goes next, and where its numbers are (D143). */}
+              {clip && (clip.posts.length > 0 || video.posted) && (
+                <Link to="/stats" search={{ campaign: clip.campaign }} data-menu-item className="flex min-h-10 items-center rounded-sm px-3 font-semibold hover:bg-surface-3">See its stats</Link>
+              )}
+              {clip && (
+                <Link to="/clips" search={{ campaign: clip.campaign, status: "all" }} data-menu-item className="flex min-h-10 items-center rounded-sm px-3 font-semibold hover:bg-surface-3">All your Shorts in Clips</Link>
+              )}
+              <MenuItem disabled={busy !== null} onClick={() => setReplan(true)}>New pictures for every part…</MenuItem>
+            </MoreMenu>
           </div>
           {replan && (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-3 text-sm">
@@ -1536,7 +1541,7 @@ function CaptionsEditor({ video }: { video: CreateVideo }) {
   return (
     <div className="flex flex-col gap-2">
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="accent-[var(--color-accent)]" checked={video.script.captions ?? true}
+        <input type="checkbox" className="accent-[var(--text)]" checked={video.script.captions ?? true}
                disabled={video.status === "building"}
                onChange={(e) => void createApi.editStyle(video.id, { captions: e.target.checked })
                  .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))} />
@@ -1549,7 +1554,7 @@ function CaptionsEditor({ video }: { video: CreateVideo }) {
                ["caption_shift", "Caption place", video.script.caption_shift ?? 0, CAPTION_PLACES],
                ["caption_colour", "Said word colour", video.script.caption_colour ?? "", CAPTION_COLOURS]] as const).map(([key, label, now, options]) => (
               <select key={key} aria-label={label} disabled={video.status === "building"} value={String(now)}
-                      className="h-7 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
+                      className="h-8 pointer-coarse:h-11 rounded-sm border border-line bg-surface-2 px-1.5 text-xs"
                       onChange={(e) => void createApi.editStyle(video.id, { [key]: key === "caption_colour" ? e.target.value : Number(e.target.value) })
                         .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message))}>
                 {!options.some(([k]) => String(k) === String(now)) && <option value={String(now)}>{label}: set by hand</option>}
@@ -1565,7 +1570,7 @@ function CaptionsEditor({ video }: { video: CreateVideo }) {
                 <input value={draft[k] ?? b.caption ?? ""} placeholder={b.text} aria-label={`Caption for sentence ${k + 1}`}
                        onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))} onBlur={() => save(k)}
                        onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                       className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
+                       className="h-8 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm placeholder:text-subtle focus:border-line-strong focus:outline-none" />
               </li>
             ))}
           </ol>

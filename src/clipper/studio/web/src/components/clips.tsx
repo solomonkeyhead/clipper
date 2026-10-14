@@ -20,7 +20,7 @@ import { CaptionChoice, HookControl } from "./lines";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { FadeImg } from "./progress";
-import { Button, Chip, CopyButton, Kbd, StatusChip, Tip } from "./ui";
+import { Button, Chip, CopyButton, Kbd, MenuItem, MoreMenu, StatusChip, Tip } from "./ui";
 
 const STATUS_WORD: Record<ClipStatus, string> = {
   ready: "ready to post", posted: "posted", submitted: "submitted", skipped: "skipped",
@@ -67,30 +67,6 @@ function useIsOwn() {
   const { data: campaigns = [] } = useCampaigns();
   const own = new Set(campaigns.filter((c) => c.submits === false).map((c) => c.name));
   return (name: string) => own.has(name);
-}
-
-/** Good, from the card itself (D143): the same rating the sheet's Good button and Y give. */
-function GoodButton({ clip }: { clip: Clip }) {
-  const rate = useRateClip();
-  const good = (clip.rating ?? 0) >= 4;
-  return (
-    <Tip label={good ? "Rated good (click to undo)" : "Good: Clipper learns what you like"}>
-      <Button size="sm" variant="ghost" aria-label="Good" aria-pressed={good} className={cn(good && "text-success")}
-              onClick={(e) => { e.stopPropagation(); rate.mutate({ id: clip.id, rating: good ? null : 5, reasons: clip.reasons }); }}>
-        <ThumbsUp className="size-3.5" />
-      </Button>
-    </Tip>
-  );
-}
-
-function NotGoodButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" }) {
-  const notGood = useNotGood();
-  const button = (
-    <Button size={size} variant="ghost" onClick={(e) => { e.stopPropagation(); void notGood(clip); }} aria-label="Not good">
-      <ThumbsDown className={size === "md" ? "size-4" : "size-3.5"} />{size === "md" && " Not good"}
-    </Button>
-  );
-  return size === "md" ? button : <Tip label="Not good: skip it, and Clipper learns from it">{button}</Tip>;
 }
 
 /** Mark a clip (all its post links) submitted to its campaign, with a 5-second undo. */
@@ -174,7 +150,7 @@ function DuplicateWarning({ clip }: { clip: Clip }) {
         <ul className="flex flex-col">
           {clip.duplicates.map((d) => (
             <li key={d.id}>
-              <button className="text-left text-accent hover:underline" onClick={() => open(d.id)}>“{d.title}”</button>
+              <button className="text-left link" onClick={() => open(d.id)}>“{d.title}”</button>
               <span className="text-muted"> · {d.how}</span>
             </li>
           ))}
@@ -223,7 +199,7 @@ function CaptionSection({ clip }: { clip: Clip }) {
         <div className="flex flex-col gap-2">
           <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={7} autoFocus
                     onKeyDown={(e) => e.stopPropagation()}
-                    className="w-full rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-accent" />
+                    className="w-full rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-line-strong" />
           <span className="flex gap-2">
             <Button size="sm" variant="primary" disabled={edit.isPending || !draft.trim()} onClick={save}>Save</Button>
             <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>Cancel</Button>
@@ -245,7 +221,7 @@ function NoteField({ note, saved, onChange, onSave }: {
   return (
     <textarea value={note} onChange={(e) => onChange(e.target.value)} onBlur={onSave} autoFocus={!saved}
       placeholder="Add a note…" rows={2} aria-label="Note"
-      className="w-full resize-y rounded-md border border-line bg-surface-1 p-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
+      className="w-full resize-y rounded-md border border-line bg-surface-1 p-3 text-sm placeholder:text-subtle focus:border-line-strong focus:outline-none" />
   );
 }
 
@@ -357,7 +333,7 @@ export function SelectionBar({ clips, onClear }: { clips: Clip[]; onClear: () =>
   const count = (n: number) => n < clips.length ? ` ${n}` : "";
   return (
     <div role="toolbar" aria-label="Picked clips"
-      className="fade-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex md:bottom-6 -translate-x-1/2 items-center gap-1.5 rounded-xl border border-line-strong bg-surface-1 p-1.5 pl-4 shadow-3">
+      className="fade-in fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex md:bottom-6 -translate-x-1/2 items-center gap-1.5 rounded-md border border-line-strong bg-surface-1 p-1.5 pl-4 shadow-3">
       <span className="tabular mr-2 text-sm font-medium whitespace-nowrap">{clips.length} selected</span>
       {ready.length > 0 && (
         <Button size="sm" variant="secondary" onClick={act(() => bulk.setStatus(ready, "posted"))}>
@@ -411,7 +387,7 @@ function DownloadButton({ clip, label = true, size = "sm" }: {
         className={cn(
           "inline-flex items-center justify-center gap-1.5 rounded-sm border border-line bg-surface-2 font-medium text-fg",
           "transition-colors duration-[var(--dur-fast)] hover:border-line-strong hover:bg-surface-3",
-          size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
+          size === "sm" ? "h-8 px-3 text-xs pointer-coarse:h-11" : "h-9 px-3.5 text-sm",
         )}
       >
         <Download className="size-3.5" />{label && "Download"}
@@ -427,12 +403,34 @@ function DeleteButton({ clip, label = false, size = "sm" }: {
   return (
     <Tip label="Delete (you can undo)" keys="Del">
       <Button size={label ? size : "icon"} variant="ghost"
-              className={cn(!label && "size-7", "hover:text-danger")}
+              className={cn(!label && "size-8", "hover:text-danger")}
               aria-label="Delete clip"
               onClick={(e) => { e.stopPropagation(); remove(clip); }}>
         <Trash2 className="size-3.5" />{label && "Delete"}
       </Button>
     </Tip>
+  );
+}
+
+/** A tile's other actions in words under More (D215, REDESIGN_NOTES 5): a thumbs up, a thumbs down and a bin said
+ *  nothing until hovered. Each still has its undo (D74) and its key in the open clip (Y, B, Del). */
+function TileMore({ clip }: { clip: Clip }) {
+  const rate = useRateClip();
+  const notGood = useNotGood();
+  const remove = useDeleteWithUndo();
+  const good = (clip.rating ?? 0) >= 4;
+  return (
+    <span className="-my-1 -mr-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <MoreMenu align="right" size="sm">
+        {clip.status === "ready" && <>
+          <MenuItem onClick={() => rate.mutate({ id: clip.id, rating: good ? null : 5, reasons: clip.reasons })}>
+            <ThumbsUp /> {good ? "Rated good (undo)" : "Good: Clipper learns what you like"}
+          </MenuItem>
+          <MenuItem onClick={() => void notGood(clip)}><ThumbsDown /> Not good: skip it, and Clipper learns from it</MenuItem>
+        </>}
+        <MenuItem danger onClick={() => remove(clip)}><Trash2 /> Delete (you can undo)</MenuItem>
+      </MoreMenu>
+    </span>
   );
 }
 
@@ -443,7 +441,7 @@ function Preview({ clip, className }: { clip: Clip; className?: string }) {
   const timer = useRef<number | undefined>(undefined);
   return (
     <div
-      className={cn("relative aspect-[9/16] overflow-hidden rounded-md bg-surface-2", className)}
+      className={cn("poster", className)}
       onPointerEnter={() => { timer.current = window.setTimeout(() => setPlaying(true), 400); }}
       onPointerLeave={() => { window.clearTimeout(timer.current); setPlaying(false); }}
     >
@@ -459,7 +457,7 @@ function Preview({ clip, className }: { clip: Clip; className?: string }) {
                className="fade-in absolute inset-0 size-full object-cover" />
       )}
       {clip.duration_s ? (
-        <span className="tabular absolute right-1.5 bottom-1.5 rounded-[4px] bg-black/70 px-1.5 py-px text-[12px] font-medium text-white">
+        <span className="tabular absolute right-2 bottom-2 rounded-[3px] bg-black/70 px-1.5 text-[12px] leading-5 font-semibold text-white">
           {formatDuration(clip.duration_s)}
         </span>
       ) : null}
@@ -545,23 +543,24 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
   const isOwn = useIsOwn();
   const { views, best } = bestViews(clip);
   return (
+    // A poster on the wall (D215): no card around it. Focus (J/K or hover) rings it amber; picked rings it white.
     <article
       data-clip={clip.id}
+      data-tile
+      data-focus={focused || undefined}
       tabIndex={0}
       onClick={(e) => onSelect && (selecting || e.shiftKey || e.ctrlKey || e.metaKey) ? onSelect(e) : open(clip.id)}
       onKeyDown={(e) => e.key === "Enter" && open(clip.id)}
       className={cn(
-        "group relative flex cursor-pointer flex-col gap-3 rounded-lg border border-line bg-surface-1 p-3 shadow-1 outline-none",
-        "transition-[border-color,background-color] duration-[var(--dur-base)] hover:border-line-strong hover:bg-surface-2",
-        focused && "border-accent ring-1 ring-accent",
-        selected && "border-fg/60 bg-surface-2 hover:bg-surface-2",
+        "group relative flex cursor-pointer flex-col gap-2.5 outline-none",
+        selected && "[&>.poster]:shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--text)]",
       )}
     >
       {onSelect && (
         <Tip label={selected ? "Unselect" : "Select (Shift-click for a range)"}>
           <button type="button" role="checkbox" aria-checked={selected} aria-label="Select"
             onClick={(e) => { e.stopPropagation(); onSelect(e); }}
-            className={cn("absolute top-5 left-5 z-10 grid size-5 place-items-center rounded-[5px] border transition-opacity duration-[var(--dur-fast)]",
+            className={cn("absolute top-2 left-2 z-10 grid size-6 place-items-center rounded-[4px] border transition-opacity duration-[var(--dur-fast)] before:absolute before:-inset-2.5 before:content-['']",
               selected ? "border-fg bg-fg text-bg" : "border-white/70 bg-black/40 text-transparent hover:bg-black/60",
               // A touch screen has no hover: the box always shows there (D198).
               selected || selecting ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100")}>
@@ -570,9 +569,9 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
         </Tip>
       )}
       <Preview clip={clip} />
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5">
+      <div className="flex min-w-0 flex-col gap-1 px-0.5">
+        <div className="flex items-center gap-2">
+          <span className="mr-auto flex min-w-0 items-center gap-1.5">
             <StatusChip status={clip.status} own={isOwn(clip.campaign)} waiting={waitingForViews(clip)} />
             {clip.duplicates.length > 0 && clip.status === "ready" && (
               <Tip label={`Already posted: repeats “${clip.duplicates[0].title}” (${clip.duplicates[0].posted_on.join(", ")})`}>
@@ -590,17 +589,18 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
           {clip.posts.length > 0 && (
             <span className="tabular text-xs text-muted">
               {formatCount(views)} view{views === 1 ? "" : "s"}
-              {best !== null && best >= 1.5 && <span className="ml-1 text-money" title={`${best}× the median views for this campaign on that platform`}>{best}×</span>}
+              {best !== null && best >= 1.5 && <span className="ml-1 font-bold text-fg" title={`${best}× the median views for this campaign on that platform`}>{best}×</span>}
             </span>
           )}
+          <TileMore clip={clip} />
         </div>
-        <h3 className="line-clamp-2 text-sm leading-snug font-semibold">{clip.title}</h3>
+        <h3 className="line-clamp-2 font-sans text-sm leading-snug font-semibold">{clip.title}</h3>
         <div className="truncate text-xs text-muted" title={`${title(clip.campaign)} · ${clip.source_title}`}>
           {showCampaign ? title(clip.campaign) : clip.source_title}
         </div>
         {clip.submit_at_views ? <WaitingForViews clip={clip} /> : null}
       </div>
-      <div className="mt-auto flex flex-wrap items-center gap-1.5">
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 px-0.5">
         {clip.status === "posted" && clip.posts.length === 0 && clip.watching ? (
           <span className="flex items-center gap-1.5 text-xs text-muted"><Loader2 className="size-3.5 animate-spin" /> Finding your post…</span>
         ) : clip.status === "posted" ? (
@@ -617,10 +617,8 @@ export function ClipCard({ clip, showCampaign = false, focused = false, selected
           <>
             {clip.caption && <CopyButton text={clip.caption} what="Caption" label="Caption" />}
             {clip.file_exists && <DownloadButton clip={clip} />}
-            {clip.status === "ready" && <><GoodButton clip={clip} /><NotGoodButton clip={clip} /></>}
           </>
         )}
-        <span className="ml-auto"><DeleteButton clip={clip} /></span>
       </div>
     </article>
   );
@@ -647,7 +645,7 @@ function PostStats({ post, campaignUrl, need = 0 }: { post: Post; campaignUrl: s
           <CopyButton text={post.url} what={`${PLATFORM_NAME[post.platform] ?? post.platform} link`} label="Copy link" />
           <Tip label="Open the post">
             <a href={post.url} target="_blank" rel="noopener noreferrer"
-               className="grid size-7 place-items-center rounded-sm text-muted hover:bg-surface-3 hover:text-fg"
+               className="grid size-8 pointer-coarse:size-11 place-items-center rounded-sm text-muted hover:bg-surface-3 hover:text-fg"
                aria-label="Open the post">
               <ExternalLink className="size-3.5" />
             </a>
@@ -690,7 +688,7 @@ function PostTasks({ post }: { post: Post }) {
       {(post.tasks ?? []).map((t) => (
         <li key={t.views} className={cn("flex items-start gap-2 rounded-sm border p-2 text-xs",
           t.done ? "border-line text-muted" : "border-warning/50 bg-[color-mix(in_oklch,var(--warning)_8%,transparent)]")}>
-          <input type="checkbox" className="mt-0.5 accent-[var(--color-accent)]" checked={t.done}
+          <input type="checkbox" className="mt-0.5 accent-[var(--text)]" checked={t.done}
                  aria-label={`Done: ${t.task}`}
                  onChange={(e) => setTask.mutate({ url: post.url, views: t.views, done: e.target.checked })} />
           <span className={cn(t.done && "line-through")}>
@@ -730,7 +728,7 @@ function ViewsLine({ post }: { post: Post }) {
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="shrink-0 overflow-visible" aria-hidden>
         <path d={path} fill="none" stroke="var(--text-muted)" strokeWidth="1.5" />
       </svg>
-      <span>{gain > 0 ? <><b className="text-money">+{formatCount(gain)}</b> in the last day</> : "No new views in the last day"}</span>
+      <span>{gain > 0 ? <><b className="text-fg">+{formatCount(gain)}</b> in the last day</> : "No new views in the last day"}</span>
     </div>
   );
 }
@@ -738,7 +736,7 @@ function ViewsLine({ post }: { post: Post }) {
 const Stat = ({ label, value, extra, good }: { label: string; value: React.ReactNode; extra?: string; good?: boolean }) => (
   <div className="flex flex-col">
     <dt className="text-xs text-muted">{label}</dt>
-    <dd className="font-medium">{value}{extra && <span className={cn("ml-1 text-xs", good ? "text-money" : "text-muted")}>{extra}</span>}</dd>
+    <dd className="font-medium">{value}{extra && <span className={cn("ml-1 text-xs", good ? "font-bold text-fg" : "text-muted")}>{extra}</span>}</dd>
   </div>
 );
 
@@ -818,14 +816,14 @@ export function ClipSheet() {
               <div className="flex shrink-0 flex-col gap-3 md:w-[300px]">
                 {clip.file_exists ? (
                   <video key={clip.id} src={clip.video} poster={clip.thumb} controls playsInline preload="metadata"
-                         className="aspect-[9/16] max-h-[78vh] w-full rounded-lg bg-black object-contain" />
+                         className="aspect-[9/16] max-h-[78vh] w-full rounded-md bg-black object-contain" />
                 ) : (
-                  <div className="grid aspect-[9/16] place-items-center rounded-lg bg-surface-2 text-sm text-muted">File missing</div>
+                  <div className="grid aspect-[9/16] place-items-center rounded-md bg-surface-2 text-sm text-muted">File missing</div>
                 )}
                 <div className="flex gap-2">
                   {clip.file_exists && (
                     <a href={downloadUrl(clip.id)} download
-                       className="inline-flex h-9 flex-1 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                       className="inline-flex h-10 flex-1 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
                       <Download className="size-4" /> Download <Kbd className="ml-auto border-accent-fg/30 bg-accent-fg/10 text-accent-fg">D</Kbd>
                     </a>
                   )}
@@ -848,7 +846,7 @@ export function ClipSheet() {
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       <StatusChip status={clip.status} own={isOwn(clip.campaign)} waiting={waitingForViews(clip)} />
                       <span className="text-xs text-muted">
-                        <Link to="/campaigns/$name" params={{ name: clip.campaign }} onClick={() => setOpen(null)} className="hover:text-accent hover:underline">{title(clip.campaign)}</Link>
+                        <Link to="/campaigns/$name" params={{ name: clip.campaign }} onClick={() => setOpen(null)} className="hover:link">{title(clip.campaign)}</Link>
                         {" · "}{clip.source_title} · {formatDuration(clip.duration_s)}
                       </span>
                     </div>
@@ -896,9 +894,9 @@ export function ClipSheet() {
                         <PasteLink key={`paste-${clip.id}`} clip={clip} compact />
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-2 rounded-md border border-dashed border-line p-3">
+                      <div className="flex flex-col gap-2 rounded-md bg-surface-2 p-3">
                         <p className="flex items-center gap-2 text-sm text-muted">
-                          <Loader2 className="size-4 shrink-0 animate-spin text-accent" />
+                          <Loader2 className="size-4 shrink-0 animate-spin text-fg" />
                           Looking for your post every 2 minutes for the next half hour, so you can submit it fast.
                         </p>
                         <PasteLink key={`paste-${clip.id}`} clip={clip} />

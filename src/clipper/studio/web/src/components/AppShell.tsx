@@ -4,12 +4,12 @@ import {
   MoreHorizontal, Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useCampaigns, useClips, useCreate, useCreateAI, useJobs, useSetup, useStatus, useSyncNow, useUses } from "@/api/client";
+import { useCampaigns, useClips, useCreate, useCreateAI, useHome, useJobs, useSetup, useStatus, useSyncNow, useUses } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
 import { useUI } from "@/lib/store";
-import { ago, cn } from "@/lib/utils";
+import { ago, cn, formatMoney } from "@/lib/utils";
 import { AccountScope } from "./AccountScope";
 import { AskPanel } from "./AskPanel";
 import { ClipSheet } from "./clips";
@@ -69,22 +69,19 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
     <Link
       to={item.to}
       className={cn(
-        "group flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted",
+        "group flex h-10 items-center gap-3 rounded-sm px-3 text-sm font-semibold text-muted",
         "transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-fg",
-        // The page you're on: its icon is the lit word (D211). A full lime row was the loudest thing on every page
-        // and outshouted the one thing to do on it.
-        active && "bg-surface-2 font-semibold text-fg",
+        // The page you're on is white on a grey slab, never amber (D120, D215): amber is only the next thing to do.
+        active && "bg-surface-2 text-fg",
         collapsed && "justify-center px-0",
       )}
     >
-      <span className={cn("[&>svg]:size-[18px] [&>svg]:stroke-[1.9]", active && "text-accent")}>{item.icon}</span>
+      <span className="[&>svg]:size-[18px] [&>svg]:stroke-[1.9]">{item.icon}</span>
       {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
       {!collapsed && item.badge ? (
         <span className={cn(
-          "tabular min-w-5 rounded-full px-1.5 text-center text-[12px] leading-5 font-semibold",
-          item.tone === "accent" ? "bg-surface-3 text-fg"
-            : item.tone === "warning" ? "bg-[color-mix(in_oklch,var(--warning)_16%,transparent)] text-warning"
-            : "bg-surface-3 text-muted",
+          "tabular min-w-5 text-right text-[13px] font-bold",
+          item.tone === "warning" ? "text-warning" : "text-fg",
         )} title={item.hint}>{item.badge}</span>
       ) : null}
     </Link>
@@ -103,7 +100,7 @@ function ClippingPill() {
     : `${working.length} queued`;
   return (
     <Tip label={now ? `${now.name}: ${now.stage}` : "Waiting to start"}>
-      <Link to="/new" className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium text-fg hover:border-line-strong"
+      <Link to="/new" className="flex h-9 items-center gap-1.5 rounded-sm px-2.5 text-xs font-semibold text-fg hover:bg-surface-2"
             aria-label={label}>
         <Loader2 className="size-3.5 animate-spin" /> {label}
       </Link>
@@ -120,7 +117,7 @@ function BuildPill() {
   const label = building.stage ? `Short: ${building.stage}` : "Building a Short";
   return (
     <Tip label={`${building.script.title || "Building"}${building.stage ? `: ${building.stage}` : ""}`}>
-      <Link to="/create" className="flex h-8 max-w-64 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium whitespace-nowrap text-fg hover:border-line-strong" aria-label={label}>
+      <Link to="/create" className="flex h-9 max-w-64 items-center gap-1.5 rounded-sm px-2.5 text-xs font-semibold whitespace-nowrap text-fg hover:bg-surface-2" aria-label={label}>
         <Loader2 className="size-3.5 shrink-0 animate-spin" /> <span className="truncate">{label}</span>
       </Link>
     </Tip>
@@ -160,9 +157,25 @@ function AIPill() {
     <Tip label={problem || (claude
       ? `Claude ${paid ? "(paid API, drawing only)" : "on your plan"} judges moments and draws; Gemini does ${ai.gemini_jobs.join(", ") || "the rest"} and watches the video.`
       : "Gemini is doing everything: Claude isn't set up.")}>
-      <Link to="/settings" hash="ai" className={cn("hidden h-8 items-center gap-1.5 rounded-full border px-3 text-xs whitespace-nowrap lg:flex",
-        problem ? "border-warning/50 font-medium text-warning hover:border-warning" : "border-line bg-surface-1 text-muted hover:border-line-strong hover:text-fg")}>
-        <Bot className="size-3.5" /> {label}{problem && <ArrowRight className="size-3" />}
+      {/* A problem shows at every width (REDESIGN_NOTES 8): under 1024px it was hidden, and so was the fix. */}
+      <Link to="/settings" hash="ai" aria-label={label} className={cn("h-9 items-center gap-1.5 rounded-sm px-2.5 text-xs font-semibold whitespace-nowrap hover:bg-surface-2",
+        problem ? "flex text-warning" : "hidden text-muted hover:text-fg lg:flex")}>
+        <Bot className="size-4" /> <span className={cn(problem && "hidden sm:inline")}>{label}</span>{problem && <ArrowRight className="size-3" />}
+      </Link>
+    </Tip>
+  );
+}
+
+/** What has actually been paid, in the money colour, always in view (D215): money is its own colour and its own
+ *  place, not a box among the clips. Only recorded payouts, so it shows nothing until there is one. */
+function PaidLine() {
+  const { data } = useHome();
+  const paid = data?.metrics.paid_usd;
+  if (paid == null) return null;
+  return (
+    <Tip label="The payouts you've recorded on each campaign's page. Only this is money received.">
+      <Link to="/stats" className="flex h-9 shrink-0 items-center gap-1.5 rounded-sm px-2 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-fg pointer-coarse:h-11 lg:mr-2">
+        <b className="num text-[15px] text-money">{formatMoney(paid)}</b> paid
       </Link>
     </Tip>
   );
@@ -186,7 +199,7 @@ function SyncPill() {
       <button
         onClick={() => { setSyncing(true); sync.mutate(undefined, { onSettled: () => setSyncing(false) }); }}
         disabled={busy}
-        className="flex h-8 items-center gap-2 rounded-full border border-line bg-surface-1 px-3 text-xs text-muted hover:border-line-strong hover:text-fg disabled:opacity-80"
+        className="flex h-9 items-center gap-2 rounded-sm px-2.5 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-80"
       >
         {problems.length ? <AlertTriangle className="size-3.5 text-warning" />
           : <RefreshCw className={cn("size-3.5", busy && "animate-spin")} />}
@@ -203,7 +216,7 @@ function AutoPostPill() {
   if (!status?.auto_post) return null;
   return (
     <Link to="/settings"
-          className="flex h-8 items-center gap-1.5 rounded-full bg-[color-mix(in_oklch,var(--warning)_16%,transparent)] px-3 text-xs font-semibold text-warning">
+          className="flex h-9 items-center gap-1.5 rounded-sm px-2.5 text-xs font-bold text-warning hover:bg-surface-2">
       <span className="size-1.5 animate-pulse rounded-full bg-current" /> Auto-post on
     </Link>
   );
@@ -278,19 +291,19 @@ export function AppShell() {
     <div className="flex h-dvh overflow-hidden">
       {/* Sidebar (desktop) */}
       <aside className={cn(
-        "hidden shrink-0 flex-col border-r border-line bg-surface-1 transition-[width] duration-[var(--dur-panel)] ease-standard md:flex",
-        collapsed ? "w-14" : "w-60",
+        "hidden shrink-0 flex-col border-r border-line bg-bg transition-[width] duration-[var(--dur-panel)] ease-standard md:flex",
+        collapsed ? "w-16" : "w-60",
       )}>
-        <div className={cn("flex h-12 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
+        <div className={cn("flex h-16 items-center gap-2.5 px-5", collapsed && "justify-center px-0")}>
           <Mark className="h-7 text-fg" />
-          {!collapsed && <span className="cap text-xl">Clipper</span>}
+          {!collapsed && <span className="cap text-[26px] tracking-[0.04em]">Clipper</span>}
         </div>
-        <nav className="flex flex-1 flex-col gap-0.5 px-2 py-2" aria-label="Main">
+        <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2" aria-label="Main">
           {nav.map((item) => <NavLink key={item.to} item={item} collapsed={collapsed} />)}
           <div className="my-2 h-px bg-line" />
           {SECONDARY.map((item) => <NavLink key={item.to} item={item} collapsed={collapsed} />)}
         </nav>
-        <div className={cn("flex items-center gap-1 border-t border-line p-2", collapsed && "flex-col")}>
+        <div className={cn("flex items-center gap-1 p-3", collapsed && "flex-col")}>
           <Tip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} keys="[" side="right">
             <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle sidebar">
               <PanelLeft className="size-4" />
@@ -306,10 +319,10 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-md md:px-6">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-3 px-4 md:px-8">
           <button
             onClick={() => setPalette(true)}
-            className="flex h-8 w-full max-w-sm items-center gap-2 rounded-md border border-line bg-surface-1 px-3 text-sm text-subtle hover:border-line-strong hover:text-muted"
+            className="flex h-10 w-full max-w-sm items-center gap-2 rounded-sm bg-surface-2 px-3 text-sm text-subtle hover:text-muted"
           >
             <Search className="size-4" />
             <span className="flex-1 truncate text-left">
@@ -317,13 +330,14 @@ export function AppShell() {
             </span>
             <Kbd className="hidden sm:inline">Ctrl K</Kbd>
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5">
             <Tip label="Ask about your clips, campaigns and trends" keys="I">
               <button onClick={() => setAsk(true)} aria-label="Ask Clipper"
-                      className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface-1 px-3 text-xs font-medium text-muted hover:border-line-strong hover:text-fg">
-                <Sparkles className="size-3.5" /> <span className="hidden sm:inline">Ask</span>
+                      className="flex h-9 items-center gap-1.5 rounded-sm px-2.5 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-fg pointer-coarse:h-11">
+                <Sparkles className="size-4" /> <span className="hidden sm:inline">Ask</span>
               </button>
             </Tip>
+            <PaidLine />
             <AccountScope />
             <AIPill />
             <ClippingPill />
@@ -334,32 +348,32 @@ export function AppShell() {
         </header>
 
         {!online && (
-          <div className="flex items-center gap-2 border-b border-line bg-[color-mix(in_oklch,var(--warning)_12%,transparent)] px-6 py-2 text-sm text-warning">
+          <div className="flex items-center gap-2 bg-[color-mix(in_oklch,var(--warning)_12%,transparent)] px-8 py-2 text-sm font-semibold text-warning">
             <WifiOff className="size-4" /> Lost connection to Clipper. Showing the last data; reconnecting…
           </div>
         )}
 
-        <main className="min-h-0 flex-1 overflow-y-auto pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
-          <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 md:py-8">
+        <main className="min-h-0 flex-1 overflow-y-auto pb-[calc(3.5rem+1px+env(safe-area-inset-bottom))] md:pb-0">
+          <div className="mx-auto w-full max-w-[1520px] px-4 pt-4 pb-8 md:px-8 md:pt-6 md:pb-12">
             <Outlet />
           </div>
         </main>
 
         {/* Bottom tabs (mobile) */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Main">
           {tabs.map((item) => (
             <Link key={item.to} to={item.to}
                   activeOptions={{ exact: item.to === "/" }}
-                  className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] text-muted data-[status=active]:font-semibold data-[status=active]:text-fg data-[status=active]:[&_svg]:text-accent [&_svg]:size-5">
+                  className="relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] font-semibold text-subtle data-[status=active]:text-fg data-[status=active]:before:absolute data-[status=active]:before:inset-x-5 data-[status=active]:before:top-0 data-[status=active]:before:h-0.5 data-[status=active]:before:bg-fg [&_svg]:size-5">
               {item.icon}
               {item.label}
-              {item.badge ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-fg" /> : null}
+              {item.badge ? <span className="tabular absolute top-1.5 left-[calc(50%+8px)] text-[11px] font-bold text-fg">{item.badge}</span> : null}
             </Link>
           ))}
           {/* The rest of the pages: a phone had no way to Stats, Settings and the others (D161). */}
           <button onClick={() => setMore(!more)} aria-expanded={more} aria-haspopup="menu"
-                  className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] text-muted [&_svg]:size-5",
-                    (more || moreActive) && "font-semibold text-fg [&_svg]:text-accent")}>
+                  className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[12px] font-semibold text-subtle [&_svg]:size-5",
+                    (more || moreActive) && "text-fg")}>
             <MoreHorizontal />
             More
             {rest.some((i) => i.badge) ? <span className="absolute top-1.5 right-[calc(50%-18px)] size-2 rounded-full bg-fg" /> : null}
@@ -367,13 +381,13 @@ export function AppShell() {
         </nav>
         {more && <>
           <button aria-label="Close the menu" className="fixed inset-0 z-30 cursor-default md:hidden" onClick={() => setMore(false)} />
-          <div role="menu" className="fixed right-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex w-52 flex-col rounded-md border border-line bg-surface-1 p-1 shadow-3 md:hidden">
+          <div role="menu" className="fixed right-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex w-56 flex-col rounded-md bg-surface-2 p-1 shadow-3 md:hidden">
             {rest.map((item) => (
               <Link key={item.to} to={item.to} role="menuitem" onClick={() => setMore(false)}
-                    className="flex h-10 items-center gap-3 rounded-sm px-3 text-sm text-muted hover:bg-surface-2 hover:text-fg data-[status=active]:text-accent [&_svg]:size-4">
+                    className="flex h-11 items-center gap-3 rounded-sm px-3 text-sm font-semibold text-muted hover:bg-surface-3 hover:text-fg data-[status=active]:text-fg [&_svg]:size-4">
                 {item.icon}
                 <span className="flex-1">{item.label}</span>
-                {item.badge ? <span className="text-xs text-accent">{item.badge}</span> : null}
+                {item.badge ? <span className="tabular text-xs font-bold text-fg">{item.badge}</span> : null}
               </Link>
             ))}
           </div>

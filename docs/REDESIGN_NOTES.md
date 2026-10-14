@@ -1,5 +1,7 @@
 # Notes for the Studio redesign
 
+Done in D215 (2026-10-13), except the undo after a delete or a skip (problem 5), which needs the server.
+
 From three `/impeccable critique` runs on 2026-10-13 (scores 28, 26, 27 of 40; snapshots in `.impeccable/critique/`).
 These are usability problems the new look has to solve, not style wishes. The bugs are fixed (D214).
 

@@ -35,7 +35,7 @@ function CampaignCard({ c }: { c: Campaign }) {
   const days = c.own_channel ? null : daysLeft(c.deadline);
   return (
     <Link to="/campaigns/$name" params={{ name: c.name }}
-          className="group flex flex-col gap-4 rounded-lg border border-line bg-surface-1 p-5 shadow-1 transition-colors duration-[var(--dur-base)] hover:border-line-strong hover:bg-surface-2">
+          className="group flex flex-col gap-4 rounded-md bg-surface-1 p-5 transition-colors duration-[var(--dur-base)] hover:bg-surface-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="line-clamp-2 text-md font-semibold" title={c.title}>{c.title}</h3>
@@ -75,7 +75,7 @@ function CampaignCard({ c }: { c: Campaign }) {
           {idle && c.counts.skipped > 0 && <span>{c.counts.skipped} skipped</span>}
           {(c.counts.waiting ?? 0) > 0 && <span title="Posted, and short of the views the brief wants before you submit">{c.counts.waiting} waiting for views</span>}
           {idle && (
-            <button type="button" className="font-medium text-accent hover:underline"
+            <button type="button" className="font-medium link"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); void navigate({ to: "/new", search: { campaign: c.name } }); }}>
               Make clips →
             </button>
@@ -93,7 +93,7 @@ function CampaignCard({ c }: { c: Campaign }) {
 function NewCampaignButton() {
   return (
     <Link to="/campaigns/new"
-          className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+          className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
       <Plus className="size-4" /> New campaign
     </Link>
   );
@@ -134,7 +134,7 @@ export function CampaignsPage() {
                     onClick={() => navigate({ search: { find: finding ? undefined : "1" } })}>
               <Search className="size-4" /> Find campaigns
               {/* Good fits only (D198): the poor ones it counted are folded away on the list. */}
-              {goodFits > 0 && <span className="tabular rounded-full bg-accent-soft px-1.5 text-[12px] font-semibold text-accent">{goodFits}</span>}
+              {goodFits > 0 && <span className="tabular text-[13px] font-bold text-fg">{goodFits}</span>}
             </Button>
           )}
           <NewCampaignButton />
@@ -273,15 +273,15 @@ function MoneyCard({ c }: { c: Campaign }) {
         <div>
           <div className="text-xs text-muted">Budget left{c.deadline && <> · ends {c.deadline}</>}</div>
           {budget === null ? (
-            <button type="button" className="tabular text-lg font-semibold hover:text-accent" onClick={() => setBudget(c.budget_left != null ? String(c.budget_left) : "")}
+            <button type="button" className="tabular text-lg font-semibold hover:text-fg" onClick={() => setBudget(c.budget_left != null ? String(c.budget_left) : "")}
                     title={c.budget_checked_at ? `Checked ${ago(c.budget_checked_at)}` : "Not set: copy it from the campaign's page"}>
-              {c.budget_left != null ? formatMoney(c.budget_left) : <span className="text-sm font-normal text-accent">Add</span>}
+              {c.budget_left != null ? formatMoney(c.budget_left) : <span className="text-sm font-semibold text-muted underline underline-offset-2">Add</span>}
             </button>
           ) : (
             <input autoFocus value={budget} onChange={(e) => setBudget(e.target.value)} onBlur={saveBudget}
                    onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") saveBudget(); if (e.key === "Escape") setBudget(null); }}
                    placeholder="$ left" aria-label="Budget left"
-                   className="h-8 w-28 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+                   className="h-8 w-28 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-line-strong focus:outline-none" />
           )}
         </div>
       </div>
@@ -304,9 +304,9 @@ function MoneyCard({ c }: { c: Campaign }) {
         }}>
           <input value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.stopPropagation()}
                  placeholder="$ amount" aria-label="Amount paid"
-                 className="h-8 w-28 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+                 className="h-8 w-28 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-line-strong focus:outline-none" />
           <input type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} aria-label="Paid on"
-                 className="h-8 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+                 className="h-8 rounded-sm border border-line bg-surface-1 px-2 text-sm focus:border-line-strong focus:outline-none" />
           <Button size="sm" type="submit" variant="secondary" disabled={!amount.trim() || add.isPending}>Add payout</Button>
         </form>
         {payouts.length > 0 && (
@@ -315,7 +315,7 @@ function MoneyCard({ c }: { c: Campaign }) {
               <li key={p.id} className="flex items-center gap-3 py-1.5">
                 <span className="tabular w-24 text-money">{formatMoney(p.amount)}</span>
                 <span className="flex-1 text-muted">{p.paid_on}{p.note && ` · ${p.note}`}</span>
-                <Button size="icon" variant="ghost" className="size-7" aria-label="Remove payout" onClick={() => remove.mutateAsync(p.id)}>
+                <Button size="icon" variant="ghost" className="size-8" aria-label="Remove payout" onClick={() => remove.mutateAsync(p.id)}>
                   <Trash2 className="size-3.5" />
                 </Button>
               </li>
@@ -360,10 +360,10 @@ export function CampaignPage() {
         actions={<>
           {/* The next step from here: clip this campaign's footage, or (your own channel) write a Short. */}
           {!c.archived && (c.own_channel
-            ? <Link to="/create" className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+            ? <Link to="/create" className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
                 <Wand2 className="size-4" /> Make a Short
               </Link>
-            : <Link to="/new" search={{ campaign: c.name }} className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+            : <Link to="/new" search={{ campaign: c.name }} className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
                 <Scissors className="size-4" /> Make clips
               </Link>)}
           {posts.length > 0 && (
@@ -395,10 +395,10 @@ export function CampaignPage() {
         {brief ? <BriefPanel brief={brief} /> : <div />}
         <div className="min-w-0">
           {!c.own_channel && <MoneyCard c={c} />}   {/* your own channel has no pay (D196) */}
-          <div className="mb-4 flex gap-1 border-b border-line" role="tablist">
+          <div className="mb-4 flex gap-x-5 border-b border-line" role="tablist">
             {([["clips", `Clips ${data.clips.length}`], ["posts", `Posts ${posts.length}`]] as const).map(([key, label]) => (
               <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
-                className={cn("-mb-px border-b-2 px-3 py-2 text-sm font-medium",
+                className={cn("-mb-px h-11 border-b-2 px-1 text-sm font-semibold",
                   tab === key ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg")}>
                 {label}
               </button>
@@ -410,7 +410,7 @@ export function CampaignPage() {
               {shown.length ? <ClipGrid clips={shown} /> : <NoClips filter={showing} campaign={c.name} />}
             </> : <EmptyState icon={<Megaphone className="size-5" />} title="No clips yet"
               body="Give Clipper this campaign's footage and the clips land here."
-              action={<Link to="/new" search={{ campaign: c.name }} className="text-sm font-medium text-accent hover:underline">Make clips →</Link>} />
+              action={<Link to="/new" search={{ campaign: c.name }} className="text-sm font-medium link">Make clips →</Link>} />
           ) : (
             <PostTable posts={posts} />
           )}

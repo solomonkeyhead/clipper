@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "name": "Clipper Studio",
+  "direction": "Poster Wall (D215)",
+  "source": "src/clipper/studio/web/src/styles.css",
+  "doc": "DESIGN.md",
+  "themes": {
+    "dark": {
+      "default": true,
+      "selector": ":root",
+      "colors": {
+        "bg": "#0C0E12", "surface-1": "#13161B", "surface-2": "#1B1F26", "surface-3": "#262B33",
+        "border": "rgb(255 255 255 / 0.07)", "border-strong": "rgb(255 255 255 / 0.15)",
+        "text": "#ECEDEF", "text-muted": "#A6ABB4", "text-subtle": "#8A909A",
+        "accent": "#FFC229", "accent-hover": "#FFD15C", "accent-fg": "#17110A", "accent-ink": "#FFC229",
+        "accent-soft": "rgb(255 194 41 / 0.14)", "focus-ring": "#ECEDEF",
+        "money": "#52D08F", "success": "#D5D9DF", "warning": "#FF8F57", "danger": "#FF6464", "info": "#8DB8FF",
+        "scrim": "rgb(5 6 8 / 0.62)"
+      },
+      "shadows": {
+        "1": "0 1px 2px rgb(0 0 0 / 0.45)", "2": "0 8px 20px rgb(0 0 0 / 0.5)", "3": "0 18px 44px rgb(0 0 0 / 0.6)"
+      }
+    },
+    "light": {
+      "selector": ":root.light",
+      "colors": {
+        "bg": "#E8EAEE", "surface-1": "#F4F5F7", "surface-2": "#FFFFFF", "surface-3": "#DCDFE4",
+        "border": "rgb(16 19 24 / 0.10)", "border-strong": "rgb(16 19 24 / 0.20)",
+        "text": "#101318", "text-muted": "#474D57", "text-subtle": "#5A616C",
+        "accent": "#F5B30F", "accent-hover": "#E6A700", "accent-fg": "#17110A", "accent-ink": "#8A5900",
+        "accent-soft": "rgb(245 179 15 / 0.18)", "focus-ring": "#101318",
+        "money": "#0B7A45", "success": "#2A2F37", "warning": "#B4470C", "danger": "#C42B2B", "info": "#1F62B8",
+        "scrim": "rgb(16 19 24 / 0.45)"
+      },
+      "shadows": {
+        "1": "0 1px 2px rgb(16 19 24 / 0.08)", "2": "0 6px 16px rgb(16 19 24 / 0.12)", "3": "0 16px 36px rgb(16 19 24 / 0.18)"
+      }
+    }
+  },
+  "colorRoles": {
+    "accent": "Only the next action: the primary button fill and the ring on the poster in focus (D120, D211). One primary per page.",
+    "money": "Only money: the paid line in the top bar, the Dashboard money lines, money metrics, pay rates and earnings (D212).",
+    "artwork": "The 9:16 posters are the only colour on the page.",
+    "status": { "ready": "info", "posted": "warning", "submitted": "success", "skipped": "text-muted" },
+    "focus-ring": "Keyboard outline, 2px, the text colour; not amber."
+  },
+  "typography": {
+    "families": {
+      "display": "\"Sofia Sans Condensed Variable\", \"Sofia Sans Variable\", system-ui, sans-serif",
+      "sans": "\"Sofia Sans Variable\", system-ui, sans-serif",
+      "mono": "\"JetBrains Mono\", ui-monospace, monospace"
+    },
+    "scale": { "xs": "13px", "sm": "15px", "base": "15px", "md": "17px", "lg": "21px", "xl": "26px", "2xl": "32px", "3xl": "40px" },
+    "body": { "size": "15px", "lineHeight": 1.45, "numeric": "tabular-nums" },
+    "styles": {
+      "cap": { "family": "display", "weight": 800, "transform": "uppercase", "tracking": "0.005em", "lineHeight": 0.92, "pageSize": "clamp(2.1rem, 3.6vw, 3.1rem)" },
+      "row-head": { "family": "display", "weight": 800, "transform": "uppercase", "tracking": "0.03em", "size": "19px", "lineHeight": 1 },
+      "h2-h3": { "family": "display", "weight": 700, "tracking": "0.005em", "lineHeight": 1.15, "layer": "base" },
+      "num": { "family": "display", "weight": 800, "numeric": "tabular-nums" },
+      "label": { "family": "sans", "size": "13px", "weight": 600 }
+    }
+  },
+  "radius": { "sm": "4px", "md": "6px", "lg": "6px", "xl": "8px", "posterBadge": "3px" },
+  "spacing": { "wallRowGap": "14px", "posterTileWidth": ["148px", "164px@sm"], "gridPosterMin": "184px", "pageHeaderBottom": "32px", "touchTarget": "44px" },
+  "motion": {
+    "durations": { "instant": "80ms", "fast": "110ms", "base": "140ms", "enter": "180ms", "exit": "120ms", "panel": "240ms" },
+    "easing": {
+      "standard": "cubic-bezier(0.2, 0, 0, 1)",
+      "decelerate": "cubic-bezier(0.16, 1, 0.3, 1)",
+      "accelerate": "cubic-bezier(0.3, 0, 0.8, 0.15)"
+    },
+    "reducedMotion": "enter, exit and base 1ms; panel 100ms; shimmer, stripes, pops and poster transitions off"
+  },
+  "components": {
+    "Button": { "file": "components/ui.tsx", "variants": ["primary", "secondary", "ghost", "danger"], "heights": { "sm": "32px", "md": "40px", "icon": "36px", "coarse": "44px" } },
+    "Poster": { "file": "components/wall.tsx", "class": ".poster", "aspect": "9/16" },
+    "PosterTile": { "file": "components/wall.tsx", "attrs": ["data-tile", "data-focus"], "line": ".tile-more" },
+    "WallRow": { "file": "components/wall.tsx", "parts": ["row-head title", "count", "See all"], "scroller": ".wall-row" },
+    "ClipGrid": { "file": "components/ClipGrid.tsx", "attrs": ["data-wall"] },
+    "Chip": { "file": "components/ui.tsx", "look": "coloured text, no fill, no border" },
+    "StatusChip": { "file": "components/ui.tsx", "look": "coloured text with a 6px dot" },
+    "Tabs": { "look": "underlined words, 2px fg underline on the current tab, 44px tall" },
+    "MoreMenu": { "file": "components/ui.tsx", "items": "MenuItem", "trigger": "ghost button, dots icon and the word More", "panel": "surface-2, 256px, shadow-3" },
+    "Metric": { "file": "components/ui.tsx", "look": "flat label over .num value, money tone green" },
+    "Switch": { "file": "components/ui.tsx", "track": "24px, hit area 44px, fg when on" },
+    "Card": { "file": "components/ui.tsx", "look": "flat surface-1, rounded-md, no border, no shadow" }
+  },
+  "focusMove": {
+    "lift": "translateY(-3px)",
+    "ring": "0 0 0 2px var(--bg), 0 0 0 4px var(--accent), var(--shadow-2)",
+    "siblingsOpacity": 0.5,
+    "containers": [".wall-row", "[data-wall]"],
+    "duration": "var(--dur-base)"
+  },
+  "rules": [
+    "One amber, only for the next action.",
+    "Green is money and nothing else.",
+    "Posters are the only colour.",
+    "Rows by status, with a count and See all.",
+    "No cards on cards.",
+    "No pills: tabs are underlined words, tags are coloured text. Round stays only where the device is round (switch track, progress bars, status dots).",
+    "Secondary actions are named items under More.",
+    "44px tap targets on coarse pointers.",
+    "Light and dark are both first class."
+  ]
+}

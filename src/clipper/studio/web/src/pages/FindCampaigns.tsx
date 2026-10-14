@@ -170,8 +170,8 @@ function NicheFilter({ found, niche, setNiche }: { found: FoundCampaign[]; niche
     <div className="mb-3 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Niche">
       {options.map(([value, label, count]) => (
         <button key={label} role="radio" aria-checked={niche === value} onClick={() => setNiche(value)}
-          className={cn("flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
-            niche === value ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
+          className={cn("inline-flex h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition-colors pointer-coarse:h-11",
+            niche === value ? "bg-surface-3 text-fg" : "text-muted hover:bg-surface-2 hover:text-fg")}>
           {label} <span className="tabular opacity-70">{count}</span>
         </button>
       ))}

@@ -45,20 +45,20 @@ export function PostQueuePage() {
   return (
     <div className="fade-in max-w-5xl">
       <PageHeader title="Post queue" subtitle="One clip at a time: post it, then submit its link. Done moves to the next." />
-      <div className="mb-5 flex flex-wrap items-center gap-1.5" role="tablist">
+      <div className="mb-6 flex flex-wrap items-center gap-x-5 border-b border-line" role="tablist">
         {(["post", "submit"] as const).map((s) => (
           <button key={s} role="tab" aria-selected={step === s} onClick={() => go(s)}
-                  className={cn("h-8 rounded-full border px-3 text-sm font-medium transition-colors",
-                    step === s ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
+                  className={cn("-mb-px h-11 border-b-2 px-1 text-sm font-semibold transition-colors",
+                    step === s ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg")}>
             {LABEL[s]} <span className="tabular ml-1 opacity-70">{lists[s].length}</span>
           </button>
         ))}
         {search.campaign && (
-          <Link to="/post" search={{}} className="ml-2 text-sm text-accent hover:underline">Everything, not only {campaign?.title ?? search.campaign}</Link>
+          <Link to="/post" search={{}} className="ml-2 text-sm link">Everything, not only {campaign?.title ?? search.campaign}</Link>
         )}
       </div>
       {isLoading ? <Skeleton className="h-96" /> : !clip ? (
-        <EmptyState icon={<PartyPopper className="size-5 text-money" />}
+        <EmptyState icon={<PartyPopper className="size-5" />}
           title={step === "post" ? "Nothing waiting to be posted" : waiting ? "Nothing to submit yet" : "Every posted clip is submitted"}
           body={step === "post" && lists.submit.length ? `${lists.submit.length} posted clip${lists.submit.length === 1 ? "" : "s"} still need their link submitted.`
             : step === "submit" && waiting ? `${waiting} posted clip${waiting === 1 ? " is" : "s are"} waiting to reach the views their brief wants before submitting.` : undefined}

@@ -4,7 +4,7 @@ import { Card, Switch } from "./ui";
 
 const control =
   "w-full rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle " +
-  "transition-colors hover:border-line-strong focus:border-accent focus:outline-none";
+  "transition-colors hover:border-line-strong focus:border-line-strong focus:outline-none";
 
 export function Section({ title, hint, children, id }: {
   title: string; hint?: ReactNode; children: ReactNode; id?: string;
@@ -97,7 +97,7 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
       {options.map(([key, title, hint]) => (
         <button key={key} type="button" role="radio" aria-checked={value === key} onClick={() => onChange(key)}
           className={cn("flex flex-col items-start gap-0.5 rounded-md border px-3 py-2.5 text-left transition-colors",
-            value === key ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
+            value === key ? "border-line-strong bg-surface-3" : "border-line hover:bg-surface-2")}>
           <span className="text-sm font-medium">{title}</span>
           {hint && <span className="text-xs text-muted">{hint}</span>}
         </button>

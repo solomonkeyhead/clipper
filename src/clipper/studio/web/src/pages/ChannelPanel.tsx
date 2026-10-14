@@ -6,8 +6,8 @@ import { createApi, type ChannelEdit, type CreateView } from "@/api/client";
 import { Button, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-const input = "h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none focus:border-accent";
-const area = "w-full rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-accent";
+const input = "h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none focus:border-line-strong";
+const area = "w-full rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-line-strong";
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
@@ -56,9 +56,9 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {data.packs.map((p) => (
-          <label key={p.key} className={cn("flex cursor-pointer flex-col gap-1 rounded-md border p-3", pack === p.key ? "border-accent bg-accent-soft/50" : "border-line")}>
+          <label key={p.key} className={cn("flex cursor-pointer flex-col gap-1 rounded-md border p-3", pack === p.key ? "border-line-strong bg-surface-3" : "border-line")}>
             <span className="flex items-center gap-2 text-sm font-semibold">
-              <input type="radio" name="pack" className="accent-[var(--color-accent)]" checked={pack === p.key} onChange={() => setPack(p.key)} /> {p.label}
+              <input type="radio" name="pack" className="accent-[var(--text)]" checked={pack === p.key} onChange={() => setPack(p.key)} /> {p.label}
             </span>
             <span className="text-xs text-muted">{p.about}</span>
           </label>
@@ -147,7 +147,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
       </Field>
       <Field label="How you make the voice" hint="Shown on the video's voice step."><input className={input} value={val("voice") as string} onChange={(e) => set({ voice: e.target.value })} /></Field>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("drawings") as boolean} onChange={(e) => set({ drawings: e.target.checked })} />
+        <input type="checkbox" className="accent-[var(--text)]" checked={val("drawings") as boolean} onChange={(e) => set({ drawings: e.target.checked })} />
         Use chalkboard drawings (off: real stock footage only)
       </label>
       {/* The look and sound of every video (D156). */}
@@ -168,15 +168,15 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
         <Field label="Watermark" hint="A small logo in the top right. Empty: none."><input className={input} value={val("watermark") as string} onChange={(e) => set({ watermark: e.target.value })} /></Field>
       </div>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("music") as boolean} onChange={(e) => set({ music: e.target.checked })} />
+        <input type="checkbox" className="accent-[var(--text)]" checked={val("music") as boolean} onChange={(e) => set({ music: e.target.checked })} />
         Quiet music under the voice (made by Clipper, or your own tracks in data/create/music/{slug})
       </label>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("sfx") as boolean} onChange={(e) => set({ sfx: e.target.checked })} />
+        <input type="checkbox" className="accent-[var(--text)]" checked={val("sfx") as boolean} onChange={(e) => set({ sfx: e.target.checked })} />
         Sound effects on the edit: whooshes on transitions, a thump on zoom-ins, chalk as drawings are drawn, a riser into the punchline. Made by Clipper, so nothing for Content ID to match
       </label>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="accent-[var(--color-accent)]" checked={val("short_takes") as boolean} onChange={(e) => set({ short_takes: e.target.checked })} />
+        <input type="checkbox" className="accent-[var(--text)]" checked={val("short_takes") as boolean} onChange={(e) => set({ short_takes: e.target.checked })} />
         Every other script short (70 to 90 words, about 35 seconds), to see whether shorter videos keep viewers to the end. Pair them in Learning's Experiments
       </label>
       <div className="flex gap-2">

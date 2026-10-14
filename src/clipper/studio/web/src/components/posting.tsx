@@ -95,7 +95,7 @@ export function PostPanel({ clip }: { clip: Clip }) {
                        paid={!campaign?.own_channel} />
         {clip.pinned_comment && (
           <div className="flex items-start gap-2 rounded-sm border border-line bg-surface-1 px-2.5 py-2">
-            <Pin className="mt-0.5 size-3.5 shrink-0 text-accent" />
+            <Pin className="mt-0.5 size-3.5 shrink-0 text-muted" />
             <div className="min-w-0 flex-1">
               <div className="text-xs text-muted">Pin as the first comment, on each platform</div>
               <p className="text-sm">{clip.pinned_comment}</p>
@@ -183,7 +183,7 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
           {/* A real link, so middle-click and Ctrl-click work as usual too. */}
           <a href={url} target="_blank" rel="noopener noreferrer"
              onClick={(e) => { if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) { e.preventDefault(); onOpen(); } }}
-             className="inline-flex h-7 w-[8.5rem] shrink-0 items-center justify-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
+             className="inline-flex h-8 pointer-coarse:h-11 w-[8.5rem] shrink-0 items-center justify-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
             Open {name} <ExternalLink className="size-3" />
           </a>
         </Tip>
@@ -193,7 +193,7 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
       )}
       {accounts.length > 0 && (
         <p className="mt-1 flex flex-wrap items-center gap-1 pl-[7rem] text-xs text-muted">
-          Post from {accounts.map((a) => <span key={a.key} className="rounded-full border border-line px-2 py-0.5 text-fg">@{a.handle}</span>)}
+          Post from {accounts.map((a) => <span key={a.key} className="font-semibold text-fg">@{a.handle}</span>)}
           {accounts.length > 1 && <span>(one post each)</span>}
         </p>
       )}
@@ -281,7 +281,7 @@ function BriefCheck({ clip }: { clip: Clip }) {
       ) : (
         <>
           <Loader2 className="size-3.5" /> Not read against the brief yet.
-          <button type="button" className="text-accent hover:underline" disabled={recheck.isPending}
+          <button type="button" className="link" disabled={recheck.isPending}
                   onClick={() => recheck.mutate(clip.campaign)}>Check now</button>
         </>
       )}
@@ -321,7 +321,7 @@ function Checklist({ rules }: { rules: string[] }) {
       <span className="text-muted">While posting, the brief also says:</span>
       {rules.map((r) => (
         <label key={r} className="flex cursor-pointer items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-1 accent-[var(--color-accent)]" checked={!!done[r]}
+          <input type="checkbox" className="mt-1 accent-[var(--text)]" checked={!!done[r]}
                  onChange={(e) => setDone({ ...done, [r]: e.target.checked })} />
           <span className={cn(done[r] && "text-muted line-through")}>{r}</span>
         </label>
@@ -347,7 +347,7 @@ export function PasteLink({ clip, compact = false }: { clip: Clip; compact?: boo
       });
     }}>
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste the post's link (TikTok, Instagram, YouTube, X, Facebook, Snapchat or Threads)"
-             aria-label="Post link" className="h-9 flex-1 rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle focus:border-accent focus:outline-none" />
+             aria-label="Post link" className="h-9 flex-1 rounded-sm border border-line bg-surface-1 px-3 text-sm placeholder:text-subtle focus:border-line-strong focus:outline-none" />
       <Button type="submit" variant="secondary" disabled={!url.trim() || add.isPending}>Add</Button>
     </form>
   );

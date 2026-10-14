@@ -30,7 +30,7 @@ function cell(p: Post, key: Key): React.ReactNode {
   switch (key) {
     case "views": return formatCount(p.views);
     case "x": return p.x_median != null
-      ? <span className={cn(p.x_median >= 2 ? "font-semibold text-money" : p.x_median < 0.5 ? "text-subtle" : "")}>{p.x_median}×</span>
+      ? <span className={cn(p.x_median >= 2 ? "font-bold text-fg" : p.x_median < 0.5 ? "text-subtle" : "")}>{p.x_median}×</span>
       : na("Needs 3+ posts on this platform in this campaign, with a median of at least 10 views");
     case "watch": return p.avg_watch_s != null ? `${p.avg_watch_s}s` : na(p.platform === "tiktok" ? tiktok : "Not reported yet");
     case "pct": return p.avg_view_pct != null ? `${p.avg_view_pct}%` : na(p.platform === "youtube" ? "Not reported yet" : "Only YouTube reports this");
@@ -57,7 +57,7 @@ function StayedCell({ post }: { post: Post }) {
     <input key={post.stayed_pct ?? "none"} defaultValue={post.stayed_pct ?? ""} placeholder="type %" aria-label="Viewed vs swiped away"
            onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }}
            onBlur={(e) => save(e.target.value)}
-           className="h-6 w-14 rounded-sm border border-line bg-surface-2 px-1 text-right text-xs tabular-nums placeholder:text-subtle focus:border-accent focus:outline-none" />
+           className="h-8 w-14 rounded-sm border border-line bg-surface-2 px-1 text-right text-xs tabular-nums placeholder:text-subtle focus:border-line-strong focus:outline-none" />
   );
 }
 
@@ -107,7 +107,7 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
   if (!posts.length) {
     return <EmptyState icon={<BarChart3 className="size-5" />} title="No posts yet"
       body="Post a clip with its caption and the next sync picks it up, with its link and numbers."
-      action={<Link to="/clips" search={{ status: "ready" }} className="inline-flex h-9 items-center rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">See clips ready to post</Link>} />;
+      action={<Link to="/clips" search={{ status: "ready" }} className="inline-flex h-10 items-center rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">See clips ready to post</Link>} />;
   }
   const header = (key: Key, label: string, tip?: string) => {
     const th = (
@@ -134,7 +134,7 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
   return (
     // `relative`: the header's screen-reader label is positioned, and without it
     // escaped the scroll box and widened the whole page on a phone.
-    <div className="relative overflow-x-auto rounded-lg border border-line bg-surface-1">
+    <div className="relative overflow-x-auto rounded-md bg-surface-1">
       <table className="tabular w-full text-sm">
         <thead className="border-b border-line text-left text-xs text-muted">
           <tr className="h-9">
@@ -165,7 +165,7 @@ export function PostTable({ posts, initialSort, showCampaign = false }: { posts:
                         </button>
                       ) : platformLink(list[0])}
                       {showCampaign && (
-                        <Link to="/campaigns/$name" params={{ name: row.campaign }} className="hidden max-w-28 truncate text-xs text-muted hover:text-accent 2xl:block">
+                        <Link to="/campaigns/$name" params={{ name: row.campaign }} className="hidden max-w-28 truncate text-xs text-muted hover:text-fg 2xl:block">
                           {campaignTitle(row.campaign)}
                         </Link>
                       )}
@@ -219,16 +219,16 @@ function ByPlatform({ posts }: { posts: Post[] }) {
   }).sort((a, b) => b.total - a.total);
   const top = Math.max(1, ...rows.map((r) => r.total));
   return (
-    <div className="rounded-lg border border-line bg-surface-1 p-4">
+    <div className="rounded-md bg-surface-1 p-4">
       <h2 className="mb-3 text-sm font-semibold">By platform</h2>
       <div className="flex flex-col gap-2.5">
         {rows.map((r) => (
           <div key={r.platform} className="grid grid-cols-[120px_1fr_auto] items-center gap-3 text-sm">
-            <Link to="/accounts" className="flex items-center gap-2 hover:text-accent" title="Open Accounts">
+            <Link to="/accounts" className="flex items-center gap-2 hover:text-fg" title="Open Accounts">
               <PlatformIcon platform={r.platform} />{PLATFORM_NAME[r.platform] ?? r.platform}
             </Link>
             <span className="h-2 overflow-hidden rounded-full bg-surface-3">
-              <span className="block h-full rounded-full bg-accent" style={{ width: `${(r.total / top) * 100}%` }} />
+              <span className="block h-full rounded-full bg-[var(--text-muted)]" style={{ width: `${(r.total / top) * 100}%` }} />
             </span>
             <span className="tabular text-right text-xs text-muted">
               <b className="text-fg">{formatCount(r.total)}</b> views · {r.posts} post{r.posts === 1 ? "" : "s"} · median {formatCount(r.median)}
@@ -277,17 +277,20 @@ export function StatsPage() {
         </div>} />
       {isLoading ? <Skeleton className="h-80" /> : (
         <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <Metric label="Est. earnings" tone="money" value={money.length ? formatMoney(sum((p) => p.est_earnings)) : "–"} />
+          {/* Only numbers there are (REDESIGN_NOTES 6): before any post a row of dashes and zeros sat over "No posts yet". */}
+          {list.length > 0 && <>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-5 border-b border-line pb-6 lg:grid-cols-5">
+            {money.length > 0 && <Metric label="Est. earnings" tone="money" value={formatMoney(sum((p) => p.est_earnings))} />}
             <Metric label="Views" value={formatCount(sum((p) => p.views))} sub={`${list.length} posts`} />
             {/* One median across platforms mixes TikTok's and YouTube's numbers; the rows below have each one's (D199). */}
             <Metric label="Median views" value={formatCount(median)} sub={platform === "all" && platforms.length > 1 ? "all platforms together" : undefined} />
-            <Metric label="Avg watch time" value={withWatch.length ? `${(withWatch.reduce((s, p) => s + (p.avg_watch_s ?? 0), 0) / withWatch.length).toFixed(1)}s` : "–"}
-                    sub={withWatch.length ? `from ${withWatch.length} posts that report it` : "TikTok's API doesn't report it"} />
-            <Metric label="Skipped in 3s" value={withSkip.length ? `${Math.round(withSkip.reduce((s, p) => s + (p.skip_rate_pct ?? 0), 0) / withSkip.length)}%` : "–"}
-                    sub="lower is better" />
+            {withWatch.length > 0 && <Metric label="Avg watch time" value={`${(withWatch.reduce((s, p) => s + (p.avg_watch_s ?? 0), 0) / withWatch.length).toFixed(1)}s`}
+                    sub={`from ${withWatch.length} posts that report it`} />}
+            {withSkip.length > 0 && <Metric label="Skipped in 3s" value={`${Math.round(withSkip.reduce((s, p) => s + (p.skip_rate_pct ?? 0), 0) / withSkip.length)}%`}
+                    sub="lower is better" />}
           </div>
           <ByPlatform posts={list} />
+          </>}
           <PostTable key={search.sort ?? "posted"} posts={list} initialSort={search.sort} showCampaign={campaign === "all"} />
         </div>
       )}

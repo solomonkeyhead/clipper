@@ -32,14 +32,18 @@ with sync_playwright() as p:
     expect(page.get_by_label("Description")).to_have_count(0)                # folded
     print("draft: one sentence's controls at a time, they follow a moved sentence")
     page.screenshot(path=f"{OUT}/0_draft.png", full_page=True)
-    # D207: lime marks the next thing to do, not every chip: the heading, the current step and Approve
-    lime = page.evaluate("""() => [...document.querySelectorAll('main *')].filter(e => { const s = getComputedStyle(e);
-        return e.getClientRects().length && ([s.backgroundColor, s.borderTopColor].includes('rgb(215, 255, 58)')
-          || (s.color === 'rgb(215, 255, 58)' && !e.children.length && e.textContent.trim())); }).length""")
-    assert lime <= 3, f"{lime} lime things on a draft"
+    # D207, D215: amber marks the next thing to do and nothing else: on a draft, Approve (or Check) alone
+    amber = page.evaluate("""() => [...document.querySelectorAll('main *')].filter(e => { const s = getComputedStyle(e);
+        return e.getClientRects().length && ([s.backgroundColor, s.borderTopColor].includes('rgb(255, 194, 41)')
+          || (s.color === 'rgb(255, 194, 41)' && !e.children.length && e.textContent.trim())); }).length""")
+    assert amber <= 1, f"{amber} amber things on a draft"
     # D208: the bar says the step and what Approve locks; a checked (ready-made) script has Approve as its filled button
     expect(page.get_by_text("Step 1 of 4, the script.")).to_be_visible()
+    # D215: the draft's other actions are under its bar's More
+    bar = page.get_by_text("Step 1 of 4, the script.").locator("xpath=..")
+    bar.locator("summary", has_text="More").click()
     expect(page.get_by_role("button", name="Check physics again")).to_be_visible()
+    bar.locator("summary", has_text="More").click()
     draft.click()
     built = cards.nth(1)                        # the newest (a draft) first, the built one second
     if built.get_attribute("aria-expanded") == "false":
@@ -50,12 +54,19 @@ with sync_playwright() as p:
     # D206: the finished card's poster reads, and the player is bigger on a wide window
     assert page.locator("img[src^='/thumb/']").first.bounding_box()["height"] >= 79, "the finished card's poster is a strip again"
     assert page.locator("video").first.bounding_box()["width"] >= 287, "the player is narrow on a wide window"
-    footage = page.get_by_role("button", name="New footage")
+    # D215: a part is picked first ("Change this part"), then its tools open under it
+    footage = page.get_by_test_id("part")
+
+    def choose(part):
+        if part.get_by_role("button", name="Change this part").count():
+            part.get_by_role("button", name="Change this part").click()
+        return part
+
     print("parts listed:", footage.count())
     page.screenshot(path=f"{OUT}/1_open.png", full_page=True)
 
     # choose new footage for the last part in the picker (D129), then a drawing on another
-    footage.last.click()
+    choose(footage.last).get_by_role("button", name="New footage").click()
     picker = page.get_by_test_id("footage-picker")
     expect(picker).to_be_visible()
     offered = picker.locator("button[aria-pressed]")
@@ -83,12 +94,12 @@ with sync_playwright() as p:
     expect(picker).to_have_count(0)
     print("after new footage: review", review.get_attribute("aria-expanded"), "parts", footage.count())
     assert footage.count() == 7, "the parts list vanished after asking for new footage"
-    page.get_by_role("button", name="New drawing").nth(1).click()
+    choose(footage.nth(1)).get_by_role("button", name="New drawing").click()
     expect(page.get_by_text("new drawing on the next build")).to_be_visible()
     print("after new drawing: review", review.get_attribute("aria-expanded"), "parts", footage.count())
     assert footage.count() == 7, "the parts list vanished after asking for a new drawing"
     # the camera on a part's footage (D164): only that shot is made again, and it counts as a change
-    page.get_by_label("Camera, part 1").select_option("still")
+    choose(footage.nth(0)).get_by_label("Camera, part 1").select_option("still")
     expect(page.get_by_text("new camera on the next build")).to_be_visible()
     rebuild = page.get_by_role("button", name="Rebuild with 3 changes")
     expect(rebuild).to_be_visible()
@@ -110,7 +121,11 @@ with sync_playwright() as p:
     print("opened again:", review.get_attribute("aria-expanded"), "parts", footage.count())
 
     # undo one, then rebuild (it fails here: no real voice) and the review must still be there
-    page.get_by_role("button", name="Undo").first.click()
+    for k in range(footage.count()):
+        undo = choose(footage.nth(k)).get_by_role("button", name="Undo")
+        if undo.count():
+            undo.click()
+            break
     expect(page.get_by_role("button", name="Rebuild with 1 change")).to_be_visible()
     page.get_by_role("button", name="Rebuild with 1 change").click()
     page.wait_for_selector("text=The last rebuild didn't finish", timeout=60000)
@@ -118,12 +133,14 @@ with sync_playwright() as p:
     print("after failed rebuild: review", review.get_attribute("aria-expanded"), "parts", footage.count())
     page.screenshot(path=f"{OUT}/3_after_rebuild.png", full_page=True)
     # a part set by hand (D171): a drawing's way in and size, from its Adjust panel; captions and the cover
-    adjust = page.get_by_role("button", name="Adjust")
-    for k in range(adjust.count()):
-        adjust.nth(k).click()
-        if page.get_by_label("Drawing size, part 3").count():
-            break
-        adjust.nth(k).click()
+    def adjust_until(label):
+        for k in range(footage.count()):
+            choose(footage.nth(k)).get_by_role("button", name="Adjust").click()
+            if page.get_by_label(label).count():
+                return
+        raise AssertionError(f"no part has {label}")
+
+    adjust_until("Drawing size, part 3")
     page.get_by_label("Way in, part 3").select_option("whip")
     page.get_by_label("Drawing size, part 3").select_option(label="size 115%")
     expect(page.get_by_label("Way in, part 3")).to_have_value("whip")
@@ -142,11 +159,8 @@ with sync_playwright() as p:
     else:
         raise AssertionError("the colour set for 'air' wasn't saved")
     marks.screenshot(path=f"{OUT}/4c_marks.png")
-    for k in range(adjust.count()):
-        adjust.nth(k).click()
-        if page.get_by_label("Framing, part 1").count():
-            break
-    page.get_by_label("Framing, part 1").select_option(label="framing: left")
+    adjust_until("Framing, part 1")
+    page.get_by_label("Framing, part 1").select_option(label="Framed left")
     expect(page.get_by_label("Framing, part 1")).to_have_value("0.25")
     print("sketch colour, arrow and footage framing set by hand")
     page.get_by_text("Captions", exact=True).first.click()
@@ -182,7 +196,7 @@ with sync_playwright() as p:
     expect(page.get_by_text("Cover: the frame at").first).to_be_visible()
     print("cover frame chosen")
     # D199: New pictures is under More and asks first
-    page.locator("summary", has_text="More").first.click()
+    page.get_by_role("button", name="Build again").locator("xpath=..").locator("summary", has_text="More").click()
     page.get_by_role("button", name="New pictures for every part…").click()
     expect(page.get_by_text("Plans every picture you haven't chosen yourself")).to_be_visible()
     page.get_by_role("button", name="Keep these").click()
@@ -199,6 +213,7 @@ with sync_playwright() as p:
     cards.nth(2).click()
     expect(page.get_by_text("Marked posted in Clips.")).to_be_visible()
     page.screenshot(path=f"{OUT}/4_archive.png", full_page=True)
+    cards.nth(2).locator("xpath=..").locator("summary").click()   # a card's actions are named under More (D215)
     page.get_by_role("button", name="Back to Create").click()
     expect(page.get_by_text("Back in Create")).to_be_visible()
     expect(page.get_by_role("button", name="Archive 1")).to_have_count(0)
@@ -208,6 +223,7 @@ with sync_playwright() as p:
     page.wait_for_selector("text=Make a Short")
     expect(cards).to_have_count(3)
     assert page.get_by_role("button", name="Archive 1").count() == 0, "a brought-back video went back into the archive"
+    cards.first.locator("xpath=..").locator("summary").click()
     page.get_by_role("button", name="Move to the Archive").first.click()
     expect(page.get_by_role("button", name="Archive 1")).to_be_visible()
     expect(cards).to_have_count(2)
@@ -217,6 +233,7 @@ with sync_playwright() as p:
     page.evaluate("""() => { const real = window.fetch; window.__sent = 0;
         window.fetch = async (u, o) => { if (o && o.method && o.method !== 'GET') { window.__sent++;
             await new Promise((r) => setTimeout(r, 1500)); } return real(u, o); }; }""")
+    cards.first.locator("xpath=..").locator("summary").click()
     page.get_by_role("button", name="Move to the Archive").first.click()
     expect(cards).to_have_count(1, timeout=300)
     expect(page.get_by_role("button", name="Archive 2")).to_be_visible(timeout=300)

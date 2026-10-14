@@ -21,7 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 /* ---------- small pieces ---------- */
 
 const Ext = ({ href, children }: { href: string; children: ReactNode }) => (
-  <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
+  <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium link">
     {children}<ExternalLink className="size-3" />
   </a>
 );
@@ -45,7 +45,7 @@ function SiteCopy({ page }: { page: string }) {
   };
   return (
     <button type="button" onClick={() => copy()}
-            className="ml-1 inline-flex h-6 items-center gap-1 rounded-sm border border-line bg-surface-2 px-2 text-xs font-medium text-fg hover:bg-surface-3">
+            className="ml-1 inline-flex h-8 pointer-coarse:h-11 items-center gap-1 rounded-sm border border-line bg-surface-2 px-2 text-xs font-medium text-fg hover:bg-surface-3">
       Copy page
     </button>
   );
@@ -87,7 +87,7 @@ function AccountRow({ account }: { account: Account }) {
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-muted">{account.posts} post{account.posts === 1 ? "" : "s"} · {formatCount(account.views)} views</span>
-          {account.groups.map((g) => <span key={g} className="rounded-full border border-line px-2 py-0.5 text-subtle">{g}</span>)}
+          {account.groups.map((g) => <span key={g} className="font-semibold text-subtle">{g}</span>)}
         </div>
       </div>
       {account.health !== "ok" && account.platform === "tiktok" && <AddTikTok label="Reconnect" />}
@@ -121,7 +121,7 @@ function TikTokAppKeys({ onSaved }: { onSaved?: () => void }) {
   const [key, setKey] = useState("");
   const [secret, setSecret] = useState("");
   return (
-    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+    <div className="flex flex-col gap-4 rounded-md bg-surface-2 p-4">
       <div>
         <div className="text-sm font-semibold">One-time setup: a free TikTok developer app</div>
         <p className="mt-0.5 text-sm text-muted">TikTok only shares your posts' stats with an app you register. It takes about 5 minutes, once.</p>
@@ -189,13 +189,13 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, waiti
 
   if (waiting) {
     return (
-      <div className="flex flex-col gap-3 rounded-md border border-dashed border-line p-4">
-        <div className="flex items-center gap-2 text-sm font-medium"><Loader2 className="size-4 animate-spin text-accent" /> Waiting for you to approve in the {name} tab…</div>
+      <div className="flex flex-col gap-3 rounded-md bg-surface-2 p-4">
+        <div className="flex items-center gap-2 text-sm font-medium"><Loader2 className="size-4 animate-spin text-fg" /> Waiting for you to approve in the {name} tab…</div>
         <p className="text-sm text-muted">{waitingHint}</p>
         {trouble && Date.now() - waiting.since > 25_000 && <p className="rounded-md bg-warning/10 p-2.5 text-sm text-warning">{trouble}</p>}
         <div className="flex gap-2">
           <a href={waiting.url} target="_blank" rel="noopener noreferrer"
-             className="inline-flex h-7 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
+             className="inline-flex h-8 pointer-coarse:h-11 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
             <ExternalLink className="size-3.5" /> Open {name} again
           </a>
           <CopyButton text={waiting.url} what="Link" label="Copy link" />
@@ -227,7 +227,7 @@ function YouTubeAppKeys() {
   const [id, setId] = useState("");
   const [secret, setSecret] = useState("");
   return (
-    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+    <div className="flex flex-col gap-4 rounded-md bg-surface-2 p-4">
       <div>
         <div className="text-sm font-semibold">One-time setup: a free Google Cloud app</div>
         <p className="mt-0.5 text-sm text-muted">
@@ -311,7 +311,7 @@ function InstagramAppKeys({ onToken }: { onToken: () => void }) {
   const [secret, setSecret] = useState("");
   const redirect = "http://localhost:3458/callback/";
   return (
-    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+    <div className="flex flex-col gap-4 rounded-md bg-surface-2 p-4">
       <div>
         <div className="text-sm font-semibold">One-time setup: a free Meta app</div>
         <p className="mt-0.5 text-sm text-muted">Instagram only shares Reel stats with an app you register. Do this once and every account after is one click.</p>
@@ -372,7 +372,7 @@ function InstagramToken({ onBack }: { onBack: () => void }) {
     return <Button variant="secondary" onClick={() => setOpen(true)}><Plus className="size-4" /> Add an Instagram account</Button>;
   }
   return (
-    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+    <div className="flex flex-col gap-4 rounded-md bg-surface-2 p-4">
       <Steps>
         <li>The account must be <b>professional</b> (Creator or Business): Instagram app → Settings → Account type and tools.</li>
         <li>At <Ext href="https://developers.facebook.com/apps">developers.facebook.com</Ext>, create an app (type <b>Business</b>) and add the <b>Instagram</b> product.</li>
@@ -425,7 +425,7 @@ function AddX() {
   }
   if (haveToken) {   // the app is set up: the username is the whole sign-in
     return (
-      <div className="flex flex-wrap items-end gap-2 rounded-md border border-dashed border-line p-4">
+      <div className="flex flex-wrap items-end gap-2 rounded-md bg-surface-2 p-4">
         <div className="min-w-48 flex-1">
           <Field label="Your X username">
             {(id) => <TextInput id={id} value={username} placeholder="@solomonkeyclips" onChange={(e) => setUsername(e.target.value)}
@@ -440,7 +440,7 @@ function AddX() {
     );
   }
   return (
-    <div className="flex flex-col gap-4 rounded-md border border-dashed border-line p-4">
+    <div className="flex flex-col gap-4 rounded-md bg-surface-2 p-4">
       <p className="text-sm text-muted">
         X charges for its API: <b>$0.005 per post read</b>, each post at most once a day. Clipper only reads posts up to two weeks
         old, so one clip a day costs about <b>$2 a month</b>. About 5 minutes, once.
@@ -523,7 +523,7 @@ function Row({ title, body, control, id }: { title: string; body: ReactNode; con
 }
 
 const Where = ({ to, children }: { to: string; children: ReactNode }) => (
-  <> <Link to={to} className="font-medium text-accent hover:underline">{children}</Link></>
+  <> <Link to={to} className="font-medium link">{children}</Link></>
 );
 
 /** Browser notifications when a clipping job or a Short's build finishes in the background (D143). */
@@ -890,7 +890,7 @@ export function SettingsPage() {
         />
       </Card>
       {/* Not used day to day: a switch for a feature still to come, and a preview of paid tiers (D118). */}
-      <details open={settings?.auto_post === "1" || undefined} className="group rounded-lg border border-line bg-surface-1">
+      <details open={settings?.auto_post === "1" || undefined} className="group rounded-md bg-surface-1">
         <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted hover:text-fg">Advanced</summary>
         <div className="divide-y divide-line px-5">
           <Row

@@ -46,7 +46,7 @@ function Answer({ message }: { message: ResearchMessage }) {
         <div className="flex flex-wrap gap-1.5">
           {message.sources.map((s, i) => (
             <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer" title={s.title}
-               className="flex max-w-52 items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-xs text-muted hover:border-line-strong hover:text-fg">
+               className="flex min-h-8 max-w-52 items-center gap-1.5 rounded-sm bg-surface-2 px-2.5 text-xs font-semibold text-muted hover:text-fg">
               <b>{i + 1}</b><span className="truncate">{host(s.url)}</span>
             </a>
           ))}
@@ -65,19 +65,19 @@ function WebSetup() {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState("");
   return (
-    <div className="rounded-md border border-dashed border-line p-3 text-xs text-muted">
+    <div className="rounded-md bg-surface-2 p-3 text-xs text-muted">
       {!open ? (
         <button className="text-left hover:text-fg" onClick={() => setOpen(true)}>
-          Answers use your clips, stats and the AI's knowledge. <span className="font-medium text-accent">Set up web search</span> for
+          Answers use your clips, stats and the AI's knowledge. <span className="font-semibold text-fg">Set up web search</span> for
           what's happening right now, with sources (free).
         </button>
       ) : (
         <div className="flex flex-col gap-2">
-          <p>Sign up at <a className="text-accent hover:underline" href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a> (free,
+          <p>Sign up at <a className="link" href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a> (free,
             no card, 1,000 searches a month) and paste your API key:</p>
           <div className="flex gap-2">
             <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder="tvly-…"
-                   aria-label="Tavily key" className="h-8 flex-1 rounded-sm border border-line bg-surface-1 px-2 text-sm text-fg focus:border-accent focus:outline-none" />
+                   aria-label="Tavily key" className="h-8 flex-1 rounded-sm border border-line bg-surface-1 px-2 text-sm text-fg focus:border-line-strong focus:outline-none" />
             <Button size="sm" variant="primary" disabled={key.trim().length < 10}
                     onClick={() => save.mutateAsync({ TAVILY_API_KEY: key }, {
                       onSuccess: () => { setKey(""); setOpen(false); void qc.invalidateQueries({ queryKey: ["research"] }); toast.success("Web search is on"); },
@@ -137,13 +137,13 @@ function Conversation({ threadId, onThread }: { threadId?: number; onThread: (id
         ) : (
           <div className="flex flex-col gap-5">
             {messages.map((m) => m.role === "user"
-              ? <div key={m.id} className="ml-auto max-w-[85%] rounded-lg bg-surface-2 px-3.5 py-2 text-sm whitespace-pre-wrap">{m.content}</div>
+              ? <div key={m.id} className="ml-auto max-w-[85%] rounded-md bg-surface-2 px-3.5 py-2 text-sm whitespace-pre-wrap">{m.content}</div>
               : <Answer key={m.id} message={m} />)}
             {pending && (
               <>
-                <div className="ml-auto max-w-[85%] rounded-lg bg-surface-2 px-3.5 py-2 text-sm whitespace-pre-wrap">{pending}</div>
+                <div className="ml-auto max-w-[85%] rounded-md bg-surface-2 px-3.5 py-2 text-sm whitespace-pre-wrap">{pending}</div>
                 <div className="flex items-center gap-2 text-sm text-muted">
-                  <Loader2 className="size-4 animate-spin text-accent" />
+                  <Loader2 className="size-4 animate-spin text-fg" />
                   {(progress && (!threadId || progress.thread_id === threadId) && progress.step) || "Thinking"}…
                   <Waited after={5} />
                 </div>
@@ -154,7 +154,7 @@ function Conversation({ threadId, onThread }: { threadId?: number; onThread: (id
         )}
       </div>
       <div className="border-t border-line p-3">
-        <div className="flex items-end gap-2 rounded-lg border border-line bg-surface-1 p-1.5 focus-within:border-accent">
+        <div className="flex items-end gap-2 rounded-md bg-surface-1 p-1.5 focus-within:border-line-strong">
           <textarea value={text} rows={2} placeholder="Ask about your clips, campaigns, trends…" aria-label="Your question"
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
@@ -185,7 +185,7 @@ export function AskPanel() {
         <Dialog.Content aria-describedby={undefined}
           className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[560px] flex-col border-l border-line bg-bg shadow-3 outline-none data-[state=open]:animate-[sheet-in_var(--dur-panel)_var(--ease-decelerate)]">
           <div className="flex items-center gap-2 border-b border-line px-5 py-3">
-            <Sparkles className="size-4 text-accent" />
+            <Sparkles className="size-4 text-muted" />
             <Dialog.Title className="flex-1 text-md font-semibold">Ask Clipper</Dialog.Title>
             {status?.can_research && status.ai && (
               <>

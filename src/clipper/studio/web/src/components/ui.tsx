@@ -1,7 +1,7 @@
 import * as RadixSwitch from "@radix-ui/react-switch";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Check, Copy, Info } from "lucide-react";
+import { ArrowLeft, Check, Copy, Info, MoreHorizontal } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { toast } from "sonner";
 import { cn, copyText } from "@/lib/utils";
@@ -14,17 +14,19 @@ type Size = "sm" | "md" | "icon";
 /** A button's look, for a link that acts as one too (D196): the same long class string was copied a dozen times. */
 export function buttonClass(variant: Variant = "secondary", size: Size = "md") {
   return cn(
-    "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-medium",
+    "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-semibold",
     "transition-[background-color,border-color,color,transform] duration-[var(--dur-fast)] ease-standard",
-    "active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40",
-    size === "sm" && "h-7 px-2.5 text-xs",
-    size === "md" && "h-9 px-3.5 text-sm",
-    size === "icon" && "size-8 text-sm",
-    // A primary that can't go yet isn't lit (D213): dimmed lime still read as the one thing to do.
+    "active:translate-y-px disabled:pointer-events-none disabled:opacity-40",
+    // 44px on a touch screen (REDESIGN_NOTES 7): 28px buttons were hard to hit on a phone.
+    size === "sm" && "h-8 px-3 text-xs pointer-coarse:h-11 pointer-coarse:px-3.5",
+    size === "md" && "h-10 px-4 text-sm pointer-coarse:h-11",
+    size === "icon" && "size-9 text-sm pointer-coarse:size-11",
+    // A primary that can't go yet isn't lit (D213): dimmed amber still reads as the one thing to do.
     variant === "primary" && "bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-surface-3 disabled:text-subtle disabled:opacity-100",
-    variant === "secondary" && "border border-line bg-surface-2 text-fg hover:border-line-strong hover:bg-surface-3",
+    // Solid grey slabs, as a catalog's "More info" button (D215): no outline boxes.
+    variant === "secondary" && "bg-surface-3 text-fg hover:bg-[color-mix(in_oklch,var(--surface-3),var(--text)_10%)]",
     variant === "ghost" && "text-muted hover:bg-surface-2 hover:text-fg",
-    variant === "danger" && "border border-line bg-surface-2 text-danger hover:bg-surface-3",
+    variant === "danger" && "bg-surface-3 text-danger hover:bg-[color-mix(in_oklch,var(--surface-3),var(--danger)_14%)]",
   );
 }
 
@@ -100,7 +102,7 @@ export function Tip({ label, keys, children, side = "top" }: {
 }
 
 export const Kbd = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <kbd className={cn("rounded-[4px] border border-line-strong bg-surface-2 px-1.5 py-px font-mono text-[12px] text-muted", className)}>
+  <kbd className={cn("rounded-[3px] border border-line-strong px-1.5 py-px font-mono text-[12px] text-muted", className)}>
     {children}
   </kbd>
 );
@@ -138,6 +140,8 @@ export function CopyButton({ text, what, label, size = "sm", variant = "secondar
 
 /* ---------- Chips and status ---------- */
 
+/** A word of metadata (D215): coloured text, no pill. The wall sets "9.1 · 0:41 · Ready to post" as plain words;
+ *  a row of rounded chips was the stock dashboard look. */
 export const Chip = ({ children, tone = "neutral", className, title }: {
   children: ReactNode; tone?: "neutral" | "accent" | "money" | "warning" | "success" | "danger" | "info";
   className?: string; title?: string;
@@ -145,14 +149,15 @@ export const Chip = ({ children, tone = "neutral", className, title }: {
   <span
     title={title}
     className={cn(
-      "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs font-medium",
-      tone === "neutral" && "border-transparent bg-surface-2 text-muted",
-      tone === "accent" && "border-transparent bg-accent-soft text-accent",
-      tone === "money" && "border-transparent bg-[color-mix(in_oklch,var(--money)_14%,transparent)] text-money",
-      tone === "warning" && "border-transparent bg-[color-mix(in_oklch,var(--warning)_14%,transparent)] text-warning",
-      tone === "success" && "border-transparent bg-[color-mix(in_oklch,var(--success)_14%,transparent)] text-success",
-      tone === "danger" && "border-transparent bg-[color-mix(in_oklch,var(--danger)_14%,transparent)] text-danger",
-      tone === "info" && "border-transparent bg-[color-mix(in_oklch,var(--info)_14%,transparent)] text-info",
+      "inline-flex min-h-6 items-center gap-1.5 text-xs font-semibold",
+      tone === "neutral" && "text-muted",
+      // Not amber: a tag is never the next thing to do (D120).
+      tone === "accent" && "text-fg",
+      tone === "money" && "text-money",
+      tone === "warning" && "text-warning",
+      tone === "success" && "text-success",
+      tone === "danger" && "text-danger",
+      tone === "info" && "text-info",
       className,
     )}
   >
@@ -196,7 +201,7 @@ export function StatusLegend() {
         ))}
       </span>
     }>
-      <button type="button" aria-label="What the statuses mean" className="grid size-8 place-items-center rounded-full text-subtle hover:text-fg">
+      <button type="button" aria-label="What the statuses mean" className="grid size-9 place-items-center rounded-sm text-subtle hover:text-fg pointer-coarse:size-11">
         <Info className="size-4" />
       </button>
     </Tip>
@@ -206,7 +211,7 @@ export function StatusLegend() {
 /** A way back up: the list a detail page belongs to. */
 export function BackLink({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <Link to={to} className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg">
+    <Link to={to} className="mb-3 inline-flex min-h-8 items-center gap-1.5 text-sm text-muted hover:text-fg pointer-coarse:min-h-11">
       <ArrowLeft className="size-3.5" /> {children}
     </Link>
   );
@@ -215,7 +220,7 @@ export function BackLink({ to, children }: { to: string; children: ReactNode }) 
 /* ---------- Surfaces ---------- */
 
 export const Card = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("rounded-lg border border-line bg-surface-1 shadow-1", className)} {...props}>{children}</div>
+  <div className={cn("rounded-md bg-surface-1", className)} {...props}>{children}</div>
 );
 
 /** Only shows after 150 ms, so fast loads never flash a skeleton. */
@@ -232,12 +237,14 @@ export function EmptyState({ icon, title, body, action }: {
   icon: ReactNode; title: string; body?: ReactNode; action?: ReactNode;
 }) {
   return (
-    <div className="fade-in flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line-strong px-6 py-14 text-center">
-      {/* The empty 9:16 frame: a clip waiting to happen. */}
-      <div className="grid h-[72px] w-[41px] place-items-center rounded-[10px] border-2 border-line-strong text-muted [&_svg]:size-5">{icon}</div>
-      <div className="text-md font-semibold">{title}</div>
-      {body && <div className="max-w-md text-sm text-muted">{body}</div>}
-      {action}
+    <div className="fade-in flex flex-col items-start gap-3 py-10 sm:flex-row sm:items-center sm:gap-5">
+      {/* An empty poster: a clip waiting to happen. */}
+      <div className="grid aspect-[9/16] w-14 shrink-0 place-items-center rounded-md border-2 border-dashed border-line-strong text-muted [&_svg]:size-5">{icon}</div>
+      <div className="flex flex-col items-start gap-2">
+        <div className="text-md font-semibold">{title}</div>
+        {body && <div className="max-w-md text-sm text-muted">{body}</div>}
+        {action}
+      </div>
     </div>
   );
 }
@@ -251,61 +258,40 @@ export function Switch({ checked, onChange, label, id }: {
       checked={checked}
       onCheckedChange={onChange}
       aria-label={label}
-      className="relative h-5 w-9 shrink-0 rounded-full bg-surface-3 transition-colors duration-[var(--dur-base)] data-[state=checked]:bg-fg"
+      // 24px to see, 44px to hit (REDESIGN_NOTES 7): the hit area reaches past the switch.
+      className="relative h-6 w-10 shrink-0 rounded-full bg-surface-3 transition-colors duration-[var(--dur-base)] before:absolute before:-inset-2.5 before:content-[''] data-[state=checked]:bg-fg"
     >
-      <RadixSwitch.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white shadow-1 transition-transform duration-[var(--dur-base)] ease-standard data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-bg" />
+      <RadixSwitch.Thumb className="block size-5 translate-x-0.5 rounded-full bg-[var(--text-muted)] shadow-1 transition-transform duration-[var(--dur-base)] ease-standard data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-bg" />
     </RadixSwitch.Root>
   );
 }
 
-/** Clipper's mark: a 9:16 clip with its caption on, the lime bar being the
- *  word spoken right now (D102). */
+/** Clipper's mark: a 9:16 poster with its title bar (D215; the lime caption bar of D102 went with the old look). */
 export function Mark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 18 32" className={cn("h-7 w-auto shrink-0", className)} aria-hidden>
-      <rect x="1.25" y="1.25" width="15.5" height="29.5" rx="4" fill="none" stroke="currentColor" strokeWidth="2.5" />
-      <rect x="4" y="17.5" width="10" height="3.5" rx="1" fill="var(--accent)" />
-      <rect x="5" y="23" width="6" height="2.2" rx="0.8" fill="currentColor" />
+      <rect x="1.25" y="1.25" width="15.5" height="29.5" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
+      <rect x="4" y="19" width="10" height="3.2" rx="0.6" fill="currentColor" />
+      <rect x="4" y="24" width="6" height="2.2" rx="0.6" fill="currentColor" opacity="0.55" />
     </svg>
   );
 }
 
-/**
- * A heading set like a clip's caption: heavy, outlined, words popping in one
- * by one, with `hi` (a word or phrase in it) lit in lime. A title that isn't
- * plain text is shown as it is.
- */
-export function CaptionTitle({ text, hi, as: Tag = "h1", className }: {
+/** A page's title in the condensed face, upper case (D215). `hi` is kept for the callers; it no longer lights a
+ *  word: one highlight colour, only for the next action (D120). */
+export function CaptionTitle({ text, as: Tag = "h1", className }: {
   text: ReactNode; hi?: string; as?: "h1" | "h2"; className?: string;
 }) {
-  if (typeof text !== "string") return <Tag className={cn("cap", className)}>{text}</Tag>;
-  const at = hi ? text.toLowerCase().indexOf(hi.toLowerCase()) : -1;
-  const words = text.split(/\s+/).filter(Boolean);
-  let pos = 0;
-  return (
-    <Tag className={cn("cap", className)} aria-label={text}>
-      {words.map((word, i) => {
-        const start = text.indexOf(word, pos);
-        pos = start + word.length;
-        const lit = at >= 0 && start >= at && start < at + (hi?.length ?? 0);
-        return (
-          <span key={i} aria-hidden>
-            <span className={cn("cap-word", lit && "cap-hi")} style={{ "--i": i } as React.CSSProperties}>{word}</span>
-            {i < words.length - 1 && " "}
-          </span>
-        );
-      })}
-    </Tag>
-  );
+  return <Tag className={cn("cap text-balance", className)}>{text}</Tag>;
 }
 
 export function PageHeader({ title, hi, subtitle, actions }: {
   title: ReactNode; hi?: string; subtitle?: ReactNode; actions?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <CaptionTitle text={title} hi={hi} className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+        <CaptionTitle text={title} hi={hi} className="text-[clamp(2.1rem,3.6vw,3.1rem)]" />
         {subtitle && <p className="mt-2 text-sm text-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -328,19 +314,51 @@ export function Sparkline({ values, className, color = "var(--text-muted)" }: { 
   );
 }
 
+/** A number and its label, set flat on the page (D215): the row of four boxed metric tiles was the stock dashboard. */
 export function Metric({ label, value, hint, tone, sub, trend, to, search }: {
   label: string; value: ReactNode; hint?: string; tone?: "money"; sub?: ReactNode; trend?: number[];
-  /** Makes the card a link to where the number comes from (D143). */
+  /** Makes it a link to where the number comes from (D143). */
   to?: string; search?: Record<string, string>;
 }) {
   const card = (
-    <Card className={cn("flex h-full flex-col gap-1 p-4", to && "transition-colors hover:border-line-strong hover:bg-surface-2")}>
-      <span className="text-xs font-medium text-muted">{label}</span>
-      <span className={cn("num text-[1.9rem] leading-tight", tone === "money" && "text-money")}>{value}</span>
+    <div className={cn("flex h-full flex-col gap-1 rounded-md py-1", to && "group")}>
+      <span className="text-xs font-semibold text-muted group-hover:text-fg">{label}</span>
+      <span className={cn("num text-[2.1rem] leading-none", tone === "money" && "text-money")}>{value}</span>
       {trend && <Sparkline values={trend} className="mt-1" />}
       {sub && <span className="text-xs text-muted">{sub}</span>}
-    </Card>
+    </div>
   );
-  const body = to ? <Link to={to} search={search} className="block rounded-lg">{card}</Link> : card;
+  const body = to ? <Link to={to} search={search} className="block rounded-md">{card}</Link> : card;
   return hint ? <Tip label={hint}>{body}</Tip> : body;
+}
+
+/** A "More" menu of named actions (D215): the actions a card or a bar doesn't need in view, each in words. Icon-only
+ *  buttons (archive, a lightbulb for "Back to ideas", a bin) said nothing until hovered (REDESIGN_NOTES 5). A
+ *  `<details>`, so it opens with a tap, Enter or Space, and an item that is picked closes it. */
+export function MoreMenu({ label = "More", children, align = "left", size = "md", className }: {
+  label?: string; children: ReactNode; align?: "left" | "right"; size?: "sm" | "md"; className?: string;
+}) {
+  return (
+    <details className={cn("relative", className)}
+             onClick={(e) => { if ((e.target as HTMLElement).closest("[data-menu-item]")) e.currentTarget.removeAttribute("open"); }}>
+      <summary className={cn(buttonClass("ghost", size), "cursor-pointer list-none [&::-webkit-details-marker]:hidden")}>
+        <MoreHorizontal className="size-4" /> {label}
+      </summary>
+      <div className={cn("absolute z-30 mt-1 flex w-64 flex-col rounded-md bg-surface-2 p-1 text-sm shadow-3", align === "right" ? "right-0" : "left-0")}>
+        {children}
+      </div>
+    </details>
+  );
+}
+
+export function MenuItem({ onClick, disabled, danger, children }: {
+  onClick: () => void; disabled?: boolean; danger?: boolean; children: ReactNode;
+}) {
+  return (
+    <button type="button" data-menu-item disabled={disabled} onClick={onClick}
+            className={cn("flex min-h-10 items-center gap-2.5 rounded-sm px-3 text-left font-semibold hover:bg-surface-3 disabled:opacity-50 pointer-coarse:min-h-11 [&_svg]:size-4 [&_svg]:shrink-0",
+              danger ? "text-danger" : "text-fg")}>
+      {children}
+    </button>
+  );
 }

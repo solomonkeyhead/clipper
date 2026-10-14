@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Film, Loader2, Play, RefreshCw, Search, Shapes, SlidersHorizontal, Undo2, Wand2, X } from "lucide-react";
+import { Check, Film, Loader2, PenLine, Play, RefreshCw, Search, Shapes, SlidersHorizontal, Undo2, Wand2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createApi, useCreate, type CreateVideo, type CreateVisual, type FootageOffer } from "@/api/client";
@@ -8,15 +8,17 @@ import { Button, Chip, Skeleton, Tip } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 /** The camera on a sentence's footage (D164): automatic, or one move. */
-export const CAMERAS: [string, string][] = [["", "camera: auto"], ["push", "push in"], ["pull", "pull out"], ["drift", "drift across"], ["still", "hold still"]];
+// Whole words in the closed select (REDESIGN_NOTES 8): "camera: auto" was a setting's name, not a sentence.
+export const CAMERAS: [string, string][] = [["", "Camera moves on its own"], ["push", "Camera pushes in"], ["pull", "Camera pulls out"],
+  ["drift", "Camera drifts across"], ["still", "Camera holds still"]];
 
 /** How a part comes in, a drawing's size and its place on the board, set by hand (D171). */
-const WAYS: [string, string][] = [["", "way in: auto"], ["cut", "plain cut"], ["whip", "whip in"], ["zoom", "zoom in"]];
+const WAYS: [string, string][] = [["", "Comes in on its own"], ["cut", "plain cut"], ["whip", "whip in"], ["zoom", "zoom in"]];
 const SIZES: [number, string][] = [[0.7, "size 70%"], [0.85, "size 85%"], [1, "size as drawn"], [1.15, "size 115%"], [1.3, "size 130%"]];
 const PLACES: [number, string][] = [[-0.12, "higher"], [0, "in the middle"], [0.12, "lower"]];
 /** Where footage is cropped across, a template's arrows, a sketch's colours, set by hand (D180). */
-const FRAMES: [string, string][] = [["", "framing: on its subject"], ["0", "framing: left edge"], ["0.25", "framing: left"],
-  ["0.5", "framing: middle"], ["0.75", "framing: right"], ["1", "framing: right edge"]];
+const FRAMES: [string, string][] = [["", "Framed on its subject"], ["0", "Framed at the left edge"], ["0.25", "Framed left"],
+  ["0.5", "Framed in the middle"], ["0.75", "Framed right"], ["1", "Framed at the right edge"]];
 const WAYS_ROUND = ["up", "down", "left", "right"];
 const INKS: [string, string][] = [["chalk", "white"], ["yellow", "yellow"], ["blue", "blue"], ["red", "red"], ["dim", "grey"]];
 
@@ -118,7 +120,7 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
       <div className="flex flex-wrap items-center gap-1.5">
         <input value={wish} onChange={(e) => setWish(e.target.value)} placeholder="What you'd like to see (optional)"
                onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") void find(); }} aria-label="What you'd like to see"
-               className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
+               className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none" />
         <Button size="sm" variant="secondary" disabled={searching} onClick={() => find()}>
           {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Search again
         </Button>
@@ -128,7 +130,7 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
         <>
           {/* What's being done, how long so far, and where the clips will appear (D189). */}
           <p className="flex items-center gap-2 text-xs text-muted" role="status">
-            <Loader2 className="size-3.5 shrink-0 animate-spin text-accent" /> Writing searches, looking in both libraries and scoring what comes back
+            <Loader2 className="size-3.5 shrink-0 animate-spin text-fg" /> Writing searches, looking in both libraries and scoring what comes back
             <Waited after={4} />
           </p>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2" aria-hidden>
@@ -155,13 +157,13 @@ function FootagePicker({ video, beat, wish, setWish, onClose, onAuto }: {
                 const [label, tone] = fit(c.score);
                 return (
                   <button key={c.id} type="button" onClick={() => toggle(c.id)} aria-pressed={n >= 0} title={c.tags}
-                          className={cn("flex flex-col gap-1 rounded-md border p-1 text-left", n >= 0 ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong")}>
+                          className={cn("flex flex-col gap-1 rounded-md border p-1 text-left", n >= 0 ? "border-line-strong bg-surface-3" : "border-line hover:border-line-strong")}>
                     <span className="relative block aspect-[27/28] w-full overflow-hidden rounded-sm bg-surface-2">
                       <Preview thumb={`/api/create/stock-thumb/${encodeURIComponent(c.id)}`} src={c.preview} />
                       <span className="absolute bottom-1 left-1 rounded-sm bg-black/70 px-1 text-[10px] text-white/80">
                         {c.source === "photo" ? `Photo · ${c.id.split("-")[1] === "pexels" ? "Pexels" : "Pixabay"}` : <>{c.source === "pexels" ? "Pexels" : c.source === "coverr" ? "Coverr" : c.source === "nasa" ? "NASA" : "Pixabay"} · {Math.round(c.duration)}s</>}
                       </span>
-                      {n >= 0 && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-accent text-[12px] font-bold text-accent-fg">{offer.clips > 1 ? n + 1 : <Check className="size-3" />}</span>}
+                      {n >= 0 && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-fg text-[12px] font-bold text-bg">{offer.clips > 1 ? n + 1 : <Check className="size-3" />}</span>}
                     </span>
                     <span className={cn("text-[12px] font-medium", tone)}>{label}</span>
                     <span className="line-clamp-2 text-[12px] text-muted">{c.tags || c.query}</span>
@@ -196,6 +198,8 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
   const [busy, setBusy] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [picking, setPicking] = useState<number | null>(null);
+  // The part you're changing (REDESIGN_NOTES 3): its tools open under it; every other row is the picture and its words.
+  const [chosen, setChosen] = useState<number | null>(null);
   const beats = video.script.beats;
   const pending = beats.filter((b) => b.visual.redo || b.visual.restyle).length;
   // Everything since the last build, where the server kept it (D199): music, a cover or captions counted as nothing.
@@ -278,8 +282,8 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
         <p className="flex-1 text-xs text-muted">
-          Everything you don't change stays exactly as it is. Ask for new footage or a new drawing where you don't like a
-          part (add a few words to say what you'd rather see), then rebuild.
+          Everything you don't change stays exactly as it is. Pick a part you don't like, then ask for new footage or a
+          new drawing (add a few words to say what you'd rather see), then rebuild.
         </p>
         <Tip label={changes?.length ? `Not built yet: ${changes.join(", ")}` : "Nothing changed since the last build"}>
           <Button variant={count ? "primary" : "secondary"} disabled={!count || rebuilding} onClick={onRebuild}>
@@ -290,7 +294,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
       </div>
       {drawings && old.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-2.5 text-xs text-muted">
-          <span className="flex-1">{old.length === 1 ? "One drawing was" : `${old.length} drawings were`} made before the new style: smaller on the board,
+          <span className="flex-1">{old.length === 1 ? "One drawing is" : `${old.length} drawings are`} in the older look: smaller on the board,
             without the ready-drawn objects. Drawing {old.length === 1 ? "it" : "them"} again uses a little of your AI quota on the next build.</span>
           <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => redrawOld()}>
             {busy === "old" ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} Redraw {old.length === 1 ? "it" : `all ${old.length}`}
@@ -312,10 +316,10 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
           const mid = (shot.start + shot.end) / 2;
           const playing = now != null && shot.start <= now && now < shot.end;
           return (
-            <li key={first} aria-current={playing || undefined}
-                className={cn("flex gap-3 py-3 transition-colors", playing && "-mx-2 rounded-md bg-accent-soft px-2")}>
+            <li key={first} data-testid="part" aria-current={playing || undefined}
+                className={cn("-mx-2 flex gap-3 rounded-md px-2 py-3 transition-colors", (playing || chosen === first) && "bg-surface-2")}>
               <button type="button" onClick={() => seek(shot.start)} aria-label="Play from here"
-                      className="group relative aspect-[9/16] w-14 shrink-0 self-start overflow-hidden rounded-md bg-surface-2">
+                      className="group poster w-14 shrink-0 self-start">
                 <FadeImg src={`/api/create/videos/${video.id}/still?t=${mid.toFixed(2)}&v=${video.clip_id}-${video.updated_at ?? ""}`}
                          className="size-full object-cover" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
                 <Play className="absolute inset-0 m-auto size-5 text-white opacity-0 drop-shadow group-hover:opacity-100" />
@@ -336,11 +340,16 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
                 </div>
                 {v.notice && <p className="text-xs text-warning">{v.notice}</p>}
                 <p className="line-clamp-2 text-sm">{text}</p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {picking !== first && (
+                {chosen !== first ? (
+                  <Button size="sm" variant="secondary" className="self-start" disabled={rebuilding}
+                          onClick={() => { setChosen(first); setAdjusting(null); setPicking(null); }}>
+                    <PenLine className="size-3.5" /> Change this part
+                  </Button>
+                ) : (
+                <div className="flex flex-wrap items-center gap-1.5">                  {picking !== first && (
                     <input value={notes[first] ?? ""} onChange={(e) => setNotes((n) => ({ ...n, [first]: e.target.value }))}
                            onKeyDown={(e) => e.stopPropagation()} placeholder="What you'd rather see (optional)" aria-label="What you'd rather see"
-                           className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none" />
+                           className="h-8 min-w-48 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none" />
                   )}
                   <Tip label="See footage for this part, scored, best first, and pick what to use. The clip it has now isn't offered.">
                     <Button size="sm" variant={picking === first ? "primary" : "secondary"} disabled={busy !== null || rebuilding}
@@ -357,27 +366,29 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
                     <Tip label="How the camera moves on this part's footage. Automatic takes the moves in turn.">
                       <select aria-label={`Camera, part ${first}`} value={v.camera ?? ""} disabled={busy !== null || rebuilding}
                               onChange={(e) => void setCamera(first, e.target.value)}
-                              className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none">
+                              className="h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none">
                         {CAMERAS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </select>
                     </Tip>
                   )}
-                  {/* Icons, named in the tip and to a screen reader (D210): the words made a row of six labels. */}
-                  <Tip label="Adjust: how it comes in, where its cut falls, its framing, and a drawing's size, place, words, arrows and colours">
-                    <Button size="icon" variant="ghost" aria-label="Adjust" aria-expanded={adjusting === first}
+                  {/* In words again (D215): with the tools behind "Change this part" there is room to name them. */}
+                  <Tip label="How it comes in, where its cut falls, its framing, and a drawing's size, place, words, arrows and colours">
+                    <Button size="sm" variant="ghost" aria-label="Adjust" aria-expanded={adjusting === first}
                             className={cn(adjusting === first && "bg-surface-3 text-fg")}
                             disabled={rebuilding} onClick={() => setAdjusting((a) => (a === first ? null : first))}>
-                      <SlidersHorizontal className="size-4" />
+                      <SlidersHorizontal className="size-3.5" /> Adjust
                     </Button>
                   </Tip>
                   {v.previous && (
-                    <Tip label="Undo: keep what this part had">
-                      <Button size="icon" variant="ghost" aria-label="Undo" disabled={busy !== null || rebuilding} onClick={() => ask(first, "undo")}>
-                        <Undo2 className="size-4" />
+                    <Tip label="Keep what this part had">
+                      <Button size="sm" variant="ghost" disabled={busy !== null || rebuilding} onClick={() => ask(first, "undo")}>
+                        <Undo2 className="size-3.5" /> Undo
                       </Button>
                     </Tip>
                   )}
+                  <Button size="sm" variant="ghost" className="ml-auto" onClick={() => { setChosen(null); setAdjusting(null); setPicking(null); }}>Done</Button>
                 </div>
+                )}
                 {adjusting === first && (
                   <PartAdjust key={`${first}-${video.updated_at ?? ""}`} first={first} v={v} nudge={beats[first - 1]?.nudge ?? 0}
                               busy={busy !== null || rebuilding} onSet={(body, done) => void setPart(first, body, done)} />
@@ -409,15 +420,15 @@ function PartAdjust({ first, v, nudge, busy, onSet }: {
   const [title, setTitle] = useState(shown.title ?? "");
   const [words, setWords] = useState(shown.words);
   const edited = title !== (shown.title ?? "") || words.some((w, k) => w !== shown.words[k]);
-  const select = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
-  const input = "h-8 min-w-32 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-accent focus:outline-none";
+  const select = "h-8 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none";
+  const input = "h-8 min-w-32 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm focus:border-line-strong focus:outline-none";
   const footage = v.kind === "stock" && !v.clip;
   const marks = v.template === "sketch" ? (sketchOf(v)?.marks ?? []).map((m, i) => ({ ...m, i })).filter((m) => m.kind === "arrow" || m.kind === "text") : [];
   const labels = v.template === "forces" ? (v.labels ?? []).slice(0, 4) : [];
   const step = (by: number) => onSet({ nudge: Math.round((nudge + by) * 10) / 10 },
                                      `Cut ${nudge + by === 0 ? "back where the voice put it" : `${Math.abs(nudge + by).toFixed(1)}s ${nudge + by > 0 ? "later" : "earlier"}`}`);
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-1 p-2.5" data-testid="part-adjust">
+    <div className="flex flex-col gap-2 pt-1" data-testid="part-adjust">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         {first > 1 && (
           <>
@@ -447,7 +458,7 @@ function PartAdjust({ first, v, nudge, busy, onSet }: {
         {footage && (
           <select aria-label={`Framing, part ${first}`} value={v.frame == null ? "" : String(v.frame)} disabled={busy} className={select}
                   onChange={(e) => onSet({ frame: e.target.value === "" ? null : Number(e.target.value) }, "Framing set")}>
-            {v.frame != null && !FRAMES.some(([k]) => k === String(v.frame)) && <option value={String(v.frame)}>framing: set by hand</option>}
+            {v.frame != null && !FRAMES.some(([k]) => k === String(v.frame)) && <option value={String(v.frame)}>Framed by hand</option>}
             {FRAMES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         )}

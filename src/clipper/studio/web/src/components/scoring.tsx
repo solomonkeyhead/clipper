@@ -11,7 +11,7 @@ const RUBRIC_LABELS: Record<string, string> = {
 };
 
 const scoreTone = (score: number) =>
-  score >= 8 ? "text-success" : score >= 6.5 ? "text-accent" : score >= 5.5 ? "text-fg" : "text-warning";
+  score >= 8 ? "text-success" : score >= 6.5 ? "text-fg" : score >= 5.5 ? "text-fg" : "text-warning";
 
 /** Clipper's 0-10 score, or "Hand-picked" for a clip cut from chosen times. */
 export function ScoreBadge({ clip }: { clip: Clip }) {
@@ -25,7 +25,7 @@ export function ScoreBadge({ clip }: { clip: Clip }) {
   if (clip.score == null) return null;
   return (
     <Tip label={`Clipper's score out of 10${clip.pool_rank && clip.pool ? `, #${clip.pool_rank} of ${clip.pool} moments in the video` : ""}`}>
-      <span className={cn("tabular rounded-[4px] bg-surface-2 px-1.5 py-px text-[12px] font-semibold", scoreTone(clip.score))}>
+      <span className={cn("tabular text-xs font-bold", scoreTone(clip.score))}>
         {clip.score.toFixed(1)}
       </span>
     </Tip>
@@ -78,7 +78,7 @@ export function ScoreBreakdown({ clip }: { clip: Clip }) {
               <dt className="w-32 shrink-0 text-muted">{label}</dt>
               <dd className="flex flex-1 items-center gap-2">
                 <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
-                  <span className="block h-full rounded-full bg-accent" style={{ width: `${clip.rubric[key] * 10}%` }} />
+                  <span className="block h-full rounded-full bg-[var(--text-muted)]" style={{ width: `${clip.rubric[key] * 10}%` }} />
                 </span>
                 <span className="tabular w-7 text-right font-medium">{clip.rubric[key].toFixed(1)}</span>
               </dd>
@@ -142,10 +142,10 @@ export function RatingPanel({ clip }: { clip: Clip }) {
             <span className="w-24 shrink-0 text-xs text-muted">{g.label}</span>
             {g.reasons.map(({ key, label }) => (
               <button key={key} onClick={() => toggle(key)} aria-pressed={reasons.includes(key)}
-                className={cn("h-7 rounded-full border px-2.5 text-xs font-medium transition-colors",
+                className={cn("inline-flex h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition-colors pointer-coarse:h-11",
                   reasons.includes(key)
-                    ? g.tone === "good" ? "border-success/50 bg-[color-mix(in_oklch,var(--success)_14%,transparent)] text-success"
-                      : "border-warning/50 bg-[color-mix(in_oklch,var(--warning)_14%,transparent)] text-warning"
+                    ? g.tone === "good" ? "bg-surface-3 text-fg"
+                      : "bg-[color-mix(in_oklch,var(--warning)_16%,var(--surface-2))] text-warning"
                     : "border-line text-muted hover:text-fg")}>
                 {label}
               </button>

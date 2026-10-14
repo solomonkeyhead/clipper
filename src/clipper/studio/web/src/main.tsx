@@ -58,7 +58,7 @@ const root = createRootRoute({
   notFoundComponent: () => (
     <EmptyState icon={<MapPinOff />} title="No page here"
                 body="This address isn't a page in Clipper. It may be an old link."
-                action={<Link to="/" className="text-sm font-medium text-accent hover:underline">Go to the Dashboard</Link>} />
+                action={<Link to="/" className="text-sm font-medium link">Go to the Dashboard</Link>} />
   ),
 });
 const routes = [
@@ -142,7 +142,7 @@ const router = createRouter({
                   <span className="mt-2 block font-mono text-xs text-subtle">{error instanceof Error ? error.message : String(error)}</span></>}
                 action={<div className="flex items-center gap-4">
                   <Button variant="primary" size="sm" onClick={() => location.reload()}>Reload</Button>
-                  <a href="/" className="text-sm font-medium text-accent hover:underline">Go to the Dashboard</a>
+                  <a href="/" className="text-sm font-medium link">Go to the Dashboard</a>
                 </div>} />
   ),
 });

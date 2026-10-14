@@ -35,7 +35,7 @@ export function HookControl({ clip }: { clip: Clip }) {
   if (clip.rerendering) {
     return (
       <p className="flex items-center gap-1.5 text-xs text-muted">
-        <Loader2 className="size-3.5 animate-spin text-accent" />
+        <Loader2 className="size-3.5 animate-spin text-fg" />
         {clip.rerendering === "queued" ? "Waiting to be made again with its new hook…" : "Making it again with its new hook…"}
       </p>
     );
@@ -69,7 +69,7 @@ export function HookControl({ clip }: { clip: Clip }) {
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (custom.trim()) go.mutate(custom.trim()); }}>
           <input value={custom} onChange={(e) => setCustom(e.target.value)} autoFocus maxLength={120}
                  onKeyDown={(e) => e.stopPropagation()} placeholder="The line to show over its first seconds"
-                 className="h-8 flex-1 rounded-sm border border-line bg-surface-1 px-2.5 text-sm focus:border-accent focus:outline-none" />
+                 className="h-8 flex-1 rounded-sm border border-line bg-surface-1 px-2.5 text-sm focus:border-line-strong focus:outline-none" />
           <Button type="submit" size="sm" variant="primary" disabled={!custom.trim() || go.isPending}>Make it</Button>
           <Button size="sm" variant="ghost" onClick={() => setCustom(null)}>Cancel</Button>
         </form>

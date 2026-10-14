@@ -18,7 +18,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   return (
     <Card className="p-5">
       <h2 className="mb-3 flex items-center gap-2.5 text-md font-semibold">
-        <span className="grid size-6 place-items-center rounded-full bg-accent-soft text-xs font-bold text-accent">{n}</span>
+        <span className="num grid size-6 place-items-center text-[18px] leading-none text-muted">{n}</span>
         {title}
       </h2>
       {children}
@@ -60,8 +60,8 @@ function Dropzone({ onUploaded, campaign }: { onUploaded: (s: Source) => void; c
       tabIndex={0}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
       className={cn(
-        "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors",
-        over ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong hover:bg-surface-2",
+        "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-6 py-8 text-center transition-colors",
+        over ? "border-line-strong bg-surface-3" : "border-line hover:border-line-strong hover:bg-surface-2",
       )}
     >
       <input ref={input} type="file" accept="video/*,.mov,.mkv" hidden multiple
@@ -124,7 +124,7 @@ function FinishedRow({ job, runs = 1 }: { job: Job; runs?: number }) {
           {job.status === "done" && <JobResults job={job} />}
           <div className="flex flex-wrap items-center gap-3">
             {job.clips > 0 && (
-              <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium text-accent hover:underline">
+              <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium link">
                 See its clips →
               </Link>
             )}
@@ -209,7 +209,7 @@ function JobCard({ job }: { job: Job }) {
       {job.message && <p className="text-xs text-muted">{job.message}</p>}
       {job.status === "done" && <JobResults job={job} />}
       {job.status === "done" && job.clips > 0 && (
-        <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium text-accent hover:underline">
+        <Link to="/campaigns/$name" params={{ name: job.campaign }} className="text-sm font-medium link">
           View and rate the clips →
         </Link>
       )}
@@ -264,7 +264,7 @@ function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, cl
           <span className="shrink-0 text-xs font-normal text-muted">{videos.length} video{videos.length === 1 ? "" : "s"}{chosen ? ` · ${chosen} picked` : ""}</span>
         </button>
         {open && onAll && videos.length > 1 && (
-          <button className="shrink-0 text-xs text-accent hover:underline" onClick={onAll}>Select all</button>
+          <button className="shrink-0 text-xs link" onClick={onAll}>Select all</button>
         )}
       </div>
       {open && (
@@ -273,9 +273,9 @@ function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, cl
           {videos.map((s) => (
             <button key={s.path} onClick={() => onToggle(s.path)} aria-pressed={picked.includes(s.path)}
               className={cn("flex items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors",
-                picked.includes(s.path) ? "border-accent bg-accent-soft" : "border-transparent hover:bg-surface-2")}>
+                picked.includes(s.path) ? "border-line-strong bg-surface-3" : "border-transparent hover:bg-surface-2")}>
               {manual ? <Film className="size-4 shrink-0 text-muted" />
-                : picked.includes(s.path) ? <CheckSquare className="size-4 shrink-0 text-accent" />
+                : picked.includes(s.path) ? <CheckSquare className="size-4 shrink-0 text-fg" />
                 : <Square className="size-4 shrink-0 text-muted" />}
               <span className="min-w-0 flex-1 truncate text-sm" title={s.sorted_by ? `Sorted ${SORTED_BY[s.sorted_by] ?? ""}` : undefined}>{s.name}</span>
               {clipped.has(s.path.toLowerCase()) && (
@@ -298,14 +298,14 @@ function FootageGroup({ title, videos, open: startOpen, hint, picked, manual, cl
 function OpenEditor({ source, campaign }: { source: string; campaign: string }) {
   const ready = Boolean(source && campaign);
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-accent/40 bg-accent-soft p-4">
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md bg-surface-2 p-4">
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold">Cut it yourself in the editor</div>
         <p className="text-xs text-muted">Pick the moment by its words, trim to the frame, cut lines out, punch in, fix captions, then preview exactly what you'll get.</p>
       </div>
       {ready ? (
         <Link to="/edit" search={{ source, campaign }}
-              className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+              className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
           <Scissors className="size-4" /> Open in the editor
         </Link>
       ) : <span className="text-xs text-muted">{campaign ? "Pick a video first" : "Pick a campaign first"}</span>}
@@ -341,7 +341,7 @@ function RangeEditor({ source, ranges, setRanges }: {
           </div>
         </div>
       ) : source ? (
-        <p className="rounded-md border border-dashed border-line p-3 text-xs text-muted">
+        <p className="rounded-md bg-surface-2 p-3 text-xs text-muted">
           This file can't play in the browser (common for .mov files from editing software). Find the times in your usual
           video player and type them below.
         </p>
@@ -355,7 +355,7 @@ function RangeEditor({ source, ranges, setRanges }: {
           return (
             <div key={i} onFocus={() => setActive(i)} onClick={() => setActive(i)}
                  className={cn("flex flex-wrap items-center gap-2 rounded-md border p-2",
-                   active === i ? "border-accent/60 bg-accent-soft/30" : "border-line")}>
+                   active === i ? "border-line-strong bg-surface-2" : "border-line")}>
               <span className="w-20 text-xs font-medium text-muted">Moment {i + 1}</span>
               <TextInput className="w-28" value={r.start} placeholder="24:45" aria-label={`Moment ${i + 1} start`}
                          onChange={(e) => update(i, "start", e.target.value)} />
@@ -365,7 +365,7 @@ function RangeEditor({ source, ranges, setRanges }: {
               {!problem && a !== null && b !== null && <span className="tabular text-xs text-muted">{Math.round(b - a)}s</span>}
               {problem && <span className="text-xs text-warning">{problem}</span>}
               {ranges.length > 1 && (
-                <Button size="icon" variant="ghost" className="ml-auto size-7" aria-label={`Remove moment ${i + 1}`}
+                <Button size="icon" variant="ghost" className="ml-auto size-8" aria-label={`Remove moment ${i + 1}`}
                         onClick={(e) => { e.stopPropagation(); setRanges(ranges.filter((_, j) => j !== i)); setActive(0); }}>
                   <X className="size-3.5" />
                 </Button>
@@ -493,7 +493,7 @@ export function NewClipsPage() {
           <Card className="flex flex-wrap items-center gap-3 border-warning/40 p-4 text-sm">
             <AlertTriangle className="size-4 shrink-0 text-warning" />
             <span className="flex-1">Clipper needs your free AI key to find and score moments.</span>
-            <Link to="/settings" className="font-medium text-accent hover:underline">Add it in Settings →</Link>
+            <Link to="/settings" className="font-medium link">Add it in Settings →</Link>
           </Card>
         )}
 
@@ -503,7 +503,7 @@ export function NewClipsPage() {
               {active.map((c) => (
                 <button key={c.name} onClick={() => setCampaign(c.name)}
                   className={cn("flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors",
-                    campaign === c.name ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
+                    campaign === c.name ? "border-line-strong bg-surface-3" : "border-line hover:bg-surface-2")}>
                   <span className="truncate text-sm font-medium">{c.title}</span>
                   <span className="flex items-center gap-1.5 text-muted">
                     {c.platforms.map((p) => <PlatformIcon key={p} platform={p} className="size-3.5" />)}
@@ -511,7 +511,7 @@ export function NewClipsPage() {
                 </button>
               ))}
               <Link to="/campaigns/new"
-                    className="flex items-center gap-2 rounded-md border border-dashed border-line px-3 py-2.5 text-sm text-muted hover:bg-surface-2 hover:text-fg">
+                    className="flex items-center gap-2 rounded-md bg-surface-2 px-3 py-2.5 text-sm text-muted hover:bg-surface-2 hover:text-fg">
                 <Plus className="size-4" /> New campaign
               </Link>
             </div>
@@ -519,7 +519,7 @@ export function NewClipsPage() {
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-muted">Clipper follows a campaign's rules, so add the campaign first.</p>
               <Link to="/campaigns/new"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover">
+                    className="inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
                 <Plus className="size-4" /> Add a campaign
               </Link>
             </div>
@@ -593,7 +593,7 @@ export function NewClipsPage() {
                   <input type="number" min={1} max={500} aria-label="Another number" placeholder="Other"
                          value={counts.includes(top) ? "" : top}
                          onChange={(e) => e.target.value && setTop(Math.max(1, Math.min(500, Number(e.target.value))))}
-                         className="h-9 w-20 rounded-md border border-line bg-surface-1 px-2 text-sm focus:border-accent focus:outline-none" />
+                         className="h-9 w-20 rounded-md border border-line bg-surface-1 px-2 text-sm focus:border-line-strong focus:outline-none" />
                 )}
                 <span className="text-xs text-muted">
                   at most; fewer if nothing else is good enough{pro ? "" : ". Pro makes as many as qualify."}

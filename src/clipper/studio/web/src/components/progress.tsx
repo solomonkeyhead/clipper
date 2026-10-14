@@ -71,14 +71,14 @@ export function ProgressBar({ value, label, valueText, size = "md", live = true,
          aria-valuenow={value === null ? undefined : Math.round(value)} aria-valuetext={valueText}
          className={cn("relative overflow-hidden rounded-full bg-surface-3", size === "md" ? "h-2" : "h-1.5", className)}>
       {value === null ? (
-        <div className="bar-indeterminate absolute inset-y-0 w-1/3 rounded-full bg-accent" />
+        <div className="bar-indeterminate absolute inset-y-0 w-1/3 rounded-full bg-fg" />
       ) : (
-        <div className={cn("relative h-full overflow-hidden rounded-full bg-accent transition-[width] duration-1000 ease-decelerate",
+        <div className={cn("relative h-full overflow-hidden rounded-full bg-fg transition-[width] duration-1000 ease-decelerate",
                            live && value < 100 && "bar-ribs")}
              style={{ width: `${Math.max(3, Math.min(100, value))}%` }} />
       )}
       {/* The end of the track, visible on any surface (the track itself is faint). */}
-      <span className="absolute right-[2px] top-1/2 size-1 -translate-y-1/2 rounded-full bg-accent" aria-hidden />
+      <span className="absolute right-[2px] top-1/2 size-1 -translate-y-1/2 rounded-full bg-fg" aria-hidden />
     </div>
   );
 }
@@ -120,7 +120,7 @@ export function JobProgress({ pct, stage, started, steps, label, size = "md", ch
             <li key={s.label} className={cn("flex items-center gap-2",
                                              i < cur ? "text-muted" : i === cur ? "font-medium text-fg" : "text-subtle")}>
               {i < cur ? <Check className="pop-in size-3.5 shrink-0 text-success" aria-label="done" />
-                : i === cur ? <Loader2 className="size-3.5 shrink-0 animate-spin text-accent" aria-label="now" />
+                : i === cur ? <Loader2 className="size-3.5 shrink-0 animate-spin text-fg" aria-label="now" />
                 : <span className="mx-[3px] size-2 shrink-0 rounded-full border border-line-strong" aria-label="to come" />}
               <span className="min-w-0 truncate">{i === cur && stage ? stage : s.label}</span>
             </li>

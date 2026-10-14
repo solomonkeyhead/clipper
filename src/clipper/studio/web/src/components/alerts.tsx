@@ -31,7 +31,7 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
 
 const Hint = ({ children }: { children: ReactNode }) => <div className="text-sm text-muted">{children}</div>;
 const ExtLink = ({ href, children }: { href: string; children: ReactNode }) => (
-  <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
+  <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 link">
     {children}<ExternalLink className="size-3" />
   </a>
 );
@@ -172,7 +172,7 @@ function DiscordSetup({ alerts }: { alerts: Alerts }) {
           <div className="flex flex-wrap items-center gap-2">
             {bot ? (
               <a href={bot.invite} target="_blank" rel="noopener noreferrer"
-                 className="inline-flex h-7 items-center gap-1.5 rounded-sm bg-accent px-2.5 text-xs font-medium text-accent-fg hover:bg-accent-hover">
+                 className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-accent px-3 text-xs font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11">
                 Add the bot to your server <ExternalLink className="size-3.5" />
               </a>
             ) : <Hint>(Finish step 1 first.)</Hint>}
@@ -285,7 +285,7 @@ function WhopSignIn({ alerts }: { alerts: Alerts }) {
           <Button size="sm" variant="ghost" onClick={() => signOut()}>Sign out</Button>
         </div>
       ) : waiting ? (
-        <div className="flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin text-accent" /> Approve Clipper in the Whop tab…</div>
+        <div className="flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin text-fg" /> Approve Clipper in the Whop tab…</div>
       ) : (
         <div><Button size="sm" variant="primary" disabled={!alerts.whop_app} onClick={() => connect()}>Sign in with Whop</Button></div>
       )}
@@ -375,7 +375,7 @@ function Setup({ alerts, onClose }: { alerts: Alerts; onClose?: () => void }) {
     <Card className="mb-6 flex flex-col gap-4 p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-md font-semibold"><BellRing className="size-4 text-accent" /> Campaign alerts</h2>
+          <h2 className="flex items-center gap-2 text-md font-semibold"><BellRing className="size-4 text-muted" /> Campaign alerts</h2>
           <p className="mt-0.5 text-sm text-muted">
             Clipper reads where new campaigns are announced, checks each one against what you clip, and lists them here.
           </p>
@@ -414,7 +414,7 @@ function Watching({ alerts, onEdit }: { alerts: Alerts; onEdit: () => void }) {
   const names = [...alerts.whop_feeds.map((f) => f.name), ...alerts.watched.map((c) => `#${c.name}`)];
   return (
     <Card className="mb-6 flex flex-wrap items-center gap-3 px-4 py-3">
-      <BellRing className="size-4 shrink-0 text-accent" />
+      <BellRing className="size-4 shrink-0 text-muted" />
       <div className="min-w-0 flex-1 text-sm">
         <span className="font-medium">Campaign alerts on.</span>{" "}
         <span className="text-muted">
@@ -441,7 +441,7 @@ export function CampaignAlerts() {
   if (!ready && !editing) {
     return (
       <Card className="mb-6 flex flex-wrap items-center gap-3 px-4 py-3">
-        <BellRing className="size-4 shrink-0 text-accent" />
+        <BellRing className="size-4 shrink-0 text-muted" />
         <div className="min-w-0 flex-1 text-sm">
           <span className="font-medium">Hear about new campaigns first.</span>{" "}
           <span className="text-muted">Clipper can watch the Whop feeds and Discord channels where campaigns are announced and flag the ones that fit you.</span>

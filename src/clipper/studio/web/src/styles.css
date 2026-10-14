@@ -1,76 +1,77 @@
 @import "tailwindcss";
-@import "@fontsource-variable/figtree";
-@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/sofia-sans";
+@import "@fontsource-variable/sofia-sans-condensed";
 @import "@fontsource/jetbrains-mono/400.css";
 
-/* Design tokens (docs: research spec section b). Dark is the default; `.light`
-   overrides. Never use raw colours in components: use these via Tailwind. */
-/* Design tokens. Clipper's look (D102): ink and lime, headings set like the
-   captions burned into a clip. Lime marks the one thing to do in a view, like the
-   word being spoken in a caption; money has its own calm sage (D212). Dark is the default;
-   `.light` overrides. Never use raw colours in components: use these via Tailwind. */
+/* Design tokens. Clipper's look (D215): a wall of vertical posters, your clips, in rows by status, like a
+   streaming catalog. The artwork is the colour; the page around it is flat and quiet. Amber marks the one
+   thing to do next (D120), the focused poster and its button; green is money and nothing else (D212).
+   Dark is the default; `.light` is the same wall by day. Never use raw colours in components. */
 :root {
-  --bg: #0A0A0D;
-  --surface-1: #141419;
-  --surface-2: #1C1C23;
-  --surface-3: #26262F;
-  --border: rgb(255 255 255 / 0.08);
-  --border-strong: rgb(255 255 255 / 0.14);
-  --text: #F5F5F7;
-  --text-muted: #A1A1AE;
+  --bg: #0C0E12;
+  --surface-1: #13161B;
+  --surface-2: #1B1F26;
+  --surface-3: #262B33;
+  --border: rgb(255 255 255 / 0.07);
+  --border-strong: rgb(255 255 255 / 0.15);
+  --text: #ECEDEF;
+  --text-muted: #A6ABB4;
   /* 4.5:1 or better on every surface (WCAG AA). */
-  --text-subtle: #8E8E9A;
-  --accent: #D7FF3A;
-  --accent-hover: #E4FF75;
-  --accent-fg: #0A0A0D;
-  --accent-soft: rgb(215 255 58 / 0.13);
-  --focus-ring: #D7FF3A;
-  --money: #A8D5A2;
-  --success: #5BE3A6;
-  --warning: #FFC857;
-  --danger: #FF6B5A;
-  --info: #7CC4FF;
-  /* Caption headings: white with a black outline, as on a clip. */
-  --cap-shadow: 0 0 3px #000, 0 0 3px #000, 0 2px 0 #000;
+  --text-subtle: #8A909A;
+  --accent: #FFC229;
+  --accent-hover: #FFD15C;
+  --accent-fg: #17110A;
+  /* Amber as words or an icon on the page's ground; in the dark it's the fill itself. */
+  --accent-ink: #FFC229;
+  --accent-soft: rgb(255 194 41 / 0.14);
+  --focus-ring: #ECEDEF;
+  --money: #52D08F;
+  /* "Done" and "good" are not money (REDESIGN_NOTES 1): they read as plain strong text with their icon. */
+  --success: #D5D9DF;
+  --warning: #FF8F57;
+  --danger: #FF6464;
+  --info: #8DB8FF;
+  --scrim: rgb(5 6 8 / 0.62);
 
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.40);
-  --shadow-2: 0 6px 16px rgb(0 0 0 / 0.45);
-  --shadow-3: 0 16px 40px rgb(0 0 0 / 0.55);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.45);
+  --shadow-2: 0 8px 20px rgb(0 0 0 / 0.5);
+  --shadow-3: 0 18px 44px rgb(0 0 0 / 0.6);
 
-  --dur-instant: 80ms; --dur-fast: 120ms; --dur-base: 150ms; --dur-enter: 200ms;
-  --dur-exit: 140ms; --dur-panel: 280ms;
+  --dur-instant: 80ms; --dur-fast: 110ms; --dur-base: 140ms; --dur-enter: 180ms;
+  --dur-exit: 120ms; --dur-panel: 240ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
 
   color-scheme: dark;
 }
-/* Lime can't carry text on white, so light mode's accent is a deep olive. */
+/* The wall by day: cool grey so the posters still carry the colour. Amber stays a fill with dark words;
+   as words on the ground it turns deep ochre to keep 4.5:1. */
 :root.light {
-  --bg: #F6F6F4;
-  --surface-1: #FFFFFF;
-  --surface-2: #F0F0F3;
-  --surface-3: #E6E6EB;
-  --border: rgb(10 10 13 / 0.09);
-  --border-strong: rgb(10 10 13 / 0.16);
-  --text: #0A0A0D;
-  --text-muted: #4E4E58;
-  --text-subtle: #62626C;
-  --accent: #4F6B00;
-  --accent-hover: #435C00;
-  --accent-fg: #FFFFFF;
-  --accent-soft: rgb(79 107 0 / 0.10);
-  --focus-ring: #4F6B00;
-  --money: #2F6B4A;
-  /* Darker than they were (D192): the warning and success words fell under 4.5:1 on the grey surfaces. */
-  --success: #137446;
-  --warning: #955800;
-  --danger: #C8341F;
-  --info: #1F6FB8;
-  --cap-shadow: none;
-  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.06);
-  --shadow-2: 0 4px 12px rgb(0 0 0 / 0.08);
-  --shadow-3: 0 12px 32px rgb(0 0 0 / 0.14);
+  --bg: #E8EAEE;
+  --surface-1: #F4F5F7;
+  --surface-2: #FFFFFF;
+  --surface-3: #DCDFE4;
+  --border: rgb(16 19 24 / 0.10);
+  --border-strong: rgb(16 19 24 / 0.20);
+  --text: #101318;
+  --text-muted: #474D57;
+  --text-subtle: #5A616C;
+  --accent: #F5B30F;
+  --accent-hover: #E6A700;
+  --accent-fg: #17110A;
+  --accent-ink: #8A5900;
+  --accent-soft: rgb(245 179 15 / 0.18);
+  --focus-ring: #101318;
+  --money: #0B7A45;
+  --success: #2A2F37;
+  --warning: #B4470C;
+  --danger: #C42B2B;
+  --info: #1F62B8;
+  --scrim: rgb(16 19 24 / 0.45);
+  --shadow-1: 0 1px 2px rgb(16 19 24 / 0.08);
+  --shadow-2: 0 6px 16px rgb(16 19 24 / 0.12);
+  --shadow-3: 0 16px 36px rgb(16 19 24 / 0.18);
   color-scheme: light;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -91,33 +92,35 @@
   --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
   --color-ring: var(--focus-ring);
   --color-money: var(--money);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-info: var(--info);
-  --font-sans: "Figtree Variable", system-ui, sans-serif;
-  --font-display: "Bricolage Grotesque Variable", "Figtree Variable", system-ui, sans-serif;
+  --font-sans: "Sofia Sans Variable", system-ui, sans-serif;
+  --font-display: "Sofia Sans Condensed Variable", "Sofia Sans Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  /* Small, exact corners (D215): a poster's 6px, a control's 4px. Round pills are gone. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
   --shadow-3: var(--shadow-3);
   --ease-standard: var(--ease-standard);
   --ease-decelerate: var(--ease-decelerate);
-  /* 14px body, 13px labels (D210): 13 and 12 read small through a long session on a desktop tool. */
+  /* 15px body, 13px labels (D210, D215): Sofia Sans sets smaller than Figtree did, so the body went up a step. */
   --text-xs: 13px;
-  --text-sm: 14px;
-  --text-base: 14px;
-  --text-md: 16px;
-  --text-lg: 20px;
-  --text-xl: 24px;
-  --text-2xl: 30px;
-  --text-3xl: 36px;
+  --text-sm: 15px;
+  --text-base: 15px;
+  --text-md: 17px;
+  --text-lg: 21px;
+  --text-xl: 26px;
+  --text-2xl: 32px;
+  --text-3xl: 40px;
 }
 
 html, body, #root { height: 100%; }
@@ -126,33 +129,71 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.45;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
-h2, h3 { font-family: var(--font-display); }
+/* Headings in the condensed face, like a catalog's row titles (D215). In the base layer so a heading's own
+   classes win: unlayered, this beat `font-sans` on the clip tiles' titles. */
+@layer base {
+  h1, h2, h3 { line-height: 1.15; letter-spacing: 0; }
+  h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.005em; }
+}
 
-/* A caption heading: heavy, upper case, outlined like the words on a clip.
-   `.cap-hi` lights the word that matters; `.cap-word`s pop in one by one. */
+/* A title: tall, condensed, upper case, as a streaming wall sets a show's name (D215). It replaced the
+   outlined caption look (D102), which stopped at the heading and lost its outline by day. */
 .cap {
   font-family: var(--font-display);
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: -0.01em;
-  line-height: 0.95;
-  text-shadow: var(--cap-shadow);
+  letter-spacing: 0.005em;
+  line-height: 0.92;
 }
-.cap-hi { color: var(--accent); }
-.cap-word { display: inline-block; animation: word-in 360ms var(--ease-decelerate) both; animation-delay: calc(var(--i, 0) * 70ms); }
-@keyframes word-in { from { opacity: 0; transform: translateY(0.25em) scale(0.94); } }
-@media (prefers-reduced-motion: reduce) { .cap-word { animation: none; } }
+.cap-hi { color: inherit; }
+.cap-word { display: inline; }
 /* Big numbers (money, views) in the display face. */
-.num { font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.num { font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0; }
 .tabular { font-variant-numeric: tabular-nums; }
+/* A row's name on the wall: small caps-height condensed, tracked out. */
+.row-head { font-family: var(--font-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; font-size: 19px; line-height: 1; }
 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
-::selection { background: var(--accent-soft); }
+::selection { background: color-mix(in oklch, var(--text) 24%, transparent); }
+input, textarea { caret-color: var(--accent-ink); }
 * { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+a { text-underline-offset: 3px; }
+
+/* The wall's one move (D215): the poster in focus grows and takes the amber ring, and its row steps back.
+   `data-focus` marks it (J/K, hover or the first to post); `data-focusing` on the row dims the rest. */
+.poster {
+  position: relative; aspect-ratio: 9 / 16; overflow: hidden; border-radius: var(--radius-md);
+  background: var(--surface-2);
+  transition: transform var(--dur-base) var(--ease-decelerate), box-shadow var(--dur-base) var(--ease-decelerate),
+              opacity var(--dur-base) var(--ease-standard);
+}
+[data-focus] > .poster, .poster[data-focus],
+[data-tile]:hover > .poster, [data-tile]:focus-visible > .poster {
+  transform: translateY(-3px);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent), var(--shadow-2);
+}
+/* While one poster in a row is in focus, the others step back. Hover or keyboard wins over the default focus. */
+:is(.wall-row, [data-wall]):has([data-tile]:hover, [data-tile]:focus-visible) > [data-tile]:not(:hover, :focus-visible) { opacity: 0.5; }
+:is(.wall-row, [data-wall]):has([data-tile]:hover, [data-tile]:focus-visible) > [data-focus]:not(:hover, :focus-visible) > .poster {
+  transform: none; box-shadow: none;
+}
+[data-tile]:focus-visible { outline: none; }
+/* The tile in focus grows a line saying what a click does; hidden, not removed, so the row keeps its height. */
+.tile-more { opacity: 0; transform: translateY(-2px); transition: opacity var(--dur-base) var(--ease-decelerate), transform var(--dur-base) var(--ease-decelerate); }
+[data-tile]:is(:hover, :focus-visible, [data-focus]) .tile-more { opacity: 1; transform: none; }
+:is(.wall-row, [data-wall]):has([data-tile]:hover, [data-tile]:focus-visible) > [data-focus]:not(:hover, :focus-visible) .tile-more { opacity: 0; }
+/* A row that scrolls sideways, snapping a poster at a time; the edge fades so the next one promises more. */
+.wall-row {
+  display: flex; gap: 14px; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory; scroll-padding-inline: 2px; padding: 6px 2px 10px; scrollbar-width: none;
+}
+.wall-row::-webkit-scrollbar { display: none; }
+.wall-row > * { scroll-snap-align: start; }
+@media (prefers-reduced-motion: reduce) { .poster, .tile-more { transition: none; } }
 
 .skeleton {
   background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
@@ -212,3 +253,9 @@ button[data-busy]:disabled { opacity: 1; }
 .prose-answer table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
 .prose-answer th, .prose-answer td { border-bottom: 1px solid var(--border); padding: 0.35em 0.5em; text-align: left; }
 .prose-answer blockquote { border-left: 2px solid var(--border-strong); padding-left: 0.75em; color: var(--text-muted); }
+
+/* A link inside text (D215): the text's own colour, underlined. Amber is kept for the next thing to do. */
+.link { color: var(--text); font-weight: 600; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+.link:hover { text-decoration-color: currentColor; }
+/* A link in a sentence can't be 44px tall; on a touch screen its hit area reaches above and below the line. */
+@media (pointer: coarse) { .link { padding-block: 10px; margin-block: -10px; } }

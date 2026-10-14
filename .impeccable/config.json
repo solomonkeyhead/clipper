@@ -1,0 +1,61 @@
+{
+  "buildPath": "code",
+  "hook": {
+    "enabled": true,
+    "limits": {
+      "maxFindings": 5,
+      "maxChars": 8000
+    }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/clipper/studio/web/src/styles.css"
+        ],
+        "createdAt": "2026-10-13T16:06:27.118Z",
+        "reason": "Agent: the only hit is .prose-answer blockquote, a 2px neutral border-strong rule for markdown quotes, not an accent on a card"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/assigned.html"
+        ],
+        "createdAt": "2026-10-13T23:48:44.182Z",
+        "reason": "Agent: decision-round sketch, a spent mock under .impeccable/mocks/decision, never shipped"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/model-pick.html"
+        ],
+        "createdAt": "2026-10-13T23:48:44.429Z",
+        "reason": "Agent: decision-round sketch, a spent mock under .impeccable/mocks/decision, never shipped"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-wall.html"
+        ],
+        "createdAt": "2026-10-13T23:48:44.748Z",
+        "reason": "Agent: decision-round sketch, a spent mock under .impeccable/mocks/decision, never shipped"
+      },
+      {
+        "rule": "hero-eyebrow-chip",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-wall.html"
+        ],
+        "createdAt": "2026-10-13T23:48:45.026Z",
+        "reason": "Agent: decision-round sketch, a spent mock under .impeccable/mocks/decision, never shipped"
+      }
+    ]
+  }
+}

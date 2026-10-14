@@ -28,11 +28,11 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
   const waiting = clips.filter((c) => inFilter(c, "posted") && c.submit_at_views).length;
   return (
     <>
-      <div className="mb-5 flex flex-wrap gap-1.5" role="tablist">
+      <div className="mb-6 flex items-center gap-x-5 overflow-x-auto border-b border-line whitespace-nowrap [scrollbar-width:none]" role="tablist">
         {FILTERS.map(([key, label]) => (
           <button key={key} role="tab" aria-selected={value === key} onClick={() => onChange(key)}
-                  className={cn("h-8 rounded-full border px-3 text-sm font-medium transition-colors",
-                    value === key ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
+                  className={cn("-mb-px h-11 border-b-2 px-1 text-sm font-semibold transition-colors",
+                    value === key ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg")}>
             {label} <span className="tabular ml-1 opacity-70">{clips.filter((c) => inFilter(c, key) && !(key === "posted" && c.submit_at_views)).length}</span>
             {/* Posts still short of the campaign's view minimum are listed here but can't be submitted yet:
                 counted apart, as the Dashboard and the Post queue do (D161). */}
@@ -50,13 +50,13 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
   );
 }
 
-const linkClass = "inline-flex h-9 items-center gap-1.5 rounded-sm bg-accent px-3.5 text-sm font-medium text-accent-fg hover:bg-accent-hover";
+const linkClass = "inline-flex h-10 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-semibold text-accent-fg hover:bg-accent-hover pointer-coarse:h-11";
 
 /** What a filtered list shows when it's empty: what puts a clip here, and a link to do it (D143). */
 export function NoClips({ filter, campaign }: { filter: ClipFilter; campaign?: string }) {
   const make = <Link to="/new" search={{ campaign }} className={linkClass}>Make clips</Link>;
   if (filter === "posted") {
-    return <EmptyState icon={<PartyPopper className="size-5 text-money" />} title="All caught up" body="Every posted clip is submitted."
+    return <EmptyState icon={<PartyPopper className="size-5" />} title="All caught up" body="Every posted clip is submitted."
       action={<Link to="/clips" search={{ status: "ready" }} className={linkClass}>See what's ready to post</Link>} />;
   }
   if (filter === "ready") {
@@ -118,9 +118,9 @@ export function ClipsPage() {
         </>} />
       {search.rate ? (
         <Card className="mb-5 flex flex-wrap items-center gap-2.5 border-dashed p-3.5 text-sm text-muted">
-          <Info className="size-4 shrink-0 text-accent" />
+          <Info className="size-4 shrink-0 text-muted" />
           <p className="flex-1">{list.length} clip{list.length === 1 ? "" : "s"} with no rating. Thumbs up or down on each teaches Clipper your taste.</p>
-          <Link to="/clips" search={{ status }} className="font-medium text-accent hover:underline">Back to all clips</Link>
+          <Link to="/clips" search={{ status }} className="font-medium link">Back to all clips</Link>
         </Card>
       ) : (
         <ClipFilters clips={mine} value={status} hints

@@ -46,7 +46,7 @@ export function GroupsCard({ accounts }: { accounts: Account[] }) {
 function Member({ account }: { account: Account | undefined }) {
   if (!account) return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs">
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted text-fg">
       {/* The platform named too (D154): the same handle on two platforms read as a duplicate. */}
       <PlatformIcon platform={account.platform} className="size-3" />
       <span className="text-muted">{PLATFORM_NAME[account.platform] ?? account.platform}</span> @{account.handle}
@@ -92,10 +92,10 @@ function GroupEditor({ group, accounts, onDone }: { group: AccountGroup; account
   const [chosen, setChosen] = useState<string[]>(group.campaigns ?? []);
   const toggle = (list: string[], set: (v: string[]) => void, value: string) =>
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
-  const chip = (on: boolean) => cn("inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
-    on ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg");
+  const chip = (on: boolean) => cn("inline-flex h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-semibold transition-colors pointer-coarse:h-11",
+    on ? "bg-surface-3 text-fg" : "text-muted hover:bg-surface-2 hover:text-fg");
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-dashed border-line p-3">
+    <div className="flex flex-col gap-3 rounded-md bg-surface-2 p-3">
       <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name, e.g. Movies" aria-label="Group name" autoFocus />
       <div>
         <div className="mb-1.5 text-xs font-medium text-muted">Accounts</div>

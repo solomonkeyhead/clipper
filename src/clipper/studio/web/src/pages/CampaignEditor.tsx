@@ -118,7 +118,7 @@ function BriefReader({ onRead, initial = "", from, saved, editing = false }: {
     // Editing: the brief is optional, so it stays folded until asked for.
     return (
       <Card className="flex flex-wrap items-center gap-3 px-4 py-3">
-        <Sparkles className="size-4 shrink-0 text-accent" />
+        <Sparkles className="size-4 shrink-0 text-muted" />
         <span className="min-w-0 flex-1 text-sm">
           {saved ? <>Full brief saved {saved.slice(0, 10)}. <span className="text-muted">Ask can answer questions about it.</span></>
             : <>No brief saved. <span className="text-muted">Paste it so Ask can answer questions about this campaign.</span></>}
@@ -128,16 +128,16 @@ function BriefReader({ onRead, initial = "", from, saved, editing = false }: {
     );
   }
   return (
-    <Card className="flex flex-col gap-3 border-accent/40 bg-accent-soft/40 p-5">
+    <Card className="flex flex-col gap-3 bg-surface-2 p-5">
       <div>
         <h2 className="flex items-center gap-2 text-md font-semibold">
-          <Sparkles className="size-4 text-accent" /> {editing ? "Paste the brief" : "Fastest way: paste the brief"}
+          <Sparkles className="size-4 text-muted" /> {editing ? "Paste the brief" : "Fastest way: paste the brief"}
         </h2>
         {from ? (
           <p className="mt-0.5 text-sm text-muted">
             The alert only had the pay and platforms. Open{" "}
             {from.campaign_url ? (
-              <a href={from.campaign_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">the campaign page</a>
+              <a href={from.campaign_url} target="_blank" rel="noopener noreferrer" className="link">the campaign page</a>
             ) : "the campaign's page"}
             , copy the whole brief, and paste it here to fill in its rules. What's already filled in stays unless the brief says otherwise.
           </p>
@@ -302,7 +302,7 @@ export function CampaignEditorPage() {
             </Field>
           )}
           <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-1 accent-[var(--color-accent)]" checked={form.submit_links}
+            <input type="checkbox" className="mt-1 accent-[var(--text)]" checked={form.submit_links}
                    onChange={(e) => set("submit_links", e.target.checked)} />
             <span>Each post's link is submitted to the campaign<span className="block text-xs text-muted">Adds the "To submit" step. Leave it off if nobody asks you for links.</span></span>
           </label>
@@ -318,7 +318,7 @@ export function CampaignEditorPage() {
                 {PLATFORMS.map(([key, label]) => (
                   <button key={key} type="button" aria-pressed={form.platform_targets.includes(key)} onClick={() => togglePlatform(key)}
                     className={cn("flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium",
-                      form.platform_targets.includes(key) ? "border-accent bg-accent-soft text-fg" : "border-line text-muted hover:text-fg")}>
+                      form.platform_targets.includes(key) ? "border-line-strong bg-surface-3 text-fg" : "border-line text-muted hover:text-fg")}>
                     <PlatformIcon platform={key} className="size-4" /> {label}
                   </button>
                 ))}
