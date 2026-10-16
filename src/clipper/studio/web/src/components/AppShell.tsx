@@ -1,17 +1,16 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlertTriangle, ArrowRight, BarChart3, Bot, Film, Send, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search, Sparkles,
+  AlertTriangle, ArrowRight, BarChart3, Bot, Film, Send, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
   MoreHorizontal, Settings, UserCircle2, Wand2, WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useCampaigns, useClips, useCreate, useCreateAI, useHome, useJobs, useSetup, useStatus, useSyncNow, useUses } from "@/api/client";
+import { useCampaigns, useClips, useCreate, useCreateAI, useHome, useJobs, useSetup, useStatus, useSyncNow } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatMoney } from "@/lib/utils";
 import { AccountScope } from "./AccountScope";
-import { AskPanel } from "./AskPanel";
 import { ClipSheet } from "./clips";
 import { CommandPalette, ShortcutSheet } from "./Palette";
 import { Button, Kbd, Mark, Tip } from "./ui";
@@ -30,7 +29,6 @@ function useNav(): NavItem[] {
   const { data: campaigns = [] } = useCampaigns();
   const { data: clips = [] } = useClips();
   const { data: jobs = [] } = useJobs();
-  const uses = useUses();
   const working = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
   const active = new Set(campaigns.filter((c) => !c.archived).map((c) => c.name));
   // Clips waiting on you: ready to post, or posted and not yet submitted.
@@ -41,8 +39,8 @@ function useNav(): NavItem[] {
   const waiting = toPost + toSubmit;
   return [
     { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
-    // Create is the daily job, so it sits right under the Dashboard (D118); hidden when you don't use it (D145).
-    ...(uses.create ? [{ to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" }] : []),
+    // Create is the daily job, so it sits right under the Dashboard (D118).
+    { to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" },
     // A number only where something waits on you (D154): a count of campaigns asked nothing of anyone.
     { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C" },
     { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent",
@@ -211,17 +209,6 @@ function SyncPill() {
   );
 }
 
-function AutoPostPill() {
-  const { data: status } = useStatus();
-  if (!status?.auto_post) return null;
-  return (
-    <Link to="/settings"
-          className="flex h-9 items-center gap-1.5 rounded-sm px-2.5 text-xs font-bold text-warning hover:bg-surface-2">
-      <span className="size-1.5 animate-pulse rounded-full bg-current" /> Auto-post on
-    </Link>
-  );
-}
-
 /** Whether the window is narrower than `px`, kept up to date. */
 function useNarrow(px: number) {
   const query = `(max-width: ${px - 1}px)`;
@@ -249,7 +236,6 @@ export function AppShell() {
   const online = useUI((s) => s.online);
   const setPalette = useUI((s) => s.setPalette);
   const setShortcuts = useUI((s) => s.setShortcuts);
-  const setAsk = useUI((s) => s.setAsk);
   const nav = useNav();
   const [more, setMore] = useState(false);
   // A phone's tabs are the daily jobs (D198): posting is what a phone is for, and Clips and the Post queue sat
@@ -272,7 +258,6 @@ export function AppShell() {
     d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"), m: goto("/create"),
     s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"), p: goto("/post"),
     "[": toggle,
-    i: () => setAsk(true),
     "?": () => setShortcuts(true),
     "/": () => setPalette(true),
   }, { goto: true });
@@ -331,18 +316,11 @@ export function AppShell() {
             <Kbd className="hidden sm:inline">Ctrl K</Kbd>
           </button>
           <div className="flex items-center gap-0.5">
-            <Tip label="Ask about your clips, campaigns and trends" keys="I">
-              <button onClick={() => setAsk(true)} aria-label="Ask Clipper"
-                      className="flex h-9 items-center gap-1.5 rounded-sm px-2.5 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-fg pointer-coarse:h-11">
-                <Sparkles className="size-4" /> <span className="hidden sm:inline">Ask</span>
-              </button>
-            </Tip>
             <PaidLine />
             <AccountScope />
             <AIPill />
             <ClippingPill />
             <BuildPill />
-            <AutoPostPill />
             <SyncPill />
           </div>
         </header>
@@ -395,7 +373,6 @@ export function AppShell() {
       </div>
 
       <ClipSheet />
-      <AskPanel />
       <CommandPalette />
       <ShortcutSheet />
     </div>

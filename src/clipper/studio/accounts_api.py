@@ -68,10 +68,9 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
     def disconnect(platform: str, account: str) -> dict:
         from ..instagram import api as ig_api
         from ..tiktok import api as tt_api
-        from ..x import api as x_api
         from ..youtube import api as yt_api
 
-        module = {"tiktok": tt_api, "instagram": ig_api, "youtube": yt_api, "x": x_api}.get(platform)
+        module = {"tiktok": tt_api, "instagram": ig_api, "youtube": yt_api}.get(platform)
         if module is None or not module.remove(account):
             raise HTTPException(404, "no such account")
         publish("accounts.changed")
@@ -122,22 +121,6 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
     @app.get("/api/accounts/instagram/connect")
     def instagram_connect_state() -> dict[str, str]:
         return instagram.view()
-
-    @app.post("/api/accounts/x")
-    def x_connect(body: dict) -> dict:
-        """An X account by its username, read with the app's Bearer Token (D83)."""
-        from ..x import api as x_api
-
-        before = set(x_api.account_files())
-        try:
-            account = x_api.connect(str(body.get("username") or ""))
-        except x_api.XError as exc:
-            raise HTTPException(400, str(exc)) from exc
-        refused = account_groups.undo_if_over("x", before)
-        if refused:
-            raise HTTPException(402, refused)
-        publish("accounts.changed")
-        return {"username": account["username"]}
 
     @app.post("/api/accounts/instagram")
     def instagram_connect(body: dict) -> dict:

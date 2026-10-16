@@ -135,20 +135,3 @@ def test_a_chosen_provider_is_asked_first_and_the_usual_order_follows(monkeypatc
     assert [b.name for b in ai.backends(picked, job="topics")] == ["claude_code", "gemini"]   # only that job
 
 
-def test_a_taste_file_is_exported_without_clip_text_and_imported_as_the_starting_weights(data_root):
-    from fastapi.testclient import TestClient
-
-    from clipper.learn import feedback
-    from clipper.studio import server
-
-    client = TestClient(server.create_app())
-    exported = client.get("/api/learning/taste").json()
-    assert set(exported["weights"]) == set(feedback.RUBRIC) and "text" not in str(exported).lower().replace("context", "")
-    assert client.put("/api/learning/taste", json={"weights": {"hook_strength": 0.5}}).status_code == 400
-    mine = {k: 1 / len(feedback.RUBRIC) for k in feedback.RUBRIC} | {"hook_strength": 0.4, "payoff": 0.1}
-    assert client.put("/api/learning/taste", json={"weights": mine}).status_code == 200
-    assert runner._taste_seed() == mine
-    start, seeded = runner._seeded(Config().llm.rubric_weights.as_dict())   # no ratings yet: it starts from the file
-    assert seeded and start == mine
-    client.delete("/api/learning/taste")
-    assert runner._taste_seed() is None

@@ -1,7 +1,7 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, redirect, RouterProvider,
+  createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, RouterProvider,
 } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -9,7 +9,6 @@ import { Toaster, toast } from "sonner";
 import { AppShell } from "./components/AppShell";
 import { AlertTriangle, MapPinOff } from "lucide-react";
 import { Button, EmptyState, Skeleton } from "./components/ui";
-import { useUI } from "./lib/store";
 import { CampaignPage, CampaignsPage } from "./pages/CampaignPages";
 import { DashboardPage } from "./pages/HomePage";
 import { NewClipsPage } from "./pages/NewClipsPage";
@@ -63,9 +62,6 @@ const root = createRootRoute({
 });
 const routes = [
   createRoute({ getParentRoute: () => root, path: "/", component: DashboardPage }),
-  // The Research page became the Ask panel (top bar) and Find campaigns (Campaigns), D63.
-  createRoute({ getParentRoute: () => root, path: "/research",
-                beforeLoad: () => { throw redirect({ to: "/campaigns", search: { find: "1" } }); } }),
   createRoute({
     getParentRoute: () => root, path: "/campaigns", component: CampaignsPage,
     validateSearch: (s: Record<string, unknown>): { find?: string } => ({
@@ -109,11 +105,6 @@ const routes = [
       campaign: typeof s.campaign === "string" ? s.campaign : undefined,
     }),
   }),
-  // Queue and Submissions became filters on Clips.
-  createRoute({ getParentRoute: () => root, path: "/queue",
-                beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "ready" } }); } }),
-  createRoute({ getParentRoute: () => root, path: "/submissions",
-                beforeLoad: () => { throw redirect({ to: "/clips", search: { status: "posted" } }); } }),
   createRoute({
     getParentRoute: () => root, path: "/stats", component: StatsPage,
     // Where a number on another page came from: that campaign, sorted by that column (D143).
@@ -152,13 +143,12 @@ declare module "@tanstack/react-router" {
 }
 
 function App() {
-  const theme = useUI((s) => s.theme);
   return (
     <QueryClientProvider client={queryClient}>
       <Tooltip.Provider delayDuration={500}>
         <RouterProvider router={router} />
         <Toaster
-          theme={theme === "light" ? "light" : "dark"}
+          theme="system"
           position="bottom-center"
           // An open window (Radix) turns clicks off for the rest of the page; Undo has to stay clickable.
           style={{ pointerEvents: "auto" }}

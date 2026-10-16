@@ -1,8 +1,8 @@
 """Plans: which features an account has.
 
 Planned as paid tiers for a hosted Clipper (D62, D63): Free (clipping, stats),
-Research (adds the Ask chat, D90), Pro (everything:
-every clip a video has, several accounts per platform, later auto-posting). Nothing
+Research (10 videos at a time; it added the Ask chat, D90, gone since D216), Pro (everything:
+every clip a video has, several accounts per platform). Nothing
 is billed; a local install is on Pro, and the setting exists so the tiers can
 be tried and the checks sit in the right places.
 """
@@ -16,7 +16,7 @@ from . import db
 PLANS = ["free", "research", "pro"]
 PLAN_NAMES = {"free": "Free", "research": "Research", "pro": "Pro"}
 #: feature -> the lowest plan that has it
-FEATURES = {"research": "research", "unlimited_clips": "pro",
+FEATURES = {"unlimited_clips": "pro",
             # More than one account per platform, and account groups (D89).
             "multi_account": "pro"}
 # Choosing a clip's hook or caption, and writing your own, was a Research feature (D90); it is on every plan now

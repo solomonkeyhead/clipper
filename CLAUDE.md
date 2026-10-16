@@ -61,7 +61,7 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 ## Clipping AI
 - Moments are judged (rubric scores, opening lines) by Claude when `llm.judge_model` is set and
   Claude is reachable (API key, else Claude Code on Marc's plan), Gemini otherwise; Gemini always
-  watches the video (D139). Settings, Who does what, Judge the moments picks it (`llm.job_providers.judge`).
+  watches the video (D139). Settings, Which AI sets every job at once (`llm.job_providers`, D216).
 - Cached stages in `data/work/<source>/` carry a `.key` of the settings that made them
   (`pipeline.stage_keys`); a changed campaign redoes them (D139).
 

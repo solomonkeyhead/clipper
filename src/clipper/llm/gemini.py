@@ -67,8 +67,7 @@ class GeminiBackend(LLMBackend):
             raise LLMConfigError(
                 "GEMINI_API_KEY is not set.\n"
                 "  Get a free key at https://aistudio.google.com/apikey\n"
-                "  Then copy .env.example to .env and put it there.\n"
-                "  Or choose another backend: --backend ollama"
+                "  Then copy .env.example to .env and put it there."
             )
         self._client = None
 

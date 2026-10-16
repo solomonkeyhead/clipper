@@ -66,11 +66,15 @@ export interface paths {
         };
         /**
          * Ai Jobs
-         * @description Who does which AI job, and which providers this computer can use (D148).
+         * @description The AI every job goes to, and which providers this computer can use. `choice` is "" for
+         *     Automatic, or "mixed" while picks made per job before D216 still differ.
          */
         get: operations["ai_jobs_api_ai_jobs_get"];
-        /** Set Ai Job */
-        put: operations["set_ai_job_api_ai_jobs_put"];
+        /**
+         * Set Ai Jobs
+         * @description One AI for every job, or Automatic ("") to put each back on Clipper's own order.
+         */
+        put: operations["set_ai_jobs_api_ai_jobs_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -401,43 +405,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/alerts/discord": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Discord Bot
-         * @description The bot behind the token, and every channel it can read (asks Discord).
-         */
-        get: operations["discord_bot_api_alerts_discord_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/alerts/channels": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Watch Channels */
-        put: operations["watch_channels_api_alerts_channels_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/alerts/prefs": {
         parameters: {
             query?: never;
@@ -466,7 +433,7 @@ export interface paths {
         put?: never;
         /**
          * Check Alerts
-         * @description Check the watched channels now, rather than at the next scheduled check.
+         * @description Check the watched feeds now, rather than at the next scheduled check.
          */
         post: operations["check_alerts_api_alerts_check_post"];
         delete?: never;
@@ -541,23 +508,6 @@ export interface paths {
         put?: never;
         /** Whop Disconnect */
         post: operations["whop_disconnect_api_alerts_whop_disconnect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/alerts/test-push": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Alert Test Push */
-        post: operations["alert_test_push_api_alerts_test_push_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1854,52 +1804,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/learning/taste": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Taste Export
-         * @description What Clipper has learnt about this user's taste, as a file to keep or give to a new install:
-         *     the six rubric weights and the reasons they give most. No clip text, no titles (D148).
-         */
-        get: operations["taste_export_api_learning_taste_get"];
-        /**
-         * Taste Import
-         * @description Start from a taste file: its weights are the prior until this install's own ratings take over.
-         */
-        put: operations["taste_import_api_learning_taste_put"];
-        post?: never;
-        /** Taste Clear */
-        delete: operations["taste_clear_api_learning_taste_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/learning/compare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Whats Working
-         * @description Posts with each change against posts without it, fairly (D105).
-         */
-        get: operations["whats_working_api_learning_compare_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/posts/history": {
         parameters: {
             query?: never;
@@ -2084,26 +1988,6 @@ export interface paths {
          * @description Start Instagram's login; the page opens the returned consent link (D150).
          */
         post: operations["instagram_connect_start_api_accounts_instagram_connect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/accounts/x": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * X Connect
-         * @description An X account by its username, read with the app's Bearer Token (D83).
-         */
-        post: operations["x_connect_api_accounts_x_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2506,78 +2390,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/research/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Status */
-        get: operations["status_api_research_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/threads": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Threads */
-        get: operations["threads_api_research_threads_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/threads/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Thread */
-        get: operations["thread_api_research_threads__thread_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Thread */
-        delete: operations["delete_thread_api_research_threads__thread_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/ask": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ask
-         * @description Ask in a conversation (a new one without `thread_id`); returns it with the answer.
-         */
-        post: operations["ask_api_research_ask_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2633,22 +2445,6 @@ export interface components {
              */
             campaigns: string[];
         };
-        /** AlertChannel */
-        AlertChannel: {
-            /** Id */
-            id: string;
-            /** Guild Id */
-            guild_id: string;
-            /** Guild */
-            guild: string;
-            /** Name */
-            name: string;
-            /**
-             * Kind
-             * @default text
-             */
-            kind: string;
-        };
         /** AlertCheck */
         AlertCheck: {
             /**
@@ -2672,11 +2468,6 @@ export interface components {
              */
             new: string[];
             /**
-             * Pushed
-             * @default 0
-             */
-            pushed: number;
-            /**
              * Errors
              * @default []
              */
@@ -2684,10 +2475,6 @@ export interface components {
         };
         /** Alerts */
         Alerts: {
-            /** Token Set */
-            token_set: boolean;
-            /** Watched */
-            watched: components["schemas"]["AlertChannel"][];
             /**
              * Whop App
              * @default false
@@ -2707,14 +2494,10 @@ export interface components {
             checked_at: string;
             /** Error */
             error: string;
-            /** Push Set */
-            push_set: boolean;
             /** Every Minutes */
             every_minutes: number;
             /** Profile */
             profile: string;
-            /** Min Rate */
-            min_rate: number;
         };
         /** Band */
         Band: {
@@ -2815,8 +2598,6 @@ export interface components {
             has_brief: boolean;
             /** Archived */
             archived: boolean;
-            /** Auto Post */
-            auto_post: boolean | null;
             /** Platforms */
             platforms: string[];
             /** Reward Per 1K Usd */
@@ -3213,42 +2994,6 @@ export interface components {
             /** Rerender Error */
             rerender_error?: string | null;
         };
-        /** CompareRow */
-        CompareRow: {
-            /** Platform */
-            platform: string;
-            yes: components["schemas"]["CompareSide"];
-            no: components["schemas"]["CompareSide"];
-            /** Ratio */
-            ratio?: number | null;
-            /** Verdict */
-            verdict: string;
-        };
-        /** CompareSide */
-        CompareSide: {
-            /** Posts */
-            posts: number;
-            /** Median Views */
-            median_views?: number | null;
-            /** Skip Rate */
-            skip_rate?: number | null;
-        };
-        /**
-         * Comparison
-         * @description Posts with a change against posts without it (learn/compare.py, D105).
-         */
-        Comparison: {
-            /** Key */
-            key: string;
-            /** Title */
-            title: string;
-            /** Yes Label */
-            yes_label: string;
-            /** No Label */
-            no_label: string;
-            /** Rows */
-            rows: components["schemas"]["CompareRow"][];
-        };
         /** Dimension */
         Dimension: {
             /** Key */
@@ -3261,19 +3006,6 @@ export interface components {
             learned: number;
             /** Agreement */
             agreement?: number | null;
-        };
-        /** DiscordBot */
-        DiscordBot: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Content Intent */
-            content_intent: boolean;
-            /** Invite */
-            invite: string;
-            /** Channels */
-            channels: components["schemas"]["AlertChannel"][];
         };
         /** Duplicate */
         Duplicate: {
@@ -3457,19 +3189,6 @@ export interface components {
                 [key: string]: boolean;
             };
         };
-        /** HookResult */
-        HookResult: {
-            /** Campaign */
-            campaign: string;
-            /** Platform */
-            platform: string;
-            /** Hook */
-            hook: string;
-            /** Posts */
-            posts: number;
-            /** Median Views */
-            median_views: number;
-        };
         /** Learning */
         Learning: {
             /** Active */
@@ -3516,19 +3235,6 @@ export interface components {
             min_for_weights: number;
             /** Min For Agreement */
             min_for_agreement: number;
-        };
-        /** Message */
-        Message: {
-            /** Id */
-            id: number;
-            /** Role */
-            role: string;
-            /** Content */
-            content: string;
-            /** Sources */
-            sources: components["schemas"]["Source"][];
-            /** Created At */
-            created_at: string;
         };
         /** Metrics */
         Metrics: {
@@ -3746,17 +3452,6 @@ export interface components {
             /** Label */
             label: string;
         };
-        /** ResearchStatus */
-        ResearchStatus: {
-            /** Plan */
-            plan: string;
-            /** Can Research */
-            can_research: boolean;
-            /** Ai */
-            ai: boolean;
-            /** Web */
-            web: boolean;
-        };
         /** RuleCheck */
         RuleCheck: {
             /** Name */
@@ -3841,13 +3536,6 @@ export interface components {
              */
             top_mover_gain: number;
         };
-        /** Source */
-        Source: {
-            /** Title */
-            title: string;
-            /** Url */
-            url: string;
-        };
         /** Status */
         Status: {
             /** Last Synced */
@@ -3858,8 +3546,6 @@ export interface components {
             sync_minutes: number;
             /** Problems */
             problems: string[];
-            /** Auto Post */
-            auto_post: boolean;
             /** Accounts */
             accounts: components["schemas"]["Account"][];
             /**
@@ -3867,26 +3553,6 @@ export interface components {
              * @default false
              */
             hosted: boolean;
-        };
-        /** Thread */
-        Thread: {
-            /** Id */
-            id: number;
-            /** Title */
-            title: string;
-            /** Updated At */
-            updated_at: string;
-        };
-        /** ThreadDetail */
-        ThreadDetail: {
-            /** Id */
-            id: number;
-            /** Title */
-            title: string;
-            /** Updated At */
-            updated_at: string;
-            /** Messages */
-            messages: components["schemas"]["Message"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -3900,19 +3566,6 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
-        };
-        /** WhatsWorking */
-        WhatsWorking: {
-            /** Age Hours */
-            age_hours: number;
-            /** Min Each */
-            min_each: number;
-            /** Comparisons */
-            comparisons: components["schemas"]["Comparison"][];
-            /** Hooks */
-            hooks: components["schemas"]["HookResult"][];
-            /** Disclosed Since */
-            disclosed_since: string;
         };
         /** WhopFeed */
         WhopFeed: {
@@ -4018,7 +3671,7 @@ export interface operations {
             };
         };
     };
-    set_ai_job_api_ai_jobs_put: {
+    set_ai_jobs_api_ai_jobs_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -4760,61 +4413,6 @@ export interface operations {
             };
         };
     };
-    discord_bot_api_alerts_discord_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscordBot"];
-                };
-            };
-        };
-    };
-    watch_channels_api_alerts_channels_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Alerts"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     alert_prefs_api_alerts_prefs_put: {
         parameters: {
             query?: never;
@@ -4985,28 +4583,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Alerts"];
-                };
-            };
-        };
-    };
-    alert_test_push_api_alerts_test_push_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
         };
@@ -7386,107 +6962,6 @@ export interface operations {
             };
         };
     };
-    taste_export_api_learning_taste_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    taste_import_api_learning_taste_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    taste_clear_api_learning_taste_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    whats_working_api_learning_compare_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WhatsWorking"];
-                };
-            };
-        };
-    };
     post_history_api_posts_history_get: {
         parameters: {
             query: {
@@ -7828,43 +7303,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
-                };
-            };
-        };
-    };
-    x_connect_api_accounts_x_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8578,145 +8016,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    status_api_research_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResearchStatus"];
-                };
-            };
-        };
-    };
-    threads_api_research_threads_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Thread"][];
-                };
-            };
-        };
-    };
-    thread_api_research_threads__thread_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_thread_api_research_threads__thread_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ask_api_research_ask_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadDetail"];
                 };
             };
             /** @description Validation Error */

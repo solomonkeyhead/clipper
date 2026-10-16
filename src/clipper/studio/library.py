@@ -349,69 +349,6 @@ def with_description(caption: str, description: str) -> str:
     return "\n\n".join(p for p in (line, description.strip(), tags) if p)
 
 
-def describe_clips(campaign_name: str, *, backends=None, listener=None) -> list[tuple[str, str]]:
-    """Write descriptions for a campaign's clips that aren't posted yet.
-
-    Posted clips keep their caption: it is what is live, and what the syncs match
-    on. Needs each clip's time range (start_s/end_s) and its source's transcript.
-    Returns (title, description) for each clip described.
-    """
-    from ..campaign.description import describe, pasted_brief
-    from ..config import CampaignConfig, Config
-    from ..learn import log as perf
-    from ..llm.cache import LLMCache
-    from ..models import SourceInfo, Transcript
-    from ..paths import campaigns_dir, work_dir
-    from ..runner import with_range_transcript
-    from .stats import posts_by_clip
-
-    campaign = CampaignConfig.load(campaigns_dir() / f"{campaign_name}.yaml")
-    if not campaign.long_description:
-        raise ValueError(f"{campaign_name}: set long_description: true in its yaml first")
-    config = Config.load()
-    if backends is None:
-        from ..pipeline import build_backend
-
-        backends = [build_backend(config)]
-    rows = perf.read()
-    posts = posts_by_clip(rows)
-    brief = pasted_brief(campaign_name)
-    done = []
-    with db.connect() as con:
-        for clip in db.clips(con, campaign_name):
-            live = posts.get((clip["campaign"], clip["source_id"], clip["clip_id"]))
-            if live or clip["status"] != "ready" or clip["start_s"] is None:
-                continue
-            work = work_dir(clip["source_id"])
-            if not (work / "transcript.json").exists():
-                continue
-            words = Transcript.load(work / "transcript.json").words
-            start, end = clip["start_s"], clip["end_s"]
-            if listener is None and (work / "info.json").exists():
-                from ..transcribe.recheck import AudioRecheck
-
-                info = SourceInfo.load(work / "info.json")
-                if info.audio_path and Path(info.audio_path).exists():
-                    listener = AudioRecheck(Path(info.audio_path), config.transcription)
-            if listener is not None:
-                words = with_range_transcript(words, start, end, listener.words_between(start, end))
-            text = " ".join(w.text for w in words if start <= (w.start + w.end) / 2 < end)
-            line, _ = split_caption(clip["caption"])
-            description = describe(text, campaign, line, backends, cache=LLMCache(), hook=clip["hook"] or "", brief=brief)
-            if not description:
-                continue
-            caption = with_description(clip["caption"], description)
-            db.update_clip(con, clip["id"], caption=caption)
-            for row in rows:  # the log row, so the syncs and Control Center agree
-                if ((row.get("platform") or "tiktok") == "tiktok" and not row.get("url")
-                        and (row.get("campaign"), row.get("source_id"), row.get("clip_id"))
-                        == (clip["campaign"], clip["source_id"], clip["clip_id"])):
-                    row["caption"] = caption
-            done.append((clip["title"], description))
-    perf.write(rows)
-    return done
-
-
 def clip_texts(clips: list[dict]) -> dict[int, str]:
     """Clip id -> what is said in it, from its source's transcript (each source
     read once). Clips with no time range or transcript are left out."""

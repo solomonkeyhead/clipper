@@ -20,7 +20,7 @@ is the order I'd build them.
 | Stopping a build | Ran to the end | Cancel while it builds (stops at the next step; a finished version stays); Build again on a finished video | **Done** (D122) | |
 | How long a drawing stays up | One picture per sentence, unless the plan holds a drawing | "Keep the drawing above, building on" on any sentence after a drawing | **Done** (D124) | |
 | Archiving a posted video | Moves to the Archive once posted (found or marked in Clips) | Archive any video by hand; "Back to Create" keeps it out | **Done** (D131) | |
-| Who does each AI job | Gemini first for script, check, review and footage; Claude draws (`llm.create_gemini_jobs`, D136) | Switches in Settings per job | Gap (config only) | S |
+| Who does each AI job | Gemini first for script, check, review and footage; Claude draws (`llm.create_gemini_jobs`, D136) | "Which AI" in Settings: one choice for every job (D216; a list per job before, D148); per job only in config (`llm.job_providers`) | **Exists** | |
 | Which stock clip | The AI judge picks one of ~6 | "New footage" opens a picker: searches written for the part, both libraries, every clip scored, best first; pick one (or several for a long part), or let Clipper choose | **Done** (D129) | |
 | Redo one picture | "New pictures" redoes all of them | On a built video: per part, "New footage" or "New drawing" (with optional words), undo, and a rebuild that keeps every other part as it was | **Done** (D125) | |
 | Diagram contents | Templates and sketches are generated; a sketch is kept out of the button corner and its words moved off its lines (D182) | A template's title and labels, a sketch's words, per part (D171); a sketch's words and arrows coloured, its arrows turned round, a forces diagram's arrows pointed (D180); numbers, a template's colours | Partial | S |
@@ -51,7 +51,7 @@ is the order I'd build them.
 | Cover frame | Best still picked automatically | Pause the player and "Use this frame" (D171) | Done | - |
 | Watermark | Channel setting | On/off and corner per video | Gap | S |
 | Loudness and music | Always normalised; no music | Normalisation off or a level; an optional music bed with ducking under the voice | Gap | M |
-| Which AI writes | Claude plan, else key, else Gemini | A Settings choice (Claude plan, API key, Gemini), model picker, and the "only Claude" switch (`create_claude_only`) | Gap | S |
+| Which AI writes | Claude plan, else key, else Gemini | "Which AI" in Settings (Claude plan, API key, Gemini) is done (D216); a model picker and the "only Claude" switch (`create_claude_only`) are config only | Gap | S |
 
 ## Clipping (campaign clips)
 
@@ -71,7 +71,7 @@ is the order I'd build them.
 | Post caption and hashtags | Generated from the brief | Editable on the clip, and the brief's lines to choose from, on every plan (the tier gate came out, D169) | **Done** | |
 | Brief rules | AI reads a pasted brief | **Exists** (the campaign editor) | **Exists** | |
 | Finding campaigns | Automatic discovery | **Exists** ("New campaign" by hand) | **Exists** | |
-| Posting | Auto-post switch (not shipped) | Off by default; every post waits for a click | **Exists** | |
+| Posting | None: every post is yours, from the Post queue (the unbuilt auto-post switch went, D216) | Posting by hand | **Exists** | |
 
 ## Where I'd start
 

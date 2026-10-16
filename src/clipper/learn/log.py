@@ -99,31 +99,6 @@ class NewClip:
     hook: str = ""
 
 
-def campaign_links(rows: list[dict[str, str]], campaign: str, *, since: str | None = None,
-                   platform: str | None = None) -> list[tuple[str, str, str, str]]:
-    """(posted_at, platform, caption, url) of every posted clip of `campaign`, oldest first.
-
-    For pasting into a campaign's submission form instead of opening each post
-    to copy its link. `since` is a YYYY-MM-DD date; posts before it are left out.
-    `platform` ("tiktok" or "instagram") keeps only that platform's posts.
-    """
-    out = []
-    for row in rows:
-        url = (row.get("url") or "").strip()
-        if not url or (row.get("campaign") or "").strip() != campaign:
-            continue
-        where = (row.get("platform") or "").strip() or "tiktok"
-        if platform and where != platform:
-            continue
-        posted = (row.get("posted_at") or "").strip()
-        if since and posted and posted[:10] < since:
-            continue
-        # The API's share_url carries ?utm_campaign=tt4d_open_api&utm_source=
-        # <the app's client key>; the post's address is everything before it.
-        out.append((posted, where, (row.get("caption") or "").strip(), url.split("?", 1)[0]))
-    return sorted(out)
-
-
 #: The last read of each log file, by its size and modification time: the
 #: Control Center reads it on every page load, and parsing the workbook is
 #: most of that time. Callers change the rows they get, so each gets a copy.

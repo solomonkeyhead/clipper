@@ -73,31 +73,6 @@ class TestRangeTranscript:
         assert with_range_transcript(episode, 10, 20, None) is episode
 
 
-class TestCampaignLinks:
-    def test_only_this_campaigns_posted_clips_oldest_first(self):
-        from clipper.learn.log import campaign_links
-
-        rows = [
-            {"campaign": "sample-show", "caption": "b",
-             "url": "https://t/2?utm_campaign=tt4d_open_api&utm_source=abc",
-             "posted_at": "2026-09-29 10:00"},
-            {"campaign": "sample-show", "caption": "a", "url": "https://t/1",
-             "posted_at": "2026-09-28 18:00"},
-            {"campaign": "sample-show", "caption": "unposted", "url": ""},
-            {"campaign": "fx-adults-s2", "caption": "c", "url": "https://t/3",
-             "posted_at": "2026-09-22 12:00"},
-        ]
-        rows.append({"campaign": "sample-show", "caption": "a", "platform": "instagram",
-                     "url": "https://www.instagram.com/reel/X/",
-                     "posted_at": "2026-09-28 19:00"})
-        assert [u for *_, u in campaign_links(rows, "sample-show")] == [
-            "https://t/1", "https://www.instagram.com/reel/X/", "https://t/2"]
-        assert [u for *_, u in campaign_links(rows, "sample-show",
-                                              since="2026-09-29")] == ["https://t/2"]
-        assert [u for *_, u in campaign_links(rows, "sample-show", platform="instagram")] == [
-            "https://www.instagram.com/reel/X/"]
-
-
 class TestCaptionHold:
     """Captions left the screen the instant their last word ended: too short to
     read in slow scripted dialogue."""

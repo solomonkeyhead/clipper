@@ -191,7 +191,6 @@ class Campaign(BaseModel):
     marketplace: str = ""
     has_brief: bool
     archived: bool
-    auto_post: bool | None
     platforms: list[str]
     reward_per_1k_usd: float | None = None
     max_clips: int | None = None   # most clips per video when Clipper decides; None: no limit
@@ -357,14 +356,6 @@ class FoundCampaign(BaseModel):
     niche: str = ""                  # what gets clipped (watch.judge.NICHES, D106); "" until sorted
 
 
-class AlertChannel(BaseModel):
-    id: str
-    guild_id: str
-    guild: str
-    name: str
-    kind: str = "text"
-
-
 class WhopFeed(BaseModel):
     id: str
     company: str
@@ -372,25 +363,13 @@ class WhopFeed(BaseModel):
 
 
 class Alerts(BaseModel):
-    token_set: bool
-    watched: list[AlertChannel]
     whop_app: bool = False          # the Whop app's ID is saved
     whop_signed_in: bool = False
     whop_feeds: list[WhopFeed] = []
     checked_at: str
     error: str
-    push_set: bool
     every_minutes: int
     profile: str
-    min_rate: float
-
-
-class DiscordBot(BaseModel):
-    id: str
-    name: str
-    content_intent: bool
-    invite: str
-    channels: list[AlertChannel]
 
 
 class AlertCheck(BaseModel):
@@ -398,7 +377,6 @@ class AlertCheck(BaseModel):
     read: int = 0
     campaigns: int = 0
     new: list[str] = []
-    pushed: int = 0
     errors: list[str] = []
 
 
@@ -435,7 +413,6 @@ class Status(BaseModel):
     syncing: bool
     sync_minutes: int
     problems: list[str]
-    auto_post: bool
     accounts: list[Account]
     hosted: bool = False   # on a server others reach, not this one computer: local-only actions are hidden (D148)
 
@@ -474,42 +451,3 @@ class EditorView(BaseModel):
     clip_id: int | None = None
     clip_status: str | None = None
     edit: dict | None = None       # editing.ClipEdit: pieces, hook, fixes
-
-
-class CompareSide(BaseModel):
-    posts: int
-    median_views: float | None = None
-    skip_rate: float | None = None     # Instagram: % who swipe away in the first 3 s
-
-
-class CompareRow(BaseModel):
-    platform: str
-    yes: CompareSide
-    no: CompareSide
-    ratio: float | None = None
-    verdict: str
-
-
-class Comparison(BaseModel):
-    """Posts with a change against posts without it (learn/compare.py, D105)."""
-    key: str
-    title: str
-    yes_label: str
-    no_label: str
-    rows: list[CompareRow]
-
-
-class HookResult(BaseModel):
-    campaign: str
-    platform: str
-    hook: str
-    posts: int
-    median_views: float
-
-
-class WhatsWorking(BaseModel):
-    age_hours: int
-    min_each: int
-    comparisons: list[Comparison]
-    hooks: list[HookResult]
-    disclosed_since: str               # TikTok posts from this date count as switch on

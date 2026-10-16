@@ -1,9 +1,11 @@
-"""Decide whether an email or Discord post announces a new campaign worth the user's time.
+"""Decide whether a Whop feed post announces a new campaign worth the user's time.
 
-The email is data, not instructions: its text is quoted to the model inside a
-fenced block, and nothing it says can change what gets pushed except through
+The post is data, not instructions: its text is quoted to the model inside a
+fenced block, and nothing it says can change what gets kept except through
 the fields of the verdict -- whose link is only kept when it points at a known
-campaign site (`safe_link`).
+campaign site (`safe_link`). The prompt still names emails and Discord, the
+sources this was first written for (removed, D216); it stays as it is so cached
+verdicts stay valid.
 """
 
 from __future__ import annotations
@@ -17,7 +19,6 @@ from pydantic import BaseModel, ValidationError
 from ..llm.base import LLMBackend
 from ..llm.cache import LLMCache
 from ..utils.logging import get_logger
-from .mailbox import Mail
 
 log = get_logger(__name__)
 
@@ -86,11 +87,9 @@ class Verdict(BaseModel):
     why: str = ""
 
 
-def judge(mail: Mail, profile: str, backend: LLMBackend | list[LLMBackend], *,
-          cache: LLMCache | None = None) -> Verdict | None:
-    """The model's verdict on one email; None if no model answered usably."""
-    return judge_text(f"Email from: {mail.sender}\nSubject: {mail.subject}\nDate: {mail.sent}",
-                      mail.text, profile, backend, cache=cache, label=mail.subject)
+def campaign_key(v: Verdict) -> str:
+    """One found campaign, however many posts mention it."""
+    return f"{v.source}|{v.name.strip().lower()}|{v.owner.strip().lower()}"
 
 
 def judge_text(header: str, text: str, profile: str, backend: LLMBackend | list[LLMBackend], *,

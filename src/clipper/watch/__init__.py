@@ -1,7 +1,5 @@
-"""Campaign watcher: new-campaign emails in a dedicated mailbox -> phone push.
+"""Campaign alerts: the Whop feeds the user follows (whop.py) and the judge that reads them (judge.py).
 
-Vyro and Whop both forbid scraping their sites, so the watcher never visits
-them. It reads the campaign emails they send, forwarded by the user's own mail
-rule into a mailbox used only for this, and pushes the relevant ones to the
-user's phone through ntfy.
+Vyro and Whop both forbid scraping their sites, so nothing here visits them: Whop's own API reads the
+feeds the user has joined. The email watcher and ntfy pushes that started this package are gone (D216).
 """

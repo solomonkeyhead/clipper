@@ -3720,3 +3720,26 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - Not done: an undo after deleting a Short or skipping an idea would need the server to restore from the Recycle Bin;
   deletes still ask first, inline. `scripts/ui/walkthrough.py` is updated for the new controls but wasn't run here
   (it needs a cloud session's Chromium).
+
+## D216: features cut after a review of what the site needs (2026-10-15)
+- A pass over every feature sorted them into essential, middle and not needed, against Marc's own data: 112 clips
+  made, 67 ready, 8 posted, 1 submitted, 0 payouts recorded. Making clips works; posting and submitting is where it
+  stalls. Marc picked what to cut from the "not needed" list. Deleted files went to the Recycle Bin.
+- Gone: the Ask chat (`research/`, `research_api.py`, the panel and its Tavily key; 14 messages ever), the Discord bot
+  and the ntfy phone pushes (0 channels set up; the Whop feed finds campaigns), the old email watcher (`clipper watch`,
+  `watch/mailbox.py`, `watcher.py`; its scheduled task was already off), the X account and its paid sync (`x/`; no X
+  account connected; X stays a platform a campaign can pay for), Learning's experiments and "what's working"
+  comparisons (`learn/compare.py`; none made, 8 posts is too few), the "Does the score work?" cards and table and the
+  taste file export/import (the plain-words lines and "What Clipper has learned" stay), the Ollama backend, the
+  auto-post switch (never built), the old redirect addresses (/research, /queue, /submissions), the theme switch (the
+  page follows the computer's light or dark mode), the "What you use Clipper for" switches and the dashboard question
+  that set them (every part shows), and the CLI commands the page covers (run, cut, score, explain, eval, links,
+  library import/describe, youtube bundle).
+- "Who does what" (a list per job, D148) became one "Which AI" choice in Settings: Automatic, Claude on my plan,
+  Claude API key, or Gemini, for every job at once. Picks made per job before stay in force, shown as "Your own pick
+  per job", until one choice replaces them. Create's "Use Claude for footage" button became "Use Claude instead".
+- Kept, though on the list: the single-key shortcuts switch (WCAG 2.1.4 wants letter-key shortcuts to have an off
+  switch), and the connect service (`broker/`, `connect.py`): `CLIPPER_BROKER_URL` is set on Marc's machine and
+  Instagram has no app of its own, so its sign-in goes through the service. Asked Marc before removing it.
+- Old database tables and settings (discord_channels, research_threads, experiments, use_*) stay in existing
+  databases, unread; new databases don't make them.

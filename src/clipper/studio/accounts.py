@@ -44,9 +44,6 @@ def token_files(platform: str):
     if platform == "youtube":
         from ..youtube import api
         return api.token_files
-    if platform == "x":
-        from ..x import api
-        return api.account_files
     raise ValueError(f"unknown platform {platform!r}")
 
 

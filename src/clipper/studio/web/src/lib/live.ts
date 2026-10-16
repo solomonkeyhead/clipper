@@ -95,9 +95,6 @@ export function useLiveUpdates() {
         qc.invalidateQueries({ queryKey: keys.setup });
         qc.invalidateQueries({ queryKey: keys.home });
       });
-      source.addEventListener("research.progress", (e) => {
-        qc.setQueryData(["research", "progress"], JSON.parse((e as MessageEvent).data || "null"));
-      });
       source.addEventListener("accounts.changed", () => {
         [keys.accounts, keys.setup, keys.status, keys.home, ["account-groups"]].forEach((queryKey) => qc.invalidateQueries({ queryKey }));
       });

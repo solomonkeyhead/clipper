@@ -7,12 +7,15 @@
 <title>Clipper</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <script>
-  // Apply the saved theme before first paint (no flash of the wrong theme).
+  // The computer's light or dark mode, before first paint and whenever it changes (its own switch went, D216).
   try {
-    var t = localStorage.getItem("clipper.theme") || "dark";
-    var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.classList.toggle("dark", dark);
-    document.documentElement.classList.toggle("light", !dark);
+    var mode = matchMedia("(prefers-color-scheme: dark)");
+    var apply = function () {
+      document.documentElement.classList.toggle("dark", mode.matches);
+      document.documentElement.classList.toggle("light", !mode.matches);
+    };
+    apply();
+    mode.addEventListener("change", apply);
   } catch (e) {}
 </script>
 </head>

@@ -63,7 +63,6 @@ from .api_models import (
     Rules,
     SinceLastVisit,
     Status,
-    WhatsWorking,
 )
 from .events import Broker
 from .imports import VIDEO_EXTENSIONS
@@ -346,12 +345,10 @@ class Snapshot:
                                 waiting=sum(1 for c in mine if c.submit_at_views))
         earnings = [p.est_earnings for p in posts if p.est_earnings is not None]
         st = self.state.get(name, {})
-        auto = st.get("auto_post")
         locked = stats.locked_earnings(posts, lambda _: brief)
         return Campaign(
             name=name, title=editor.title_of(brief) if brief else editor.pretty(name),
             marketplace=brief.marketplace if brief else "", has_brief=brief is not None, archived=bool(st.get("archived")),
-            auto_post=None if auto is None else bool(auto),
             platforms=list(brief.platform_targets) if brief else [],
             reward_per_1k_usd=brief.reward_per_1k_usd if brief else None,
             max_clips=brief.max_clips_per_source if brief else None,
@@ -463,17 +460,6 @@ def accounts() -> list[Account]:
         out.append(Account(
             id=path.stem, platform="youtube", connected=True, handle=yt_api.name(path), health="ok",
             detail="Stats: views, likes, comments, and a day or two later watch time and shares.",
-            expires_in_days=None))
-    from ..x import api as x_api
-
-    for path in x_api.account_files():
-        account = x_api.read(path)
-        read_so_far = int(account.get("posts_read") or 0)
-        out.append(Account(
-            id=path.stem, platform="x", connected=True, handle=account.get("username", ""), health="ok",
-            detail=(f"Stats: views, likes, replies, reposts, bookmarks, hourly, for posts up to "
-                    f"{x_api.REFRESH_DAYS} days old. X charges per post read: {read_so_far} so far, "
-                    f"at most ${read_so_far * x_api.PRICE_PER_POST:.2f}."),
             expires_in_days=None))
     return out
 
@@ -627,10 +613,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             log.info("couldn't transcribe clips for the duplicate check: %s", exc)
 
     async def alerts_loop() -> None:
-        """Campaign alerts from Discord and Whop, every few minutes (studio/alerts.py). Whop alone counts:
-        this used to wait for a Discord bot, so a Whop-only setup was never checked on its own."""
+        """Campaign alerts from the Whop feed, every few minutes (studio/alerts.py)."""
         while True:
-            if (alerts.token() and alerts.watched()) or alerts.whop_watched():
+            if alerts.whop_watched():
                 try:
                     await asyncio.to_thread(alerts.check, publish=broker.publish)
                 except Exception:
@@ -739,68 +724,39 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             settings = db.settings(con)
         return Status(last_synced=stats.last_synced(rows), syncing=stats.syncing(),
                       sync_minutes=int(settings["sync_minutes"] or 15),
-                      problems=list(last_problems), auto_post=settings["auto_post"] == "1",
+                      problems=list(last_problems),
                       accounts=accounts(), hosted=hosted())
 
-    #: The AI jobs a user can give to a provider (Settings > Who does what, D148): id, label, what it is.
-    AI_JOBS = [
-        ("judge", "Judge the moments", "Reads every moment of a video, scores it, and picks each clip's opening line."),
-        ("script", "Write Create's scripts", "The script for a Short."),
-        ("check", "Fact-check scripts", "Reads a script for mistakes."),
-        ("critic", "Edit scripts", "Reads a new script as an editor would and lists what to fix. A different AI from the writer when one is set up."),
-        ("sketch", "Draw the diagrams", "Chalkboard drawings. The one job the paid Claude key is meant for."),
-        ("review", "Review the drawings", "Looks at a drawing and fixes it."),
-        ("footage", "Pick stock footage", "Judges thumbnails and writes the searches."),
-        ("place", "Place your own clips", "Matches your clips to the script's sentences."),
-        ("topics", "Think up ideas", "The ideas list for a channel."),
-    ]
-    BACKENDS = {"claude_plan": "claude_code", "claude_api": "anthropic", "gemini": "gemini", "ollama": "ollama"}
+    #: The AI jobs one choice in Settings sets together (D216; one list per job before, D148): judging the
+    #: moments and Create's jobs. Clipping's captions and checks follow it through llm.backend.
+    AI_JOBS = ("judge", "script", "check", "critic", "sketch", "review", "footage", "place", "topics")
+    BACKENDS = {"claude_plan": "claude_code", "claude_api": "anthropic", "gemini": "gemini"}
 
     @app.get("/api/ai-jobs")
     def ai_jobs() -> dict:
-        """Who does which AI job, and which providers this computer can use (D148)."""
-        import shutil
-
+        """The AI every job goes to, and which providers this computer can use. `choice` is "" for
+        Automatic, or "mixed" while picks made per job before D216 still differ."""
         from ..config import Config
         from ..llm.claude_code import cli
 
-        config = Config.load()
-        mine = config.llm.backend
-        current = next((k for k, v in BACKENDS.items() if v == mine), "")
-        from ..create import ai as create_ai
-        from ..pipeline import judge_backend
-
-        # What "Automatic" means right now, per job (D154): Marc's scripts sat on an overloaded Gemini
-        # while the page only said "Automatic".
-        def now(job: str) -> str:
-            if job == "judge":
-                try:
-                    judge = judge_backend(config)
-                except Exception:
-                    judge = None
-                return judge.name if judge else mine
-            return create_ai.first_choice(config, job)
-
-        return {"jobs": [{"id": i, "label": label, "about": about, "choice": config.llm.job_providers.get(i, ""),
-                          "now": now(i)} for i, label, about in AI_JOBS],
-                "clipping": {"choice": current if mine != "gemini" else "", "now": mine},
+        llm = Config.load().llm
+        picks = {llm.job_providers.get(j, "") for j in AI_JOBS}
+        picks.add(next((k for k, v in BACKENDS.items() if v == llm.backend), "") if llm.backend != "gemini" else "")
+        return {"choice": picks.pop() if len(picks) == 1 else "mixed",
                 "available": {"claude_plan": bool(cli()), "claude_api": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
-                              "gemini": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "ollama": bool(shutil.which("ollama"))}}
+                              "gemini": bool(os.environ.get("GEMINI_API_KEY", "").strip())}}
 
     @app.put("/api/ai-jobs")
-    def set_ai_job(body: dict) -> dict:
+    def set_ai_jobs(body: dict) -> dict:
+        """One AI for every job, or Automatic ("") to put each back on Clipper's own order."""
         from ..config import write_auto
 
-        job, choice = str(body.get("job") or ""), str(body.get("choice") or "")
+        choice = str(body.get("choice") or "")
         if choice and choice not in BACKENDS:
             raise HTTPException(400, "unknown provider")
-        if job == "clipping":   # captions, descriptions, rule checks and the rest of clipping
-            write_auto({"llm": {"backend": BACKENDS[choice] if choice else None}})
-        elif job in {j[0] for j in AI_JOBS}:
-            write_auto({"llm": {"job_providers": {job: choice or None}}})
-        else:
-            raise HTTPException(404, "no such job")
-        return {"job": job, "choice": choice}
+        write_auto({"llm": {"backend": BACKENDS[choice] if choice else None,
+                            "job_providers": {j: choice or None for j in AI_JOBS}}})
+        return {"choice": choice}
 
     @app.get("/api/compute")
     def compute() -> dict:
@@ -1156,68 +1112,6 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         return Learning(active=active, min_for_weights=feedback.MIN_FOR_WEIGHTS,
                         min_for_agreement=feedback.MIN_FOR_AGREEMENT, **result.__dict__)
 
-    @app.get("/api/learning/taste")
-    def taste_export() -> dict:
-        """What Clipper has learnt about this user's taste, as a file to keep or give to a new install:
-        the six rubric weights and the reasons they give most. No clip text, no titles (D148)."""
-        result = learning()
-        return {"version": 1, "rated": result.rated,
-                "weights": {d.key: d.learned for d in result.dimensions},
-                "reasons": [{"key": r.key, "count": r.count} for r in result.reasons]}
-
-    @app.put("/api/learning/taste")
-    def taste_import(body: dict) -> dict:
-        """Start from a taste file: its weights are the prior until this install's own ratings take over."""
-        from ..learn import feedback
-
-        weights = body.get("weights")
-        valid = isinstance(weights, dict) and set(weights) == set(feedback.RUBRIC) \
-            and all(isinstance(v, int | float) and 0 <= v <= 1 for v in weights.values())
-        if not valid:
-            raise HTTPException(400, "that isn't a taste file from Clipper")
-        with db.connect() as con:
-            db.set_setting(con, "taste_seed", json.dumps({"weights": {k: float(v) for k, v in weights.items()}}))
-        return {"imported": True}
-
-    @app.delete("/api/learning/taste")
-    def taste_clear() -> dict:
-        with db.connect() as con:
-            db.set_setting(con, "taste_seed", "")
-        return {"cleared": True}
-
-    @app.get("/api/learning/compare")
-    def whats_working() -> WhatsWorking:
-        """Posts with each change against posts without it, fairly (D105)."""
-        from ..learn import compare
-
-        snap = Snapshot()
-        since = snap.settings.get("tiktok_disclosed_since", "")
-        disclosed_from = compare.parse(since)
-        history: dict[str, list] = {}
-        with db.connect() as con:
-            for r in con.execute("SELECT url, at, views, skip_rate_pct FROM snapshots ORDER BY at"):
-                history.setdefault(r["url"], []).append((compare.parse(r["at"]), r["views"], r["skip_rate_pct"]))
-        raw = {c["id"]: c for c in snap.raw_clips}
-        facts = []
-        for clip in snap.clips:
-            scores = json.loads(raw[clip.id].get("scores") or "{}") or {}
-            for p in clip.posts:
-                posted = compare.parse(p.posted_at)
-                traits = {"cover": scores.get("cover") is not None, "edited": bool(scores.get("edit"))}
-                if scores.get("picked_by") == "auto":  # only Clipper's picks can open on a payoff
-                    traits["payoff"] = bool(scores.get("teaser"))
-                if p.platform == "tiktok" and disclosed_from and posted:
-                    traits["disclosed"] = posted >= disclosed_from
-                facts.append(compare.PostFacts(
-                    url=p.url, platform=p.platform, posted_at=posted,
-                    history=tuple(h for h in history.get(p.url.split("?", 1)[0], []) if h[0]),
-                    traits=traits, hook=clip.hook or "", campaign=clip.campaign))
-        return WhatsWorking(age_hours=compare.AGE_HOURS, min_each=compare.MIN_EACH,
-                            comparisons=[c.__dict__ | {"rows": [r.__dict__ | {"yes": r.yes.__dict__, "no": r.no.__dict__}
-                                                                for r in c.rows]}
-                                         for c in compare.compare(facts)],
-                            hooks=[h.__dict__ for h in compare.hooks(facts)], disclosed_since=since)
-
     @app.get("/api/posts/history")
     def post_history(url: str) -> list[PostPoint]:
         with db.connect() as con:
@@ -1486,10 +1380,6 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
             return FileResponse(path, media_type="video/mp4",
                                 filename=f"{name or 'clip'} - {found['campaign']}.mp4")
         return FileResponse(path, media_type="video/mp4")
-
-    from .research_api import build_router
-
-    app.include_router(build_router(broker))
 
     # The single-page app: real files from the build, index.html for its routes.
     if (STATIC / "assets").is_dir():

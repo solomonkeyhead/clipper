@@ -21,7 +21,7 @@ from .paths import REPO_ROOT
 DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "default.yaml"
 
 CaptionStyle = Literal["bold_pop", "clean_white", "yellow_highlight"]
-LLMBackend = Literal["gemini", "ollama", "anthropic", "claude_code", "mock"]
+LLMBackend = Literal["gemini", "anthropic", "claude_code", "mock"]
 Encoder = Literal["auto", "h264_nvenc", "libx264"]
 CreditPosition = Literal["top_left", "top_right", "bottom_left", "bottom_right"]
 
@@ -223,8 +223,9 @@ class LLMConfig(StrictModel):
     campaign_focus: str = ""
     # The language captions, hooks and descriptions are written in, set per run from the campaign (D147).
     language: str = "en"
-    # Who does which job, when the user chose (Settings > Who does what, D148): job -> "claude_plan" |
-    # "claude_api" | "gemini" | "ollama". A job not listed is automatic: the order the other settings give.
+    # Who does which job, when the user chose (Settings > AI, D148, one choice for every job since D216):
+    # job -> "claude_plan" | "claude_api" | "gemini". A job not listed is automatic: the order the other
+    # settings give.
     job_providers: dict[str, str] = Field(default_factory=dict)
     # What the user's own ratings say they like and dislike (learn/feedback.py),
     # set per run; guidance for the scorer, weaker than the campaign focus.
@@ -407,22 +408,15 @@ class QAConfig(StrictModel):
 
 
 class WatchConfig(StrictModel):
-    """The campaign watcher (`clipper watch`). Secrets live in .env."""
+    """The campaign judge for the Whop feed (studio/alerts.py). The mailbox and ntfy settings went with
+    the email watcher (D216)."""
 
-    imap_host: str = "imap.gmail.com"
-    # Gmail can file forwarded mail as spam; reading it is harmless (read-only).
-    folders: list[str] = ["INBOX", "[Gmail]/Spam"]
-    lookback_days: int = Field(default=14, ge=1, le=90)
     # Who the campaigns are for; the judge reads this verbatim.
     profile: str = (
         "A social-media clipping account that cuts short vertical clips from footage "
         "it is authorized to use. Not interested in product ads, supplements, AI "
         "tools, crypto or gambling.")
     platforms: list[str] = ["tiktok"]
-    # Skip campaigns paying less than this per 1,000 views (when a rate is stated).
-    min_rate_per_1k: float = Field(default=1.0, ge=0)
-    notify_maybe: bool = True
-    ntfy_server: str = "https://ntfy.sh"
 
 
 def write_auto(patch: dict) -> None:
@@ -433,7 +427,7 @@ def write_auto(patch: dict) -> None:
     path = data_root() / "config.auto.yaml"
     have = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) if path.is_file() else {}
     path.parent.mkdir(parents=True, exist_ok=True)
-    note = "# Written by Settings (This computer, Who does what). Your own config.yaml overrides it.\n"
+    note = "# Written by Settings (This computer, Which AI). Your own config.yaml overrides it.\n"
     path.write_text(note + yaml.safe_dump(_merged(have, patch)), encoding="utf-8")
 
 

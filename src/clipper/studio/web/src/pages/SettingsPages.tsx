@@ -1,20 +1,19 @@
-import { Link } from "@tanstack/react-router";
 import {
-  AlertTriangle, CheckCircle2, ExternalLink, Eye, KeyRound, Loader2, Monitor, Moon, Plus, Stethoscope, Sun, XCircle,
+  AlertTriangle, CheckCircle2, ExternalLink, Eye, KeyRound, Loader2, Plus, Stethoscope, XCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  connectInstagram, connectX, instagramConnectState, runSystemCheck, startInstagramConnect, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
-  useSetKeys, useSetSettings, useSettings, useSetup, useStatus, useUses, type Account, type CheckResult,
+  connectInstagram, instagramConnectState, runSystemCheck, startInstagramConnect, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
+  useSetKeys, useSetSettings, useSettings, useSetup, useStatus, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
 import { GroupsCard } from "@/components/groups";
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { Button, Card, CopyButton, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
 import { notifyOn, notifySupported, setNotify } from "@/lib/notify";
-import { useUI, type Theme } from "@/lib/store";
+import { useUI } from "@/lib/store";
 import { cn, formatCount, openTab } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -392,82 +391,6 @@ function InstagramToken({ onBack }: { onBack: () => void }) {
 }
 
 /** X: the app's Bearer Token and the account's username (D83). Paid per post read. */
-function AddX() {
-  const qc = useQueryClient();
-  const { data: setup } = useSetup();
-  const setKeys = useSetKeys();
-  const [open, setOpen] = useState(false);
-  const [token, setToken] = useState("");
-  const { data: known } = useAccounts();
-  const [typed, setUsername] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const haveToken = Boolean(setup?.keys.X_BEARER_TOKEN);
-  // Most people post under one name everywhere: start from a handle already connected (D150).
-  const username = typed ?? known?.find((a) => a.platform !== "x" && a.handle)?.handle ?? "";
-  const connect = async () => {
-    setBusy(true);
-    try {
-      if (token.trim()) await setKeys.mutateAsync({ X_BEARER_TOKEN: token.trim() });
-      const res = await connectX(username);
-      setToken("");
-      setUsername(null);
-      setOpen(false);
-      await qc.invalidateQueries({ queryKey: ["accounts"] });
-      toast.success(`Connected @${res.username}`, { description: "Its posts and their views arrive within the hour." });
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (!open) {
-    return <Button variant="secondary" onClick={() => setOpen(true)}><Plus className="size-4" /> Add an X account</Button>;
-  }
-  if (haveToken) {   // the app is set up: the username is the whole sign-in
-    return (
-      <div className="flex flex-wrap items-end gap-2 rounded-md bg-surface-2 p-4">
-        <div className="min-w-48 flex-1">
-          <Field label="Your X username">
-            {(id) => <TextInput id={id} value={username} placeholder="@solomonkeyclips" onChange={(e) => setUsername(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter" && username.trim() && !busy) void connect(); }} />}
-          </Field>
-        </div>
-        <Button variant="primary" disabled={busy || !username.trim()} onClick={() => connect()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="x" className="size-4" />} Connect
-        </Button>
-        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-4 rounded-md bg-surface-2 p-4">
-      <p className="text-sm text-muted">
-        X charges for its API: <b>$0.005 per post read</b>, each post at most once a day. Clipper only reads posts up to two weeks
-        old, so one clip a day costs about <b>$2 a month</b>. About 5 minutes, once.
-      </p>
-      <Steps>
-        <li>Open <Ext href="https://console.x.com">console.x.com</Ext> and sign in with the X account you post clips on. Accept the Developer Agreement.</li>
-        <li>Press <b>New App</b>. <b>Name:</b> Clipper. <b>Description:</b> Reads my own posts' view counts. Create it.</li>
-        <li>On the screen that opens, copy the <b>Bearer Token</b> (it's shown once; you can regenerate it later under the app's <b>Keys and tokens</b>).</li>
-        <li>Press <b>View pricing &amp; purchase credits</b> and buy credits yourself ($5 lasts months). X asks for a verified phone number.</li>
-        <li>Paste the token and your username below, then <b>Connect</b>.</li>
-      </Steps>
-      <Field label="Bearer Token" hint={haveToken ? "Saved already. Paste a new one only to replace it." : undefined}>
-        {(id) => <SecretInput id={id} value={token} onChange={setToken} placeholder="AAAAAAAAAAAAAAAAAAAAA…" isSet={setup?.keys.X_BEARER_TOKEN} />}
-      </Field>
-      <Field label="Your X username">
-        {(id) => <TextInput id={id} value={username} placeholder="@solomonkeyclips" onChange={(e) => setUsername(e.target.value)} />}
-      </Field>
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-        <Button variant="primary" disabled={busy || !username.trim() || (!haveToken && token.trim().length < 30)} onClick={() => connect()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <PlatformIcon platform="x" className="size-4" />} Connect
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function PlatformCard({ platform, title, accounts, add }: {
   platform: string; title: string; accounts: Account[]; add: ReactNode;
 }) {
@@ -498,7 +421,6 @@ export function AccountsPage() {
           <PlatformCard platform="tiktok" title="TikTok" accounts={list.filter((a) => a.platform === "tiktok")} add={<AddTikTok />} />
           <PlatformCard platform="instagram" title="Instagram" accounts={list.filter((a) => a.platform === "instagram")} add={<AddInstagram />} />
           <PlatformCard platform="youtube" title="YouTube Shorts" accounts={list.filter((a) => a.platform === "youtube")} add={<AddYouTube />} />
-          <PlatformCard platform="x" title="X" accounts={list.filter((a) => a.platform === "x")} add={<AddX />} />
           <p className="text-xs text-subtle">
             Clipper only reads stats through each platform's official API. Logins are stored on this PC only, in Clipper's data folder.
           </p>
@@ -522,10 +444,6 @@ function Row({ title, body, control, id }: { title: string; body: ReactNode; con
   );
 }
 
-const Where = ({ to, children }: { to: string; children: ReactNode }) => (
-  <> <Link to={to} className="font-medium link">{children}</Link></>
-);
-
 /** Browser notifications when a clipping job or a Short's build finishes in the background (D143). */
 function NotifySwitch() {
   const [on, setOn] = useState(notifyOn());
@@ -536,30 +454,6 @@ function NotifySwitch() {
               setOn(now);
               if (v && !now) toast.error("Notifications are blocked", { description: "Allow them for this page in your browser's site settings, then try again." });
             })} />
-  );
-}
-
-const USES_ROWS: [string, string, string][] = [
-  ["use_campaigns", "Clip footage for campaigns", "New clips, campaign pages and the post and submit steps."],
-  ["use_create", "Make original videos", "Create, for your own channel."],
-  ["use_finder", "Find campaigns for me", "Campaign alerts and search on the Campaigns page."],
-];
-
-/** What you use Clipper for: the parts you don't use are hidden (D145). */
-function Uses() {
-  const { data: settings } = useSettings();
-  const save = useSetSettings();
-  if (!settings) return <Skeleton className="h-20" />;
-  const values = settings as Record<string, string>;
-  return (
-    <div className="flex flex-col gap-2.5">
-      {USES_ROWS.map(([key, title, body]) => (
-        <label key={key} className="flex items-start gap-3">
-          <Switch label={title} checked={values[key] !== "0"} onChange={(v) => save.mutate({ [key]: v ? "1" : "0" })} />
-          <span><span className="text-sm font-medium">{title}</span><span className="block text-xs text-muted">{body}</span></span>
-        </label>
-      ))}
-    </div>
   );
 }
 
@@ -601,61 +495,37 @@ function Computer() {
 }
 
 interface AIJobs {
-  jobs: { id: string; label: string; about: string; choice: string; now: string }[];
-  clipping: { choice: string; now: string };
+  choice: string;
   available: Record<string, boolean>;
 }
 
-const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude API key (paid)"], ["gemini", "Gemini"], ["ollama", "Ollama on this computer"]];
-/** The backend names the server reports for "now", in the dropdown's words. */
-const NOW_NAME: Record<string, string> = { claude_code: "Claude on my plan", anthropic: "Claude API key (paid)", gemini: "Gemini", ollama: "Ollama" };
-/** Clipping's jobs; the rest are Create's (D154: one list of nine read as a wall). */
-const CLIPPING_JOBS = new Set(["clipping", "judge"]);
+const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude API key (paid)"], ["gemini", "Gemini"]];
 
-/** Which AI does which job (D148). Automatic keeps Clipper's own order; a pick is tried first, and the
- *  paid Claude key is only ever used where you choose it here. */
-function WhoDoesWhat({ part }: { part: "clipping" | "create" }) {
+/** One AI for every job (D216; a list per job before, D148). Automatic keeps Clipper's own order per job.
+ *  The paid Claude key is only used where `llm.paid_api_jobs` allows it, or if you pick it here. */
+function WhichAI() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["ai-jobs"], queryFn: async () => {
     const res = await fetch("/api/ai-jobs");
     if (!res.ok) throw new Error(res.statusText);
     return res.json() as Promise<AIJobs>;
   } });
-  if (!data) return <Skeleton className="h-32" />;
-  const set = async (job: string, choice: string) => {
-    const res = await fetch("/api/ai-jobs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job, choice }) });
+  if (!data) return <Skeleton className="h-9 w-48" />;
+  const set = async (choice: string) => {
+    const res = await fetch("/api/ai-jobs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ choice }) });
     if (!res.ok) { toast.error("Couldn't save that"); return; }
     toast.success("Saved", { description: "Used from the next job." });
     void qc.invalidateQueries({ queryKey: ["ai-jobs"] });
     void qc.invalidateQueries({ queryKey: ["create", "ai"] });
   };
-  const rows = [
-    { id: "clipping", label: "Captions, descriptions and checks", about: "Everything else in clipping: captions, post descriptions, rule checks, scene splits.",
-      choice: data.clipping.choice, now: data.clipping.now },
-    ...data.jobs,
-  ].filter((r) => CLIPPING_JOBS.has(r.id) === (part === "clipping"));
-  // Only providers this computer has; one not set up is named once below, not in every list (D154).
-  const missing = PROVIDERS.filter(([k]) => !data.available[k]).map(([, label]) => label);
   return (
-    <div className="flex flex-col divide-y divide-line">
-      {rows.map((r) => (
-        <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
-          <div className="min-w-0 max-w-md"><div className="text-sm font-medium">{r.label}</div><div className="text-xs text-muted">{r.about}</div></div>
-          <select value={r.choice} aria-label={r.label} onChange={(e) => void set(r.id, e.target.value)}
-                  className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
-            {/* What Automatic picks right now, so a stuck job's AI is visible here (D154). */}
-            <option value="">Automatic{NOW_NAME[r.now] ? ` (now ${NOW_NAME[r.now]})` : ""}</option>
-            {PROVIDERS.filter(([k]) => data.available[k] || k === r.choice).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-          </select>
-        </div>
-      ))}
-      {part === "clipping" && (
-        <div className="py-2.5 text-xs text-muted">Watching the video itself is always Gemini: Claude can't take video. With no Gemini key that step is skipped and moments are judged from the words.</div>
-      )}
-      {missing.length > 0 && (
-        <div className="py-2.5 text-xs text-subtle">Not set up on this computer: {missing.join(", ")}.</div>
-      )}
-    </div>
+    <select value={data.choice} aria-label="Which AI" onChange={(e) => void set(e.target.value)}
+            className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+      {/* Picks made per job before D216 keep working until one choice replaces them. */}
+      {data.choice === "mixed" && <option value="mixed" disabled>Your own pick per job</option>}
+      <option value="">Automatic</option>
+      {PROVIDERS.filter(([k]) => data.available[k] || k === data.choice).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+    </select>
   );
 }
 
@@ -678,8 +548,7 @@ function AIKey() {
           <h2 className="text-md font-semibold">AI model for clipping</h2>
           <p className="mt-0.5 text-sm text-muted">
             Clipping uses Google's Gemini to watch the video, write captions and read campaign briefs, and Claude on your plan
-            to judge the moments (change either under Who does what). Create, for your own channel, uses both; its page shows which AI is answering.
-            Gemini is free:
+            to judge the moments. Create, for your own channel, uses both; its page shows which AI is answering. Gemini is free:
             get a key at <Ext href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</Ext> (sign in, <b className="text-fg">Create API key</b>, copy).
           </p>
         </div>
@@ -795,42 +664,29 @@ function SystemCheck() {
 
 export function SettingsPage() {
   const { data: settings } = useSettings();
-  const uses = useUses();
   const { data: status } = useStatus();
   const save = useSetSettings();
-  const qc = useQueryClient();
-  const theme = useUI((s) => s.theme);
-  const setTheme = useUI((s) => s.setTheme);
   const shortcuts = useUI((s) => s.shortcuts);
   const setShortcutKeys = useUI((s) => s.setShortcutKeys);
-  const themes: [Theme, string, ReactNode][] = [
-    ["dark", "Dark", <Moon key="d" className="size-4" />],
-    ["light", "Light", <Sun key="l" className="size-4" />],
-    ["system", "System", <Monitor key="s" className="size-4" />],
-  ];
   return (
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
       {/* Under headings (D199): one long card mixed clipping, the app and this computer. */}
       <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">AI</h2>
       <AIKey />
-      <Card className="px-5 py-3"><h2 className="text-md font-semibold">Who does what: clipping</h2>
-        <p className="mt-0.5 mb-1 text-sm text-muted">Pick the AI for each job, or leave it on Automatic.</p><WhoDoesWhat part="clipping" /></Card>
-      {/* Create's AI and its footage libraries, together (D154); gone with Create turned off, like the rest of it (D198). */}
-      {uses.create && <>
-        <Card className="px-5 py-3" id="create-ai"><h2 className="text-md font-semibold">Who does what: Create</h2>
-          <p className="mt-0.5 mb-1 text-sm text-muted">For your own channel's Shorts.</p><WhoDoesWhat part="create" /></Card>
-        <FootageKeys />
-      </>}
-      {uses.campaigns && <>
-        <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Clipping</h2>
-        <Card className="divide-y divide-line px-5">
+      <Card className="px-5" id="create-ai">
+        <Row title="Which AI"
+             body="Automatic lets Clipper pick the AI for each job. Pick one to use it for every job instead. Watching the video itself is always Gemini: Claude can't take video."
+             control={<WhichAI />} />
+      </Card>
+      <FootageKeys />
+      <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Clipping</h2>
+      <Card className="divide-y divide-line px-5">
         <Row
           title="Open on the payoff"
           body={<>Podcast and stream clips start with the first half of their best line, stopping just before it lands, then
             a quick flash back to the setup, and end on that line so they loop. Never on scripted TV or film, where it spoils
-            the joke; skipped when a brief forbids re-edits or no line works on its own.
-            <Where to="/learning">See whether it's working →</Where></>}
+            the joke; skipped when a brief forbids re-edits or no line works on its own.</>}
           control={settings ? (
             <Switch label="Open on the payoff" checked={settings.payoff_first !== "0"}
                     onChange={(v) => save.mutate({ payoff_first: v ? "1" : "0" })} />
@@ -840,21 +696,18 @@ export function SettingsPage() {
           title="Pick the cover"
           body={<>Clipper finds each clip's best still (a clear face, sharp, well lit) and puts it on the first frame with the
             hook, so TikTok and Instagram show it as the cover and you don't have to choose one. It's held for 1/15 of a
-            second, too short to notice when it plays. Skipped when a brief forbids re-edits.
-            <Where to="/learning">See whether it's working →</Where></>}
+            second, too short to notice when it plays. Skipped when a brief forbids re-edits.</>}
           control={settings ? (
             <Switch label="Pick the cover" checked={settings.auto_cover !== "0"}
                     onChange={(v) => save.mutate({ auto_cover: v ? "1" : "0" })} />
           ) : <Skeleton className="h-5 w-9" />}
         />
-        </Card>
-      </>}
+      </Card>
       <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">The app</h2>
       <Card className="divide-y divide-line px-5">
-        <Row title="What you use Clipper for" body="Parts you turn off are hidden everywhere, so the app only shows what you do." control={<Uses />} />
         <Row
           title="Sync every"
-          body="How often Clipper fetches views and stats from your connected accounts while it's open. X is read at most hourly, since it charges per read."
+          body="How often Clipper fetches views and stats from your connected accounts while it's open."
           control={settings ? (
             <select value={settings.sync_minutes} aria-label="Sync interval"
                     onChange={(e) => save.mutate({ sync_minutes: e.target.value })}
@@ -868,41 +721,17 @@ export function SettingsPage() {
           body="A notification when a clipping job or a Short's build finishes while you're on another tab or window. Only this browser; it asks permission the first time."
           control={<NotifySwitch />}
         />
-        <Row
-          title="Theme"
-          body="Dark suits watching video; light can be easier for long reading."
-          control={
-            <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Theme">
-              {themes.map(([value, label, icon]) => (
-                <button key={value} role="radio" aria-checked={theme === value} onClick={() => setTheme(value)}
-                        className={cn("flex h-8 items-center gap-1.5 rounded-sm px-3 text-sm",
-                          theme === value ? "bg-surface-1 text-fg shadow-1" : "text-muted hover:text-fg")}>
-                  {icon}{label}
-                </button>
-              ))}
-            </div>
-          }
-        />
+        {/* Kept when the theme switch went (D216): WCAG 2.1.4 wants letter-key shortcuts to have an off switch. */}
         <Row
           title="Single-key shortcuts"
           body="Keys like J, K, C and P. They never fire while you're typing. Ctrl K works either way."
           control={<Switch label="Single-key shortcuts" checked={shortcuts} onChange={setShortcutKeys} />}
         />
       </Card>
-      {/* Not used day to day: a switch for a feature still to come, and a preview of paid tiers (D118). */}
-      <details open={settings?.auto_post === "1" || undefined} className="group rounded-md bg-surface-1">
+      {/* Not used day to day: a preview of paid tiers (D118). */}
+      <details className="group rounded-md bg-surface-1">
         <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted hover:text-fg">Advanced</summary>
         <div className="divide-y divide-line px-5">
-          <Row
-            title="Auto-post approved clips"
-            body={<>On: an approved clip posts itself through each platform's official API, after a 10-minute
-              hold you can cancel. Off: every post waits for your click. Posting from Clipper arrives in the next
-              update; this choice is saved for it.</>}
-            control={settings ? (
-              <Switch label="Auto-post" checked={settings.auto_post === "1"}
-                      onChange={(v) => save.mutate({ auto_post: v ? "1" : "0" })} />
-            ) : <Skeleton className="h-5 w-9" />}
-          />
           {/* Moved here from Accounts (D154): needed once, when registering your own platform apps. */}
           <Row
             title="Pages for your own platform apps"
@@ -913,14 +742,14 @@ export function SettingsPage() {
           <Row
             title="Plan (preview)"
             body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats, up to 10 clips
-              a video and 3 videos at a time. <b className="text-fg">Research</b>: adds the Ask chat and 10 videos at a time. Choosing a clip's
+              a video and 3 videos at a time. <b className="text-fg">Research</b>: 10 videos at a time. Choosing a clip's
               lines and writing your own are on every plan. <b className="text-fg">Pro</b>: everything, including every clip a video
-              has, several accounts per platform with groups, and auto-posting once it's available. Nothing is billed; switch to see each tier.</>}
+              has, and several accounts per platform with groups. Nothing is billed; switch to see each tier.</>}
             control={settings ? (
               <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">
                 {([["free", "Free"], ["research", "Research"], ["pro", "Pro"]] as const).map(([value, label]) => (
                   <button key={value} role="radio" aria-checked={settings.plan === value}
-                          onClick={() => save.mutate({ plan: value }, { onSuccess: () => void qc.invalidateQueries({ queryKey: ["research"] }) })}
+                          onClick={() => save.mutate({ plan: value })}
                           className={cn("h-8 rounded-sm px-3 text-sm",
                             settings.plan === value ? "bg-surface-1 text-fg shadow-1" : "text-muted hover:text-fg")}>
                     {label}

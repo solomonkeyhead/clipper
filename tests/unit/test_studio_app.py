@@ -51,11 +51,11 @@ class TestDatabase:
         with db.connect() as con, pytest.raises(ValueError):
             db.update_clip(con, clip_id, status="viral")
 
-    def test_auto_post_is_off_until_turned_on(self, data_root):
+    def test_only_known_settings_are_kept(self, data_root):
         with db.connect() as con:
-            assert db.settings(con)["auto_post"] == "0"
-            db.set_setting(con, "auto_post", "1")
-            assert db.settings(con)["auto_post"] == "1"
+            assert db.settings(con)["sync_minutes"] == "15"
+            db.set_setting(con, "sync_minutes", "30")
+            assert db.settings(con)["sync_minutes"] == "30"
             with pytest.raises(ValueError):
                 db.set_setting(con, "not_a_setting", "1")
 
@@ -188,7 +188,7 @@ class TestApi:
         assert client.get("/api/nope").status_code == 404
         (campaign,) = client.get("/api/campaigns").json()
         assert campaign["name"] == "chad-powers-s2" and campaign["counts"]["ready"] == 1
-        assert client.get("/api/settings").json()["auto_post"] == "0"
+        assert client.get("/api/settings").json()["sync_minutes"] == "15"
 
     def test_the_rating_reasons_come_grouped_from_one_list(self, client):
         from clipper.studio import db
@@ -246,11 +246,11 @@ class TestApi:
         # Captions come from runs; the page cannot rewrite them.
         client.patch(f"/api/clips/{clip_id}", json={"caption": "hacked"})
         assert client.get(f"/api/clips/{clip_id}").json()["caption"].startswith("I started")
-        client.patch("/api/campaigns/chad-powers-s2", json={"archived": True, "auto_post": True})
+        client.patch("/api/campaigns/chad-powers-s2", json={"archived": True})
         (campaign,) = client.get("/api/campaigns").json()
-        assert campaign["archived"] and campaign["auto_post"] is True
+        assert campaign["archived"]
         assert campaign["counts"]["skipped"] == 1
-        assert client.put("/api/settings", json={"auto_post": "1"}).json()["auto_post"] == "1"
+        assert client.put("/api/settings", json={"sync_minutes": "30"}).json()["sync_minutes"] == "30"
         assert client.put("/api/settings", json={"nope": "1"}).status_code == 400
 
     def test_since_you_were_last_here_needs_a_break(self, client, data_root):

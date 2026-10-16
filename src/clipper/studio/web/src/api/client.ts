@@ -72,14 +72,6 @@ export const useAccounts = () =>
 export const useSettings = () =>
   useQuery({ queryKey: keys.settings, queryFn: () => unwrap(api.GET("/api/settings")) });
 
-/** Which parts of Clipper this user turned on in the first-run question (D145). Until settings load, everything. */
-export function useUses() {
-  const { data } = useSettings();
-  const on = (key: string) => (data as Record<string, string> | undefined)?.[key] !== "0";
-  return { loaded: Boolean(data), campaigns: on("use_campaigns"), create: on("use_create"), finder: on("use_finder"),
-           onboarded: (data as Record<string, string> | undefined)?.onboarded === "1" };
-}
-
 /** The reasons a rating can give, grouped (one list, on the server). */
 export const useReasons = () =>
   useQuery({ queryKey: ["reasons"], queryFn: () => unwrap(api.GET("/api/reasons")), staleTime: Infinity });
@@ -129,7 +121,7 @@ export function useSetCampaign() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: ({ name, ...changes }: {
-      name: string; archived?: boolean; auto_post?: boolean | null; budget_left?: number | null;
+      name: string; archived?: boolean; budget_left?: number | null;
     }) => unwrap(api.PATCH("/api/campaigns/{name}", { params: { path: { name } }, body: changes })),
     onSettled: invalidate,
   });
@@ -388,9 +380,6 @@ export const startInstagramConnect = () =>
   unwrap(api.POST("/api/accounts/instagram/connect")) as Promise<{ state: string; message: string; url: string }>;
 export const instagramConnectState = () =>
   unwrap(api.GET("/api/accounts/instagram/connect")) as Promise<{ state: string; message: string; url: string }>;
-/** An X account by username, read with the app's Bearer Token (D83). */
-export const connectX = (username: string) =>
-  unwrap(api.POST("/api/accounts/x", { body: { username } })) as Promise<{ username: string }>;
 export const connectInstagram = (token: string) =>
   unwrap(api.POST("/api/accounts/instagram", { body: { token } })) as Promise<{ username: string }>;
 
@@ -447,25 +436,6 @@ export async function markNotGood(id: number, undo?: { status: string }, reasons
   if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
 }
 
-/* ---------- Ask (the research chat) ---------- */
-
-export type ResearchStatus = components["schemas"]["ResearchStatus"];
-export type Thread = components["schemas"]["Thread"];
-export type ThreadDetail = components["schemas"]["ThreadDetail"];
-export type ResearchMessage = components["schemas"]["Message"];
-
-export const useResearchStatus = () =>
-  useQuery({ queryKey: ["research", "status"], queryFn: () => unwrap(api.GET("/api/research/status")) });
-export const useThreads = () =>
-  useQuery({ queryKey: ["research", "threads"], queryFn: () => unwrap(api.GET("/api/research/threads")) });
-export const useThread = (id: number | undefined) =>
-  useQuery({ queryKey: ["research", "thread", id], enabled: id !== undefined,
-             queryFn: () => unwrap(api.GET("/api/research/threads/{thread_id}", { params: { path: { thread_id: id! } } })) });
-export const askResearch = (text: string, threadId?: number) =>
-  unwrap(api.POST("/api/research/ask", { body: { text, thread_id: threadId } }));
-export const deleteThread = (id: number) =>
-  unwrap(api.DELETE("/api/research/threads/{thread_id}", { params: { path: { thread_id: id } } }));
-
 /* ---------- finding campaigns ---------- */
 
 export type FoundCampaign = components["schemas"]["FoundCampaign"];
@@ -479,20 +449,14 @@ export const checkFound = async (key: string) =>
 export const dismissFound = (key: string) =>
   unwrap(api.POST("/api/found/{key}/dismiss", { params: { path: { key } } }));
 
-/* ---------- campaign alerts (Discord) ---------- */
+/* ---------- campaign alerts (the Whop feed) ---------- */
 
 export type Alerts = components["schemas"]["Alerts"];
-export type DiscordBot = components["schemas"]["DiscordBot"];
 export type AlertCheck = components["schemas"]["AlertCheck"];
 
 export const useAlerts = () => useQuery({ queryKey: ["alerts"], queryFn: () => unwrap(api.GET("/api/alerts")) });
-/** Asks Discord, so only while the setup is open. */
-export const useDiscordBot = (enabled: boolean) =>
-  useQuery({ queryKey: ["alerts", "discord"], enabled, retry: false, staleTime: 30_000,
-             queryFn: () => unwrap(api.GET("/api/alerts/discord")) });
-export const watchChannels = (ids: string[]) => unwrap(api.PUT("/api/alerts/channels", { body: { ids } }));
-export const saveAlertPrefs = (profile: string, min_rate: number) =>
-  unwrap(api.PUT("/api/alerts/prefs", { body: { profile, min_rate } }));
+export const saveAlertPrefs = (profile: string) =>
+  unwrap(api.PUT("/api/alerts/prefs", { body: { profile } }));
 export const checkAlerts = () => unwrap(api.POST("/api/alerts/check"));
 export type WhopFeed = components["schemas"]["WhopFeed"];
 /** Asks Whop, so only while the setup is open and signed in. */
@@ -504,7 +468,6 @@ type ConnectState = { state: string; message: string; url: string };
 export const startWhopConnect = () => unwrap(api.POST("/api/alerts/whop/connect")) as Promise<ConnectState>;
 export const whopConnectState = () => unwrap(api.GET("/api/alerts/whop/connect")) as Promise<ConnectState>;
 export const disconnectWhop = () => unwrap(api.POST("/api/alerts/whop/disconnect"));
-export const testAlertPush = () => unwrap(api.POST("/api/alerts/test-push"));
 
 /** Open the New campaign form already filled in (read once by CampaignEditor). */
 export function prefillCampaign(value: { form?: CampaignForm; title?: string; brief?: string }) {
@@ -625,11 +588,6 @@ export type EditBody = { source_id: string; campaign: string; clip?: number | nu
 export const previewEdit = (body: EditBody) => post<{ url: string; length: number }>("/api/editor/preview", body);
 export const saveEdit = (body: EditBody) => post<{ queued: boolean; clip?: number; job?: Job }>("/api/editor/save", body);
 
-/* ---------- what's working (D105) ---------- */
-
-export type WhatsWorking = components["schemas"]["WhatsWorking"];
-export const useWhatsWorking = () =>
-  useQuery({ queryKey: ["whats-working"], queryFn: () => unwrap(api.GET("/api/learning/compare")) });
 export const tightenEdit = (body: EditBody) =>
   post<{ edit: unknown; removed: number; cuts: { start: number; end: number; why: string }[] }>("/api/editor/tighten", body);
 

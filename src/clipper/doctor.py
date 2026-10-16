@@ -309,8 +309,7 @@ def check_api_keys() -> CheckResult:
             f"backend is {backend!r} but {needed} is not set ({summary})",
             fix=(
                 f"Copy .env.example to .env and set {needed}.\n"
-                "    Gemini free-tier keys: https://aistudio.google.com/apikey\n"
-                "    Or switch backends:  clipper run ... --backend ollama"
+                "    Gemini free-tier keys: https://aistudio.google.com/apikey"
             ),
         )
     return _result("API keys", Status.OK, f"backend={backend}, {summary}")

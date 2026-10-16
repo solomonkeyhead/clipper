@@ -187,9 +187,9 @@ function GeminiStruggling() {
     setBusy(true);
     try {
       const res = await fetch("/api/ai-jobs", { method: "PUT", headers: { "Content-Type": "application/json" },
-                                                body: JSON.stringify({ job: "footage", choice: "claude_plan" }) });
+                                                body: JSON.stringify({ choice: "claude_plan" }) });
       if (!res.ok) throw new Error("Couldn't change it");
-      toast.success("Claude picks the footage from now on. Change it back in Settings, Who does what.");
+      toast.success("Claude does the AI jobs from now on. Change it back in Settings, under AI.");
       void qc.invalidateQueries({ queryKey: ["ai-jobs"] });
     } catch (e) {
       toast.error((e as Error).message);
@@ -206,7 +206,7 @@ function GeminiStruggling() {
       {claude && (
         <Tip label="Uses your Claude plan's usage for the rest of this build and later ones.">
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => useClaude()}>
-            {busy && <Loader2 className="size-3.5 animate-spin" />} Use Claude for footage
+            {busy && <Loader2 className="size-3.5 animate-spin" />} Use Claude instead
           </Button>
         </Tip>
       )}
@@ -220,8 +220,7 @@ function minutesAgo(seconds: number | undefined) {
 }
 
 /** Each AI provider by its own name: a miss on Mistral or NVIDIA was labelled "Claude had a problem" (D171). */
-const PROVIDER: Record<string, string> = { gemini: "Gemini", claude_code: "Claude", anthropic: "Claude",
-  ollama: "Ollama" };
+const PROVIDER: Record<string, string> = { gemini: "Gemini", claude_code: "Claude", anthropic: "Claude" };
 
 /** Which AI does what, always in view: Claude or Gemini was a guess for two videos (D118). */
 function AIStrip() {

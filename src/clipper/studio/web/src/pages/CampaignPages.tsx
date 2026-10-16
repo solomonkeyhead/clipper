@@ -3,7 +3,7 @@ import { AlertTriangle, Archive, ArchiveRestore, BarChart3, CalendarClock, Chevr
 import { toast } from "sonner";
 import { useState } from "react";
 import {
-  useAddPayout, useCampaign, useCampaigns, useDeletePayout, useFound, usePayouts, useSetCampaign, useUses, type Brief, type Campaign,
+  useAddPayout, useCampaign, useCampaigns, useDeletePayout, useFound, usePayouts, useSetCampaign, type Brief, type Campaign,
 } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
 import { PlatformIcon } from "@/components/PlatformIcon";
@@ -105,8 +105,7 @@ export function CampaignsPage() {
   const goodFits = found.filter((f) => f.fit === "yes").length;
   const search = useSearch({ from: "/campaigns" });
   const navigate = useNavigate({ from: "/campaigns" });
-  const uses = useUses();
-  const finding = search.find === "1" && uses.finder;
+  const finding = search.find === "1";
   const [showArchived, setShowArchived] = useState(false);
   const [sort, setSort] = useState<keyof typeof SORTS>("usual");
   // The user's own channel (German Professor) isn't a paid campaign: listed on its own (D140).
@@ -129,14 +128,12 @@ export function CampaignsPage() {
               {showArchived ? "Active campaigns" : `Archived (${archivedCount})`}
             </Button>
           )}
-          {uses.finder && (
-            <Button variant={finding ? "secondary" : "ghost"}
-                    onClick={() => navigate({ search: { find: finding ? undefined : "1" } })}>
-              <Search className="size-4" /> Find campaigns
-              {/* Good fits only (D198): the poor ones it counted are folded away on the list. */}
-              {goodFits > 0 && <span className="tabular text-[13px] font-bold text-fg">{goodFits}</span>}
-            </Button>
-          )}
+          <Button variant={finding ? "secondary" : "ghost"}
+                  onClick={() => navigate({ search: { find: finding ? undefined : "1" } })}>
+            <Search className="size-4" /> Find campaigns
+            {/* Good fits only (D198): the poor ones it counted are folded away on the list. */}
+            {goodFits > 0 && <span className="tabular text-[13px] font-bold text-fg">{goodFits}</span>}
+          </Button>
           <NewCampaignButton />
         </>} />
       {finding && <FindCampaigns />}

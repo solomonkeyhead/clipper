@@ -2,7 +2,7 @@
 
 It holds what used to live in folder names and file names -- which clips a
 campaign has, where each file is, and how far along it is (ready, posted,
-submitted, skipped) -- plus settings such as the auto-post toggle, which post
+submitted, skipped) -- plus settings such as the sync interval, which post
 links have been submitted to their campaign, and a snapshot of every post's
 numbers at each sync (for growth charts and "since you were last here").
 Post links and current stats stay in the performance log
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS clips (
 CREATE TABLE IF NOT EXISTS campaign_state (
     name        TEXT PRIMARY KEY,
     archived    INTEGER NOT NULL DEFAULT 0,
-    auto_post   INTEGER               -- NULL: follow the global setting
+    auto_post   INTEGER               -- unused since D216 (auto-post removed before it was built)
 );
 -- A brief's view-milestone task done for a post (campaign/milestones.py, D98).
 CREATE TABLE IF NOT EXISTS post_tasks (
@@ -70,35 +70,10 @@ CREATE TABLE IF NOT EXISTS post_state (
     url         TEXT PRIMARY KEY,     -- the post's link, without query string
     submitted_at TEXT                 -- NULL: not yet submitted to its campaign
 );
-CREATE TABLE IF NOT EXISTS research_threads (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    title       TEXT NOT NULL DEFAULT '',
-    niche_id    INTEGER,                  -- unused since D63
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS research_messages (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    thread_id   INTEGER NOT NULL,
-    role        TEXT NOT NULL,            -- user | assistant
-    content     TEXT NOT NULL,
-    sources     TEXT NOT NULL DEFAULT '[]',   -- [{title, url}]
-    actions     TEXT NOT NULL DEFAULT '[]',   -- unused since D63 (chat actions removed)
-    created_at  TEXT NOT NULL
-);
 CREATE TABLE IF NOT EXISTS jobs (
     id          INTEGER PRIMARY KEY,      -- studio/jobs.py Job.id
     data        TEXT NOT NULL,            -- the job, kept from when it is queued (D175), with its results report
     finished    TEXT NOT NULL
-);
--- Discord channels the campaign alerts read (studio/alerts.py), in the user's own server.
-CREATE TABLE IF NOT EXISTS discord_channels (
-    id          TEXT PRIMARY KEY,
-    guild_id    TEXT NOT NULL,
-    guild       TEXT NOT NULL DEFAULT '',
-    name        TEXT NOT NULL DEFAULT '',
-    last_id     TEXT,                     -- newest message already read
-    added_at    TEXT NOT NULL
 );
 -- Whop forum feeds the campaign alerts read (studio/alerts.py, watch/whop.py).
 CREATE TABLE IF NOT EXISTS whop_feeds (
@@ -189,12 +164,6 @@ CREATE TABLE IF NOT EXISTS create_videos (
 
 #: Defaults for `settings`; stored values win.
 DEFAULT_SETTINGS = {
-    # Learning's experiments (D155): a JSON list of {id, name, a, b, metric, pairs: [[clip, clip], ...]}.
-    "experiments": "[]",
-    # Posting goes through each platform's official API. With auto-post off,
-    # every post waits in the review queue for a click; on, an approved clip
-    # posts itself. Off until the user turns it on.
-    "auto_post": "0",
     # "Since you were last here": the end of the previous session (last activity
     # before a 30-minute gap), and the latest activity in this one.
     "last_visit": "",
@@ -206,26 +175,14 @@ DEFAULT_SETTINGS = {
     # Open each new clip on a preview of its payoff line (render/teaser.py, D97).
     "payoff_first": "1",
     "auto_cover": "1",
-    # Claude judges the moments and picks the opening lines when it's set up (D139).
-    # TikTok's "Disclose commercial content -> Branded content" switch, on from this date (D105).
-    "tiktok_disclosed_since": "",
-    # How the user uses Clipper, asked once on the dashboard (D145): which parts show.
-    "onboarded": "0",
-    "use_campaigns": "1",
-    "use_create": "1",
-    "use_finder": "1",
     # The channel Create is working on (create/channel.py); "" = the first.
     "create_channel": "",
-    # A taste profile imported from a file (D148): the rubric weights to start from instead of the
-    # defaults, until your own ratings take over. JSON, "" = none.
-    "taste_seed": "",
     # Which plan's features are on (studio/plans.py). A local install is the
     # owner's, so everything; a hosted version would set this per account.
     "plan": "pro",
     # Campaign alerts (studio/alerts.py): what the user clips, for the fit judge
     # ("" = config's watch.profile), the lowest pay worth an alert, and the last check.
     "alert_profile": "",
-    "alert_min_rate": "",
     "alerts_checked": "",
     "alerts_error": "",
 }
@@ -416,11 +373,8 @@ def campaign_state(con: sqlite3.Connection) -> dict[str, dict]:
 
 def set_campaign_state(con: sqlite3.Connection, name: str, **changes) -> None:
     con.execute("INSERT OR IGNORE INTO campaign_state (name) VALUES (?)", (name,))
-    for key in ("archived", "auto_post"):
-        if key in changes:
-            value = changes[key]
-            con.execute(f"UPDATE campaign_state SET {key}=? WHERE name=?",
-                        (None if value is None else int(bool(value)), name))
+    if "archived" in changes:
+        con.execute("UPDATE campaign_state SET archived=? WHERE name=?", (int(bool(changes["archived"])), name))
     if "budget_left" in changes:
         value = changes["budget_left"]
         if value is not None and (not isinstance(value, int | float) or value < 0):

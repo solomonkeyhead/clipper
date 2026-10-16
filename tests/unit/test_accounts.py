@@ -99,28 +99,28 @@ class TestGroups:
 
 class TestPlanLimit:
     def test_a_second_account_on_the_free_plan_is_undone(self, data_root, monkeypatch):
-        from clipper.x import api as x_api
+        from clipper.youtube import api as yt_api
 
-        folder = x_api.accounts_dir()
+        folder = yt_api.accounts_dir()
         folder.mkdir(parents=True)
         (folder / "first.json").write_text("{}", encoding="utf-8")
-        before = set(x_api.account_files())
+        before = set(yt_api.token_files())
         (folder / "second.json").write_text("{}", encoding="utf-8")
         with db.connect() as con:
             db.set_setting(con, "plan", "free")
-        assert "one X account" in accounts.undo_if_over("x", before)
-        assert [p.stem for p in x_api.account_files()] == ["first"]
+        assert "one YouTube account" in accounts.undo_if_over("youtube", before)
+        assert [p.stem for p in yt_api.token_files()] == ["first"]
 
     def test_the_first_account_and_pro_are_never_undone(self, data_root):
-        from clipper.x import api as x_api
+        from clipper.youtube import api as yt_api
 
-        folder = x_api.accounts_dir()
+        folder = yt_api.accounts_dir()
         folder.mkdir(parents=True)
         (folder / "first.json").write_text("{}", encoding="utf-8")
         with db.connect() as con:
             db.set_setting(con, "plan", "free")
-        assert accounts.undo_if_over("x", set()) is None
+        assert accounts.undo_if_over("youtube", set()) is None
         with db.connect() as con:
             db.set_setting(con, "plan", "pro")
         (folder / "second.json").write_text("{}", encoding="utf-8")
-        assert accounts.undo_if_over("x", {folder / "first.json"}) is None
+        assert accounts.undo_if_over("youtube", {folder / "first.json"}) is None

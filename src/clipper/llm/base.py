@@ -1,8 +1,8 @@
 """The LLM backend interface, rate limiting and retries.
 
 Backends differ in one way that matters: whether the provider can enforce a
-response schema server-side. Gemini can (`response_schema`), Ollama can (its
-`format` parameter), a bare completion API cannot. Backends that can are far
+response schema server-side. Gemini can (`response_schema`), a bare completion
+API cannot. Backends that can are far
 more reliable, so the interface exposes it rather than hiding it -- and the
 rubric scorer still validates every response with pydantic regardless.
 
@@ -414,7 +414,7 @@ def available_backends() -> list[str]:
 
 def _load_builtins() -> None:
     """Import backend modules lazily, so a missing optional SDK is not fatal."""
-    from . import claude_code, gemini, ollama  # noqa: F401
+    from . import claude_code, gemini  # noqa: F401
 
     try:
         from . import anthropic_backend  # noqa: F401

@@ -33,7 +33,7 @@ class CreateError(RuntimeError):
 
 
 def _chosen(config, model: str | None, job: str) -> list:
-    """The provider the user picked for `job` in Settings > Who does what (D148), as a backend, or nothing
+    """The provider the user picked for `job` in Settings > Which AI (D148, D216), as a backend, or nothing
     when it's automatic or can't be set up (then the usual order answers)."""
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
@@ -48,8 +48,6 @@ def _chosen(config, model: str | None, job: str) -> list:
             return [create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=CLAUDE_TIMEOUT + 60)]
         if pick == "gemini":
             return free_backends(config, "gemini")
-        if pick == "ollama":
-            return [create_backend("ollama", max_retries=1, requests_per_minute=60, timeout=CLAUDE_TIMEOUT)]
     except Exception as exc:  # not set up: the usual order answers
         log.warning("create: the %s you chose for %s isn't available (%s)", pick, job, exc)
     return []
@@ -166,7 +164,7 @@ def _ordered(config, job: str = "", quick: bool = False):
     order = backends(config, config.llm.create_quick_model if quick else None, job)
     claude = [b for b in order if b.name in ("anthropic", "claude_code")]
     picked = config.llm.job_providers.get(job, "") if job else ""
-    gemini_first = picked in ("gemini", "ollama") if picked else job in config.llm.create_gemini_jobs
+    gemini_first = picked == "gemini" if picked else job in config.llm.create_gemini_jobs
     if gemini_first:
         order = [b for b in order if b not in claude] + claude
     return order, claude, picked, gemini_first

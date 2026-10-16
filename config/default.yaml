@@ -39,7 +39,7 @@ selection:
   use_absolute_gate: true    # false restores the brief's percentile-only behaviour
 
 llm:
-  backend: gemini            # gemini | ollama | anthropic | mock
+  backend: gemini            # gemini | anthropic | claude_code | mock
   model: null                # null = resolve the best available free model at runtime
   batch_size: 15             # candidates per call (8 took twice the calls; D75)
   max_retries: 5
@@ -151,19 +151,11 @@ qa:
   max_trail_silence: 1.5
   caption_sync_tolerance: 0.25
 
-# Campaign watcher (`clipper watch`): reads forwarded Vyro/Whop campaign emails
-# from a dedicated mailbox and pushes the ones that fit to your phone via ntfy.
-# Mailbox login and the ntfy topic are secrets and live in .env.
+# Campaign alerts: the judge that reads the Whop feeds you follow (Campaigns, Find campaigns).
 watch:
-  imap_host: imap.gmail.com
-  folders: ["INBOX", "[Gmail]/Spam"]
-  lookback_days: 14
   # Who the campaigns are for; the judge reads it. Set yours in Settings (or data/config.yaml).
   profile: >-
     A social-media clipping account that cuts short vertical clips from footage it
     is authorized to use. Not interested in product ads, supplements, AI tools,
     crypto or gambling.
   platforms: ["tiktok"]
-  min_rate_per_1k: 1.0       # skip campaigns paying less per 1,000 views
-  notify_maybe: true         # also push "maybe" fits, marked with a ?
-  ntfy_server: https://ntfy.sh

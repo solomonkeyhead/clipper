@@ -143,8 +143,6 @@ def judge_backend(config: Config, backend_override: str | None = None) -> LLMBac
     model = config.llm.judge_model or (config.llm.create_model if pick else None)
     if pick == "gemini" or backend_override:   # the user said Gemini: the scoring backend judges
         return None
-    if pick == "ollama":
-        return create_backend("ollama", max_retries=1, requests_per_minute=60, timeout=300)
     if not model:
         return None
     try:

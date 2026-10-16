@@ -2,11 +2,11 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
-  BarChart3, Film, Search, Sparkles, GraduationCap, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, Moon, PanelLeft, RefreshCw, Scissors, Send,
-  Settings, Sun, UserCircle2, Wand2,
+  BarChart3, Film, Search, GraduationCap, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, PanelLeft, RefreshCw, Scissors, Send,
+  Settings, UserCircle2, Wand2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCampaigns, useClips, useSyncNow, useUses } from "@/api/client";
+import { useCampaigns, useClips, useSyncNow } from "@/api/client";
 import { useUI } from "@/lib/store";
 import { Kbd } from "./ui";
 
@@ -59,15 +59,11 @@ export function CommandPalette() {
   const setOpen = useUI((s) => s.setPalette);
   const setClip = useUI((s) => s.setOpenClip);
   const setShortcuts = useUI((s) => s.setShortcuts);
-  const setAsk = useUI((s) => s.setAsk);
   const toggleCollapsed = useUI((s) => s.toggleCollapsed);
-  const theme = useUI((s) => s.theme);
-  const setTheme = useUI((s) => s.setTheme);
   const navigate = useNavigate();
   const sync = useSyncNow();
   const { data: campaigns = [] } = useCampaigns();
   const { data: clips = [] } = useClips();
-  const uses = useUses();
 
   const run = (fn: () => void) => () => { setOpen(false); fn(); };
   const go = (to: string, search?: Record<string, string>) => run(() => void navigate({ to, search }));
@@ -90,7 +86,7 @@ export function CommandPalette() {
         <Command.Empty className="px-4 py-8 text-center text-sm text-muted">No results.</Command.Empty>
         <Group heading="Go to">
           <Item icon={<LayoutDashboard />} label="Dashboard" keys="G D" onSelect={go("/")} />
-          {uses.create && <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />}
+          <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />
           <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
           <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
           <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
@@ -99,16 +95,13 @@ export function CommandPalette() {
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
           <Item icon={<BarChart3 />} label="Stats" keys="G S" onSelect={go("/stats")} />
-          <Item icon={<GraduationCap />} label="Learning: does the score match your taste?" onSelect={go("/learning")} />
+          <Item icon={<GraduationCap />} label="Learning: what Clipper has learned" onSelect={go("/learning")} />
           <Item icon={<UserCircle2 />} label="Accounts" keys="G A" onSelect={go("/accounts")} />
           <Item icon={<Settings />} label="Settings" keys="G ," onSelect={go("/settings")} />
         </Group>
         <Group heading="Actions">
-          <Item icon={<Sparkles />} label="Ask Clipper a question" keys="I" onSelect={run(() => setAsk(true))} />
-          {uses.finder && <Item icon={<Search />} label="Find campaigns" onSelect={go("/campaigns", { find: "1" })} />}
+          <Item icon={<Search />} label="Find campaigns" onSelect={go("/campaigns", { find: "1" })} />
           <Item icon={<RefreshCw />} label="Sync stats now" onSelect={run(() => sync.mutate())} />
-          <Item icon={theme === "light" ? <Moon /> : <Sun />} label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
-                onSelect={run(() => setTheme(theme === "light" ? "dark" : "light"))} />
           <Item icon={<PanelLeft />} label="Toggle sidebar" keys="[" onSelect={run(toggleCollapsed)} />
           <Item icon={<Keyboard />} label="Keyboard shortcuts" keys="?" onSelect={run(() => setShortcuts(true))} />
         </Group>

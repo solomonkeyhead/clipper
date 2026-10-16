@@ -31,16 +31,12 @@ KEYS = {
     "COVERR_API_KEY": "Coverr (free): stock footage for Create",
     "TIKTOK_CLIENT_KEY": "Your TikTok developer app's client key",
     "TIKTOK_CLIENT_SECRET": "Your TikTok developer app's client secret",
-    "TAVILY_API_KEY": "Tavily (free): live web search for the Ask chat",
-    "DISCORD_BOT_TOKEN": "Your Discord bot's token: reads the campaign channels you follow",
-    "NTFY_TOPIC": "Your ntfy topic: campaign alerts on your phone",
     "YOUTUBE_CLIENT_ID": "Your Google app's client ID: reads your YouTube Shorts' stats",
     "YOUTUBE_CLIENT_SECRET": "Your Google app's client secret",
     "WHOP_CLIENT_ID": "Your Whop app's ID (app_...): reads campaign feeds you've joined",
     "WHOP_CLIENT_SECRET": "Your Whop app's API key, used as its sign-in secret",
     "INSTAGRAM_APP_ID": "Your Meta app's ID: one-click Instagram sign-in",
     "INSTAGRAM_APP_SECRET": "Your Meta app's Instagram secret",
-    "X_BEARER_TOKEN": "Your X app's Bearer Token: reads your X posts' views (paid per post read)",
 }
 
 

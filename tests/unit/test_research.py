@@ -1,4 +1,4 @@
-"""The Ask chat, finding campaigns, proof packs and fast post-link capture."""
+"""Finding campaigns, proof packs and fast post-link capture."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import zipfile
 import pytest
 import yaml
 
-from clipper.research import agent, sources
 from clipper.studio import db
 
 
@@ -37,47 +36,6 @@ def add_clip(data_root, **extra) -> int:
                                     "title": "a clip", "file": "test-campaign/x.mp4",
                                     "caption": "so good #test #ad", **extra})
 
-
-# ---------- Ask ----------
-
-def fake_ask(question, history, box, progress=lambda s: None):
-    progress("Searching the web: x")
-    return agent.Answer(text=f"answer to {question} after {len(history)} turns",
-                        sources=[{"title": "A", "url": "https://a.example"}])
-
-
-def test_a_conversation_keeps_its_history(client, monkeypatch):
-    monkeypatch.setattr(agent, "ask", fake_ask)
-    first = client.post("/api/research/ask", json={"text": "what is trending?"}).json()
-    assert first["title"] == "what is trending?" and len(first["messages"]) == 2
-    again = client.post("/api/research/ask", json={"text": "and hooks?", "thread_id": first["id"]}).json()
-    assert again["messages"][-1]["content"] == "answer to and hooks? after 2 turns"
-    assert again["messages"][-1]["sources"] == [{"title": "A", "url": "https://a.example"}]
-    client.delete(f"/api/research/threads/{first['id']}")
-    assert client.get("/api/research/threads").json() == []
-
-
-def test_the_free_plan_has_no_ask(client):
-    with db.connect() as con:
-        db.set_setting(con, "plan", "free")
-    assert client.get("/api/research/threads").status_code == 402
-    assert client.get("/api/research/status").json()["can_research"] is False
-
-
-def test_web_search_needs_a_key_and_numbers_sources_once(monkeypatch):
-    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-    with pytest.raises(sources.SourceUnavailable, match="Tavily"):
-        sources.search_web("x")
-    monkeypatch.setattr(sources, "search_web", lambda q, days=None: [
-        sources.WebResult("A", "https://a", "text a"), sources.WebResult("B", "https://b", "text b")])
-    run = agent._Run(agent.Toolbox(lambda c: [], lambda: []), lambda s: None)
-    run.call("search_web", {"query": "one"})
-    second = run.call("search_web", {"query": "two"})
-    assert [r["n"] for r in second["results"]] == [1, 2] and len(run.sources) == 2
-    assert run.call("propose_hook_lines", {"campaign": "c"})["error"]  # no actions any more
-
-
-# ---------- finding campaigns ----------
 
 def test_the_watcher_keeps_what_it_finds(client):
     from clipper.studio import finder

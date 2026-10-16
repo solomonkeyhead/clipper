@@ -266,5 +266,15 @@ with sync_playwright() as p:
     page.get_by_text("Footage libraries for Create").scroll_into_view_if_needed()
     page.screenshot(path=f"{OUT}/5_settings.png")
     print("settings: footage card with Pixabay, Pexels, Coverr")
+    # D216: one AI choice for every job, no theme switch, no auto-post; Learning without the score charts
+    expect(page.get_by_label("Which AI")).to_be_visible()
+    for gone in ("Who does what: clipping", "Theme", "Auto-post approved clips", "What you use Clipper for"):
+        assert page.get_by_text(gone, exact=True).count() == 0, f"{gone!r} is back in Settings"
+    page.goto("http://127.0.0.1:8799/learning")
+    expect(page.get_by_role("heading", name="What Clipper has learned")).to_be_visible()
+    for gone in ("Does the score work?", "What's working", "Export my taste"):
+        assert page.get_by_text(gone).count() == 0, f"{gone!r} is back on Learning"
+    assert page.get_by_role("button", name="Ask Clipper").count() == 0, "the Ask button is back"
+    print("D216: Which AI in Settings; Learning, Ask, theme and auto-post trimmed")
     print("page errors:", errors)
     b.close()

@@ -1,16 +1,14 @@
-"""Campaign alerts (D65, D69): new campaigns, judged, listed and pushed.
+"""Campaign alerts (D65, D69): new campaigns, judged and listed.
 
-Two sources. Discord: the user follows campaign announcement channels into a
-small server of their own and adds a bot they made to it (watch/discord.py).
-Whop: the user signs in to their own Whop app and picks forum feeds in the
-communities they've joined, where Content Rewards' campaign bot posts
-(watch/whop.py). Every few minutes while
-the Control Center is open, Clipper reads what's new in the channels they chose,
-asks the campaign judge (watch/judge.py) whether each post announces a campaign
-and how well it fits them, keeps each campaign for the Campaigns page, and
-pushes the fitting ones to their phone through ntfy when they've set a topic.
+The user signs in to their own Whop app and picks forum feeds in the communities
+they've joined, where Content Rewards' campaign bot posts (watch/whop.py). Every
+few minutes while the Control Center is open, Clipper reads what's new in the
+feeds they chose, asks the campaign judge (watch/judge.py) whether each post
+announces a campaign and how well it fits them, and keeps each campaign for the
+Campaigns page. Discord channels and ntfy phone pushes were sources too, unused
+and removed (D216).
 
-Both keep their posts, so nothing is missed while the PC is off: the next check
+Whop keeps its posts, so nothing is missed while the PC is off: the next check
 reads everything since the last post it saw.
 """
 
@@ -22,47 +20,19 @@ from datetime import UTC, datetime, timedelta
 
 from ..config import PLATFORM_NAMES
 from ..utils.logging import get_logger
-from ..watch import discord, whop
+from ..watch import whop
 from . import db
 
 log = get_logger(__name__)
 
-TOKEN = "DISCORD_BOT_TOKEN"
-TOPIC = "NTFY_TOPIC"
 CHECK_MINUTES = 5
-FIRST_LOOK = 25    # messages read from a channel when it's first watched...
+FIRST_LOOK = 25    # posts read from a feed when it's first watched...
 FIRST_DAYS = 14    # ...of which only posts this recent are judged
 MIN_CHARS = 40     # shorter posts ("gm", a role ping) aren't campaigns
 MAX_ATTEMPTS = 3   # a post the AI can't judge is retried, then passed over
 
 _attempts: dict[str, int] = {}
 _checking = threading.Lock()
-
-
-def token() -> str:
-    return os.environ.get(TOKEN, "").strip()
-
-
-def watched() -> list[dict]:
-    with db.connect() as con:
-        return [dict(r) for r in con.execute(
-            "SELECT id, guild_id, guild, name, last_id FROM discord_channels ORDER BY guild, name")]
-
-
-def watch(ids: list[str], available: list[dict]) -> list[dict]:
-    """Read exactly these channels from now on (each one of `available`)."""
-    by_id = {c["id"]: c for c in available}
-    unknown = [i for i in ids if i not in by_id]
-    if unknown:
-        raise ValueError("the bot can't see one of those channels; refresh the list")
-    with db.connect() as con:
-        con.execute(f"DELETE FROM discord_channels WHERE id NOT IN ({','.join('?' * len(ids))})", ids)
-        for i in ids:
-            c = by_id[i]
-            con.execute("INSERT INTO discord_channels (id, guild_id, guild, name, added_at) "
-                        "VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET guild=excluded.guild, "
-                        "name=excluded.name", (i, c["guild_id"], c["guild"], c["name"], db.now()))
-    return watched()
 
 
 def whop_watched() -> list[dict]:
@@ -87,33 +57,27 @@ def whop_watch(ids: list[str], available: list[dict]) -> list[dict]:
 
 
 def prefs() -> dict:
-    """What the judge is told about the user, and the lowest pay worth an alert."""
+    """What the judge is told about the user."""
     from ..config import Config
 
     base = Config.load().watch
     with db.connect() as con:
         s = db.settings(con)
-    rate = s["alert_min_rate"]
-    return {"profile": s["alert_profile"].strip() or base.profile.strip(),
-            "min_rate": float(rate) if rate else base.min_rate_per_1k}
+    return {"profile": s["alert_profile"].strip() or base.profile.strip()}
 
 
-def set_prefs(profile: str, min_rate: float) -> dict:
-    if not 0 <= min_rate <= 1000:
-        raise ValueError("the minimum rate is dollars per 1,000 views")
+def set_prefs(profile: str) -> dict:
     with db.connect() as con:
         db.set_setting(con, "alert_profile", profile.strip()[:2000])
-        db.set_setting(con, "alert_min_rate", f"{min_rate:g}")
     return prefs()
 
 
 def status() -> dict:
     with db.connect() as con:
         s = db.settings(con)
-    return {"token_set": bool(token()), "watched": watched(), "whop_signed_in": whop.signed_in(),
+    return {"whop_signed_in": whop.signed_in(),
             "whop_app": bool(os.environ.get(whop.ENV_ID, "").strip()), "whop_feeds": whop_watched(),
-            "checked_at": s["alerts_checked"],
-            "error": s["alerts_error"], "push_set": bool(os.environ.get(TOPIC, "").strip()),
+            "checked_at": s["alerts_checked"], "error": s["alerts_error"],
             "every_minutes": CHECK_MINUTES, **prefs()}
 
 
@@ -127,19 +91,17 @@ def _config():
     # with Instagram connected.
     platforms = _connected() or base.platforms
     profile = f"{p['profile']}\nPosts on: {', '.join(PLATFORM_NAMES.get(x, x) for x in platforms)}."
-    return base.model_copy(update={"profile": profile, "min_rate_per_1k": p["min_rate"],
-                                   "platforms": platforms})
+    return base.model_copy(update={"profile": profile, "platforms": platforms})
 
 
 def _connected() -> list[str]:
     """The platforms the user has an account connected on."""
     from ..instagram import api as ig_api
     from ..tiktok import api as tt_api
-    from ..x import api as x_api
     from ..youtube import api as yt_api
 
     return [name for name, files in (("tiktok", tt_api.token_files), ("instagram", ig_api.token_files),
-                                     ("youtube", yt_api.token_files), ("x", x_api.account_files)) if files()]
+                                     ("youtube", yt_api.token_files)) if files()]
 
 
 def _recent(stamp: str | None) -> bool:
@@ -156,7 +118,6 @@ def check(backend=None, *, publish=None) -> dict:
         return {"busy": True}
     try:
         run = _Run(backend)
-        _check_discord(run)
         _check_whop(run)
     finally:
         _checking.release()
@@ -172,23 +133,20 @@ def check(backend=None, *, publish=None) -> dict:
 
 
 class _Run:
-    """One check across sources: the judge, the cache, the push, the tally."""
+    """One check: the judge, the cache, the tally."""
 
     def __init__(self, backend) -> None:
         from ..llm.cache import LLMCache
 
         self.backend = backend
         self.cfg, self.cache = _config(), LLMCache()
-        self.topic = os.environ.get(TOPIC, "").strip()
-        self.result = {"read": 0, "campaigns": 0, "new": [], "pushed": 0, "errors": []}
+        self.result = {"read": 0, "campaigns": 0, "new": [], "errors": []}
         self.checked = False
 
     def judge(self, header: str, text: str, *, key: str, via: str, link: str) -> bool:
-        """Judge one post and keep/push its campaign. False: the AI didn't answer
+        """Judge one post and keep its campaign. False: the AI didn't answer
         and the post should be read again next check (up to MAX_ATTEMPTS)."""
-        from ..watch import notify
         from ..watch.judge import judge_text
-        from ..watch.watcher import message_for, should_push
         from .finder import record_found
 
         if self.backend is None:
@@ -211,42 +169,7 @@ class _Run:
         verdict = verdict.model_copy(update={"link": verdict.link or link})
         if record_found(verdict, text, via=via):
             self.result["new"].append(verdict.name or "a campaign")
-            ok, _ = should_push(verdict, self.cfg)
-            if ok and self.topic:
-                try:
-                    notify.push(self.cfg.ntfy_server, notify.payload(self.topic, **message_for(verdict)))
-                    self.result["pushed"] += 1
-                except notify.PushError as exc:
-                    log.warning("alert push failed: %s", exc)
         return True
-
-
-def _check_discord(run: _Run) -> None:
-    tok, channels = token(), watched()
-    if not tok or not channels:
-        return
-    run.checked = True
-    for ch in channels:
-        first = ch["last_id"] is None
-        try:
-            posts = discord.messages(tok, ch["id"], after=ch["last_id"], latest=FIRST_LOOK)
-        except discord.DiscordError as exc:
-            run.result["errors"].append(f"#{ch['name']}: {exc}")
-            continue
-        for m in posts:
-            text = discord.text_of(m)
-            if len(text) >= MIN_CHARS and (not first or _recent(m.get("timestamp"))):
-                author = (m.get("author") or {}).get("username") or "someone"
-                if not run.judge(f"Discord post in #{ch['name']} ({ch['guild']}), from {author}\n"
-                                 f"Date: {m.get('timestamp', '')}", text, key=m["id"], via="discord",
-                                 link=discord.link_to(ch["guild_id"], ch["id"], m["id"])):
-                    break  # keep last_id before this post
-            with db.connect() as con:
-                con.execute("UPDATE discord_channels SET last_id=? WHERE id=?", (m["id"], ch["id"]))
-        if first and not posts:  # an empty channel: read from now on
-            with db.connect() as con:
-                con.execute("UPDATE discord_channels SET last_id=? WHERE id=? AND last_id IS NULL",
-                            (discord.snowflake_now(), ch["id"]))
 
 
 def _check_whop(run: _Run) -> None:
@@ -278,15 +201,3 @@ def _check_whop(run: _Run) -> None:
             with db.connect() as con:
                 con.execute("UPDATE whop_feeds SET last_seen=? WHERE id=? AND last_seen IS NULL",
                             (datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z"), feed["id"]))
-
-
-def test_push() -> None:
-    from ..watch import notify
-
-    topic = os.environ.get(TOPIC, "").strip()
-    if not topic:
-        raise ValueError("add your ntfy topic first")
-    notify.push(_config().ntfy_server, notify.payload(
-        topic, title="Clipper campaign alerts",
-        message="Test alert. New campaigns that fit you will arrive like this.",
-        tags=["white_check_mark"]))

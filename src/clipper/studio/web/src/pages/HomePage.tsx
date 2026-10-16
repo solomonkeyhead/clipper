@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, TrendingUp, Wand2 } from "lucide-react";
-import { useCampaignTitle, useCampaigns, useClips, useCreate, useHome, usePosts, useSetSettings, useSetTask, useUses, type Clip } from "@/api/client";
+import { useCampaignTitle, useCampaigns, useClips, useCreate, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
 import { Button, Card, Skeleton, Tip, buttonClass } from "@/components/ui";
 import { Poster, PosterTile, WallRow } from "@/components/wall";
 import { useUI } from "@/lib/store";
@@ -119,12 +119,6 @@ function NextUp({ clip, label, run }: { clip: Clip; label: string; run: () => vo
   );
 }
 
-const USES: { key: string; title: string; body: string }[] = [
-  { key: "use_campaigns", title: "Clip footage for campaigns", body: "Brands or creators pay clippers per view (Whop, Vyro, Content Rewards...), or you clip for a client or for your own long videos." },
-  { key: "use_create", title: "Make original videos", body: "Create writes a short script, you add the voice, and Clipper builds the video for your own channel." },
-  { key: "use_finder", title: "Find campaigns for me", body: "Watch your inbox, Discord or Whop for new campaigns that fit what you clip." },
-];
-
 /** Where today's Short stands and the one thing to do next, with a button to it (D118). */
 function ChannelCard({ quiet = false }: { quiet?: boolean }) {
   const { data } = useCreate();
@@ -163,24 +157,11 @@ const STEPS: { key: string; title: string; body: string; to: string; action: str
     to: "/accounts", action: "Connect" },
 ];
 
-/** Setting up, as one list (D209): what you'll use is its first step (D145), then the steps for what you picked; the
- *  next one is open with its button, the rest are a line each, and the list goes when all are done. The question used
- *  to be a card of its own above a second card of four equal steps. */
+/** Setting up, as one list (D209): the next step is open with its button, the rest are a line each, and the list goes
+ *  when all are done. Its first step asked what you'd use and hid the rest (D145); everything shows since D216. */
 function Setup({ done }: { done: Record<string, boolean> }) {
-  const uses = useUses();
-  const save = useSetSettings();
-  const [picked, setPicked] = useState<Record<string, boolean>>({ use_campaigns: true, use_create: false, use_finder: false });
-  const [about, setAbout] = useState("");
-  const choose = () => save.mutate({
-    onboarded: "1", alert_profile: about.trim(),
-    ...Object.fromEntries(USES.map((u) => [u.key, picked[u.key] ? "1" : "0"])),
-  });
-  const campaigns = uses.onboarded ? uses.campaigns : picked.use_campaigns;
-  const steps = [
-    { key: "uses", title: "Choose what you'll use", body: "Anything you leave out stays hidden; you can change it in Settings.", to: "", action: "" },
-    ...STEPS.filter((s) => s.key === "ai" || s.key === "accounts" || campaigns),
-  ];
-  const isDone = (key: string) => (key === "uses" ? uses.onboarded : Boolean(done[key]));
+  const steps = STEPS;
+  const isDone = (key: string) => Boolean(done[key]);
   const next = steps.find((s) => !isDone(s.key));
   if (!next) return null;
   const count = steps.filter((s) => isDone(s.key)).length;
@@ -200,39 +181,14 @@ function Setup({ done }: { done: Record<string, boolean> }) {
                 {finished ? <CheckCircle2 className="size-5 shrink-0 text-success" aria-label="Done" />
                   : <span className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[12px] font-bold", open ? "bg-fg text-bg" : "bg-surface-3")}>{i + 1}</span>}
                 <span className={cn("flex-1 text-sm", open ? "font-semibold" : finished ? "text-muted line-through" : "text-muted")}>{step.title}</span>
-                {!finished && !open && step.to && <Link to={step.to} className="inline-flex min-h-8 items-center text-xs font-semibold text-muted hover:text-fg pointer-coarse:min-h-11">{step.action}</Link>}
+                {!finished && !open && <Link to={step.to} className="inline-flex min-h-8 items-center text-xs font-semibold text-muted hover:text-fg pointer-coarse:min-h-11">{step.action}</Link>}
               </div>
               {open && (
                 <div className="flex flex-col gap-3 pl-8">
                   <p className="text-sm text-muted">{step.body}</p>
-                  {step.key === "uses" ? (
-                    <>
-                      <div className="grid gap-2 md:grid-cols-3">
-                        {USES.map((u) => (
-                          <label key={u.key} className={cn("flex cursor-pointer flex-col gap-1 rounded-md p-3", picked[u.key] ? "bg-surface-3" : "bg-surface-2 hover:bg-surface-3")}>
-                            <span className="flex items-center gap-2 text-sm font-medium">
-                              <input type="checkbox" className="size-4 accent-[var(--text)]" checked={picked[u.key]}
-                                     onChange={(e) => setPicked({ ...picked, [u.key]: e.target.checked })} /> {u.title}
-                            </span>
-                            <span className="text-xs text-muted">{u.body}</span>
-                          </label>
-                        ))}
-                      </div>
-                      {picked.use_finder && (
-                        <label className="flex flex-col gap-1.5 text-sm">
-                          <span className="font-medium">What do you clip? (so only campaigns that fit are shown)</span>
-                          <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={2}
-                                    placeholder="e.g. A TikTok account for TV comedy clips. Not interested in crypto or supplements."
-                                    className="rounded-sm border border-line bg-surface-2 p-3 text-sm outline-none focus:border-line-strong" />
-                        </label>
-                      )}
-                      <div><Button variant="primary" disabled={save.isPending || !Object.values(picked).some(Boolean)} onClick={choose}>Continue <ArrowRight className="size-4" /></Button></div>
-                    </>
-                  ) : (
-                    <Link to={step.to} hash={step.key === "ai" ? "ai" : undefined} className={cn(buttonClass("primary"), "w-fit")}>
-                      {step.action} <ArrowRight className="size-3.5" />
-                    </Link>
-                  )}
+                  <Link to={step.to} hash={step.key === "ai" ? "ai" : undefined} className={cn(buttonClass("primary"), "w-fit")}>
+                    {step.action} <ArrowRight className="size-3.5" />
+                  </Link>
                 </div>
               )}
             </li>
@@ -253,7 +209,6 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { data: campaigns = [] } = useCampaigns();
   const { data: create } = useCreate();
-  const uses = useUses();
   const archived = new Set(campaigns.filter((c) => c.archived).map((c) => c.name));
 
   if (!home) {
@@ -298,14 +253,13 @@ export function DashboardPage() {
 
   // The one thing to do next (D143): the first clip to post, else the first link to submit, else a
   // brief task, else the channel's next step, else more clips. One button, so opening the app has a next move.
-  const channelBusy = uses.create ? create?.videos.find((v) => v.status !== "built") : undefined;
+  const channelBusy = create?.videos.find((v) => v.status !== "built");
   const next: { label: string; run: () => void } | null = firstRun ? null
     : toPost.length ? { label: `Post the next clip (${toPost.length})`, run: () => void navigate({ to: "/post", search: { step: "post" } }) }
     : by("posted").length ? { label: `Submit the next clip (${by("posted").length})`, run: () => void navigate({ to: "/post", search: { step: "submit" } }) }
     : due.length ? { label: "Do the next brief task", run: () => open(due[0].post.clip) }
     : channelBusy ? { label: `Your Short: ${channelBusy.status === "draft" ? "approve the script" : channelBusy.status === "approved" ? "add the voice" : "see it"}`, run: () => void navigate({ to: "/create" }) }
-    : uses.campaigns ? { label: "Make more clips", run: () => void navigate({ to: "/new" }) }
-    : { label: "Make a Short", run: () => void navigate({ to: "/create" }) };
+    : { label: "Make more clips", run: () => void navigate({ to: "/new" }) };
   // This week, in a line: what you posted and what it brought.
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
   const weekPosts = posts.filter((p) => (p.posted_at ?? "") >= weekAgo).length;
@@ -315,7 +269,7 @@ export function DashboardPage() {
 
   // The first clip of the post queue, shown large with its button (D215); the queue takes the same order.
   const hero = !firstRun ? toPost.find((c) => c.file_exists) : undefined;
-  const nextIsChannel = !!next && next.label.startsWith("Your Short") || (!!next && next.label === "Make a Short");
+  const nextIsChannel = !!next && next.label.startsWith("Your Short");
   const restReady = by("ready").filter((c) => c !== hero);
   // Nothing has synced yet (REDESIGN_NOTES 6): one line, not four boxes of dashes and zeros.
   const noNumbers = m.posts === 0 && !m.views && m.est_earnings === null && m.paid_usd == null;
@@ -328,14 +282,14 @@ export function DashboardPage() {
             {!firstRun && toPost.length ? `${greeting()} ${toPost.length} clip${toPost.length === 1 ? "" : "s"} to post` : greeting()}
           </h1>
           <p className="mt-2 text-sm text-muted">
-            {firstRun || !uses.onboarded ? "Welcome to Clipper. A few steps and you're ready." : `${week ? `${week} ` : ""}Here's where your clips stand.`}
+            {firstRun ? "Welcome to Clipper. A few steps and you're ready." : `${week ? `${week} ` : ""}Here's where your clips stand.`}
           </p>
         </div>
         {/* The one button: on the poster when there is a clip to post, up here for every other next step. */}
         {next && !hero && <Button variant="primary" size="md" onClick={next.run}>{next.label} <ArrowRight className="size-4" /></Button>}
       </div>
-      {uses.loaded && (!uses.onboarded || firstRun) && <Setup done={home.first_run} />}
-      {uses.create && <ChannelCard quiet={!uses.onboarded || firstRun || !nextIsChannel} />}
+      {firstRun && <Setup done={home.first_run} />}
+      <ChannelCard quiet={firstRun || !nextIsChannel} />
       {home.first_run.clips && <>
       {hero && next && <NextUp clip={hero} label={next.label} run={next.run} />}
 
@@ -368,8 +322,8 @@ export function DashboardPage() {
       {!hero && m.ready === 0 && by("posted").length === 0 && !waitingViews.length && !due.length && (
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
           <CheckCircle2 className="size-4 text-success" /> All caught up.
-          <Link to={uses.campaigns ? "/new" : "/create"} className="inline-flex min-h-8 items-center gap-1 font-semibold text-fg hover:underline">
-            {uses.campaigns ? "Make more clips" : "Make a Short"} <ArrowRight className="size-3.5" />
+          <Link to="/new" className="inline-flex min-h-8 items-center gap-1 font-semibold text-fg hover:underline">
+            Make more clips <ArrowRight className="size-3.5" />
           </Link>
         </p>
       )}

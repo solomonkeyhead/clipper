@@ -327,40 +327,17 @@ class TestBatches:
         assert res.status_code == 402 and "3 videos" in res.json()["detail"]
 
 
-class TestBriefsForAsk:
+class TestBriefs:
     BRIEF = ("Test Campaign: clip the best moments. Only US residents can be paid. Payouts go out "
              "every Friday once a post reaches 10,000 views. Reposts of other clippers are rejected.")
 
-    def test_a_pasted_brief_is_kept_and_reaches_ask(self, client):
-        from clipper.studio import research_api
-
+    def test_a_pasted_brief_is_kept(self, client):
         assert client.put("/api/campaigns/test-campaign/brief", json={"text": self.BRIEF}).status_code == 200
         assert client.get("/api/campaigns/test-campaign/brief").json()["chars"] == len(self.BRIEF)
-        got = research_api.toolbox().brief("test-campaign")
-        assert got["brief"] == self.BRIEF and got["rules"]["required_hashtags"] == ["#test"]
-
-    def test_archived_and_unknown_campaigns_have_no_brief(self, client):
-        from clipper.studio import research_api
-
-        client.put("/api/campaigns/test-campaign/brief", json={"text": self.BRIEF})
-        assert research_api.toolbox().brief("nope") is None
-        client.patch("/api/campaigns/test-campaign", json={"archived": True})
-        assert research_api.toolbox().brief("test-campaign") is None
-
-    def test_without_a_saved_brief_ask_still_gets_the_rules(self, client):
-        from clipper.studio import research_api
-
-        got = research_api.toolbox().brief("test-campaign")
-        assert got["brief"] is None and "edit page" in got["note"] and got["rules"]
 
     def test_a_brief_must_be_a_brief(self, client):
         assert client.put("/api/campaigns/test-campaign/brief", json={"text": "hi"}).status_code == 400
         assert client.put("/api/campaigns/nope/brief", json={"text": self.BRIEF}).status_code == 404
-
-    def test_part_of_a_title_finds_the_campaign(self, client):
-        from clipper.studio import research_api
-
-        assert research_api.toolbox().brief("test")["campaign"] == "test-campaign"
 
 
 def test_the_google_app_pages_are_served_and_nothing_else(client):

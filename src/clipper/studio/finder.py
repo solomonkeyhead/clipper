@@ -1,7 +1,7 @@
 """Finding campaigns: what the campaign alerts found, and a fit check for any brief.
 
-The alerts (Discord channels the user follows, studio/alerts.py, and the older
-email watcher, clipper.watch) record each campaign they find here; the
+The alerts (the Whop feeds the user follows, studio/alerts.py) record each
+campaign they find here; the
 Campaigns page lists them. "Check a campaign" reads a pasted brief
 (campaign/editor.read_brief) and compares it with the user's own record:
 their connected platforms, the kinds of footage they've clipped, and their
@@ -28,7 +28,7 @@ PLATFORM_NAME = {p.target: p.target_name for p in platforms.REGISTRY}
 
 def record_found(verdict, brief: str, *, via: str = "email") -> bool:
     """Keep one campaign an alert found (a watch.judge.Verdict). True if it's new."""
-    from ..watch.watcher import campaign_key
+    from ..watch.judge import campaign_key
 
     with db.connect() as con:
         return con.execute(
