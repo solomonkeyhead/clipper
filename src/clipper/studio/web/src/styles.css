@@ -157,9 +157,13 @@ body {
 .row-head { font-family: var(--font-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; font-size: 19px; line-height: 1; }
 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 ::selection { background: color-mix(in oklch, var(--text) 24%, transparent); }
-input, textarea { caret-color: var(--accent-ink); }
-* { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
-a { text-underline-offset: 3px; }
+/* In the base layer so a utility wins (D217): unlayered, `*` beat the tabs' `[scrollbar-width:none]` and a stray
+   scrollbar showed beside every tab row. */
+@layer base {
+  input, textarea { caret-color: var(--accent-ink); }
+  * { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
+  a { text-underline-offset: 3px; }
+}
 
 /* The wall's one move (D215): the poster in focus grows and takes the amber ring, and its row steps back.
    `data-focus` marks it (J/K, hover or the first to post); `data-focusing` on the row dims the rest. */
@@ -180,6 +184,8 @@ a { text-underline-offset: 3px; }
   transform: none; box-shadow: none;
 }
 [data-tile]:focus-visible { outline: none; }
+/* A press lands (D217): the poster you click sinks back toward the wall under your finger, then the clip opens. */
+[data-tile]:active > .poster { transform: translateY(-1px) scale(0.985); transition-duration: var(--dur-instant); }
 /* The tile in focus grows a line saying what a click does; hidden, not removed, so the row keeps its height. */
 .tile-more { opacity: 0; transform: translateY(-2px); transition: opacity var(--dur-base) var(--ease-decelerate), transform var(--dur-base) var(--ease-decelerate); }
 [data-tile]:is(:hover, :focus-visible, [data-focus]) .tile-more { opacity: 1; transform: none; }
@@ -192,6 +198,25 @@ a { text-underline-offset: 3px; }
 .wall-row::-webkit-scrollbar { display: none; }
 .wall-row > * { scroll-snap-align: start; }
 @media (prefers-reduced-motion: reduce) { .poster, .tile-more { transition: none; } }
+
+/* Tabs (D217): underlined words over a hairline. The underline grows out from the word's middle when it's picked,
+   and a hovered tab shows a short grey one: where a click would take it. One class for every tab row. */
+.tabs {
+  display: flex; align-items: center; gap: 20px; overflow-x: auto; white-space: nowrap; scrollbar-width: none;
+  box-shadow: inset 0 -1px var(--border);
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  position: relative; flex-shrink: 0; height: 44px; padding-inline: 4px; font-size: 15px; font-weight: 600;
+  color: var(--text-muted); transition: color var(--dur-fast) var(--ease-standard);
+}
+.tab:hover, .tab[aria-selected="true"] { color: var(--text); }
+.tab::after {
+  content: ""; position: absolute; inset-inline: 0; bottom: 0; height: 2px; background: var(--text);
+  transform: scaleX(0); transition: transform var(--dur-enter) var(--ease-decelerate), background-color var(--dur-fast);
+}
+.tab[aria-selected="true"]::after { transform: scaleX(1); }
+.tab:hover:not([aria-selected="true"])::after { transform: scaleX(0.4); background: var(--border-strong); }
 
 .skeleton {
   background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
@@ -237,6 +262,12 @@ button[data-busy]:not(:has(.animate-spin))::after {
 button[data-busy]:disabled { opacity: 1; }
 
 .fade-in { animation: fade-in var(--dur-enter) var(--ease-decelerate); }
+/* What a fold or a toggle opens arrives instead of appearing (D217): a native <details>, or a button with
+   aria-expanded and its content right after it. A menu grows out of its corner instead. */
+details[open] > summary ~ :not(.menu-in),
+button[aria-expanded="true"]:not([aria-haspopup]) + :is(div, p, ol, ul) { animation: fade-in var(--dur-enter) var(--ease-decelerate); }
+.menu-in { animation: menu-in var(--dur-enter) var(--ease-decelerate); }
+@keyframes menu-in { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
 @keyframes sheet-in { from { transform: translateX(24px); opacity: 0; } }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }
 

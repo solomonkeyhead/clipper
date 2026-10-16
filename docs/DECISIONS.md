@@ -3743,3 +3743,17 @@ their transcripts and frames, then a research report; Marc picked what to build.
   Instagram has no app of its own, so its sign-in goes through the service. Asked Marc before removing it.
 - Old database tables and settings (discord_channels, research_threads, experiments, use_*) stay in existing
   databases, unread; new databases don't make them.
+
+## D217 - Studio polish: every click answers (2026-10-16)
+- A stray scrollbar sat beside every tab row: the page-wide `* { scrollbar-width: thin }` was unlayered CSS, so it
+  beat the tabs' own "no scrollbar". The base rules (scrollbar, caret, link underline) moved into `@layer base`.
+- The three tab rows (Clips filters, a campaign's Clips/Posts, the Post queue) were three copies with small
+  differences; they are now `.tabs` / `.tab` in `styles.css`. The picked tab's underline grows out from the middle,
+  and a hovered tab shows a short grey one.
+- A More menu stayed open over the page until its own button was pressed. A click anywhere else or Escape closes it
+  now, and focus goes back to its button. Menus (More, the phone's More, the account picker) grow out of their corner.
+- A poster sinks a little under the click. What a fold opens fades in instead of appearing. "Copied" pops its tick.
+  In the Post queue the next clip arrives when Done moves on; an opened Create card fades in.
+- Style drift fixed: "Make a Short" on an empty Ready list was an old outlined button, now the grey secondary one;
+  "Make clips" on an empty campaign had a typed arrow, now the arrow icon.
+- All of it short (180ms or less) and off with reduced motion: delight here is the page answering, not a show.

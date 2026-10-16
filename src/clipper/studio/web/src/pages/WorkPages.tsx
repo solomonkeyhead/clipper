@@ -3,7 +3,6 @@ import { Film, Info, PartyPopper } from "lucide-react";
 import { useCampaigns, useClips, type Clip } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
 import { Card, EmptyState, Kbd, PageHeader, Skeleton, StatusLegend, buttonClass } from "@/components/ui";
-import { cn } from "@/lib/utils";
 
 // In the order a clip moves through them, opening on what's waiting to be posted; All last (D78).
 const FILTERS = [["ready", "Ready to post"], ["posted", "To submit"], ["submitted", "Submitted"], ["skipped", "Skipped"], ["all", "All"]] as const;
@@ -28,11 +27,9 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
   const waiting = clips.filter((c) => inFilter(c, "posted") && c.submit_at_views).length;
   return (
     <>
-      <div className="mb-6 flex items-center gap-x-5 overflow-x-auto border-b border-line whitespace-nowrap [scrollbar-width:none]" role="tablist">
+      <div className="tabs mb-6" role="tablist">
         {FILTERS.map(([key, label]) => (
-          <button key={key} role="tab" aria-selected={value === key} onClick={() => onChange(key)}
-                  className={cn("-mb-px h-11 border-b-2 px-1 text-sm font-semibold transition-colors",
-                    value === key ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg")}>
+          <button key={key} role="tab" aria-selected={value === key} onClick={() => onChange(key)} className="tab">
             {label} <span className="tabular ml-1 opacity-70">{clips.filter((c) => inFilter(c, key) && !(key === "posted" && c.submit_at_views)).length}</span>
             {/* Posts still short of the campaign's view minimum are listed here but can't be submitted yet:
                 counted apart, as the Dashboard and the Post queue do (D161). */}
@@ -62,7 +59,7 @@ export function NoClips({ filter, campaign }: { filter: ClipFilter; campaign?: s
   if (filter === "ready") {
     return <EmptyState icon={<Film className="size-5" />} title="Nothing waiting to be posted"
       body="Clips you haven't posted yet land here. Make more from a campaign's footage, or write a Short for your own channel."
-      action={<span className="flex flex-wrap justify-center gap-2">{make}<Link to="/create" className="inline-flex h-9 items-center rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">Make a Short</Link></span>} />;
+      action={<span className="flex flex-wrap justify-center gap-2">{make}<Link to="/create" className={buttonClass("secondary")}>Make a Short</Link></span>} />;
   }
   if (filter === "submitted") {
     return <EmptyState icon={<Film className="size-5" />} title="Nothing submitted yet"

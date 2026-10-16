@@ -55,7 +55,7 @@ export function AccountScope() {
         <ChevronDown className="size-3 shrink-0" />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 z-50 mt-1 max-h-[70vh] w-64 overflow-auto rounded-md border border-line bg-surface-1 p-1 shadow-3">
+        <div role="menu" className="menu-in origin-top-right absolute right-0 z-50 mt-1 max-h-[70vh] w-64 overflow-auto rounded-md border border-line bg-surface-1 p-1 shadow-3">
           {item("all", <><Users className="size-4 text-muted" /> All accounts</>)}
           {groups.length > 0 && <div className="px-2 pt-2 pb-1 text-xs font-semibold tracking-wide text-subtle uppercase">Groups</div>}
           {groups.map((g) => item(`group:${g.id}`, <><Layers className="size-4 text-muted" /><span className="flex-1 truncate">{g.name}</span>

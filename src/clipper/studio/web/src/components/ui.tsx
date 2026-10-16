@@ -131,7 +131,7 @@ export function CopyButton({ text, what, label, size = "sm", variant = "secondar
         if (await copyText(text, what)) setDone(true);
       }}
     >
-      {done ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
+      {done ? <Check className="pop-in size-3.5 text-success" /> : <Copy className="size-3.5" />}
       {label && <span>{done ? "Copied" : label}</span>}
     </Button>
   );
@@ -333,17 +333,33 @@ export function Metric({ label, value, hint, tone, sub, trend, to, search }: {
 
 /** A "More" menu of named actions (D215): the actions a card or a bar doesn't need in view, each in words. Icon-only
  *  buttons (archive, a lightbulb for "Back to ideas", a bin) said nothing until hovered (REDESIGN_NOTES 5). A
- *  `<details>`, so it opens with a tap, Enter or Space, and an item that is picked closes it. */
+ *  `<details>`, so it opens with a tap, Enter or Space, and an item that is picked closes it. A click anywhere else
+ *  or Escape closes it too (D217): an open menu used to stay open over the page until its own button was pressed. */
 export function MoreMenu({ label = "More", children, align = "left", size = "md", className }: {
   label?: string; children: ReactNode; align?: "left" | "right"; size?: "sm" | "md"; className?: string;
 }) {
+  const box = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) box.current?.removeAttribute("open"); };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      box.current?.removeAttribute("open");
+      box.current?.querySelector("summary")?.focus();
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("pointerdown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
   return (
-    <details className={cn("relative", className)}
+    <details ref={box} className={cn("relative", className)} onToggle={(e) => setOpen(e.currentTarget.open)}
              onClick={(e) => { if ((e.target as HTMLElement).closest("[data-menu-item]")) e.currentTarget.removeAttribute("open"); }}>
       <summary className={cn(buttonClass("ghost", size), "cursor-pointer list-none [&::-webkit-details-marker]:hidden")}>
         <MoreHorizontal className="size-4" /> {label}
       </summary>
-      <div className={cn("absolute z-30 mt-1 flex w-64 flex-col rounded-md bg-surface-2 p-1 text-sm shadow-3", align === "right" ? "right-0" : "left-0")}>
+      <div className={cn("menu-in absolute z-30 mt-1 flex w-64 flex-col rounded-md bg-surface-2 p-1 text-sm shadow-3",
+        align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left")}>
         {children}
       </div>
     </details>

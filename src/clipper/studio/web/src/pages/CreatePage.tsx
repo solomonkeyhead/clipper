@@ -639,7 +639,7 @@ function VideoCard({ video, open: startOpen, wps, lead = false }: { video: Creat
           </MoreMenu>
         )}
       </div>
-      {open && <div className="border-t border-line p-4"><Body video={video} wps={wps} lead={lead} /></div>}
+      {open && <div className="fade-in border-t border-line p-4"><Body video={video} wps={wps} lead={lead} /></div>}
     </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { AlertTriangle, Archive, ArchiveRestore, BarChart3, CalendarClock, ChevronRight, ExternalLink, Megaphone, Pencil, Plus, Scissors, Search, ShieldCheck, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, Archive, ArrowRight, ArchiveRestore, BarChart3, CalendarClock, ChevronRight, ExternalLink, Megaphone, Pencil, Plus, Scissors, Search, ShieldCheck, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import {
@@ -392,11 +392,9 @@ export function CampaignPage() {
         {brief ? <BriefPanel brief={brief} /> : <div />}
         <div className="min-w-0">
           {!c.own_channel && <MoneyCard c={c} />}   {/* your own channel has no pay (D196) */}
-          <div className="mb-4 flex gap-x-5 border-b border-line" role="tablist">
+          <div className="tabs mb-4" role="tablist">
             {([["clips", `Clips ${data.clips.length}`], ["posts", `Posts ${posts.length}`]] as const).map(([key, label]) => (
-              <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)}
-                className={cn("-mb-px h-11 border-b-2 px-1 text-sm font-semibold",
-                  tab === key ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg")}>
+              <button key={key} role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className="tab">
                 {label}
               </button>
             ))}
@@ -407,7 +405,7 @@ export function CampaignPage() {
               {shown.length ? <ClipGrid clips={shown} /> : <NoClips filter={showing} campaign={c.name} />}
             </> : <EmptyState icon={<Megaphone className="size-5" />} title="No clips yet"
               body="Give Clipper this campaign's footage and the clips land here."
-              action={<Link to="/new" search={{ campaign: c.name }} className="text-sm font-medium link">Make clips →</Link>} />
+              action={<Link to="/new" search={{ campaign: c.name }} className="inline-flex items-center gap-1 text-sm link">Make clips <ArrowRight className="size-3.5" /></Link>} />
           ) : (
             <PostTable posts={posts} />
           )}

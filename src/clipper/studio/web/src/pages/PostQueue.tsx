@@ -6,7 +6,6 @@ import { SubmitLinkButton, useStatusWithUndo, useSubmittedWithUndo } from "@/com
 import { PlatformIcon } from "@/components/PlatformIcon";
 import { PostPanel } from "@/components/posting";
 import { Button, Card, EmptyState, PageHeader, Skeleton, buttonClass } from "@/components/ui";
-import { cn } from "@/lib/utils";
 
 /**
  * The post queue (D149): one clip at a time, with everything for it on one screen. Two kinds of step,
@@ -45,11 +44,9 @@ export function PostQueuePage() {
   return (
     <div className="fade-in max-w-5xl">
       <PageHeader title="Post queue" subtitle="One clip at a time: post it, then submit its link. Done moves to the next." />
-      <div className="mb-6 flex flex-wrap items-center gap-x-5 border-b border-line" role="tablist">
+      <div className="tabs mb-6" role="tablist">
         {(["post", "submit"] as const).map((s) => (
-          <button key={s} role="tab" aria-selected={step === s} onClick={() => go(s)}
-                  className={cn("-mb-px h-11 border-b-2 px-1 text-sm font-semibold transition-colors",
-                    step === s ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg")}>
+          <button key={s} role="tab" aria-selected={step === s} onClick={() => go(s)} className="tab">
             {LABEL[s]} <span className="tabular ml-1 opacity-70">{lists[s].length}</span>
           </button>
         ))}
@@ -68,7 +65,7 @@ export function PostQueuePage() {
               ? <Link to="/clips" search={{ status: "posted" }} className={buttonClass("secondary")}>See them</Link>
               : <Link to="/new" className={buttonClass("primary")}>Make clips</Link>} />
       ) : (
-        <div className="grid gap-5 md:grid-cols-[17rem_1fr]">
+        <div key={clip.id} className="fade-in grid gap-5 md:grid-cols-[17rem_1fr]">
           <div className="flex flex-col gap-2">
             <video key={clip.id} src={clip.video} poster={clip.thumb} controls playsInline preload="metadata"
                    className="aspect-[9/16] w-full rounded-md bg-black object-contain" />

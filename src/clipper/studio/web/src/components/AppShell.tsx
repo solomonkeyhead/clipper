@@ -359,7 +359,7 @@ export function AppShell() {
         </nav>
         {more && <>
           <button aria-label="Close the menu" className="fixed inset-0 z-30 cursor-default md:hidden" onClick={() => setMore(false)} />
-          <div role="menu" className="fixed right-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex w-56 flex-col rounded-md bg-surface-2 p-1 shadow-3 md:hidden">
+          <div role="menu" className="menu-in origin-bottom-right fixed right-2 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex w-56 flex-col rounded-md bg-surface-2 p-1 shadow-3 md:hidden">
             {rest.map((item) => (
               <Link key={item.to} to={item.to} role="menuitem" onClick={() => setMore(false)}
                     className="flex h-11 items-center gap-3 rounded-sm px-3 text-sm font-semibold text-muted hover:bg-surface-3 hover:text-fg data-[status=active]:text-fg [&_svg]:size-4">
