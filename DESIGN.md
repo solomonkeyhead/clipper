@@ -170,7 +170,7 @@ and the `.tile-more` line ("Open to post", "Open to submit", "See its views" wit
 - A built Short waiting to be posted carries `data-focus` on its player in Create the same way.
 
 **Tabs**: underlined words. A `role="tablist"` row with a bottom hairline; each tab 44px tall, semibold 15px,
-the current one `text-fg` with a 2px `fg` underline, the rest muted. Counts sit after the word. Create's steps
+the current one `text-fg` with a 2px `fg` underline, the rest muted. Counts sit after the word. One `.tabs` / `.tab` class pair (D217): the underline grows from the middle, a hovered tab shows a short grey one. Create's steps
 are words with the current one underlined.
 
 **Tags** (`Chip`, `StatusChip`): coloured semibold 13px text, no fill, no border, no pill. A status adds a

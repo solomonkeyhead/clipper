@@ -3744,7 +3744,7 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - Old database tables and settings (discord_channels, research_threads, experiments, use_*) stay in existing
   databases, unread; new databases don't make them.
 
-## D217 - Studio polish: every click answers (2026-10-16)
+## D217: Studio polish, every click answers (2026-10-16)
 - A stray scrollbar sat beside every tab row: the page-wide `* { scrollbar-width: thin }` was unlayered CSS, so it
   beat the tabs' own "no scrollbar". The base rules (scrollbar, caret, link underline) moved into `@layer base`.
 - The three tab rows (Clips filters, a campaign's Clips/Posts, the Post queue) were three copies with small
