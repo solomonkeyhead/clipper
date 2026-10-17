@@ -11,7 +11,6 @@ import {
   downloadUrl, useStatus, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useSetTask, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
-import { useHotkeys } from "@/lib/hotkeys";
 import { useUI } from "@/lib/store";
 import { NO_STATS } from "@/api/platforms.gen";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney, openTab } from "@/lib/utils";
@@ -20,7 +19,7 @@ import { CaptionChoice, HookControl } from "./lines";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { FadeImg } from "./progress";
-import { Button, Chip, CopyButton, Kbd, MenuItem, MoreMenu, StatusChip, Tip, buttonClass } from "./ui";
+import { Button, Chip, CopyButton, MenuItem, MoreMenu, StatusChip, Tip, buttonClass } from "./ui";
 
 const STATUS_WORD: Record<ClipStatus, string> = {
   ready: "ready to post", posted: "posted", submitted: "submitted", skipped: "skipped",
@@ -104,7 +103,7 @@ function SubmitButton({ clip, size = "sm" }: { clip: Clip; size?: "sm" | "md" })
     );
   }
   return (
-    <Tip label="You've pasted its link into the campaign's submission form" keys="S">
+    <Tip label="You've pasted its link into the campaign's submission form">
       <Button size={size} variant="primary" onClick={(e) => { e.stopPropagation(); submit(clip); }}>
         <CheckCircle2 className="size-3.5" /> Mark submitted
       </Button>
@@ -188,7 +187,7 @@ function CaptionSection({ clip }: { clip: Clip }) {
           {editable && draft === null &&
             <Button size="sm" variant="ghost" onClick={() => setDraft(clip.caption)}><Pencil className="size-3.5" /> Edit</Button>}
           {draft === null && !(clip.post_copy?.length && clip.status === "ready") &&
-            <CopyButton text={clip.caption} what="Caption" label="Copy caption" keys="C" />}
+            <CopyButton text={clip.caption} what="Caption" label="Copy caption" />}
         </span>
       </div>
       {draft === null ? (
@@ -349,7 +348,7 @@ export function SelectionBar({ clips, onClear }: { clips: Clip[]; onClear: () =>
       )}
       {ready.length > 0 && (
         <Button size="sm" variant="secondary" onClick={act(() => bulk.setStatus(ready, "skipped"))}>
-          <SkipForward className="size-3.5" /> Skip{count(ready.length)} <Kbd>X</Kbd>
+          <SkipForward className="size-3.5" /> Skip{count(ready.length)}
         </Button>
       )}
       {skipped.length > 0 && (
@@ -365,9 +364,9 @@ export function SelectionBar({ clips, onClear }: { clips: Clip[]; onClear: () =>
         </Tip>
       )}
       <Button size="sm" variant="danger" onClick={act(() => bulk.remove(clips))}>
-        <Trash2 className="size-3.5" /> Delete <Kbd>Del</Kbd>
+        <Trash2 className="size-3.5" /> Delete
       </Button>
-      <Tip label="Clear the selection" keys="Esc">
+      <Tip label="Clear the selection">
         <Button size="icon" variant="ghost" aria-label="Clear the selection" onClick={onClear}><X className="size-4" /></Button>
       </Tip>
     </div>
@@ -378,7 +377,7 @@ function DownloadButton({ clip, label = true, size = "sm" }: {
   clip: Clip; label?: boolean; size?: "sm" | "md";
 }) {
   return (
-    <Tip label="Download the video" keys="D">
+    <Tip label="Download the video">
       <a
         href={downloadUrl(clip.id)}
         download
@@ -401,7 +400,7 @@ function DeleteButton({ clip, label = false, size = "sm" }: {
 }) {
   const remove = useDeleteWithUndo();
   return (
-    <Tip label="Delete (you can undo)" keys="Del">
+    <Tip label="Delete (you can undo)">
       <Button size={label ? size : "icon"} variant="ghost"
               className={cn(!label && "size-8", "hover:text-danger")}
               aria-label="Delete clip"
@@ -747,15 +746,12 @@ export function ClipSheet() {
   const setOpen = useUI((s) => s.setOpenClip);
   const clip = clips.find((c) => c.id === openId) ?? null;
   const setStatus = useStatusWithUndo();
-  const submit = useSubmittedWithUndo();
-  const rate = useRateClip();
-  const notGood = useNotGood();
   const title = useCampaignTitle();
   const campaignUrlOf = useCampaignUrl();
   const campaignUrl = clip ? campaignUrlOf(clip.campaign) : "";
   const isOwn = useIsOwn();
+  const own = clip ? isOwn(clip.campaign) : false;
   const hosted = useStatus().data?.hosted === true;   // on a server there is no folder of yours to open (D148)
-  const remove = useDeleteWithUndo();
   const setNote = useSetNote();
   const [note, setNoteText] = useState("");
   useEffect(() => setNoteText(clip?.notes ?? ""), [clip?.id, clip?.notes]);
@@ -763,10 +759,6 @@ export function ClipSheet() {
   const neighbour = (step: number) => {
     const order = listIds.length ? listIds : clips.map((c) => c.id);
     return order[order.indexOf(openId ?? -1) + step];
-  };
-  const go = (step: number) => {
-    const next = neighbour(step);
-    if (next !== undefined) setOpen(next);
   };
   // Skipping is a triage decision: move straight on to the next clip. (Not good
   // stays, so you can say why; posting stays, as posts are spaced hours apart.)
@@ -779,27 +771,6 @@ export function ClipSheet() {
     if (next !== undefined) setOpen(next);
   };
 
-  useHotkeys({
-    j: () => go(1),
-    k: () => go(-1),
-    c: () => clip?.caption && void copyText(clip.caption, "Caption"),
-    l: () => clip?.posts[0] && void copyText(clip.posts[0].url, "Link"),
-    p: () => clip && setStatus(clip, "posted"),
-    x: () => clip && skip(clip),
-    r: () => clip && setStatus(clip, "ready"),
-    s: () => clip && clip.status !== "submitted" && submit(clip),
-    // Good / Not good (D74), as the buttons: Y toggles Good; B on a ready clip skips it too.
-    y: () => clip && rate.mutate({ id: clip.id, rating: (clip.rating ?? 0) >= 4 ? null : 5, reasons: clip.reasons }),
-    b: () => {
-      if (!clip) return;
-      if (clip.status === "ready") void notGood(clip);
-      else rate.mutate({ id: clip.id, rating: clip.rating != null && clip.rating <= 2 ? null : 1, reasons: clip.reasons });
-    },
-    f: () => clip && void showFile(clip.id),
-    e: () => clip && (clip.status === "ready" || clip.status === "skipped") && edit(clip),
-    d: () => clip?.file_exists && window.location.assign(downloadUrl(clip.id)),
-    Delete: () => clip && remove(clip),
-  }, { enabled: clip !== null, inDialog: true });
 
   return (
     <Dialog.Root open={clip !== null} onOpenChange={(o) => !o && setOpen(null)}>
@@ -824,7 +795,7 @@ export function ClipSheet() {
                   {clip.file_exists && (
                     <a href={downloadUrl(clip.id)} download
                        className={cn(buttonClass("primary"), "flex-1")}>
-                      <Download className="size-4" /> Download <Kbd className="ml-auto border-accent-fg/30 bg-accent-fg/10 text-accent-fg">D</Kbd>
+                      <Download className="size-4" /> Download
                     </a>
                   )}
                   {!hosted && <Tip label="Show in folder"><Button variant="secondary" size="icon" aria-label="Show in folder" onClick={() => showFile(clip.id)}>
@@ -832,8 +803,9 @@ export function ClipSheet() {
                   </Button></Tip>}
                   <DeleteButton clip={clip} size="md" />
                 </div>
-                {(clip.status === "ready" || clip.status === "skipped") && (
-                  <Tip label="Trim to the frame, cut words out, punch in, fix captions" keys="E">
+                {/* A Short of your own is changed in Create and built again, not in the clip editor (D221). */}
+                {(clip.status === "ready" || clip.status === "skipped") && !own && (
+                  <Tip label="Trim to the frame, cut words out, punch in, fix captions">
                     <Button variant="secondary" onClick={() => edit(clip)}>
                       <Scissors className="size-4" /> Edit the clip
                     </Button>
@@ -854,7 +826,7 @@ export function ClipSheet() {
                     {clip.hook && clip.hook !== clip.title && (
                       <p className="mt-1 text-sm text-muted">On screen: {clip.hook}</p>
                     )}
-                    <div className="mt-2"><HookControl clip={clip} /></div>
+                    {!own && <div className="mt-2"><HookControl clip={clip} /></div>}
                   </div>
                   <Dialog.Close asChild>
                     <Button variant="ghost" size="icon" aria-label="Close"><X className="size-4" /></Button>
@@ -867,23 +839,23 @@ export function ClipSheet() {
                   {(clip.status === "posted" || clip.status === "submitted") && !isOwn(clip.campaign) && <SubmitButton clip={clip} size="md" />}
                   {clip.status === "ready" ? (
                     <Button variant="primary" onClick={() => setStatus(clip, "posted")}>
-                      <Upload className="size-4" /> Mark posted <Kbd className="border-accent-fg/30 bg-accent-fg/10 text-accent-fg">P</Kbd>
+                      <Upload className="size-4" /> Mark posted
                     </Button>
                   ) : clip.status === "skipped" ? (
                     <Button variant="secondary" onClick={() => setStatus(clip, "ready")}>
-                      <Undo2 className="size-4" /> Back to ready <Kbd>R</Kbd>
+                      <Undo2 className="size-4" /> Back to ready
                     </Button>
                   ) : clip.posts.length === 0 && (
-                    <Button variant="ghost" onClick={() => setStatus(clip, "ready")}>Back to ready <Kbd>R</Kbd></Button>
+                    <Button variant="ghost" onClick={() => setStatus(clip, "ready")}>Back to ready</Button>
                   )}
                   {clip.status !== "skipped" && (
                     <Button variant="ghost" onClick={() => skip(clip)}>
-                      <SkipForward className="size-4" /> Skip <Kbd>X</Kbd>
+                      <SkipForward className="size-4" /> Skip
                     </Button>
                   )}
                 </div>
 
-                <RatingPanel clip={clip} />
+                {!own && <RatingPanel clip={clip} />}
 
                 {(clip.posts.length > 0 || clip.watching) && (
                   <section>
@@ -916,25 +888,17 @@ export function ClipSheet() {
                   </section>
                 )}
 
-                <details className="group">
+                {!own && <details className="group">
                   <summary className="cursor-pointer text-xs font-semibold tracking-wide text-muted uppercase hover:text-fg">
                     Why Clipper picked it{clip.score != null && <span className="ml-1.5 normal-case">· {clip.score.toFixed(1)}</span>}
                   </summary>
                   <div className="mt-2"><ScoreBreakdown clip={clip} /></div>
-                </details>
+                </details>}
 
                 <NoteField key={`note-${clip.id}`} note={note} saved={clip.notes} onChange={setNoteText}
                   onSave={() => note !== clip.notes && setNote.mutate({ id: clip.id, notes: note },
                     { onSuccess: () => toast.success("Note saved", { duration: 1500 }) })} />
 
-                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
-                  <span><Kbd>J</Kbd> <Kbd>K</Kbd> next / previous</span>
-                  <span><Kbd>Y</Kbd> good · <Kbd>B</Kbd> not good</span>
-                  <span><Kbd>P</Kbd> posted</span>
-                  <span><Kbd>X</Kbd> skip</span>
-                  <span><Kbd>D</Kbd> download</span>
-                  <span><Kbd>Esc</Kbd> close</span>
-                </p>
               </div>
             </div>
           )}

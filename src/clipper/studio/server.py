@@ -495,14 +495,22 @@ def own_clip(path: Path, campaigns: set[str]) -> bool:
     return bool(found and found.group(1) in campaigns)
 
 
+def _plain(title: str) -> str:
+    """A title as a browser saves it, compared without punctuation: "Why ...?" is saved as "Why ..._ (1).mp4"."""
+    return re.sub(r"[^a-z0-9]+", "", re.sub(r" \(\d+\)$", "", title.lower()))
+
+
 def list_sources() -> list[dict]:
     seen, out = set(), []
     campaigns = set(load_campaigns())
+    # Shorts made in Create and saved from the player aren't footage to clip (D221).
+    with db.connect() as con:
+        made = {_plain(c["title"]) for c in db.clips(con) if c["source_id"] == "create" and c["title"]}
     for folder in source_folders():
         if not folder.is_dir():
             continue
         for path in folder.iterdir():
-            if path.suffix.lower() in VIDEO_EXTENSIONS and path.is_file() and not own_clip(path, campaigns):
+            if path.suffix.lower() in VIDEO_EXTENSIONS and path.is_file() and not own_clip(path, campaigns)                     and _plain(path.stem) not in made:
                 key = path.resolve()
                 if key in seen:
                     continue
@@ -1107,7 +1115,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
         views = {c.id: sum(p.views or 0 for p in c.posts) for c in snap.clips if c.posts}
         with db.connect() as con:
             active = db.settings(con).get("learn_from_feedback", "1") == "1"
-        clips = feedback.from_rows(snap.raw_clips, views, stats.clip_performance(snap.raw_clips, snap.rows))
+        # Shorts made in Create aren't moments Clipper picked: they teach the moment scorer nothing (D221).
+        rows = [r for r in snap.raw_clips if r["source_id"] != "create"]
+        clips = feedback.from_rows(rows, views, stats.clip_performance(rows, snap.rows))
         result = feedback.report(clips, Config.load().llm.rubric_weights.as_dict(), active=active)
         return Learning(active=active, min_for_weights=feedback.MIN_FOR_WEIGHTS,
                         min_for_agreement=feedback.MIN_FOR_AGREEMENT, **result.__dict__)

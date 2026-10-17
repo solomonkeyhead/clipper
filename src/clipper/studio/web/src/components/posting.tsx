@@ -70,7 +70,7 @@ export function PostPanel({ clip }: { clip: Clip }) {
   return (
     <section className="rounded-md border border-line p-3">
       <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Post it</h3>
-      <BriefCheck clip={clip} />
+      {!campaign?.own_channel && <BriefCheck clip={clip} />}   {/* your own channel has no brief (D221) */}
       <div className="flex flex-col gap-2.5 text-sm">
         {copies.length ? (
           // One line per platform, the same shape every time: the Open buttons sit in

@@ -146,14 +146,13 @@ function ChannelCard({ quiet = false }: { quiet?: boolean }) {
   );
 }
 
-const STEPS: { key: string; title: string; body: string; to: string; action: string }[] = [
-  { key: "ai", title: "Add your free Gemini key", body: "Clipping uses it to watch the video and write captions, and Create to write and check scripts. Takes a minute.",
+// Three steps that fit anyone (D221): "Add a campaign" assumed clipping, and a Short's own campaign file ticked it.
+const STEPS: { key: string; title: string; body: string; to: string; action: string; alt?: [string, string] }[] = [
+  { key: "ai", title: "Add your free Gemini key", body: "Clipper uses it to write scripts, watch footage and write captions. Takes a minute.",
     to: "/settings", action: "Add key" },
-  { key: "campaign", title: "Add a campaign", body: "Paste the brief of a campaign you've joined; Clipper fills in its rules.",
-    to: "/campaigns/new", action: "Add campaign" },
-  { key: "clips", title: "Make your first clips", body: "Drop in the campaign's footage and Clipper cuts, frames and captions it.",
-    to: "/new", action: "Make clips" },
-  { key: "accounts", title: "Connect TikTok or Instagram", body: "So Clipper can track views, earnings and your posts' links.",
+  { key: "clips", title: "Make your first video", body: "Make a Short from your own idea, or clip the footage of a campaign you've joined.",
+    to: "/create", action: "Make a Short", alt: ["/new", "Clip footage"] },
+  { key: "accounts", title: "Connect your accounts", body: "So Clipper can find your posts and count their views.",
     to: "/accounts", action: "Connect" },
 ];
 
@@ -186,9 +185,12 @@ function Setup({ done }: { done: Record<string, boolean> }) {
               {open && (
                 <div className="flex flex-col gap-3 pl-8">
                   <p className="text-sm text-muted">{step.body}</p>
-                  <Link to={step.to} hash={step.key === "ai" ? "ai" : undefined} className={cn(buttonClass("primary"), "w-fit")}>
-                    {step.action} <ArrowRight className="size-3.5" />
-                  </Link>
+                  <span className="flex flex-wrap gap-2">
+                    <Link to={step.to} hash={step.key === "ai" ? "ai" : undefined} className={cn(buttonClass("primary"), "w-fit")}>
+                      {step.action} <ArrowRight className="size-3.5" />
+                    </Link>
+                    {step.alt && <Link to={step.alt[0]} className={cn(buttonClass("secondary"), "w-fit")}>{step.alt[1]}</Link>}
+                  </span>
                 </div>
               )}
             </li>
@@ -235,7 +237,10 @@ export function DashboardPage() {
   // The brief's view-milestone tasks reached and not done (D98), oldest post first.
   const due = posts.flatMap((post) => (post.tasks ?? []).filter((t) => !t.done).map((task) => ({ post, task })))
     .sort((a, b) => (a.post.posted_at ?? "").localeCompare(b.post.posted_at ?? ""));
-  const firstRun = Object.values(home.first_run).some((done) => !done);
+  const firstRun = STEPS.some((s) => !home.first_run[s.key as keyof typeof home.first_run]);
+  // Submitting links and money belong to paid campaigns (D221): your own channel alone has neither.
+  const paid = campaigns.some((c) => !c.archived && !c.own_channel);
+  const submits = campaigns.some((c) => !c.archived && c.submits !== false);
   const active = clips.filter((c) => c.status !== "skipped" && !archived.has(c.campaign));
   // To submit: not your own channel's, and not still short of the views the brief wants first (D154).
   const by = (s: string) => active.filter((c) => c.status === s && !(s === "posted" && (c.submits === false || c.submit_at_views)));
@@ -259,7 +264,8 @@ export function DashboardPage() {
     : by("posted").length ? { label: `Submit the next clip (${by("posted").length})`, run: () => void navigate({ to: "/post", search: { step: "submit" } }) }
     : due.length ? { label: "Do the next brief task", run: () => open(due[0].post.clip) }
     : channelBusy ? { label: `Your Short: ${channelBusy.status === "draft" ? "approve the script" : channelBusy.status === "approved" ? "add the voice" : "see it"}`, run: () => void navigate({ to: "/create" }) }
-    : { label: "Make more clips", run: () => void navigate({ to: "/new" }) };
+    : paid ? { label: "Make more clips", run: () => void navigate({ to: "/new" }) }
+    : { label: "Make a Short", run: () => void navigate({ to: "/create" }) };
   // This week, in a line: what you posted and what it brought.
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
   const weekPosts = posts.filter((p) => (p.posted_at ?? "") >= weekAgo).length;
@@ -322,8 +328,8 @@ export function DashboardPage() {
       {!hero && m.ready === 0 && by("posted").length === 0 && !waitingViews.length && !due.length && (
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
           <CheckCircle2 className="size-4 text-success" /> All caught up.
-          <Link to="/new" className="inline-flex min-h-8 items-center gap-1 font-semibold text-fg hover:underline">
-            Make more clips <ArrowRight className="size-3.5" />
+          <Link to={paid ? "/new" : "/create"} className="inline-flex min-h-8 items-center gap-1 font-semibold text-fg hover:underline">
+            {paid ? "Make more clips" : "Make a Short"} <ArrowRight className="size-3.5" />
           </Link>
         </p>
       )}
@@ -335,17 +341,17 @@ export function DashboardPage() {
             {restReady.map((c) => <PosterTile key={c.id} clip={c} />)}
           </WallRow>
         )}
-        <WallRow title="To submit" count={by("posted").length} to="/clips" search={{ status: "posted" }} empty={<EmptyLine status="posted" />}>
+        {submits && <WallRow title="To submit" count={by("posted").length} to="/clips" search={{ status: "posted" }} empty={<EmptyLine status="posted" />}>
           {by("posted").map((c) => <PosterTile key={c.id} clip={c} />)}
-        </WallRow>
-        <WallRow title="Submitted" count={by("submitted").length} to="/clips" search={{ status: "submitted" }} empty={<EmptyLine status="submitted" />}>
+        </WallRow>}
+        {submits && <WallRow title="Submitted" count={by("submitted").length} to="/clips" search={{ status: "submitted" }} empty={<EmptyLine status="submitted" />}>
           {by("submitted").map((c) => <PosterTile key={c.id} clip={c} />)}
-        </WallRow>
+        </WallRow>}
       </div>
 
       <section className="flex flex-col gap-4 border-t border-line pt-6">
         {noNumbers ? (
-          <p className="text-sm text-muted">Views and money show here once your first posts have synced.</p>
+          <p className="text-sm text-muted">{paid ? "Views and money" : "Views"} show here once your first posts have synced.</p>
         ) : <>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="row-head">Money and views</h2>

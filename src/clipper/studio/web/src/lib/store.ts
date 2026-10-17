@@ -17,22 +17,18 @@ function write(key: string, value: string) {
 
 interface UI {
   paletteOpen: boolean;
-  shortcutsOpen: boolean;
   openClip: number | null;
-  /** The order of the list the open clip came from, for J/K in the detail sheet. */
+  /** The order of the list the open clip came from (next and previous in the detail sheet). */
   listIds: number[];
   syncing: boolean;
   online: boolean;
   collapsed: boolean;
-  shortcuts: boolean;
   setPalette: (open: boolean) => void;
-  setShortcuts: (open: boolean) => void;
   setOpenClip: (id: number | null) => void;
   setListIds: (ids: number[]) => void;
   setSyncing: (v: boolean) => void;
   setOnline: (v: boolean) => void;
   toggleCollapsed: () => void;
-  setShortcutKeys: (on: boolean) => void;
   /** "Viewing": "all", "group:<id>" or "account:<platform>:<handle>" (D89). */
   accountScope: string;
   setAccountScope: (scope: string) => void;
@@ -40,15 +36,12 @@ interface UI {
 
 export const useUI = create<UI>((set) => ({
   paletteOpen: false,
-  shortcutsOpen: false,
   openClip: null,
   listIds: [],
   syncing: false,
   online: true,
   collapsed: read<string>("clipper.collapsed", "0") === "1",
-  shortcuts: read<string>("clipper.shortcuts", "1") === "1",
   setPalette: (paletteOpen) => set({ paletteOpen }),
-  setShortcuts: (shortcutsOpen) => set({ shortcutsOpen }),
   setOpenClip: (openClip) => set({ openClip }),
   setListIds: (listIds) => set({ listIds }),
   setSyncing: (syncing) => set({ syncing }),
@@ -57,10 +50,6 @@ export const useUI = create<UI>((set) => ({
     write("clipper.collapsed", s.collapsed ? "0" : "1");
     return { collapsed: !s.collapsed };
   }),
-  setShortcutKeys: (shortcuts) => {
-    write("clipper.shortcuts", shortcuts ? "1" : "0");
-    set({ shortcuts });
-  },
   accountScope: read<string>("clipper.scope", "all"),
   setAccountScope: (accountScope) => {
     write("clipper.scope", accountScope);

@@ -53,7 +53,7 @@ export async function copyText(text: string, what: string): Promise<boolean> {
   }
 }
 
-/** True when a key press is typing, so single-key shortcuts must not fire. */
+/** True when a key press is typing, so the editor's keys must not fire. */
 export function isTyping(e: KeyboardEvent): boolean {
   const el = e.target as HTMLElement | null;
   if (!el) return false;

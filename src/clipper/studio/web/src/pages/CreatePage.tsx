@@ -231,7 +231,7 @@ function AIStrip() {
   const miss = Object.entries(ai.misses)[0];
   const text = ai.problem ? ai.problem
     // The provider's name, not its model id (REDESIGN_NOTES 8): "claude-sonnet-4-5" is a developer's word.
-    : claude ? `Drawings by Claude ${first.startsWith("anthropic") ? `on your paid Claude API key (it does only: ${ai.paid_api_jobs.join(", ")})` : "on your Claude plan"}.${ai.gemini_jobs.length ? ` Gemini does ${ai.gemini_jobs.join(", ")}.` : ""}`
+    : claude ? `Written and drawn by Claude${first.startsWith("anthropic") ? `, on your Claude API key (only for: ${ai.paid_api_jobs.join(", ")})` : ""}.${ai.gemini_jobs.length ? ` Gemini does ${ai.gemini_jobs.join(", ")}.` : ""}`
     : `Claude isn't set up: ${PROVIDER[first.split(":")[0]] ?? (first.split(":")[0] || "no AI")} will write and draw.`;
   return (
     <p className={cn("mt-1 flex items-start gap-x-2 text-xs", claude && !ai.problem ? "text-muted" : "text-warning")}>
@@ -442,7 +442,7 @@ function Ideas({ topics }: { topics: CreateTopic[] }) {
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                 <span>{t.angle}</span>
                 {/* The planner's score of 21 and series (D155); clicking a series shows only its ideas. */}
-                {t.score != null && <Tip label="The planner's score out of 21: felt, common, surprise, one mechanism, showable, searched, fits the channel"><span className="tabular-nums text-subtle">{t.score}/21</span></Tip>}
+                {t.score != null && <Tip label="How well it scored: something people feel, common, surprising, one clear cause, easy to show, searched for, fits the channel"><span className="tabular-nums text-subtle">Score {t.score} of 21</span></Tip>}
                 {t.series && <button type="button" onClick={() => setFind(t.series ?? "")} className="font-semibold text-muted underline decoration-[var(--border-strong)] underline-offset-2 hover:text-fg">{t.series}</button>}
               </div>
             </div>
@@ -1247,6 +1247,7 @@ function Fold({ id, title, startOpen = false, children }: { id: string; title: s
 function SoundChoice({ video }: { video: CreateVideo }) {
   const qc = useQueryClient();
   const { data: create } = useCreate();
+  const presenter = !!create?.channel.has_presenter;   // no picture of anyone: nothing to cut to (D221)
   const pick = (key: "music" | "sfx", label: string) => {
     const mine = video.script[key];
     const usual = create?.channel[key] ? "on" : "off";
@@ -1274,8 +1275,8 @@ function SoundChoice({ video }: { video: CreateVideo }) {
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
       {pick("music", "Music")}{pick("sfx", "Sound effects")}
-      {style("zooms", "Zoom-ins")}{style("cut_ins", "Cut-ins on the presenter")}
-      <Tip label="The last second and a half plays the opening clip up to its first frame, the hook comes back and the presenter ends as he starts, so the video runs straight into itself">
+      {style("zooms", "Zoom-ins")}{presenter && style("cut_ins", "Cut-ins on the presenter")}
+      <Tip label="The end runs straight back into the opening, so the video loops">
         <span>{style("loop", "Seamless loop", video.script.ending === "loop")}</span>
       </Tip>
       <label className="flex items-center gap-1.5">
@@ -1288,7 +1289,7 @@ function SoundChoice({ video }: { video: CreateVideo }) {
           <option value="whip">Whip</option><option value="zoom">Zoom</option>
         </select>
       </label>
-      <Tip label="Opening and punchline: he slides away after the first sentence and comes back for the punchline, so the drawings carry the middle. Try it on every other video and compare how long viewers stay">
+      {presenter && <Tip label="Opening and punchline: the presenter leaves after the first sentence and comes back for the punchline">
         <label className="flex items-center gap-1.5">
           Presenter
           <select value={video.script.on_screen ?? "all"} aria-label="Presenter" disabled={video.status === "building"}
@@ -1298,7 +1299,7 @@ function SoundChoice({ video }: { video: CreateVideo }) {
             <option value="all">Whole video</option><option value="ends">Opening and punchline</option>
           </select>
         </label>
-      </Tip>
+      </Tip>}
       <span className="text-subtle">Changes show on Build again.</span>
     </div>
   );

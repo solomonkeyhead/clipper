@@ -103,12 +103,9 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
         <Field label="Name"><input className={input} value={val("name") as string} onChange={(e) => set({ name: e.target.value })} /></Field>
         <Field label="Handle"><input className={input} value={val("handle") as string} onChange={(e) => set({ handle: e.target.value })} /></Field>
         <Field label="What it is about"><input className={input} value={val("niche") as string} onChange={(e) => set({ niche: e.target.value })} /></Field>
-        <Field label="The subject" hint="Said in the prompts: &quot;the &lt;subject&gt; behind it&quot;."><input className={input} value={val("subject") as string} onChange={(e) => set({ subject: e.target.value })} /></Field>
-        <Field label="Who checks the facts"><input className={input} value={val("expert") as string} onChange={(e) => set({ expert: e.target.value })} /></Field>
         <Field label="Words a second" hint="How fast the voice reads. Sets how long a script runs."><input className={input} type="number" step="0.1" min="1.2" max="4"
           value={val("words_per_second") as number} onChange={(e) => set({ words_per_second: Number(e.target.value) })} /></Field>
       </div>
-      <Field label="The topics it covers"><input className={input} value={val("areas") as string} onChange={(e) => set({ areas: e.target.value })} /></Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Ideas should lean toward" hint="Steers every batch of ideas. Plain words are fine.">
           <textarea className={area} rows={3} value={val("idea_focus") as string} placeholder="e.g. things people do every day without knowing why"
@@ -129,10 +126,6 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
                     onChange={(e) => set({ script_avoid: e.target.value })} />
         </Field>
       </div>
-      <Field label="Who is speaking (the persona)"><textarea className={area} rows={4} value={val("persona") as string} onChange={(e) => set({ persona: e.target.value })} /></Field>
-      <Field label="The rules a script follows (one per line)">
-        <textarea className={area} rows={8} value={edit.rulesText ?? data.rules.join("\n")} onChange={(e) => set({ rulesText: e.target.value })} />
-      </Field>
       <Field label="How you make the voice" hint="Shown on the video's voice step."><input className={input} value={val("voice") as string} onChange={(e) => set({ voice: e.target.value })} /></Field>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--text)]" checked={val("drawings") as boolean} onChange={(e) => set({ drawings: e.target.checked })} />
@@ -148,7 +141,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
           <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\me.png" onChange={(e) => set({ character: e.target.value })} /></Field>
         <Field label="Reaction pictures (one per line)" hint="One of these at the punchline, a different one each video. Empty: the character picture.">
           <textarea className={area} rows={3} value={edit.reactionsText ?? data.reactions.join("\n")} onChange={(e) => set({ reactionsText: e.target.value })} /></Field>
-        <Field label="Poses (name = file, one per line)" hint="Clipper tags up to 4 sentences a video with one of these, shown bottom left for about 2 seconds. Names it knows: shocked, facepalm, aha, thinking, smug, shrug, deadpan, confused, nervous, whisper, laugh, coffee, grudge, proud. talking-1, talking-2 and so on take turns while the voice talks. A picture with an -open (mouth open) or -blink (eyes closed) version next to it, like me-talking-1-open.png, talks and blinks.">
+        <Field label="Poses (name = file, one per line)" hint="Pictures of you reacting, like shocked or thinking. Clipper shows one on up to 4 sentences a video, bottom left.">
           <textarea className={area} rows={5} value={edit.posesText ?? Object.entries(data.poses ?? {}).map(([n, p]) => `${n} = ${p}`).join("\n")}
                     placeholder="shocked = C:\Pictures\me-shocked.png" onChange={(e) => set({ posesText: e.target.value })} /></Field>
         <Field label="Presenting picture" hint="Shown for a moment as the first drawing appears. Empty: none.">
@@ -157,16 +150,31 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--text)]" checked={val("music") as boolean} onChange={(e) => set({ music: e.target.checked })} />
-        Quiet music under the voice (made by Clipper, or your own tracks in data/create/music/{slug})
+        Quiet music under the voice
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--text)]" checked={val("sfx") as boolean} onChange={(e) => set({ sfx: e.target.checked })} />
-        Sound effects on the edit: whooshes on transitions, a thump on zoom-ins, chalk as drawings are drawn, a riser into the punchline. Made by Clipper, so nothing for Content ID to match
+        Sound effects: whooshes on transitions, a thump on zoom-ins, chalk as drawings appear. Made by Clipper, so no copyright claims
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--text)]" checked={val("short_takes") as boolean} onChange={(e) => set({ short_takes: e.target.checked })} />
-        Every other script short (70 to 90 words, about 35 seconds), to see whether shorter videos keep viewers to the end. Pair them in Learning's Experiments
+        Every other script short (about 35 seconds), to see whether shorter videos keep viewers to the end
       </label>
+      {/* What the AI is told, word for word: folded (D221), as "the subject" and "the topics" read like "what it is about" again. */}
+      <details className="rounded-md border border-line p-3">
+        <summary className="cursor-pointer text-sm font-medium">Advanced: what the AI is told</summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="The subject" hint="The word the AI uses for what the channel explains."><input className={input} value={val("subject") as string} onChange={(e) => set({ subject: e.target.value })} /></Field>
+            <Field label="Who checks the facts" hint="Who the fact check pretends to be."><input className={input} value={val("expert") as string} onChange={(e) => set({ expert: e.target.value })} /></Field>
+          </div>
+          <Field label="The topics ideas are spread across"><input className={input} value={val("areas") as string} onChange={(e) => set({ areas: e.target.value })} /></Field>
+          <Field label="Who is speaking"><textarea className={area} rows={4} value={val("persona") as string} onChange={(e) => set({ persona: e.target.value })} /></Field>
+          <Field label="The rules a script follows (one per line)">
+            <textarea className={area} rows={8} value={edit.rulesText ?? data.rules.join("\n")} onChange={(e) => set({ rulesText: e.target.value })} />
+          </Field>
+        </div>
+      </details>
       <div className="flex gap-2">
         <Button variant="primary" onClick={() => save()}>Save</Button>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>

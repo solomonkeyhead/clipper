@@ -143,8 +143,7 @@ export function CampaignsPage() {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">{list.map((c) => <CampaignCard key={c.name} c={c} />)}</div>
       ) : (
         <EmptyState icon={<Megaphone className="size-5" />} title={showArchived ? "Nothing archived" : "No campaigns yet"}
-          body={showArchived ? undefined : "Joined a campaign on Content Rewards or Vyro? Add it here: paste its brief and Clipper fills in the rules."}
-          action={showArchived ? undefined : <NewCampaignButton />} />
+          body={showArchived ? undefined : "Joined a clipping campaign? Add it with New campaign: paste its brief and Clipper fills in the rules."} />
       )}
       {!showArchived && !isLoading && channels.length > 0 && (
         <section className="mt-8 flex flex-col gap-3">
@@ -375,7 +374,8 @@ export function CampaignPage() {
               <ExternalLink className="size-4" /> Campaign page
             </a>
           )}
-          {c.has_brief && (
+          {/* Your own channel is changed in Create's Channel settings, not in the campaign form (D221). */}
+          {c.has_brief && !c.own_channel && (
             <Link to="/campaigns/$name/edit" params={{ name: c.name }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
               <Pencil className="size-4" /> Edit
@@ -388,8 +388,9 @@ export function CampaignPage() {
         </>}
       />
 
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        {brief ? <BriefPanel brief={brief} /> : <div />}
+      <div className={cn("grid gap-6", !c.own_channel && "lg:grid-cols-[320px_1fr]")}>
+        {/* Your own channel has no brief: its 15-60 s checklist was the campaign file's default (D221). */}
+        {c.own_channel ? null : brief ? <BriefPanel brief={brief} /> : <div />}
         <div className="min-w-0">
           {!c.own_channel && <MoneyCard c={c} />}   {/* your own channel has no pay (D196) */}
           <div className="tabs mb-4" role="tablist">

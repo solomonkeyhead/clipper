@@ -3807,3 +3807,22 @@ Marc: Create should work for any Short, and the Professor shouldn't be advertise
   so existing channels are unchanged.
 - Channel settings examples and hints no longer name the Professor or physics.
 - `scripts/ui/serve.py` writes the channel's campaign file as a first build does.
+
+## D221 — The page for a general user: own channel, onboarding, settings, no keyboard shortcuts (2026-10-17)
+Marc had every page clicked through for what a general user wouldn't need or understand, then picked what goes.
+- Your own channel: no campaign editor (its Edit page points to Create's Channel settings), no brief checklist, no
+  To submit or Submitted steps on its page, the Clips tabs, the Post queue or the Dashboard when no campaign takes links.
+  The clip sheet of a Short has no brief check, rating, "Why Clipper picked it", hook picker or clip editor.
+- Create: the presenter controls only when the channel has a picture of a presenter (`has_presenter` in the view).
+  Channel settings keeps everyday fields on top; subject, fact checker, topics, persona and rules fold under
+  "Advanced: what the AI is told". Shorter hints (poses, sound effects, music, short takes). Ideas say "Score 20 of 21".
+  The old-drawings note and the AI line in plain words. Shorts saved from the player aren't listed as footage
+  (`server.list_sources`, matched to Create clip titles), and Learning leaves Create clips out.
+- Keyboard shortcuts went: the G-chords, single keys in lists and the clip sheet, the shortcut sheet and its
+  Settings switch. Ctrl K (search) and the video editor's own keys stay; people editing video expect those.
+  It also took "Ask Clipper (I)", a shortcut to the Ask chat that left in D216, and the brief texts about Ask.
+- Settings: the Plan preview switcher (Marc is on Pro; the limits stay in `plans.py` for a hosted Clipper) and the
+  GitHub Pages copies (the account setups have them) are gone. No float16/cuda, shorter Clipping texts, "Gemini key".
+- Setup checklist: AI key, first video (a Short or clips), accounts. "Add a campaign" assumed clipping.
+- Smaller: "Summer Show S2" as the example name, no masked-word examples, no Whop env var names, the empty-state
+  wording on Clips and the Post queue, and `/campaigns/new` no longer asks for `/api/campaigns/`.

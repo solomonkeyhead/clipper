@@ -86,7 +86,7 @@ function WhopAppStep({ alerts }: { alerts: Alerts }) {
             ))}
           </ul>
         </li>
-        <li>Copy the app's ID (<code>NEXT_PUBLIC_WHOP_APP_ID</code>, starts with app_) and its API key (<code>WHOP_API_KEY</code>) into the boxes below. They stay on this computer.</li>
+        <li>Copy the app's ID (it starts with app_) and its API key into the boxes below. They stay on this computer.</li>
       </ol>
       <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <TextInput value={id} onChange={(e) => setId(e.target.value)} aria-label="Whop app ID" spellCheck={false}

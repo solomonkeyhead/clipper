@@ -473,7 +473,7 @@ function Computer() {
     return res.json() as Promise<Compute>;
   } });
   if (!data) return <Skeleton className="h-16" />;
-  const { hardware: hw, recommended: rec, current: now } = data;
+  const { hardware: hw, recommended: rec } = data;
   const apply = async () => {
     const res = await fetch("/api/compute/apply", { method: "POST" });
     if (res.ok) {
@@ -484,9 +484,8 @@ function Computer() {
   return (
     <div className="flex flex-col gap-2 text-sm">
       <div>{hw.gpu ? `${hw.gpu}, ${hw.vram_gb} GB` : "No NVIDIA graphics card found"} · {hw.cpu_cores} CPU cores{hw.ram_gb ? ` · ${Math.round(hw.ram_gb)} GB memory` : ""}</div>
-      <div className="text-muted">Speech recognition now: <b className="text-fg">{now.model}</b> ({now.compute_type}, {now.device}).</div>
-      <div className="text-muted">Best for this computer: <b className="text-fg">{rec.model}</b> ({rec.compute_type}, {rec.device}). {rec.label}.
-        An hour of footage takes about {rec.minutes_per_hour} minutes to read, roughly.</div>
+      {/* Model names without float16 or cuda (D221): the label says what it means. */}
+      <div className="text-muted">{rec.label}. An hour of footage takes about {rec.minutes_per_hour} minutes to read.</div>
       {data.matches
         ? <div className="text-success">Already set up this way.</div>
         : <Button variant="primary" size="sm" className="self-start" onClick={() => apply()}>Use the best settings for this computer</Button>}
@@ -499,7 +498,7 @@ interface AIJobs {
   available: Record<string, boolean>;
 }
 
-const PROVIDERS: [string, string][] = [["claude_plan", "Claude on my plan"], ["claude_api", "Claude API key (paid)"], ["gemini", "Gemini"]];
+const PROVIDERS: [string, string][] = [["claude_plan", "Claude (your Claude subscription, through Claude Code)"], ["claude_api", "Claude API key (paid)"], ["gemini", "Gemini"]];
 
 /** One AI for every job (D216; a list per job before, D148). Automatic keeps Clipper's own order per job.
  *  The paid Claude key is only used where `llm.paid_api_jobs` allows it, or if you pick it here. */
@@ -545,11 +544,9 @@ function AIKey() {
     <Card className="flex flex-col gap-4 p-5" id="ai">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-md font-semibold">AI model for clipping</h2>
+          <h2 className="text-md font-semibold">Gemini key</h2>
           <p className="mt-0.5 text-sm text-muted">
-            Clipping uses Google's Gemini to watch the video, write captions and read campaign briefs, and Claude on your plan
-            to judge the moments. Create, for your own channel, uses both; its page shows which AI is answering. Gemini is free:
-            get a key at <Ext href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</Ext> (sign in, <b className="text-fg">Create API key</b>, copy).
+            Gemini watches videos, writes captions and scripts. It's free: get a key at <Ext href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</Ext> (sign in, <b className="text-fg">Create API key</b>, copy).
           </p>
         </div>
         {setup && (setup.ai_ready
@@ -666,8 +663,6 @@ export function SettingsPage() {
   const { data: settings } = useSettings();
   const { data: status } = useStatus();
   const save = useSetSettings();
-  const shortcuts = useUI((s) => s.shortcuts);
-  const setShortcutKeys = useUI((s) => s.setShortcutKeys);
   return (
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
@@ -676,7 +671,7 @@ export function SettingsPage() {
       <AIKey />
       <Card className="px-5" id="create-ai">
         <Row title="Which AI"
-             body="Automatic lets Clipper pick the AI for each job. Pick one to use it for every job instead. Watching the video itself is always Gemini: Claude can't take video."
+             body="Automatic picks the best AI you have for each job. Watching a video is always Gemini."
              control={<WhichAI />} />
       </Card>
       <FootageKeys />
@@ -684,9 +679,7 @@ export function SettingsPage() {
       <Card className="divide-y divide-line px-5">
         <Row
           title="Open on the payoff"
-          body={<>Podcast and stream clips start with the first half of their best line, stopping just before it lands, then
-            a quick flash back to the setup, and end on that line so they loop. Never on scripted TV or film, where it spoils
-            the joke; skipped when a brief forbids re-edits or no line works on its own.</>}
+          body="Podcast and stream clips tease their best line first, then play from the start, so they loop. Never on TV or film."
           control={settings ? (
             <Switch label="Open on the payoff" checked={settings.payoff_first !== "0"}
                     onChange={(v) => save.mutate({ payoff_first: v ? "1" : "0" })} />
@@ -694,9 +687,7 @@ export function SettingsPage() {
         />
         <Row
           title="Pick the cover"
-          body={<>Clipper finds each clip's best still (a clear face, sharp, well lit) and puts it on the first frame with the
-            hook, so TikTok and Instagram show it as the cover and you don't have to choose one. It's held for 1/15 of a
-            second, too short to notice when it plays. Skipped when a brief forbids re-edits.</>}
+          body="Clipper puts each clip's best still on its first frame, so TikTok and Instagram use it as the cover."
           control={settings ? (
             <Switch label="Pick the cover" checked={settings.auto_cover !== "0"}
                     onChange={(v) => save.mutate({ auto_cover: v ? "1" : "0" })} />
@@ -721,45 +712,9 @@ export function SettingsPage() {
           body="A notification when a clipping job or a Short's build finishes while you're on another tab or window. Only this browser; it asks permission the first time."
           control={<NotifySwitch />}
         />
-        {/* Kept when the theme switch went (D216): WCAG 2.1.4 wants letter-key shortcuts to have an off switch. */}
-        <Row
-          title="Single-key shortcuts"
-          body="Keys like J, K, C and P. They never fire while you're typing. Ctrl K works either way."
-          control={<Switch label="Single-key shortcuts" checked={shortcuts} onChange={setShortcutKeys} />}
-        />
       </Card>
-      {/* Not used day to day: a preview of paid tiers (D118). */}
-      <details className="group rounded-md bg-surface-1">
-        <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted hover:text-fg">Advanced</summary>
-        <div className="divide-y divide-line px-5">
-          {/* Moved here from Accounts (D154): needed once, when registering your own platform apps. */}
-          <Row
-            title="Pages for your own platform apps"
-            body={<>Registering an app with TikTok, Google or Meta needs a privacy policy and terms page online. Copy the
-              ready-made ones for your GitHub Pages site: privacy <SiteCopy page="privacy.html" /> terms <SiteCopy page="terms.html" /> home <SiteCopy page="index.html" /></>}
-            control={null}
-          />
-          <Row
-            title="Plan (preview)"
-            body={<>How paid tiers would work in a hosted Clipper. <b className="text-fg">Free</b>: clipping and stats, up to 10 clips
-              a video and 3 videos at a time. <b className="text-fg">Research</b>: 10 videos at a time. Choosing a clip's
-              lines and writing your own are on every plan. <b className="text-fg">Pro</b>: everything, including every clip a video
-              has, and several accounts per platform with groups. Nothing is billed; switch to see each tier.</>}
-            control={settings ? (
-              <div className="flex rounded-md border border-line bg-surface-2 p-0.5" role="radiogroup" aria-label="Plan">
-                {([["free", "Free"], ["research", "Research"], ["pro", "Pro"]] as const).map(([value, label]) => (
-                  <button key={value} role="radio" aria-checked={settings.plan === value}
-                          onClick={() => save.mutate({ plan: value })}
-                          className={cn("h-8 rounded-sm px-3 text-sm",
-                            settings.plan === value ? "bg-surface-1 text-fg shadow-1" : "text-muted hover:text-fg")}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            ) : <Skeleton className="h-9 w-48" />}
-          />
-        </div>
-      </details>
+      {/* The plan preview and the GitHub Pages copies went (D221): a tier switch with nothing billed, and pages the
+          account setups already offer where they're needed. */}
       {/* Hosted, this computer is the server's: nothing to set or check here. */}
       {!status?.hosted && <>
         <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">This computer</h2>

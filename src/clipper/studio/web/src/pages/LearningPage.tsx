@@ -89,7 +89,10 @@ export function LearningPage() {
       </div>
 
 
-      <Card className="flex flex-col gap-4 p-5">
+      {/* The six weights only once there's something to learn from (D221): before, they were the defaults, unexplained. */}
+      {report.weights_n === 0 ? (
+        <p className="text-sm text-muted">Once you post clips Clipper made, or mark them good or not good, this shows what it has learned from them.</p>
+      ) : <Card className="flex flex-col gap-4 p-5">
         <div>
           <h2 className="text-md font-semibold">What Clipper has learned</h2>
           <p className="mt-0.5 text-sm text-muted">
@@ -145,7 +148,7 @@ export function LearningPage() {
         ) : (
           <p className="text-xs text-subtle">After 3 clips posted or marked, Clipper also shows the scorer examples of clips you liked and didn't.</p>
         )}
-      </Card>
+      </Card>}
     </div>
   );
 }

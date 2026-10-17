@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Save, Sparkles, Trash2, Wand2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/components/form";
 import { TARGETS } from "@/api/platforms.gen";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Button, Card, PageHeader, Skeleton } from "@/components/ui";
+import { Button, Card, EmptyState, PageHeader, Skeleton, buttonClass } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const BLANK: CampaignForm = {
@@ -120,8 +120,8 @@ function BriefReader({ onRead, initial = "", from, saved, editing = false }: {
       <Card className="flex flex-wrap items-center gap-3 px-4 py-3">
         <Sparkles className="size-4 shrink-0 text-muted" />
         <span className="min-w-0 flex-1 text-sm">
-          {saved ? <>Full brief saved {saved.slice(0, 10)}. <span className="text-muted">Ask can answer questions about it.</span></>
-            : <>No brief saved. <span className="text-muted">Paste it so Ask can answer questions about this campaign.</span></>}
+          {saved ? <>Full brief saved {saved.slice(0, 10)}. <span className="text-muted">Each post is checked against it.</span></>
+            : <>No brief saved. <span className="text-muted">Paste it so each post can be checked against it.</span></>}
         </span>
         <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>{saved ? "Paste an updated brief" : "Paste the brief"}</Button>
       </Card>
@@ -143,9 +143,8 @@ function BriefReader({ onRead, initial = "", from, saved, editing = false }: {
           </p>
         ) : (
           <p className="mt-0.5 text-sm text-muted">
-            Copy the campaign's whole page from Content Rewards, Vyro or wherever it's posted, paste it here, and
-            Clipper fills in the form for you. It skips passwords and footage links. The whole brief is kept, so
-            Ask can answer questions about it later.
+            Copy the campaign's whole page from wherever it's posted, paste it here, and Clipper fills in the form for
+            you. It skips passwords and footage links. The whole brief is kept, so each post can be checked against it.
           </p>
         )}
       </div>
@@ -187,7 +186,7 @@ export function CampaignEditorPage() {
   const set = <K extends keyof CampaignForm>(key: K, value: CampaignForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  // The brief as pasted, saved with the campaign for Ask (D76).
+  // The brief as pasted, saved with the campaign for the post check (campaign/audit.py; for Ask before D216).
   const [pasted, setPasted] = useState("");
   const { data: briefStatus } = useCampaignBrief(editing);
   const fromBrief = (read: CampaignForm, text: string) => {
@@ -227,6 +226,15 @@ export function CampaignEditorPage() {
     return <div className="flex max-w-3xl flex-col gap-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-96" /></div>;
   }
 
+  // Your own channel has no pay, brief or clipping rules: it's set up in Create (D221).
+  if (detail?.campaign.own_channel) {
+    return (
+      <EmptyState icon={<Wand2 className="size-5" />} title={`${detail.campaign.title} is your own channel`}
+        body="It has no pay or rules to edit. Change its name, handle, style and voice in Create, under Channel settings."
+        action={<Link to="/create" className={buttonClass("primary")}>Open Create</Link>} />
+    );
+  }
+
   const togglePlatform = (p: string) => set("platform_targets",
     form.platform_targets.includes(p) ? form.platform_targets.filter((x) => x !== p) : [...form.platform_targets, p]);
   const canDelete = editing && detail && detail.campaign.clips === 0;
@@ -246,9 +254,9 @@ export function CampaignEditorPage() {
                      editing={!!editing} saved={briefStatus?.saved_at} />
 
         <Section title="The basics">
-          <Field label="Campaign name" hint={editing ? "Rename it any time; its clips stay with it." : "What you'll call it in Clipper, e.g. \"Chad Powers S2\"."}>
+          <Field label="Campaign name" hint={editing ? "Rename it any time; its clips stay with it." : "What you'll call it in Clipper, e.g. \"Summer Show S2\"."}>
             {(id) => <TextInput id={id} required value={form.title} onChange={(e) => set("title", e.target.value)}
-                                placeholder="Chad Powers S2" autoFocus={!editing} />}
+                                placeholder="Summer Show S2" autoFocus={!editing} />}
           </Field>
           <Field label="Where it runs">
             {() => (
@@ -274,7 +282,7 @@ export function CampaignEditorPage() {
           <Field label="How it pays">
             {() => (
               <Segmented label="How it pays" value={form.pay_model} onChange={(v) => set("pay_model", v)}
-                options={[["per_view", "Per 1,000 views", "Whop, Vyro, Content Rewards..."],
+                options={[["per_view", "Per 1,000 views", "Most clipping campaigns"],
                           ["per_clip", "A flat fee per post", "Paid for each clip posted"],
                           ["none", "Not through Clipper", "A client, your own content, or just practice"]]} />
             )}
@@ -342,7 +350,7 @@ export function CampaignEditorPage() {
           <SwitchRow label="Use only these hashtags" hint="For briefs that ban extra hashtags."
                      checked={form.only_required_hashtags} onChange={(v) => set("only_required_hashtags", v)} />
           <SwitchRow label="Mask words that get posts flagged"
-                     hint="Sexual terms, slurs, self-harm and hard drugs get a letter masked (d*ck, p*rn) in captions, titles and hook lines. Swearing stays."
+                     hint="Sexual terms, slurs, self-harm and hard drugs get a letter masked in captions, titles and hook lines. Swearing stays."
                      checked={form.censor_flagged_words ?? true} onChange={(v) => set("censor_flagged_words", v)} />
           <Field label="Other caption rules" optional
                  hint="Anything else the brief says a post must say or must not, on one platform or all: an @mention, a tag in the YouTube title, a banned word. Every clip is checked against each.">
@@ -365,7 +373,7 @@ export function CampaignEditorPage() {
                           ["other", "Something else", "Light editing"]]} />
             )}
           </Field>
-          <Field label="Language of the footage" hint="Captions, hooks and descriptions are written in it. Auto detects it.">
+          <Field label="Language of the footage" hint="Captions, hooks and descriptions are written in it. Detect it finds it from the speech.">
             {(id) => (
               <select id={id} value={form.language} onChange={(e) => set("language", e.target.value)}
                       className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm sm:w-1/3">
@@ -432,7 +440,7 @@ export function CampaignEditorPage() {
                  hint="Leave empty to use: official footage supplied by this campaign.">
             {(id) => <TextArea id={id} rows={2} value={form.source_authorization}
                                onChange={(e) => set("source_authorization", e.target.value)}
-                               placeholder="Official footage supplied by the campaign on Content Rewards." />}
+                               placeholder="Official footage supplied by the campaign." />}
           </Field>
         </Section>
 

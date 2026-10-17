@@ -1,28 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { downloadUrl, type Clip } from "@/api/client";
-import { useHotkeys } from "@/lib/hotkeys";
+import type { Clip } from "@/api/client";
 import { useUI } from "@/lib/store";
-import { copyText } from "@/lib/utils";
-import { ClipCard, SelectionBar, useBulk, useDeleteWithUndo, useStatusWithUndo } from "./clips";
+import { ClipCard, SelectionBar } from "./clips";
 
-/** A grid of clips you can drive from the keyboard: J/K, Enter, C, L, P, X.
- *  Pick several with the corner box, Ctrl-click or Shift-click; X and Delete then act on all of them. */
+/** A grid of clips. Pick several with the corner box, Ctrl-click or Shift-click to act on all of them. */
 export function ClipGrid({ clips, showCampaign = false }: { clips: Clip[]; showCampaign?: boolean }) {
-  const [focus, setFocus] = useState(-1);
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
   const anchor = useRef<number | null>(null);
   const setListIds = useUI((s) => s.setListIds);
-  const open = useUI((s) => s.setOpenClip);
-  const setStatus = useStatusWithUndo();
-  const remove = useDeleteWithUndo();
-  const bulk = useBulk();
 
   useEffect(() => setListIds(clips.map((c) => c.id)), [clips, setListIds]);
-  useEffect(() => {
-    if (focus < 0) return;
-    document.querySelector<HTMLElement>(`[data-clip="${clips[focus]?.id}"]`)
-      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [focus, clips]);
   // A picked clip that leaves the grid (filtered out, deleted) is no longer picked.
   useEffect(() => setPicked((s) => {
     const shown = new Set(clips.map((c) => c.id));
@@ -43,33 +30,12 @@ export function ClipGrid({ clips, showCampaign = false }: { clips: Clip[]; showC
   const clear = () => { setPicked(new Set()); anchor.current = null; };
   const chosen = clips.filter((c) => picked.has(c.id));
 
-  const current = clips[focus];
-  useHotkeys({
-    j: () => setFocus((i) => Math.min(clips.length - 1, i + 1)),
-    k: () => setFocus((i) => Math.max(0, i - 1)),
-    Enter: () => current && open(current.id),
-    c: () => current?.caption && void copyText(current.caption, "Caption"),
-    l: () => current?.posts[0] && void copyText(current.posts[0].url, "Link"),
-    p: () => current && setStatus(current, "posted"),
-    x: () => {
-      const ready = chosen.filter((c) => c.status === "ready");
-      if (chosen.length) { if (ready.length) bulk.setStatus(ready, "skipped"); clear(); }
-      else if (current) setStatus(current, "skipped");
-    },
-    d: () => current?.file_exists && window.location.assign(downloadUrl(current.id)),
-    Delete: () => {
-      if (chosen.length) { bulk.remove(chosen); clear(); }
-      else if (current) remove(current);
-    },
-    Escape: () => clear(),
-  });
-
   return (
     <>
       {/* Two a row on a phone (D198): one filled the screen. */}
       <div data-wall className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-[repeat(auto-fill,minmax(184px,1fr))] sm:gap-x-5 sm:gap-y-8">
         {clips.map((clip, i) => (
-          <ClipCard key={clip.id} clip={clip} showCampaign={showCampaign} focused={i === focus}
+          <ClipCard key={clip.id} clip={clip} showCampaign={showCampaign}
                     selected={picked.has(clip.id)} selecting={picked.size > 0} onSelect={(e) => pick(i, e)} />
         ))}
       </div>

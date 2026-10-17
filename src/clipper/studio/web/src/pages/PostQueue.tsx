@@ -33,8 +33,11 @@ export function PostQueuePage() {
     // Not yet the views the brief wants before submitting: nothing to do on it yet (D154).
     submit: mine.filter((c) => c.status === "posted" && c.submits !== false && !c.submit_at_views),
   };
+  // The submit step only when a campaign takes links (D221): your own channel's posts are done once posted.
+  const submits = campaigns.some((c) => !c.archived && c.submits !== false) || lists.submit.length > 0;
+  const step: Step = search.step ?? (lists.post.length || !submits ? "post" : "submit");
   const waiting = mine.filter((c) => c.status === "posted" && c.submits !== false && !!c.submit_at_views).length;
-  const step: Step = search.step ?? (lists.post.length ? "post" : "submit");
+
   const line = [...lists[step].filter((c) => !later.includes(c.id)), ...later.flatMap((id) => lists[step].filter((c) => c.id === id))];
   const clip = line[0];
   const campaign = campaigns.find((c) => c.name === clip?.campaign);
@@ -43,9 +46,9 @@ export function PostQueuePage() {
 
   return (
     <div className="fade-in max-w-5xl">
-      <PageHeader title="Post queue" subtitle="One clip at a time: post it, then submit its link. Done moves to the next." />
+      <PageHeader title="Post queue" subtitle={submits ? "One clip at a time: post it, then submit its link. Done moves to the next." : "One clip at a time: post it, and Done moves to the next."} />
       <div className="tabs mb-6" role="tablist">
-        {(["post", "submit"] as const).map((s) => (
+        {(submits ? ["post", "submit"] as const : ["post"] as const).map((s) => (
           <button key={s} role="tab" aria-selected={step === s} onClick={() => go(s)} className="tab">
             {LABEL[s]} <span className="tabular ml-1 opacity-70">{lists[s].length}</span>
           </button>
@@ -56,7 +59,7 @@ export function PostQueuePage() {
       </div>
       {isLoading ? <Skeleton className="h-96" /> : !clip ? (
         <EmptyState icon={<PartyPopper className="size-5" />}
-          title={step === "post" ? "Nothing waiting to be posted" : waiting ? "Nothing to submit yet" : "Every posted clip is submitted"}
+          title={step === "post" ? "Nothing waiting to be posted" : "Nothing to submit"}
           body={step === "post" && lists.submit.length ? `${lists.submit.length} posted clip${lists.submit.length === 1 ? "" : "s"} still need their link submitted.`
             : step === "submit" && waiting ? `${waiting} posted clip${waiting === 1 ? " is" : "s are"} waiting to reach the views their brief wants before submitting.` : undefined}
           action={step === "post" && lists.submit.length

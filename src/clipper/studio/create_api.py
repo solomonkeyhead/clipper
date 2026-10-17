@@ -184,7 +184,9 @@ def _view() -> dict:
                         "words_per_second": ch.words_per_second, "pack": ch.pack, "drawings": ch.drawings,
                         "check_name": channels.check_name(ch),
                         "niche": ch.niche, "subject": ch.subject, "music": ch.music, "sfx": ch.sfx,
-                        "short_takes": ch.short_takes, "poses": list(ch.poses)},
+                        "short_takes": ch.short_takes, "poses": list(ch.poses),
+                        # A picture of someone presenting: the presenter controls only then (D221).
+                        "has_presenter": bool(ch.character or ch.presenter or ch.poses)},
             "channels": [{"slug": c.slug, "name": c.name, "handle": c.handle, "pack": c.pack} for c in channels.all_channels()],
             # Ideas already made into a Short (or one of the channel's own examples) don't show (D154).
             "topics": [t for t in store.topics()

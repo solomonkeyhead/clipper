@@ -299,8 +299,8 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
       </div>
       {drawings && old.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-2.5 text-xs text-muted">
-          <span className="flex-1">{old.length === 1 ? "One drawing is" : `${old.length} drawings are`} in the older look: smaller on the board,
-            without the ready-drawn objects. Drawing {old.length === 1 ? "it" : "them"} again uses a little of your AI quota on the next build.</span>
+          <span className="flex-1">{old.length === 1 ? "One drawing" : `${old.length} drawings`} could look better drawn again. It uses a little of
+            your AI quota on the next build.</span>
           <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding} onClick={() => redrawOld()}>
             {busy === "old" ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} Redraw {old.length === 1 ? "it" : `all ${old.length}`}
           </Button>

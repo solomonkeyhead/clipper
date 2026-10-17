@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import {
   AlertTriangle, ArrowRight, BarChart3, Bot, Film, Send, GraduationCap, LayoutDashboard, Loader2, Megaphone, PanelLeft, RefreshCw, Scissors, Search,
   MoreHorizontal, Settings, UserCircle2, Wand2, WifiOff,
@@ -6,20 +6,18 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useCampaigns, useClips, useCreate, useCreateAI, useHome, useJobs, useSetup, useStatus, useSyncNow } from "@/api/client";
 import { notify } from "@/lib/notify";
-import { useHotkeys } from "@/lib/hotkeys";
 import { useLiveUpdates } from "@/lib/live";
 import { useUI } from "@/lib/store";
 import { ago, cn, formatMoney } from "@/lib/utils";
 import { AccountScope } from "./AccountScope";
 import { ClipSheet } from "./clips";
-import { CommandPalette, ShortcutSheet } from "./Palette";
+import { CommandPalette } from "./Palette";
 import { Button, Kbd, Mark, Tip } from "./ui";
 
 interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
-  keys: string;
   badge?: number;
   hint?: string;     // what the badge counts, on hover
   tone?: "accent" | "warning" | "neutral";
@@ -38,26 +36,26 @@ function useNav(): NavItem[] {
   const toSubmit = mine.filter((c) => c.status === "posted" && c.submits !== false && !c.submit_at_views).length;
   const waiting = toPost + toSubmit;
   return [
-    { to: "/", label: "Dashboard", icon: <LayoutDashboard />, keys: "G D" },
+    { to: "/", label: "Dashboard", icon: <LayoutDashboard /> },
     // Create is the daily job, so it sits right under the Dashboard (D118).
-    { to: "/create", label: "Create", icon: <Wand2 />, keys: "G M" },
+    { to: "/create", label: "Create", icon: <Wand2 /> },
     // A number only where something waits on you (D154): a count of campaigns asked nothing of anyone.
-    { to: "/campaigns", label: "Campaigns", icon: <Megaphone />, keys: "G C" },
-    { to: "/new", label: "New clips", icon: <Scissors />, keys: "G N", badge: working, tone: "accent",
+    { to: "/campaigns", label: "Campaigns", icon: <Megaphone /> },
+    { to: "/new", label: "New clips", icon: <Scissors />, badge: working, tone: "accent",
       hint: `${working} clipping job${working === 1 ? "" : "s"} running or queued` },
-    { to: "/clips", label: "Clips", icon: <Film />, keys: "G L" },
-    { to: "/post", label: "Post queue", icon: <Send />, keys: "", badge: waiting, tone: "accent",
+    { to: "/clips", label: "Clips", icon: <Film /> },
+    { to: "/post", label: "Post queue", icon: <Send />, badge: waiting, tone: "accent",
       hint: [toPost && `${toPost} to post`, toSubmit && `${toSubmit} to submit`].filter(Boolean).join(", ") },
-    { to: "/stats", label: "Stats", icon: <BarChart3 />, keys: "G S" },
-    { to: "/learning", label: "Learning", icon: <GraduationCap />, keys: "G R" },
+    { to: "/stats", label: "Stats", icon: <BarChart3 /> },
+    { to: "/learning", label: "Learning", icon: <GraduationCap /> },
   ];
 }
 
 const PHONE_TABS = ["/", "/create", "/clips", "/post", "/campaigns"];
 
 const SECONDARY: NavItem[] = [
-  { to: "/accounts", label: "Accounts", icon: <UserCircle2 />, keys: "G A" },
-  { to: "/settings", label: "Settings", icon: <Settings />, keys: "G ," },
+  { to: "/accounts", label: "Accounts", icon: <UserCircle2 /> },
+  { to: "/settings", label: "Settings", icon: <Settings /> },
 ];
 
 function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
@@ -84,7 +82,7 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       ) : null}
     </Link>
   );
-  return collapsed ? <Tip label={item.label} keys={item.keys} side="right">{link}</Tip> : link;
+  return collapsed ? <Tip label={item.label} side="right">{link}</Tip> : link;
 }
 
 /** Clipping runs on the server whatever page is open; this shows it on every page. */
@@ -224,7 +222,6 @@ function useNarrow(px: number) {
 
 export function AppShell() {
   useLiveUpdates();
-  const navigate = useNavigate();
   // In a narrow window the sidebar starts as icons, so pages get the room;
   // it still opens on demand, without changing the wide-window preference.
   const narrow = useNarrow(1024);
@@ -235,7 +232,6 @@ export function AppShell() {
   const toggle = narrow ? () => setNarrowOpen((v) => !v) : toggleWide;
   const online = useUI((s) => s.online);
   const setPalette = useUI((s) => s.setPalette);
-  const setShortcuts = useUI((s) => s.setShortcuts);
   const nav = useNav();
   const [more, setMore] = useState(false);
   // A phone's tabs are the daily jobs (D198): posting is what a phone is for, and Clips and the Post queue sat
@@ -245,22 +241,7 @@ export function AppShell() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const moreActive = rest.some((i) => path.startsWith(i.to));
   useBuildNotifications();
-  const pendingG = useRef(0);
-
-  const goto = (to: string) => () => {
-    if (Date.now() - pendingG.current < 1200) {
-      pendingG.current = 0;
-      void navigate({ to });
-    }
-  };
-  useHotkeys({
-    g: () => { pendingG.current = Date.now(); },
-    d: goto("/"), h: goto("/"), c: goto("/campaigns"), n: goto("/new"), l: goto("/clips"), m: goto("/create"),
-    s: goto("/stats"), r: goto("/learning"), a: goto("/accounts"), ",": goto("/settings"), p: goto("/post"),
-    "[": toggle,
-    "?": () => setShortcuts(true),
-    "/": () => setPalette(true),
-  }, { goto: true });
+  // Keyboard shortcuts went (D221): Ctrl K for search is the one left.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -289,14 +270,9 @@ export function AppShell() {
           {SECONDARY.map((item) => <NavLink key={item.to} item={item} collapsed={collapsed} />)}
         </nav>
         <div className={cn("flex items-center gap-1 p-3", collapsed && "flex-col")}>
-          <Tip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} keys="[" side="right">
+          <Tip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} side="right">
             <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle sidebar">
               <PanelLeft className="size-4" />
-            </Button>
-          </Tip>
-          <Tip label="Keyboard shortcuts" keys="?" side="right">
-            <Button variant="ghost" size="icon" onClick={() => setShortcuts(true)} aria-label="Keyboard shortcuts">
-              <span className="text-sm font-semibold">?</span>
             </Button>
           </Tip>
         </div>
@@ -374,7 +350,6 @@ export function AppShell() {
 
       <ClipSheet />
       <CommandPalette />
-      <ShortcutSheet />
     </div>
   );
 }

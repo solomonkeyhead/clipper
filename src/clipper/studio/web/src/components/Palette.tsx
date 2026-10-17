@@ -1,14 +1,12 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
-  BarChart3, Film, Search, GraduationCap, Inbox, LayoutDashboard, Plus, Keyboard, Megaphone, PanelLeft, RefreshCw, Scissors, Send,
+  BarChart3, Film, Search, GraduationCap, Inbox, LayoutDashboard, Plus, Megaphone, PanelLeft, RefreshCw, Scissors, Send,
   Settings, UserCircle2, Wand2,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCampaigns, useClips, useSyncNow } from "@/api/client";
 import { useUI } from "@/lib/store";
-import { Kbd } from "./ui";
 
 /**
  * Every typed word must appear in the item (cmdk's default fuzzy match let
@@ -28,8 +26,8 @@ function matchWords(value: string, search: string, keywords: string[] = []): num
   return 0.3;
 }
 
-function Item({ icon, label, keys, onSelect, hint, value, keywords }: {
-  icon: ReactNode; label: ReactNode; keys?: string; onSelect: () => void; hint?: string;
+function Item({ icon, label, onSelect, hint, value, keywords }: {
+  icon: ReactNode; label: ReactNode; onSelect: () => void; hint?: string;
   value?: string; keywords?: string[];
 }) {
   return (
@@ -42,7 +40,6 @@ function Item({ icon, label, keys, onSelect, hint, value, keywords }: {
       {icon}
       <span className="flex-1 truncate">{label}</span>
       {hint && <span className="truncate text-xs text-subtle">{hint}</span>}
-      {keys && <Kbd>{keys}</Kbd>}
     </Command.Item>
   );
 }
@@ -58,7 +55,6 @@ export function CommandPalette() {
   const open = useUI((s) => s.paletteOpen);
   const setOpen = useUI((s) => s.setPalette);
   const setClip = useUI((s) => s.setOpenClip);
-  const setShortcuts = useUI((s) => s.setShortcuts);
   const toggleCollapsed = useUI((s) => s.toggleCollapsed);
   const navigate = useNavigate();
   const sync = useSyncNow();
@@ -85,25 +81,24 @@ export function CommandPalette() {
       <Command.List className="max-h-[min(420px,60vh)] overflow-y-auto py-2">
         <Command.Empty className="px-4 py-8 text-center text-sm text-muted">No results.</Command.Empty>
         <Group heading="Go to">
-          <Item icon={<LayoutDashboard />} label="Dashboard" keys="G D" onSelect={go("/")} />
-          <Item icon={<Wand2 />} label="Create a Short for your channel" keys="G M" onSelect={go("/create")} />
-          <Item icon={<Megaphone />} label="Campaigns" keys="G C" onSelect={go("/campaigns")} />
-          <Item icon={<Scissors />} label="New clips from footage" keys="G N" onSelect={go("/new")} />
-          <Item icon={<Film />} label="Clips" keys="G L" onSelect={go("/clips")} />
-          <Item icon={<Send />} label="Post queue: one clip at a time" keys="G P" onSelect={go("/post")} />
+          <Item icon={<LayoutDashboard />} label="Dashboard" onSelect={go("/")} />
+          <Item icon={<Wand2 />} label="Create a Short for your channel" onSelect={go("/create")} />
+          <Item icon={<Megaphone />} label="Campaigns" onSelect={go("/campaigns")} />
+          <Item icon={<Scissors />} label="New clips from footage" onSelect={go("/new")} />
+          <Item icon={<Film />} label="Clips" onSelect={go("/clips")} />
+          <Item icon={<Send />} label="Post queue: one clip at a time" onSelect={go("/post")} />
           <Item icon={<Send />} label="Clips ready to post" onSelect={go("/clips", { status: "ready" })} />
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
-          <Item icon={<BarChart3 />} label="Stats" keys="G S" onSelect={go("/stats")} />
+          <Item icon={<BarChart3 />} label="Stats" onSelect={go("/stats")} />
           <Item icon={<GraduationCap />} label="Learning: what Clipper has learned" onSelect={go("/learning")} />
-          <Item icon={<UserCircle2 />} label="Accounts" keys="G A" onSelect={go("/accounts")} />
-          <Item icon={<Settings />} label="Settings" keys="G ," onSelect={go("/settings")} />
+          <Item icon={<UserCircle2 />} label="Accounts" onSelect={go("/accounts")} />
+          <Item icon={<Settings />} label="Settings" onSelect={go("/settings")} />
         </Group>
         <Group heading="Actions">
           <Item icon={<Search />} label="Find campaigns" onSelect={go("/campaigns", { find: "1" })} />
           <Item icon={<RefreshCw />} label="Sync stats now" onSelect={run(() => sync.mutate())} />
-          <Item icon={<PanelLeft />} label="Toggle sidebar" keys="[" onSelect={run(toggleCollapsed)} />
-          <Item icon={<Keyboard />} label="Keyboard shortcuts" keys="?" onSelect={run(() => setShortcuts(true))} />
+          <Item icon={<PanelLeft />} label="Toggle sidebar" onSelect={run(toggleCollapsed)} />
         </Group>
         {campaigns.length > 0 && (
           <Group heading="Campaigns">
@@ -124,48 +119,5 @@ export function CommandPalette() {
         )}
       </Command.List>
     </Command.Dialog>
-  );
-}
-
-const SHORTCUTS: [string, [string, string][]][] = [
-  ["Anywhere", [["Ctrl K  or  /", "Search and commands"], ["G then D", "Dashboard"], ["I", "Ask Clipper"], ["G then C", "Campaigns"],
-    ["G then N", "New clips"], ["G then L", "Clips"], ["G then P", "Post queue"], ["G then M", "Create"], ["G then R", "Learning"],
-    ["G then S", "Stats"], ["G then A", "Accounts"], ["[", "Collapse sidebar"], ["?", "This list"]]],
-  ["Lists of clips", [["J / K", "Next / previous"], ["Enter", "Open"], ["C", "Copy caption"],
-    ["L", "Copy link"], ["D", "Download"], ["P", "Mark posted"], ["X", "Skip"], ["Delete", "Delete (undo)"],
-    ["Shift / Ctrl click", "Select several"], ["Esc", "Clear selection"]]],
-  ["Open clip", [["J / K", "Next / previous clip"], ["Y", "Good"], ["B", "Not good"], ["C", "Copy caption"], ["L", "Copy link"],
-    ["D", "Download"], ["P", "Mark posted"], ["S", "Mark submitted"], ["R", "Back to ready"], ["X", "Skip, then next"], ["E", "Edit"], ["F", "Show in folder"],
-    ["Delete", "Delete (undo)"], ["Esc", "Close"]]],
-];
-
-export function ShortcutSheet() {
-  const open = useUI((s) => s.shortcutsOpen);
-  const setOpen = useUI((s) => s.setShortcuts);
-  return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
-        <Dialog.Content aria-describedby={undefined}
-          className="fade-in fixed top-1/2 left-1/2 z-50 max-h-[85vh] w-[min(720px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md border border-line-strong bg-surface-1 p-6 shadow-3">
-          <Dialog.Title className="mb-4 text-lg font-semibold">Keyboard shortcuts</Dialog.Title>
-          <div className="grid gap-6 sm:grid-cols-3">
-            {SHORTCUTS.map(([section, items]) => (
-              <div key={section}>
-                <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">{section}</h3>
-                <ul className="flex flex-col gap-1.5 text-sm">
-                  {items.map(([keys, what]) => (
-                    <li key={keys + what} className="flex items-center justify-between gap-3">
-                      <span className="text-muted">{what}</span><Kbd>{keys}</Kbd>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <p className="mt-5 text-xs text-subtle">Single-key shortcuts pause while you're typing, and can be turned off in Settings.</p>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
   );
 }

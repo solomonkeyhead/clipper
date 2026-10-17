@@ -2,13 +2,13 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Film, Info, PartyPopper } from "lucide-react";
 import { useCampaigns, useClips, type Clip } from "@/api/client";
 import { ClipGrid } from "@/components/ClipGrid";
-import { Card, EmptyState, Kbd, PageHeader, Skeleton, StatusLegend, buttonClass } from "@/components/ui";
+import { Card, EmptyState, PageHeader, Skeleton, StatusLegend, buttonClass } from "@/components/ui";
 
 // In the order a clip moves through them, opening on what's waiting to be posted; All last (D78).
 const FILTERS = [["ready", "Ready to post"], ["posted", "To submit"], ["submitted", "Submitted"], ["skipped", "Skipped"], ["all", "All"]] as const;
 
 const HINTS: Partial<Record<ClipFilter, React.ReactNode>> = {
-  ready: <>Download a clip and copy its caption to post it. Once it's live, the next sync finds it and moves it on: to <b className="text-fg">To submit</b> for a campaign, to All for your own channel.</>,
+  ready: <>Download a clip and copy its caption to post it. Once it's live, the next sync finds the post and moves the clip on by itself.</>,
   posted: <>Copy each post's link into the campaign's submission form, then press <b className="text-fg">Mark submitted</b>.</>,
 };
 export type ClipFilter = (typeof FILTERS)[number][0];
@@ -25,10 +25,15 @@ export function ClipFilters({ clips, value, onChange, hints = false }: {
   clips: Clip[]; value: ClipFilter; onChange: (f: ClipFilter) => void; hints?: boolean;
 }) {
   const waiting = clips.filter((c) => inFilter(c, "posted") && c.submit_at_views).length;
+  // The submit steps only where a clip's campaign takes links, and Skipped only once something is (D221): your own
+  // channel and a first look had two tabs that could never fill.
+  const submits = clips.some((c) => c.submits !== false);
+  const shown = FILTERS.filter(([key]) => (submits || (key !== "posted" && key !== "submitted"))
+                                          && (key !== "skipped" || value === "skipped" || clips.some((c) => c.status === "skipped")));
   return (
     <>
       <div className="tabs mb-6" role="tablist">
-        {FILTERS.map(([key, label]) => (
+        {shown.map(([key, label]) => (
           <button key={key} role="tab" aria-selected={value === key} onClick={() => onChange(key)} className="tab">
             {label} <span className="tabular ml-1 opacity-70">{clips.filter((c) => inFilter(c, key) && !(key === "posted" && c.submit_at_views)).length}</span>
             {/* Posts still short of the campaign's view minimum are listed here but can't be submitted yet:
@@ -53,7 +58,7 @@ const linkClass = buttonClass("primary");
 export function NoClips({ filter, campaign }: { filter: ClipFilter; campaign?: string }) {
   const make = <Link to="/new" search={{ campaign }} className={linkClass}>Make clips</Link>;
   if (filter === "posted") {
-    return <EmptyState icon={<PartyPopper className="size-5" />} title="All caught up" body="Every posted clip is submitted."
+    return <EmptyState icon={<PartyPopper className="size-5" />} title="Nothing to submit" body="A posted clip waits here until you submit its link to its campaign."
       action={<Link to="/clips" search={{ status: "ready" }} className={linkClass}>See what's ready to post</Link>} />;
   }
   if (filter === "ready") {
@@ -99,7 +104,7 @@ export function ClipsPage() {
 
   return (
     <div className="fade-in">
-      <PageHeader title="Clips" subtitle={<>Every clip you've made.<span className="pointer-coarse:hidden"> <Kbd>J</Kbd> <Kbd>K</Kbd> to move, <Kbd>Enter</Kbd> to open.</span></>}
+      <PageHeader title="Clips" subtitle="Every clip you've made."
         actions={<>
           {(status === "ready" || status === "posted") && list.length > 0 && (
             <Link to="/post" search={{ step: status === "ready" ? "post" : "submit", campaign: campaign !== "active" && campaign !== "all" ? campaign : undefined }}

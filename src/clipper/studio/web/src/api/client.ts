@@ -55,7 +55,7 @@ export const useHome = () => {
 export const useCampaigns = () =>
   useQuery({ queryKey: keys.campaigns, queryFn: () => unwrap(api.GET("/api/campaigns")) });
 export const useCampaign = (name: string) =>
-  useQuery({ queryKey: keys.campaign(name),
+  useQuery({ queryKey: keys.campaign(name), enabled: !!name,   // the New campaign form has none: it asked for "/api/campaigns/"
              queryFn: () => unwrap(api.GET("/api/campaigns/{name}", { params: { path: { name } } })) });
 export const useClips = () => {
   const scope = useUI((s) => s.accountScope);
@@ -656,7 +656,7 @@ export interface CreateVideo {
 export interface CreatePost { platform: string; url: string; posted_at: string | null; views: number | null }
 export interface CreateView {
   channel: { slug: string; name: string; handle: string; voice: string; campaign: string; words_per_second: number;
-             pack: string; drawings: boolean; check_name: string; niche: string; subject: string; music?: boolean; sfx?: boolean; poses?: string[] };
+             pack: string; drawings: boolean; check_name: string; niche: string; subject: string; music?: boolean; sfx?: boolean; poses?: string[]; has_presenter?: boolean };
   channels: { slug: string; name: string; handle: string; pack: string }[];
   topics: CreateTopic[]; videos: CreateVideo[];
 }
