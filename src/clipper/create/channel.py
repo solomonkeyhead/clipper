@@ -62,6 +62,7 @@ class Channel(BaseModel):
     hook_you: bool = False
     open_surprise: bool = False          # D202: the opening line is the surprise, never a question
     numbers_late: bool = False           # D203: numbers and formulas wait until the viewer knows why they matter
+    answer_late: bool = False            # D218: the wrong belief first, the real cause only in the last third
     shapes: list[str] = Field(default_factory=list)
     scope: str = ""
     # Real scripts of the channel's own, imitated for voice and rhythm, never copied.
@@ -88,7 +89,7 @@ class Channel(BaseModel):
 
 
 #: The fields a channel file from before D155 lacks, taken from its pack when read.
-LIMITS = ("words", "sentence_max", "hook_max", "hook_you", "open_surprise", "numbers_late", "shapes", "scope", "jokes",
+LIMITS = ("words", "sentence_max", "hook_max", "hook_you", "open_surprise", "numbers_late", "answer_late", "shapes", "scope", "jokes",
           "bits", "signoff")
 
 

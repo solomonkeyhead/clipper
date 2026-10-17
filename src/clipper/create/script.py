@@ -503,7 +503,8 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             + f"End with {ENDINGS.get(ending, ENDINGS['loop'])}.\n"
             + (f"Running bit for this one: {bit[1]}\n" if bit[1] else "")
             + (f"Length: this one is a short take, {SHORT_WORDS[0]} to {SHORT_WORDS[1]} words in all, which replaces the "
-               "word count in the rules. Keep the opening, the first cause early and the ending; leave out "
+               "word count in the rules. Keep the opening, "
+               + ("the answer held back" if channel.answer_late else "the first cause early") + " and the ending; leave out "
                "a second example and any line that only says again what another said.\n" if length == "short" else "")
             + ("The channel's latest endings. Every video ends on the loop, so vary the rest: reuse none of their "
                "words or jokes, and lead back into the opening a different way from each:\n"
@@ -895,6 +896,13 @@ what the script was asked to include (its shape, its ending, a running bit). Ret
 with no problems if all pass. Otherwise, for each failure, one sentence saying exactly what to change."""
 
 
+#: For a channel that holds the answer back (D218): CRITIC's 2 and 5 would ask for the cause early.
+ANSWER_LATE_REVIEW = ("This channel holds the answer back, so judge 2 and 5 this way instead. 2: by the second line "
+                      "the wrong belief is named and shown wrong, and the real cause is not given in the first half. "
+                      "5: about two thirds of the way in a small new question opens, and the real cause comes in the "
+                      "last third in one short plain line a viewer could repeat to a friend.\n")
+
+
 def _diagrams(script: Script) -> str:
     """The diagrams in words, for the check: a curve or arrow that says the opposite of the
     sentence teaches it wrong (a graph rose while the line said high notes are absorbed)."""
@@ -955,6 +963,7 @@ def critique(script: Script, writer: str = "") -> list[str]:
     user = ((f"It was asked to end with {ENDINGS[script.ending]}.\n" if script.ending in ENDINGS else "")
             + (f"Its shape, as asked: {shape}\n" if shape else "") + (f"It was asked to include: {bit}\n" if bit else "")
             + ("" if channel.open_surprise else "The channel may open with a question.\n")   # D202
+            + (ANSWER_LATE_REVIEW if channel.answer_late else "")   # D218: 2 and 5 judged the other way round
             + "\n"
             f"Title: {script.title}\nScript:\n" + "\n".join(b.text for b in script.beats))
     try:

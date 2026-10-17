@@ -3757,3 +3757,17 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - Style drift fixed: "Make a Short" on an empty Ready list was an old outlined button, now the grey secondary one;
   "Make clips" on an empty campaign had a typed arrow, now the arrow icon.
 - All of it short (180ms or less) and off with reduced motion: delight here is the page answering, not a show.
+
+## D218: the answer held back, and a test the viewer can try (2026-10-16)
+- A third research report (pasted by Marc) audited four of the channel's Shorts: each gave the cause in its first
+  seconds, so nothing was left to wait for. That was D155's own rule ("the first cause within 20 words").
+- Much of the report was already in Clipper (question openings, short sentences, the Myth-bust shape) or argued
+  against D203's numbers (open on the surprise). Some of its figures had no source we could check. Two changes taken:
+- Hold the answer back (`packs.HOLD_ANSWER`): after the question, the wrong belief in one dry line; about two thirds
+  in, one small new question; the real cause only in the last third. From Muller's misconception-first finding. The
+  question still opens (D203). A new `answer_late` flag on the pack and channel turns the editor's checks 2 and 5
+  round (`script.ANSWER_LATE_REVIEW`) and the short take's brief, so the editor doesn't ask for the cause early.
+- A self-test line (`packs.SELF_TEST`) when the viewer can feel it where they sit ("Swallow now. Hear the click?"):
+  something to do while it loops, and something to say in the comments. Harmless, never advice (the health rule).
+- A physics channel still on D156's rules word for word moves to D218's; one with its own edits keeps them.
+- To judge: compare "stayed to watch" and average percentage viewed on the next batch with the last one.

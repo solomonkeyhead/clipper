@@ -93,9 +93,25 @@ PHYSICS_RULES_D202 = [
 #: D203: back to the question. In the channel's 15 Shorts with stats the five that held viewers best all opened on the
 #: question, over a picture of the moment, and the three worst on a joke, a quote or an abstract picture; none had
 #: opened on a surprise, so D202 was a guess the numbers didn't back.
-PHYSICS_RULES = PHYSICS_RULES_D156
+#: D218, from the third report (Muller's misconception-first teaching): the question still opens (D203), but the
+#: answer waits. D155 asked for the cause within 20 words, so after five seconds there was nothing left to wait
+#: for. And one line the viewer can try where they sit, so they have something to do and say in the comments.
+HOLD_ANSWER = ("Hold the answer back. Right after the question, say in one dry line what most people believe causes "
+               "it, and show it can't be the whole story. About two thirds of the way in, ask one small new question "
+               "the viewer can't answer yet. The real cause comes only in the last third; what follows only lands it.")
+SELF_TEST = ("When the viewer can feel the physics where they sit (swallow, hum with ears closed, blow on a hand), "
+             "ask them to try it in one short line and say what they will notice. Only a harmless thing they can do "
+             "with what is at hand; it shows the physics, it is never advice. When no such test exists, leave it out.")
+PHYSICS_RULES_D218 = [
+    *PHYSICS_RULES_D156[:3],
+    HOLD_ANSWER,
+    *PHYSICS_RULES_D156[4:8],
+    SELF_TEST,
+    *PHYSICS_RULES_D156[8:],
+]
+PHYSICS_RULES = PHYSICS_RULES_D218
 #: Rule sets a physics channel may still have word for word; read, it moves to PHYSICS_RULES.
-PHYSICS_RULES_BEFORE = [PHYSICS_RULES_BEFORE_D155, PHYSICS_RULES_D155, PHYSICS_RULES_D202]
+PHYSICS_RULES_BEFORE = [PHYSICS_RULES_BEFORE_D155, PHYSICS_RULES_D155, PHYSICS_RULES_D202, PHYSICS_RULES_D156]
 
 #: Joke shapes for the writer to follow, never lines to copy (D156, the second report's patterns).
 PHYSICS_JOKES = [
@@ -155,6 +171,7 @@ class Pack(BaseModel):
     hook_you: bool = False             # the opening line must say "you" or "your"
     open_surprise: bool = False        # the opening line is the surprise, never a question (D202)
     numbers_late: bool = False         # no number in the first 10 s past the opening, no early formula (D203)
+    answer_late: bool = False          # the wrong belief first, the real cause only in the last third (D218)
     shapes: list[str] = Field(default_factory=list)   # script shapes used in turn; none: the rules' one
     scope: str = ""                    # what an idea may be about, for the planner's fit score; "" = subject
     jokes: list[str] = Field(default_factory=list)   # joke shapes for the writer (D156)
@@ -243,6 +260,7 @@ PHYSICS = Pack(
     areas="mechanics, heat, sound, light, electricity, fluids and pressure, materials",
     abstract='"pressure", "physics",\n  "energy"', hashtags="#physics,\n#science and one specific",
     templates=list(ALL_TEMPLATES), words=[85, 110], sentence_max=12, hook_max=8, hook_you=True, numbers_late=True,
+    answer_late=True,
     shapes=list(PHYSICS_SHAPES), jokes=list(PHYSICS_JOKES),   # no running bits, no sign-off (D190)
     scope="any STEM subject, physics first, then chemistry, engineering, earth and space, maths, technology")
 

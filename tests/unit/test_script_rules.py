@@ -130,10 +130,10 @@ def test_an_untouched_physics_channel_moves_to_the_new_rules_and_an_edited_one_k
     assert prof.rules == packs.PHYSICS_RULES and (prof.words, prof.hook_max, len(prof.shapes)) == ([85, 110], 8, 6)
     for slug in ("d156", "d202"):   # Marc's channel's rules: the question first again (D203), the shapes with it
         got = channel.load(slug)
-        assert got.rules == packs.PHYSICS_RULES and not got.open_surprise and got.numbers_late, slug
+        assert got.rules == packs.PHYSICS_RULES and not got.open_surprise and got.numbers_late and got.answer_late, slug
         assert got.shapes == packs.PHYSICS_SHAPES, slug
     assert mine.rules == ["my own rule"] and (mine.words, mine.hook_max, mine.shapes) == ([80, 125], 14, [])
-    assert not mine.numbers_late
+    assert not mine.numbers_late and not mine.answer_late
 
 
 def test_the_editor_is_another_ai_family_from_the_writer():
