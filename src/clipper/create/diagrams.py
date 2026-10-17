@@ -998,7 +998,13 @@ def render(v: Visual, seconds: float, out: Path, words: list[tuple[float, str]] 
     moves in on the parts as they're explained (D162), unless the video's zooms are off (`focus`, D197)."""
     from .compose import drawing_panel
 
-    CUES.set(tuple(cues(v, words or [])))
     n = frames or max(1, round(seconds * FPS))
+    if v.template == "sketch" and v.sketch and v.sketch.svg:   # Opus's animated SVG, filmed (D219); its own camera
+        from . import svgfilm
+
+        at = svgfilm.timings(v.sketch.count or len(words or []), words, n / FPS)
+        with svgfilm.film(v.sketch.svg, at, n / FPS, BOARD, W, H, v.scale, v.shift) as shoot:
+            return drawing_panel(lambda t, d: shoot(t), out, n, [], start=start, stop=stop)
+    CUES.set(tuple(cues(v, words or [])))
     plan = focus_plan(v, words or [], n / FPS) if focus else []
     return drawing_panel(lambda t, d: frame(v, t, d), out, n, plan, start=start, stop=stop)

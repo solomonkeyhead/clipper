@@ -29,7 +29,8 @@ from pydantic import BaseModel, Field, create_model
 from ..utils.logging import get_logger
 from . import channel as channels
 from .ai import CreateError, ask
-from .sketch import Sketch
+from .sketch import Sketch, drawn
+from .svgfilm import texts as _svg_texts
 
 log = get_logger(__name__)
 
@@ -801,7 +802,7 @@ def tidy(script: Script) -> Script:
             diagram = False
         if diagram and v.template == "equation" and not any(c in v.equation for c in "=<>"):
             diagram = False
-        if diagram and v.template == "sketch" and not v.idea.strip() and not (v.sketch and v.sketch.marks):
+        if diagram and v.template == "sketch" and not v.idea.strip() and not drawn(v.sketch):
             diagram = False
         if diagram and v.template == "number" and not any(c.isdigit() for c in v.title):
             diagram = False
@@ -917,7 +918,8 @@ def _diagrams(script: Script) -> str:
                  f"values {v.values}" if v.values else "",
                  f"amounts {v.amounts}" if v.amounts else "",
                  f"a sketch of: {v.idea}" if v.idea else "",
-                 "drawn with labels " + str([m.text for m in v.sketch.marks if m.text]) if v.sketch else "",
+                 "drawn with labels " + str([m.text for m in v.sketch.marks if m.text] or _svg_texts(v.sketch.svg))
+                 if v.sketch else "",
                  f"directions {v.directions}" if v.directions else "", f"equation {v.equation!r}" if v.equation else ""]
         lines.append(f"- Over sentence {i} (\"{b.text}\"): " + ", ".join(p for p in parts if p))
     return "\n".join(lines)

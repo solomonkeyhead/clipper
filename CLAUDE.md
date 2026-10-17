@@ -45,10 +45,10 @@ tier. `docs/MANUAL_CONTROLS.md` lists the steps still automatic-only; add a row 
 ## Create pipeline (src/clipper/create/)
 - `topics.py` ideas -> `script.py` writes the script (beats, each with a visual plan),
   physics check, `replan` for "New pictures" -> Marc records the voice -> `voice.py` times
-  words -> `build.py` first has `sketch.py` draw the chalk sketches still missing (marks on a
-  1000x600 grid, then a look-and-fix review with the rendered PNG; `fit` scales to the
-  board; drawn at build, not at writing, D136), then makes shots:
-  `diagrams.py` (templates + sketches, animated with Pillow), `stock.py` (Pixabay/Pexels,
+  words -> `build.py` first has `sketch.py` draw the chalk sketches still missing (D136): Opus writes
+  each as an animated SVG timed to the words (`--w1`..., D219), films a contact sheet and fixes it;
+  `svgfilm.py` films it in Edge through Playwright. No browser: the old marks on a grid. Then shots:
+  `diagrams.py` (templates + sketches, animated with Pillow; SVG sketches go to `svgfilm`), `stock.py` (Pixabay/Pexels,
   judged by the model, score >= 7, subject-aware crop) -> ffmpeg assembly, captions, cover.
 - AI calls go through `create/ai.py`: Claude first (API key, else Claude Code headless on
   Marc's plan via `llm/claude_code.py`), Gemini only when no Claude is set up

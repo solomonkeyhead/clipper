@@ -39,6 +39,7 @@ from . import compose, diagrams, stock, store, userclips
 from .ai import CreateError
 from .script import FIRST_DIAGRAM_WORDS, Script, Visual, _query_from, loops_back, spans
 from .sketch import draw_all
+from .sketch import drawn as is_drawn
 from .voice import Timings, folder, nudged
 
 log = get_logger(__name__)
@@ -470,7 +471,7 @@ def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
     # where footage still doesn't fit draws the same one for free (D182).
     stand_in = beat.visual.kind == "stock" and _opening(i, script)
     made = _fallback(beat, script, " ".join(script.beats[k].text for k in group), keep=stand_in or bool(tag))
-    if not tag and made.template == "sketch" and made.sketch and made.sketch.marks and not stand_in:
+    if not tag and made.template == "sketch" and is_drawn(made.sketch) and not stand_in:
         chosen[i] = {"drawn": made}
     return made
 
@@ -582,7 +583,7 @@ def _planned(i: int, beat, visual: Visual, seconds: float, said: list, script: S
     filler's files apart from the sentence's own clip. Footage a build picked before is used
     again (D125); "new footage" clears it and turns those clips down. When the user asked for
     footage and none fits, the sentence keeps what it had, never a new drawing (D126)."""
-    if visual.kind == "diagram" and visual.template == "sketch" and not (visual.sketch and visual.sketch.marks):
+    if visual.kind == "diagram" and visual.template == "sketch" and not is_drawn(visual.sketch):
         visual = _drawn(i, beat, script, tag)  # asked for a new drawing, or its drawing failed
     if visual.kind == "diagram":
         return [_diagram(visual, seconds, work / f"{i:02d}{tag}_diagram.mp4", said, _frames(at, seconds))]

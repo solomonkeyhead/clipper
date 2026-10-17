@@ -29,6 +29,8 @@ dependencies = [
     "opencv-python-headless>=4.11",
     # Create's animated diagrams (create/diagrams.py)
     "pillow>=11.0",
+    # Opus's animated SVG drawings, filmed in Edge or Chrome (create/svgfilm.py, D219)
+    "playwright>=1.48",
     # llm backends
     "google-genai>=1.0",
     "httpx>=0.28",

@@ -53,9 +53,19 @@ class Sketch(BaseModel):
     # How many of the marks came from an earlier drawing this one builds on (D200): drawn in full from the first
     # frame; the rest arrive on their words.
     base: int = 0
+    # D219: the drawing as one animated SVG of Opus's (create/svgfilm.py films it), instead of marks; and a change the
+    # user asked for in words ("make the spring bigger"), made to it at the next build.
+    svg: str = ""
+    ask: str = ""
+    count: int = 0   # how many words the SVG's timing numbers (--w1 ... --wN)
 
 
-DRAW = """You draw the chalkboard sketches for a 45-second {subject} video watched on a phone.
+def drawn(s: Sketch | None) -> bool:
+    """Whether there is a drawing to film: marks, or an SVG with no change still waiting to be made to it."""
+    return bool(s and (s.marks or (s.svg and not s.ask)))
+
+
+DRAW ="""You draw the chalkboard sketches for a 45-second {subject} video watched on a phone.
 A good sketch shows how the thing works, not what it is called: the real objects, big and simple,
 and the one thing happening between them (the path, the push, the flow, the spark), labelled with a
 word or two. A viewer gets it in two seconds with the sound off.
@@ -136,6 +146,125 @@ shows something the sentence never says.
 The drawing is fitted to the board after you, kept out of the bottom-right corner, and its labels
 moved off lines and each other: don't spend a fix on those. If it works, answer ok = true and nothing
 else. Otherwise ok = false, list the problems, and return the whole corrected sketch."""
+
+
+#: D219: the old marks gave Opus a keyhole (4-14 pieces of line art, app icons, one look at a half-size picture,
+#: parts that only appear), and it drew basic pictures. Here it draws the whole thing, in motion.
+SVG_DRAW = """You are the illustrator and animator for a {subject} Shorts channel: the presenter explains everyday
+{subject} on a chalkboard. You draw ONE animated chalkboard illustration that plays while the narrator says the
+sentence(s) you are given, watched on a phone.
+
+Make the mechanism visible: the viewer should SEE it happen, not read about it. Show the real objects as a clear,
+attractive close-up or cut-away (proportions right, a sense of depth and material, solid shapes rather than icons),
+and animate the actual motion the words describe: things slide, squeeze, lift, stretch, snap, flow, vibrate, heat
+up, spread out. Motion carries the explanation and must be big enough to see on a phone. Labels are few (at most 4,
+1-3 words each), beside what they name, never on top of another label or a line.
+
+Write a single self-contained SVG:
+- <svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">.
+- The board is {board}: paint it as the background, faint smudges of old lessons welcome. Chalk colours: white
+  {chalk} (the objects), yellow {yellow} (the main idea, what happens), blue {blue} (water, cold, the second thing),
+  grey {dim} (guides, background). Red only for heat or danger. Low-opacity fills, hatching and gradients are welcome,
+  so objects read as solid things.
+- A chalk look: a filter with feTurbulence + feDisplacementMap (scale about 2-3) on the drawing, so lines look drawn
+  in chalk. Lines 4-8 px, heavier for what matters.
+- Text: font-family "Caveat" (a chalk hand, loaded for you), about 52-72 px; "Inter" for numbers.
+- Use the whole board, the main objects big. Everything inside 40 px of the edges. Keep the bottom-right corner
+  (x > {cx} and y > {cy}) EMPTY: the app's buttons cover it.{title}
+- Animate with CSS @keyframes in a <style> block. TIMING: the words are numbered (below), and the page sets the CSS
+  variable --w1 to the second word 1 is said, --w2 to word 2, and so on, and --d to the shot's length. Start each
+  step on its word: animation-delay: var(--w7), or calc(var(--w7) + 0.2s). Give each step its own animation with a
+  fixed duration in seconds; repeat a motion with animation-iteration-count, never with one long keyframe list over
+  the whole shot (its length isn't known yet). Use animation-fill-mode: both. Draw-on strokes
+  (pathLength="1", stroke-dasharray: 1, stroke-dashoffset 1 -> 0) for things being drawn, then real motion (transform
+  with transform-box: fill-box and a transform-origin) for the {subject}. The first objects are there within the
+  first half second; nothing is finished before the voice gets to it; nothing stands still for long.
+- True: arrows and motion the way things really go, nothing the {subject} gets wrong, and nothing the words don't say.
+- No JavaScript, no event attributes, no external files or links, no <image>, no foreignObject.
+
+Answer with the SVG only, from <svg to </svg>: no JSON, no fence, nothing before or after."""
+
+SVG_REVIEW = """Now you see your drawing as filmed: a contact sheet of {n} frames, left to right then top to bottom, at
+{times} (timed at the usual pace of speech). Judge it as a viewer on a phone with the sound off, against what the words
+say at each moment. Fix: motion too small or too quick to see, anything nobody would recognise, labels overlapping each
+other or the drawing, an empty or crowded board, the main action not standing out, the {subject} shown wrong, a moment
+where the picture says something other than the words, anything in the bottom-right corner. If it works, answer
+just OK. Otherwise list the problems, one per line starting with "- ", then the whole improved SVG, from <svg to </svg>."""
+
+SVG_CHANGE = """The person who owns this video asked for a change to your drawing: "{ask}". Make that change to the SVG
+below, keeping everything else as it is unless the change needs it. The same rules apply.
+
+Your SVG:
+{svg}"""
+
+SVG_ON_TOP = """This drawing goes on with an earlier one already on the board. Keep everything of the earlier SVG below,
+there and still from the first frame (no draw-on for it), and add what these words add, in the free space and beside
+what it belongs to, timed to these words. Return the whole SVG.
+
+The earlier SVG:
+{svg}"""
+
+
+def _svg_prompt(title: str) -> str:
+    from .diagrams import BLUE, BOARD, CHALK, DIM, YELLOW, H, W
+
+    def hexed(c: tuple[int, int, int]) -> str:
+        return "#{:02x}{:02x}{:02x}".format(*c)
+
+    return (channels.fill(SVG_DRAW).replace("{w}", str(W)).replace("{h}", str(H))
+            .replace("{board}", hexed(BOARD)).replace("{chalk}", hexed(CHALK)).replace("{yellow}", hexed(YELLOW))
+            .replace("{blue}", hexed(BLUE)).replace("{dim}", hexed(DIM))
+            .replace("{cx}", str(round(W * 0.88))).replace("{cy}", str(round(H * 0.86)))
+            .replace("{title}", f'\n- Write the title "{title}" across the top, in yellow, about 70 px.' if title else ""))
+
+
+def _svg_user(sentence: str, idea: str, script_text: str) -> str:
+    from . import svgfilm
+
+    said = svgfilm.words(sentence)
+    return ((f"The video's script, for context:\n{script_text}\n\n" if script_text else "")
+            + f"The words this drawing plays under: {sentence}\nNumbered: "
+            + " ".join(f"w{k}={w}" for k, w in enumerate(said, 1))
+            + f"\nAbout {svgfilm.guessed(len(said))} seconds in all.\nWhat to draw: {idea}\n")
+
+
+def draw_svg(sentence: str, idea: str, script_text: str = "", title: str = "", rounds: int = 1, keep: bool = False,
+             base: str = "", change: str = "", on_top: str = "") -> Sketch:
+    """An animated SVG drawing of `idea` for `sentence` by Opus (D219), filmed, looked at `rounds` times and fixed.
+    `base` with `change`: that drawing with the user's change made. `on_top`: an earlier drawing it goes on with.
+    The look-and-fix goes to Claude too (job "sketch"): the review job's Gemini rewrote Opus's drawings."""
+    from . import svgfilm
+    from .diagrams import BOARD, H, W
+
+    system, user = _svg_prompt(title), _svg_user(sentence, idea, script_text)
+    if base and change:
+        user += "\n" + SVG_CHANGE.replace("{ask}", change).replace("{svg}", base)
+    elif on_top:
+        user += "\n" + SVG_ON_TOP.replace("{svg}", on_top)
+    # The SVG as plain text, not in JSON: a 10,000-character drawing in a JSON string came back unreadable (a stray
+    # quote or line break), and its fix was lost.
+    try:
+        svg = svgfilm.clean(ask(system, user, None, temperature=0.4, job="sketch", keep=keep))
+    except ValueError as exc:
+        raise CreateError("the drawing came back unreadable") from exc
+    for _ in range(rounds):
+        try:
+            png, times = svgfilm.sheet(svg, sentence, BOARD, W, H)
+            look = (system + "\n\n" + channels.fill(SVG_REVIEW).replace("{n}", str(len(times)))
+                    .replace("{times}", ", ".join(f"{t} s" for t in times)))
+            review = ask(look, user + "\nYour SVG:\n" + svg, None, temperature=0.0, media=[(png, "image/png")],
+                         job="sketch", keep=True)
+        except Exception as exc:   # nobody to look, or it couldn't be filmed: keep what we have
+            log.info("create: drawing not reviewed (%s)", exc)
+            break
+        if "<svg" not in review:   # OK
+            break
+        log.info("create: drawing fixed: %s", " ".join(review[:review.find("<svg")].split())[:200])
+        try:
+            svg = svgfilm.clean(review)
+        except ValueError:   # the "fix" broke it: keep the one we had
+            break
+    return Sketch(title=title, svg=svg, grid=900, count=len(svgfilm.words(sentence)))
 
 
 class _Drawn(BaseModel):
@@ -353,7 +482,12 @@ def _prompt(text: str) -> str:
 
 def draw(sentence: str, idea: str, script_text: str = "", title: str = "", rounds: int = 2, keep: bool = False) -> Sketch:
     """A sketch of `idea` for `sentence`, checked by looking at it `rounds` times at most. `keep`: the same
-    question gets the same drawing, for one the build doesn't save in the script (D182)."""
+    question gets the same drawing, for one the build doesn't save in the script (D182). An animated SVG when a
+    browser here can film it (D219), else marks."""
+    from . import svgfilm
+
+    if svgfilm.ready():
+        return draw_svg(sentence, idea, script_text, title, keep=keep)
     user = (f"The video's script, for context:\n{script_text}\n\n" if script_text else "") + \
         f"Sentence: {sentence}\nWhat to draw: {idea}\n" + (f"Title over it: {title}\n" if title else "")
     try:
@@ -393,6 +527,10 @@ def draw_on(sentence: str, idea: str, earlier: Sketch, script_text: str = "") ->
     """The earlier sketch with this sentence's new marks added (D200), `base` counting the old ones. Not fitted or
     reviewed again: fitting would move the marks the viewer has already seen. ponytail: no look-and-fix pass on a
     building drawing; add one if they come out crowded."""
+    from . import svgfilm
+
+    if earlier.svg and svgfilm.ready():   # D219: the earlier SVG kept whole, the new parts added to it
+        return draw_svg(sentence, idea, script_text, on_top=earlier.svg)
     user = (f"The video's script, for context:\n{script_text}\n\n" if script_text else "") + \
         f"Sentence: {sentence}\nWhat to add: {idea}"
     prompt = _prompt(DRAW) + ON_TOP.replace("{marks}", json.dumps([m.model_dump(exclude_defaults=True) for m in earlier.marks]))
@@ -412,7 +550,7 @@ def draw_all(script) -> tuple[object, list[str]]:
 
     beats = list(script.beats)
     todo = [i for i, b in enumerate(beats) if b.visual.kind == "diagram" and b.visual.template == "sketch"
-            and not (b.visual.sketch and b.visual.sketch.marks) and not b.visual.clip]  # a clip of the user's: drawn only if needed
+            and not drawn(b.visual.sketch) and not b.visual.clip]  # a clip of the user's: drawn only if needed
     notes = []
 
     def one(i: int, earlier: Sketch | None = None):
@@ -421,6 +559,8 @@ def draw_all(script) -> tuple[object, list[str]]:
         v = beats[i].visual
         group = next((g for g in spans(script) if g[0] == i), [i])
         said = " ".join(beats[k].text for k in group)
+        if v.sketch and v.sketch.svg and v.sketch.ask:   # the user's change to the drawing (D219)
+            return draw_svg(said, v.idea, script.text, v.title, base=v.sketch.svg, change=v.sketch.ask)
         if earlier is not None:   # builds on an earlier drawing (D200)
             return draw_on(said, v.idea, earlier, script.text)
         return draw(said, v.idea, script.text, v.title)
@@ -430,7 +570,7 @@ def draw_all(script) -> tuple[object, list[str]]:
         done = list(pool.map(lambda i: (i, _safe(one, i)), [i for i in todo if i not in building]))
     # The building drawings last, in order, each on the drawing before it (this build's, else the saved one).
     for i in building:
-        before = [(j, b.visual.sketch) for j, b in enumerate(beats[:i]) if b.visual.sketch and b.visual.sketch.marks]
+        before = [(j, b.visual.sketch) for j, b in enumerate(beats[:i]) if drawn(b.visual.sketch)]
         before += [(j, s) for j, s in done if s is not None and j < i]
         earlier = max(before, key=lambda p: p[0])[1] if before else None   # none: drawn on a blank board
         done.append((i, _safe(lambda k, e=earlier: one(k, e), i)))

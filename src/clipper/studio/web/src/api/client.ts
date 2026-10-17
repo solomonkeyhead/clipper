@@ -730,7 +730,7 @@ export const createApi = {
                                 title?: string; labels?: string[]; texts?: string[]; caption?: string;
                                 frame?: number | null; directions?: string[]; marks?: { i: number; color?: string; flip?: boolean }[] }) =>
     send("POST", `/api/create/videos/${video}/part`, body),
-  redo: (video: number, body: { beat: number; want: "footage" | "drawing" | "undo"; note: string }) =>
+  redo: (video: number, body: { beat: number; want: "footage" | "drawing" | "change" | "undo"; note: string }) =>
     send("POST", `/api/create/videos/${video}/redo`, body),
   cancel: (video: number) => send<{ stopping: boolean }>("POST", `/api/create/videos/${video}/cancel`),
   build: (video: number) => send("POST", `/api/create/videos/${video}/build`),

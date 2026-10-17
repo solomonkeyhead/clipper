@@ -37,6 +37,12 @@ if __name__ == "__main__":
                 pick = {"id": f"pexels-{k}" if k == 1 else 4000000 + k, "url": "https://example.invalid/v.mp4", "width": 1080,
                         "height": 1920, "duration": 9, "tags": "microphone, studio", "thumb": "", "center": 0.5}
                 b = b.model_copy(update={"visual": b.visual.model_copy(update={"picked": [pick]})})
+            if k == 7:   # part 8, the last drawing: parts 3 and 6 keep their marks for the D180 checks
+                # D219: Opus's animated SVG, for "Change drawing" and its words.
+                from clipper.create.sketch import Sketch
+                svg = ("<svg xmlns='http://www.w3.org/2000/svg' width='1080' height='1120'><rect width='1080' height='1120' "
+                       "fill='#18181a'/><text x='300' y='300'>bone</text><text x='700' y='300'>air</text></svg>")
+                b = b.model_copy(update={"visual": b.visual.model_copy(update={"sketch": Sketch(svg=svg, count=6, grid=900)})})
             beats.append(b)
         store.update_video(vid, script={**script.model_copy(update={"beats": beats}).model_dump(), "take": 1})
         store.update_video(vid, status="built", voice=str(data / "v.mp3"), clip_id=clip_id,

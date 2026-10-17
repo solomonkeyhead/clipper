@@ -163,6 +163,21 @@ with sync_playwright() as p:
     page.get_by_label("Framing, part 1").select_option(label="Framed left")
     expect(page.get_by_label("Framing, part 1")).to_have_value("0.25")
     print("sketch colour, arrow and footage framing set by hand")
+    # D219: part 8 is an SVG drawing: its words edited by hand, and a change asked for in words
+    adjust_until("Drawing size, part 8")
+    page.locator("input[value='air']").fill("air only")
+    page.get_by_role("button", name="Save words").click()
+    choose(footage.nth(5)).get_by_label("What you'd rather see").fill("make the bone path thicker")
+    page.get_by_role("button", name="Change drawing").click()
+    for _ in range(20):
+        if page.evaluate("async () => (await (await fetch('/api/create')).json()).videos.some(v => {"
+                         " const s = (v.script?.beats || [])[7]?.visual?.sketch;"
+                         " return !!s && (s.svg || '').includes('air only') && s.ask === 'make the bone path thicker'; })"):
+            break
+        time.sleep(0.5)
+    else:
+        raise AssertionError("the SVG drawing's words or its change weren't saved")
+    print("SVG drawing: words changed and a change asked for")
     page.get_by_text("Captions", exact=True).first.click()
     caption = page.get_by_label("Caption for sentence 2")
     caption.fill("You think the recording lies.")

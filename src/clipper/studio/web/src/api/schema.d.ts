@@ -1207,7 +1207,8 @@ export interface paths {
          * Create Redo
          * @description Ask for a new picture on one sentence of a finished video; everything else stays as
          *     it was built. `want`: "footage" (another stock clip; the one used is turned down),
-         *     "drawing" (a new chalk drawing), or "undo" (back to what it had). `note`: optional words,
+         *     "drawing" (a new chalk drawing), "change" (an SVG drawing changed as `note` says, D219), or "undo" (back to
+         *     what it had). `note`: optional words,
          *     used as the footage search or as what to draw.
          */
         post: operations["create_redo_api_create_videos__video_id__redo_post"];

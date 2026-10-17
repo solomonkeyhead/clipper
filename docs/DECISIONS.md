@@ -3771,3 +3771,28 @@ their transcripts and frames, then a research report; Marc picked what to build.
   something to do while it loops, and something to say in the comments. Harmless, never advice (the health rule).
 - A physics channel still on D156's rules word for word moves to D218's; one with its own edits keeps them.
 - To judge: compare "stayed to watch" and average percentage viewed on the next batch with the last one.
+
+## D219: Opus draws the sketches as animated SVG, filmed in a browser (2026-10-16)
+- Marc asked why the drawings looked basic. Opus drew them, but through a keyhole: a JSON list of 4-14 marks (lines,
+  arrows, Lucide app icons) on a grid, never seen until rendered, all one thin stroke, and "animation" meant parts
+  appearing on their words. The prompt asked for "two to four things" with a five-mark example as "the size and the
+  spirit". And the look-and-fix went to the review job, Gemini first: 26 of 84 fixes were Gemini Flash rewriting
+  Opus's drawing.
+- Now Opus writes each sketch as one SVG (`sketch.draw_svg`): cut-aways, fills, a chalk filter, the Caveat hand, and
+  CSS animations that show the physics move (the pad squeezes the water out, rides on it, gets dragged and snaps
+  back). Timing is by word: the page sets `--w1`, `--w2`... to when each word is said and `--d` to the shot's
+  length, so a drawing keeps time with whatever voice is recorded after it is drawn.
+- `svgfilm.py` films it: the SVG in a page in Edge (or Chrome, or Playwright's Chromium) through Playwright, every
+  animation paused and set to each frame's moment, screenshot by screenshot, into the usual drawing panel. A
+  10.9 s drawing films in about 30 s. Fonts go into the page as data: from a file they didn't load (Times).
+- Look-and-fix: Opus sees a contact sheet of 10 frames, timed at the usual pace, and returns a fixed SVG or OK. Both
+  calls are job "sketch" (Claude). The SVG comes back as plain text: inside JSON, a 10,000-character drawing came
+  back unreadable and the fix was lost. One draw and one fix took about 3 minutes on the plan.
+- `svgfilm.clean` keeps only the <svg>: no scripts, event attributes, foreignObject, @import or outside url()s.
+- By hand (D120): "Change drawing" keeps the drawing and asks Opus to change it as your words say (`want: change`,
+  `sketch.ask`, made on the next build); the drawing's words are edited in Adjust as before; New drawing and Undo
+  as before. A machine with no browser draws the old marks. Tests run as if there were none (conftest), except
+  test_svg_drawings.py, which films a real drawing when it can.
+- Asked: Opus or a video generation API? Opus. The drawings are free on the plan, exact to the physics and the
+  words, checkable by the fact check, and editable. Video models charge per second, get mechanisms and labels
+  wrong, and can't land a motion on a word.

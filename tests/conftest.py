@@ -37,6 +37,15 @@ def _no_real_claude_code(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _sketches_as_marks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sketches drawn as marks, as on a machine without a browser, so a test runs the same everywhere; the SVG
+    drawings (D219) have their own tests, which film with the real browser when there is one."""
+    from clipper.create import svgfilm
+
+    monkeypatch.setattr(svgfilm, "ready", lambda: False)
+
+
+@pytest.fixture(autouse=True)
 def _no_ratings_from_the_real_library(monkeypatch: pytest.MonkeyPatch) -> None:
     """Runs learn from the user's ratings in data/clipper.db; tests must not."""
     from clipper import runner

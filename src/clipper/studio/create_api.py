@@ -946,7 +946,8 @@ def routes(app: FastAPI, publish) -> None:
     def create_redo(video_id: int, body: dict) -> dict:
         """Ask for a new picture on one sentence of a finished video; everything else stays as
         it was built. `want`: "footage" (another stock clip; the one used is turned down),
-        "drawing" (a new chalk drawing), or "undo" (back to what it had). `note`: optional words,
+        "drawing" (a new chalk drawing), "change" (an SVG drawing changed as `note` says, D219), or "undo" (back to
+        what it had). `note`: optional words,
         used as the footage search or as what to draw."""
         from ..create.script import _query_from
 
@@ -961,6 +962,11 @@ def routes(app: FastAPI, publish) -> None:
             if not v.previous:
                 raise HTTPException(400, "nothing to undo on that sentence")
             new = type(v).model_validate({**v.previous, "previous": None, "redo": False})
+        elif want == "change":   # the drawing kept and changed as the note says, at the next build (D219)
+            if not (v.sketch and v.sketch.svg) or not note:
+                raise HTTPException(400, "say what to change, on a drawing")
+            new = v.model_copy(update={"manual": True, "previous": v.previous or v.model_dump(exclude={"previous"}),
+                                       "sketch": v.sketch.model_copy(update={"ask": note})})
         elif want in ("footage", "drawing"):
             before = v.model_dump(exclude={"previous"})
             common = {"hold": False, "manual": True, "redo": True, "previous": v.previous or before, "clip": ""}
@@ -976,7 +982,7 @@ def routes(app: FastAPI, publish) -> None:
                 new = v.model_copy(update={**common, "kind": "diagram", "template": "sketch", "idea": idea,
                                            "sketch": None, "picked": []})
         else:
-            raise HTTPException(400, "want is footage, drawing or undo")
+            raise HTTPException(400, "want is footage, drawing, change or undo")
         beats = list(script.beats)
         beats[beat - 1] = b.model_copy(update={"visual": new})
         _put_script(row, script.model_copy(update={"beats": beats}))
@@ -1121,7 +1127,11 @@ def routes(app: FastAPI, publish) -> None:
             change["title"] = words(body["title"])
         if "labels" in body:
             change["labels"] = [words(x) for x in body.get("labels") or []][:8]
-        if "texts" in body and v.sketch:
+        if "texts" in body and v.sketch and v.sketch.svg:   # an SVG drawing's words, in order (D219)
+            from ..create.svgfilm import set_texts
+
+            change["sketch"] = v.sketch.model_copy(update={"svg": set_texts(v.sketch.svg, [words(x) for x in body.get("texts") or []])})
+        elif "texts" in body and v.sketch:
             texts = iter([words(x) for x in body.get("texts") or []])
             marks = [m.model_copy(update={"text": next(texts, m.text) or m.text}) if m.kind == "text" else m
                      for m in v.sketch.marks]

@@ -23,10 +23,15 @@ const WAYS_ROUND = ["up", "down", "left", "right"];
 const INKS: [string, string][] = [["chalk", "white"], ["yellow", "yellow"], ["blue", "blue"], ["red", "red"], ["dim", "grey"]];
 
 type Mark = { kind: string; text?: string; color?: string };
-const sketchOf = (v: CreateVisual) => v.sketch as { grid?: number; marks?: Mark[] } | null | undefined;
+const sketchOf = (v: CreateVisual) => v.sketch as { grid?: number; marks?: Mark[]; svg?: string } | null | undefined;
+/** The words written on an SVG drawing, in order (D219), as the server reads them. */
+const svgTexts = (svg: string) =>
+  Array.from(new DOMParser().parseFromString(svg, "image/svg+xml").querySelectorAll("text")).map((t) => (t.textContent ?? "").split(/\s+/).filter(Boolean).join(" "));
 /** The words on a drawing a user can change: a sketch's labels, or a template's title and labels. */
 function wordsOf(v: CreateVisual): { title: string | null; words: string[] } {
   if (v.kind !== "diagram") return { title: null, words: [] };
+  const svg = v.template === "sketch" ? sketchOf(v)?.svg : undefined;
+  if (svg) return { title: null, words: svgTexts(svg) };
   if (v.template === "sketch") return { title: null, words: (sketchOf(v)?.marks ?? []).filter((m) => m.kind === "text").map((m) => m.text ?? "") };
   return { title: v.title, words: v.template === "card" ? [] : v.labels ?? [] };
 }
@@ -211,7 +216,7 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
     return v && v.kind === "stock" && !v.clip && !v.redo && !(v.picked?.length);
   });
 
-  const ask = async (beat: number, want: "footage" | "drawing" | "undo") => {
+  const ask = async (beat: number, want: "footage" | "drawing" | "change" | "undo") => {
     setBusy(`${beat}-${want}`);
     try {
       await createApi.redo(video.id, { beat, want, note: want === "undo" ? "" : notes[beat] ?? "" });
@@ -362,6 +367,14 @@ export function ShotReview({ video, seek, onRebuild, rebuilding, now = null }: {
                       {busy === `${first}-drawing` ? <Loader2 className="size-3.5 animate-spin" /> : <Shapes className="size-3.5" />} New drawing
                     </Button>
                   </Tip>}
+                  {drawings && v.template === "sketch" && !!sketchOf(v)?.svg && (
+                    <Tip label="Keep this drawing and change what your words say, such as: make the spring bigger. Made on the next build.">
+                      <Button size="sm" variant="secondary" disabled={busy !== null || rebuilding || !(notes[first] ?? "").trim()}
+                              onClick={() => ask(first, "change")}>
+                        {busy === `${first}-change` ? <Loader2 className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />} Change drawing
+                      </Button>
+                    </Tip>
+                  )}
                   {v.kind === "stock" && !v.clip && (
                     <Tip label="How the camera moves on this part's footage. Automatic takes the moves in turn.">
                       <select aria-label={`Camera, part ${first}`} value={v.camera ?? ""} disabled={busy !== null || rebuilding}
