@@ -8,7 +8,6 @@ run in the background too, one video at a time, telling the page how far along t
 from __future__ import annotations
 
 import asyncio
-import functools
 import math
 import re
 import threading
@@ -146,7 +145,7 @@ def _archive_posted(videos: list[dict], posted: dict[int, dict]) -> None:
 
 
 def _view() -> dict:
-    from ..create import packs, store
+    from ..create import store
 
     ch = channels.load()
     videos = store.videos()
@@ -187,7 +186,6 @@ def _view() -> dict:
                         "niche": ch.niche, "subject": ch.subject, "music": ch.music, "sfx": ch.sfx,
                         "short_takes": ch.short_takes, "poses": list(ch.poses)},
             "channels": [{"slug": c.slug, "name": c.name, "handle": c.handle, "pack": c.pack} for c in channels.all_channels()],
-            "packs": [{"key": p.key, "label": p.label, "about": p.about, "drawings": p.drawings} for p in packs.PACKS.values()],
             # Ideas already made into a Short (or one of the channel's own examples) don't show (D154).
             "topics": [t for t in store.topics()
                        if t.get("sent_back") or not topics_mod.made_already(t["question"], made)],
@@ -1207,60 +1205,6 @@ def routes(app: FastAPI, publish) -> None:
         except (subprocess.SubprocessError, OSError) as exc:
             raise HTTPException(500, "couldn't read a frame") from exc
         return Response(jpg, media_type="image/jpeg", headers={"Cache-Control": "max-age=60"})
-
-    # ---------- ready-made scripts that ship with Clipper (D121) ----------
-
-    @functools.cache
-    def _ready() -> dict[str, dict]:
-        import json as _json
-
-        from ..create.script import Script
-
-        found = {}
-        folder = Path(__file__).resolve().parent.parent / "create" / "library"
-        for path in sorted(folder.glob("*.json")):
-            try:
-                data = _json.loads(path.read_text(encoding="utf-8"))
-                found[path.stem] = {"about": str(data.get("about", "")), "script": Script.model_validate(data["script"])}
-            except (OSError, ValueError, KeyError):
-                log.warning("create: unreadable ready-made script %s", path.name)
-        return found
-
-    @app.get("/api/create/ready")
-    def create_ready() -> list[dict]:
-        """Scripts that come with Clipper, written and drawn already: nothing to wait for. They are
-        physics, so only a physics channel is offered them (D146)."""
-        found = _ready() if channels.load().pack == "physics" else {}
-        # An idea that is a ready-made script's question, reworded, isn't offered twice (D133).
-        from difflib import SequenceMatcher
-
-        titles = [r["script"].title.lower() for r in found.values()]
-        for t in store.topics():   # one the owner sent back stays (D190)
-            if not t.get("sent_back") and any(SequenceMatcher(None, t["question"].lower(), x).ratio() >= 0.75 for x in titles):
-                store.set_topic(t["id"], "used")
-        made: dict[str, list[dict]] = {}
-        for v in store.videos():
-            name = v.get("ready") or ""
-            if not name and v["topic_id"] is None and v["check_notes"].startswith("A ready-made script"):
-                # Made before videos named their ready-made script (D131): known by its title.
-                name = next((n for n, r in found.items() if r["script"].title == v["script"].get("title")), "")
-                if name:
-                    store.update_video(v["id"], ready=name)
-            if name:
-                made.setdefault(name, []).append({"id": v["id"], "archived": bool(v.get("archived_at")),
-                                                  "status": v["status"]})
-        return [{"name": name, "title": r["script"].title, "about": r["about"], "words": r["script"].words,
-                 "made": made.get(name, [])}
-                for name, r in found.items()]
-
-    @app.post("/api/create/ready/{name}")
-    def create_from_ready(name: str) -> dict:
-        found = _ready().get(name)
-        if found is None:
-            raise HTTPException(404, "no such ready-made script")
-        return {"id": store.add_video(None, found["script"].model_dump(),
-                                      "A ready-made script: the words and the pictures are already done. "
-                                      "Footage is searched for when you build; edit anything you like.", ready=name)}
 
     @app.post("/api/create/videos/{video_id}/archive")
     def create_archive(video_id: int, body: dict) -> dict:

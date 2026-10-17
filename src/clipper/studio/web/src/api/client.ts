@@ -654,15 +654,10 @@ export interface CreateVideo {
   redo?: boolean;
 }
 export interface CreatePost { platform: string; url: string; posted_at: string | null; views: number | null }
-export interface ReadyScript {
-  name: string; title: string; about: string; words: number;
-  made: { id: number; archived: boolean; status: CreateVideo["status"] }[];
-}
 export interface CreateView {
   channel: { slug: string; name: string; handle: string; voice: string; campaign: string; words_per_second: number;
              pack: string; drawings: boolean; check_name: string; niche: string; subject: string; music?: boolean; sfx?: boolean; poses?: string[] };
   channels: { slug: string; name: string; handle: string; pack: string }[];
-  packs: { key: string; label: string; about: string; drawings: boolean }[];
   topics: CreateTopic[]; videos: CreateVideo[];
 }
 
@@ -703,7 +698,7 @@ export interface ChannelEdit {
   short_takes?: boolean;
 }
 export const createApi = {
-  channelNew: (body: { name: string; pack: string; handle?: string; niche?: string; voice?: string }) =>
+  channelNew: (body: { name: string; handle?: string; niche?: string; voice?: string }) =>
     send<{ slug: string }>("POST", "/api/create/channels", body),
   channelEdit: (slug: string, body: ChannelEdit) => send("PUT", `/api/create/channels/${slug}`, body),
   channelActive: (slug: string) => send("PUT", "/api/create/channel/active", { slug }),
@@ -738,14 +733,12 @@ export const createApi = {
   remove: (video: number, clip = false) => send("DELETE", `/api/create/videos/${video}${clip ? "?clip=true" : ""}`),
   own: (body: { title: string; text: string; description: string; hashtags: string; plan: boolean }) =>
     send<{ id: number }>("POST", "/api/create/videos", body),
-  ready: () => fetch("/api/create/ready").then((r) => r.json() as Promise<ReadyScript[]>),
   archive: (video: number, archived: boolean) => send("POST", `/api/create/videos/${video}/archive`, { archived }),
   /** The earlier takes, oldest first, and one back in place (D199). */
   takes: (video: number) => send<{ index: number; why: string; at: string; title: string; lines: string[] }[]>("GET", `/api/create/videos/${video}/takes`),
   useTake: (video: number, k: number) => send("POST", `/api/create/videos/${video}/takes/${k}/use`),
   /** Back to the idea board, from any stage (D190): the idea is new again, the video goes as a delete does. */
   toIdeas: (video: number) => send("POST", `/api/create/videos/${video}/to-ideas`),
-  useReady: (name: string) => send<{ id: number }>("POST", `/api/create/ready/${encodeURIComponent(name)}`),
   plan: (video: number) => send("POST", `/api/create/videos/${video}/plan`),
   check: (video: number) => send<{ notes: string }>("POST", `/api/create/videos/${video}/check`),
   clipAdd: async (video: number, file: File) => {

@@ -14,7 +14,7 @@ from clipper.create.script import Beat, Script, Visual
 
 @pytest.fixture(autouse=True)
 def _physics_channel(data_root):
-    """These tests are about the physics channel's ready-made script and archive (D146)."""
+    """These tests are about the physics channel's own scripts and archive (D146)."""
     from clipper.create import channel
 
     channel.save(channel.make("physics", "German Professor", "@German.Professor"))
@@ -122,32 +122,6 @@ def test_endpoints_for_a_script_of_your_own(client, monkeypatch):
     store.update_video(row["id"], status="building")
     assert client.post(f"/api/create/videos/{row['id']}/plan").status_code == 409
     assert json.loads(json.dumps(store.video(row["id"])["script"]))["title"] == "Bone"
-
-
-def test_the_ready_made_script_is_sound(client):
-    """The bundled script reads right, its drawings are on the board, and it can be started."""
-    from clipper.create import store
-    from clipper.create.diagrams import frame
-
-    listed = client.get("/api/create/ready").json()
-    assert [r["name"] for r in listed] == ["voice-on-a-recording"]
-    assert listed[0]["title"] == "Why does your voice sound so different on a recording?" and 80 <= listed[0]["words"] <= 125
-    made = client.post("/api/create/ready/voice-on-a-recording")
-    assert made.status_code == 200
-    row = store.video(made.json()["id"])
-    script = Script.model_validate(row["script"])
-    assert row["topic_id"] is None and len(script.beats) == 9 and len(script.hashtags) == 3
-    assert all(len(b.text.split()) <= 16 for b in script.beats) and len(script.beats[0].text.split()) <= 14
-    for b in script.beats:
-        assert b.emphasis, b.text                         # a highlight word that is really in the sentence
-        if b.visual.kind == "stock":
-            assert b.visual.queries and b.visual.card
-        elif b.visual.template == "sketch":
-            marks = b.visual.sketch.marks
-            assert len(marks) >= 4 and all(30 <= v <= 970 for m in marks if m.kind != "text"
-                                           for v in (m.xy[:2] if m.kind == "circle" else m.xy))
-            frame(b.visual, 4.0, 4.0)                      # draws without error
-    assert client.post("/api/create/ready/nope").status_code == 404
 
 
 # ---------- cancelling a build, footage with no model to judge it (D122) ----------
@@ -633,8 +607,8 @@ def test_posted_videos_move_to_the_archive_and_can_come_back(client, monkeypatch
     from clipper.learn import log as perf
     from clipper.studio import db
 
-    found = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
-    marked = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
+    found = client.post("/api/create/videos", json={"text": "Sound goes through bone. It sounds deeper to you."}).json()["id"]
+    marked = client.post("/api/create/videos", json={"text": "Sound goes through bone. It sounds deeper to you."}).json()["id"]
     draft = client.post("/api/create/videos", json={"text": "Sound goes through bone. It sounds deeper to you."}).json()["id"]
     _finished(store, db, found)
     _finished(store, db, marked, status="posted")
@@ -663,30 +637,17 @@ def test_posted_videos_move_to_the_archive_and_can_come_back(client, monkeypatch
     assert client.post(f"/api/create/videos/{draft}/archive", json={"archived": True}).status_code == 409
     assert client.post("/api/create/videos/9999/archive", json={"archived": True}).status_code == 404
 
-    # The ready-made list says what was made from it and what's archived.
-    ready = next(r for r in client.get("/api/create/ready").json() if r["name"] == "voice-on-a-recording")
-    assert {m["id"]: m["archived"] for m in ready["made"]} == {found: False, marked: True}
-
 
 def test_a_build_in_progress_isnt_archived_until_it_finishes(client, monkeypatch):
     from clipper.create import store
     from clipper.studio import db
 
-    vid = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
+    vid = client.post("/api/create/videos", json={"text": "Sound goes through bone. It sounds deeper to you."}).json()["id"]
     _finished(store, db, vid, status="posted")
     store.update_video(vid, status="building")
     assert not next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)["archived"]
     store.update_video(vid, status="built")
     assert next(v for v in client.get("/api/create").json()["videos"] if v["id"] == vid)["archived"]
-
-
-def test_videos_made_before_d131_find_their_ready_made_script(client):
-    from clipper.create import store
-
-    made = client.post("/api/create/ready/voice-on-a-recording").json()["id"]
-    store.update_video(made, ready="")            # as an older version saved it
-    ready = next(r for r in client.get("/api/create/ready").json() if r["name"] == "voice-on-a-recording")
-    assert [m["id"] for m in ready["made"]] == [made] and store.video(made)["ready"] == "voice-on-a-recording"
 
 
 def test_nothing_changes_a_video_under_a_running_build(client, tmp_path):

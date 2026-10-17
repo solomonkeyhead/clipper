@@ -10,7 +10,7 @@ import {
   createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual,
 } from "@/api/client";
 import { JobProgress, type Step } from "@/components/progress";
-import { Button, CaptionTitle, Card, Chip, EmptyState, MenuItem, MoreMenu, Skeleton, Tip } from "@/components/ui";
+import { Button, CaptionTitle, Card, EmptyState, MenuItem, MoreMenu, Skeleton, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, cn, copyText, formatCount } from "@/lib/utils";
 import { ChannelBar, NewChannel } from "./ChannelPanel";
@@ -52,7 +52,7 @@ export function CreatePage() {
     return (
       <div className="fade-in flex max-w-3xl flex-col gap-6">
         <CaptionTitle text="Make a Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
-        <NewChannel data={data} onDone={() => undefined} first />
+        <NewChannel onDone={() => undefined} first />
       </div>
     );
   }
@@ -242,15 +242,13 @@ function AIStrip() {
   );
 }
 
-/** One place to start a Short (D200): your own idea for the AI to write, your own words, or a ready-made script.
- *  The ideas the planner offers are the list beside it. Before this there were three cards with near-identical names. */
+/** One place to start a Short (D200): your own idea for the AI to write, or your own words. The ideas the planner
+ *  offers are the list beside it. The ready-made scripts were the owner's own channel's and went (D220). */
 function NewShort({ wps, folded = false }: { wps: number; folded?: boolean }) {
-  const [way, setWay] = useState<"idea" | "words" | "ready">("idea");
+  const [way, setWay] = useState<"idea" | "words">("idea");
   const [shown, setShown] = useState(false);
-  const { data: ready = [] } = useQuery({ queryKey: ["create", "ready"], queryFn: createApi.ready, staleTime: 60_000 });
-  const ways: ["idea" | "words" | "ready", string, string][] = [
+  const ways: ["idea" | "words", string, string][] = [
     ["idea", "My idea, AI writes it", "Type the question"], ["words", "My own words", "Paste your script"],
-    ...(ready.length > 0 ? [["ready", "Ready-made", "Written and drawn already"] as ["ready", string, string]] : []),
   ];
   if (folded && !shown) {
     return <Button variant="secondary" className="self-start" onClick={() => setShown(true)} aria-expanded={false}><Plus className="size-4" /> New Short</Button>;
@@ -258,7 +256,7 @@ function NewShort({ wps, folded = false }: { wps: number; folded?: boolean }) {
   return (
     <Card className="flex flex-col gap-3 p-4">
       <h2 className="flex items-center gap-2 text-md"><Plus className="size-4 text-muted" /> New Short</h2>
-      <div className={cn("grid gap-2", ways.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")} role="radiogroup" aria-label="How to start a Short">
+      <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="How to start a Short">
         {ways.map(([key, title, hint]) => (
           <button key={key} type="button" role="radio" aria-checked={way === key} onClick={() => setWay(key)}
                   className={cn("flex flex-col items-start gap-0.5 rounded-sm px-3 py-2.5 text-left transition-colors",
@@ -270,7 +268,6 @@ function NewShort({ wps, folded = false }: { wps: number; folded?: boolean }) {
       </div>
       {way === "idea" && <MyIdea />}
       {way === "words" && <OwnWords wps={wps} />}
-      {way === "ready" && <ReadyMade ready={ready} />}
       {/* Below xl the ideas wait under the videos (D206): the hint says where, and goes there (D213). */}
       <p className="text-xs text-subtle">Or press Write it on one of the ideas<span className="xl:hidden">{" "}
         (<a href="#ideas" onClick={(e) => { e.preventDefault(); document.getElementById("ideas")?.scrollIntoView({ behavior: "smooth" }); }}
@@ -360,47 +357,6 @@ function OwnWords({ wps }: { wps: number }) {
       <Button variant={text.trim() ? "primary" : "secondary"} className="self-start" disabled={busy || !text.trim()} onClick={() => create()}>
         {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />} {busy ? (plan ? "Planning…" : "Creating…") : "Use my own words"}
       </Button>
-    </div>
-  );
-}
-
-/** The scripts that ship written and drawn already, and what's been made from each. */
-function ReadyMade({ ready }: { ready: { name: string; title: string; about: string; made: { archived?: boolean }[] }[] }) {
-  const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const start = async (name: string) => {
-    setBusy(true);
-    try {
-      await createApi.useReady(name);
-      await qc.invalidateQueries({ queryKey: ["create"] });
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="flex flex-col gap-2">
-      {ready.map((r) => {
-        // What's been made from it already (D131): posted ones are in the Archive.
-        const posted = r.made.filter((m) => m.archived).length;
-        const going = r.made.length - posted;
-        return (
-          <div key={r.name} className="flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-sm font-medium">{r.title}</span>
-                {posted > 0 && <Chip tone="success" className="h-5 shrink-0 text-[12px]">in the Archive</Chip>}
-                {going > 0 && <Chip className="h-5 shrink-0 text-[12px]">{going === 1 ? "made, below" : `${going} made, below`}</Chip>}
-              </div>
-              <div className="line-clamp-1 text-xs text-muted">{r.about}</div>
-            </div>
-            <Button size="sm" variant={r.made.length ? "secondary" : "primary"} disabled={busy} onClick={() => start(r.name)}>
-              {r.made.length ? "Make again" : "Use it"}
-            </Button>
-          </div>
-        );
-      })}
     </div>
   );
 }

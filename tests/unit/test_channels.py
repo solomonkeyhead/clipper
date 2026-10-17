@@ -66,6 +66,13 @@ def test_there_is_a_pack_to_start_from_and_it_names_its_channel():
     assert "Old Tales" in made.persona and made.campaign == "old-tales"
 
 
+def test_what_a_channel_is_about_is_its_subject():
+    """D220: the page asks only what a new channel is about, so that is what its prompts name."""
+    made = channel.make(packs.DEFAULT, "Deep Blue", niche="strange facts about the ocean")
+    assert made.subject == made.areas == made.niche == "strange facts about the ocean"
+    assert channel.make(packs.DEFAULT, "Any").subject == packs.EXPLAINER.subject
+
+
 def test_a_video_with_no_voice_is_timed_at_the_channels_pace(tmp_path):
     import shutil
 

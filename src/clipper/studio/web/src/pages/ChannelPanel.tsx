@@ -4,7 +4,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { createApi, type ChannelEdit, type CreateView } from "@/api/client";
 import { Button, Card } from "@/components/ui";
-import { cn } from "@/lib/utils";
 
 const input = "h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none focus:border-line-strong";
 const area = "w-full rounded-md border border-line bg-surface-1 p-3 text-sm outline-none focus:border-line-strong";
@@ -19,19 +18,18 @@ function Field({ label, children, hint }: { label: string; children: React.React
   );
 }
 
-/** Make a channel from a niche pack (D146): its persona, rules and diagrams to start from, yours to change after. */
-export function NewChannel({ data, onDone, first = false }: { data: CreateView; onDone: () => void; first?: boolean }) {
+/** Make a channel (D146): a name, a handle and what it is about. Every channel starts from the general pack; the
+ *  kinds to pick from went (D220), one of them was the owner's own channel. Everything is yours to change after. */
+export function NewChannel({ onDone, first = false }: { onDone: () => void; first?: boolean }) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
-  const [pack, setPack] = useState(data.packs[0]?.key ?? "explainer");
   const [niche, setNiche] = useState("");
   const [busy, setBusy] = useState(false);
-  const chosen = data.packs.find((p) => p.key === pack);
   const make = async () => {
     setBusy(true);
     try {
-      await createApi.channelNew({ name, pack, handle, niche });
+      await createApi.channelNew({ name, handle, niche });
       await qc.invalidateQueries({ queryKey: ["create"] });
       toast.success("Channel made", { description: "Now get ideas for it, or write your own script." });
       onDone();
@@ -46,25 +44,15 @@ export function NewChannel({ data, onDone, first = false }: { data: CreateView; 
       <div>
         <h2 className="text-md font-semibold">{first ? "Set up your channel" : "A new channel"}</h2>
         <p className="mt-1 text-sm text-muted">
-          A channel is one of your own accounts that you make videos for. Pick the kind of videos it makes; you can edit every
-          rule after.
+          A channel is one of your own accounts that you make videos for. Say what it is about; you can change every rule
+          after, in Channel settings.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Channel name"><input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Fact Machine" /></Field>
         <Field label="Its handle" hint="So Clipper can find its posts and count their views."><input className={input} value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@factmachine" /></Field>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {data.packs.map((p) => (
-          <label key={p.key} className={cn("flex cursor-pointer flex-col gap-1 rounded-md border p-3", pack === p.key ? "border-line-strong bg-surface-3" : "border-line")}>
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              <input type="radio" name="pack" className="accent-[var(--text)]" checked={pack === p.key} onChange={() => setPack(p.key)} /> {p.label}
-            </span>
-            <span className="text-xs text-muted">{p.about}</span>
-          </label>
-        ))}
-      </div>
-      <Field label="What it is about (optional)" hint={chosen && !chosen.drawings ? "This kind uses real stock footage only, no drawings." : undefined}>
+      <Field label="What it is about" hint="Ideas, scripts and pictures follow it. Leave it empty for everyday questions on any subject.">
         <input className={input} value={niche} onChange={(e) => setNiche(e.target.value)} placeholder="e.g. strange facts about the ocean" />
       </Field>
       <div className="flex gap-2">
@@ -123,11 +111,11 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
       <Field label="The topics it covers"><input className={input} value={val("areas") as string} onChange={(e) => set({ areas: e.target.value })} /></Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Ideas should lean toward" hint="Steers every batch of ideas. Plain words are fine.">
-          <textarea className={area} rows={3} value={val("idea_focus") as string} placeholder="e.g. forces and motion, light, sound, heat, electricity: physics acting on you or on things you use"
+          <textarea className={area} rows={3} value={val("idea_focus") as string} placeholder="e.g. things people do every day without knowing why"
                     onChange={(e) => set({ idea_focus: e.target.value })} />
         </Field>
         <Field label="Ideas must never be about" hint="Skipped ideas also teach it what to avoid.">
-          <textarea className={area} rows={3} value={val("idea_avoid") as string} placeholder="e.g. biology, physiology, medicine, how the body works inside"
+          <textarea className={area} rows={3} value={val("idea_avoid") as string} placeholder="e.g. politics, medical advice"
                     onChange={(e) => set({ idea_avoid: e.target.value })} />
         </Field>
       </div>
@@ -137,7 +125,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
                     onChange={(e) => set({ script_focus: e.target.value })} />
         </Field>
         <Field label="Scripts must never" hint="Also applies to Another take.">
-          <textarea className={area} rows={3} value={val("script_avoid") as string} placeholder="e.g. mention biology, use puns, say 'basically'"
+          <textarea className={area} rows={3} value={val("script_avoid") as string} placeholder="e.g. use puns, say 'basically'"
                     onChange={(e) => set({ script_avoid: e.target.value })} />
         </Field>
       </div>
@@ -155,16 +143,16 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
         <Field label="Board colours"><select className={input} value={val("board") as string} onChange={(e) => set({ board: e.target.value })}>
           {BOARDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </select></Field>
-        <Field label="Sign-off" hint="Small, on screen for the last second. Empty: none."><input className={input} value={val("signoff") as string} placeholder="e.g. Class dismissed." onChange={(e) => set({ signoff: e.target.value })} /></Field>
+        <Field label="Sign-off" hint="Small, on screen for the last second. Empty: none."><input className={input} value={val("signoff") as string} placeholder="e.g. See you tomorrow." onChange={(e) => set({ signoff: e.target.value })} /></Field>
         <Field label="Character picture" hint="A file on this computer. Shown bottom left at the start. A transparent background is used as it is; any other is cut to a circle.">
-          <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\professor.png" onChange={(e) => set({ character: e.target.value })} /></Field>
+          <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\me.png" onChange={(e) => set({ character: e.target.value })} /></Field>
         <Field label="Reaction pictures (one per line)" hint="One of these at the punchline, a different one each video. Empty: the character picture.">
           <textarea className={area} rows={3} value={edit.reactionsText ?? data.reactions.join("\n")} onChange={(e) => set({ reactionsText: e.target.value })} /></Field>
-        <Field label="Poses (name = file, one per line)" hint="Clipper tags up to 4 sentences a video with one of these, shown bottom left for about 2 seconds. Names it knows: shocked, facepalm, aha, thinking, smug, shrug, deadpan, confused, nervous, whisper, laugh, coffee, grudge, proud. talking-1, talking-2 and so on take turns while he talks. A picture with an -open (mouth open) or -blink (eyes closed) version next to it, like professor-talking-1-open.png, talks and blinks.">
+        <Field label="Poses (name = file, one per line)" hint="Clipper tags up to 4 sentences a video with one of these, shown bottom left for about 2 seconds. Names it knows: shocked, facepalm, aha, thinking, smug, shrug, deadpan, confused, nervous, whisper, laugh, coffee, grudge, proud. talking-1, talking-2 and so on take turns while the voice talks. A picture with an -open (mouth open) or -blink (eyes closed) version next to it, like me-talking-1-open.png, talks and blinks.">
           <textarea className={area} rows={5} value={edit.posesText ?? Object.entries(data.poses ?? {}).map(([n, p]) => `${n} = ${p}`).join("\n")}
-                    placeholder="shocked = C:\Pictures\professor-shocked.png" onChange={(e) => set({ posesText: e.target.value })} /></Field>
+                    placeholder="shocked = C:\Pictures\me-shocked.png" onChange={(e) => set({ posesText: e.target.value })} /></Field>
         <Field label="Presenting picture" hint="Shown for a moment as the first drawing appears. Empty: none.">
-          <input className={input} value={val("presenter") as string} placeholder="e.g. C:\Pictures\professor-pointing.png" onChange={(e) => set({ presenter: e.target.value })} /></Field>
+          <input className={input} value={val("presenter") as string} placeholder="e.g. C:\Pictures\me-pointing.png" onChange={(e) => set({ presenter: e.target.value })} /></Field>
         <Field label="Watermark" hint="A small logo in the top right. Empty: none."><input className={input} value={val("watermark") as string} onChange={(e) => set({ watermark: e.target.value })} /></Field>
       </div>
       <label className="flex items-center gap-2 text-sm">
@@ -207,7 +195,7 @@ export function ChannelBar({ data }: { data: CreateView }) {
         <Button variant="ghost" size="sm" onClick={() => setPanel(panel === "edit" ? "" : "edit")}><Settings2 className="size-3.5" /> Channel settings</Button>
         <Button variant="ghost" size="sm" onClick={() => setPanel(panel === "new" ? "" : "new")}><Plus className="size-3.5" /> New channel</Button>
       </div>
-      {panel === "new" && <NewChannel data={data} onDone={() => setPanel("")} />}
+      {panel === "new" && <NewChannel onDone={() => setPanel("")} />}
       {panel === "edit" && <ChannelSettings slug={data.channel.slug} onClose={() => setPanel("")} />}
     </>
   );

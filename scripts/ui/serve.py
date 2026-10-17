@@ -1,4 +1,4 @@
-"""Clipper's real server on test data: one finished video from the ready-made script, a draft, and a posted one."""
+"""Clipper's real server on test data: one finished video from the test script, a draft, and a posted one."""
 import os, subprocess, sys
 from pathlib import Path
 # A build's drawing workers import this file again (D179): only a run of it sets anything up.
@@ -18,7 +18,13 @@ if __name__ == "__main__":
         # Channels live in the data folder since D145: the Professor's, as Marc has it.
         from clipper.create import channel as _channel
         _channel.save(_channel.make("physics", "German Professor"))
-        vid = c.post("/api/create/ready/voice-on-a-recording").json()["id"]
+        # A whole script, words and drawings, kept with the tests since the ready-made scripts went (D220).
+        import json as _j
+        _fixture = _j.loads((Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "voice-on-a-recording.json").read_text(encoding="utf-8"))
+        add = lambda: store.add_video(None, _fixture["script"], "Checked by the test setup: no problems.")
+        from clipper.create import build as _b   # the campaign file a first build writes: the channel's own page
+        _b._campaign(_channel.load())
+        vid = add()
         n = len(store.video(vid)["script"]["beats"])
         rel = "german-professor/001_voice.mp4"
         dest = library.clip_path(rel); dest.parent.mkdir(parents=True, exist_ok=True)
@@ -47,7 +53,7 @@ if __name__ == "__main__":
         store.update_video(vid, script={**script.model_copy(update={"beats": beats}).model_dump(), "take": 1})
         store.update_video(vid, status="built", voice=str(data / "v.mp3"), clip_id=clip_id,
                            timings={"words": [], "beats": [(i * 4.0, i * 4.0 + 4.0) for i in range(n)], "duration": n * 4.0, "matched": 1.0})
-        c.post("/api/create/ready/voice-on-a-recording")   # a second video, still a draft: the "active" one
+        add()   # a second video, still a draft: the "active" one
         # A small WebM for the footage previews: the open-source Chromium the walkthrough uses can't play
         # H.264 (Chrome and Edge can), so the hover test plays this instead (D130).
         rel2 = "german-professor/preview.webm"
@@ -57,7 +63,7 @@ if __name__ == "__main__":
             db.upsert_clip(con, {"campaign": "german-professor", "source_id": "test", "clip_id": "preview",
                                  "title": "Preview", "file": rel2, "caption": "c"})
         # A third, posted: marked posted in Clips, so it moves to the Archive by itself (D131).
-        posted = c.post("/api/create/ready/voice-on-a-recording").json()["id"]
+        posted = add()
         with db.connect() as con:
             pclip = db.upsert_clip(con, {"campaign": "german-professor", "source_id": "create", "clip_id": f"create-{posted}",
                                          "title": "Voice (posted)", "file": rel, "caption": "c"})

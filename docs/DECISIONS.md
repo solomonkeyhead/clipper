@@ -3796,3 +3796,14 @@ their transcripts and frames, then a research report; Marc picked what to build.
 - Asked: Opus or a video generation API? Opus. The drawings are free on the plan, exact to the physics and the
   words, checkable by the fact check, and editable. Video models charge per second, get mechanisms and labels
   wrong, and can't land a motion on a word.
+
+## D220 — Create for every kind of Short: no ready-made scripts, no channel kinds (2026-10-17)
+Marc: Create should work for any Short, and the Professor shouldn't be advertised to everyone.
+- The "Ready-made" way to start a Short is gone (page, `/api/create/ready`, `/api/create/ready/{name}`). Its one script
+  (the Professor's voice-on-a-recording) moved to `tests/fixtures/` for the UI test server.
+- New channel asks a name, a handle and "what it is about". The kind picker (explainer, stories, footage, physics) left
+  the page and `packs` left `/api/create`; every new channel starts from the explainer pack. What it is about now
+  also sets the channel's subject and topics (`channel.make`), which the prompts name. The physics pack stays in code,
+  so existing channels are unchanged.
+- Channel settings examples and hints no longer name the Professor or physics.
+- `scripts/ui/serve.py` writes the channel's campaign file as a first build does.

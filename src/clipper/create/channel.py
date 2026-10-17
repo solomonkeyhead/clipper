@@ -102,12 +102,13 @@ def slugify(name: str) -> str:
 
 
 def make(pack: str, name: str, handle: str = "", niche: str = "", **own) -> Channel:
-    """A new channel from a niche pack: its persona, rules, subject and diagrams, named for this channel."""
+    """A new channel from a niche pack: its persona, rules, subject and diagrams, named for this channel.
+    What it is about, when given, is the subject and the areas the prompts name (D220): the page asks only that."""
     p = packs.get(pack)
     slug = own.pop("slug", "") or slugify(name)
     return Channel(slug=slug, name=name, handle=handle, niche=niche or p.subject, pack=p.key,
-                   persona=p.persona.replace("{name}", name), rules=list(p.rules), subject=p.subject,
-                   expert=p.expert, areas=p.areas, abstract=p.abstract, hashtags=p.hashtags,
+                   persona=p.persona.replace("{name}", name), rules=list(p.rules), subject=niche or p.subject,
+                   expert=p.expert, areas=niche or p.areas, abstract=p.abstract, hashtags=p.hashtags,
                    drawings=p.drawings, templates=list(p.templates), words_per_second=p.words_per_second,
                    **_pack_limits(p),
                    campaign=own.pop("campaign", "") or slug, **own)
