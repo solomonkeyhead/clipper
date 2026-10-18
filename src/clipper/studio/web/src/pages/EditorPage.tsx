@@ -24,16 +24,17 @@ export function EditorPage() {
   if (search.clip === undefined && !(search.source && search.campaign)) {
     return <Message title="Nothing to edit" body={<>Open a clip's editor from the clip, or pick a video under <Link to="/new" className="link">New clips → I'll pick them</Link>.</>} />;
   }
-  if (error) return <Message title="Can't open the editor" body={(error as Error).message} />;
+  if (error) return <Message warn title="Can't open the editor" body={(error as Error).message} />;
   if (isLoading || !view) return <div className="flex flex-col gap-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-[60vh]" /></div>;
   if (!view.prepared) return <Preparing view={view} />;
   return <Workbench key={`${view.source_id}-${view.clip_id ?? "new"}`} view={view} />;
 }
 
-function Message({ title, body }: { title: string; body: ReactNode }) {
+function Message({ title, body, warn = false }: { title: string; body: ReactNode; warn?: boolean }) {
   return (
     <Card className="mx-auto mt-10 flex max-w-lg flex-col items-center gap-3 p-8 text-center">
-      <AlertTriangle className="size-6 text-warning" />
+      {/* The warning sign only for a real problem: "Nothing to edit" is just a place to start. */}
+      {warn && <AlertTriangle className="size-6 text-warning" />}
       <h1 className="text-lg font-semibold">{title}</h1>
       <p className="text-sm text-muted">{body}</p>
     </Card>

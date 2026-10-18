@@ -9,7 +9,7 @@ import {
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, cn, openBehind } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
-import { Button, CopyButton, Tip } from "./ui";
+import { Button, CopyButton, Tip, buttonClass } from "./ui";
 
 /**
  * Posting by hand, in one place (D77): the platforms' own upload pages, opened
@@ -68,8 +68,8 @@ export function PostPanel({ clip }: { clip: Clip }) {
   };
 
   return (
-    <section className="rounded-md border border-line p-3">
-      <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Post it</h3>
+    <section>
+      <h3 className="mb-2 font-sans text-xs font-semibold tracking-wide text-muted uppercase">Post it</h3>
       {!campaign?.own_channel && <BriefCheck clip={clip} />}   {/* your own channel has no brief (D221) */}
       <div className="flex flex-col gap-2.5 text-sm">
         {copies.length ? (
@@ -160,7 +160,7 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
   const name = SHORT[k] ?? UPLOAD[k]?.name ?? copy.platform;
   return (
     <div className="px-2.5 py-1.5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="flex w-[6.5rem] shrink-0 items-center gap-1.5 text-sm font-medium">
           <PlatformIcon platform={copy.platform} className="size-3.5" /> {name}
           <Tip label={failed.length ? `${failed.length} rule${failed.length > 1 ? "s" : ""} broken: click to see`
@@ -173,7 +173,7 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
           </Tip>
 
         </span>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="flex flex-1 items-center gap-1.5">
           {copy.title && <CopyButton text={copy.title} what={`${name} title`} label="Title"
                                      tip={<>Copy the title: <b>{copy.title}</b></>} />}
           {/* What the platform's upload page calls it: TikTok's "description" (campaign/rules.py TEXT_NAMES). */}
@@ -183,13 +183,13 @@ function PlatformRow({ copy, accounts, url, onOpen }: {
           {/* A real link, so middle-click and Ctrl-click work as usual too. */}
           <a href={url} target="_blank" rel="noopener noreferrer"
              onClick={(e) => { if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) { e.preventDefault(); onOpen(); } }}
-             className="inline-flex h-8 pointer-coarse:h-11 w-[8.5rem] shrink-0 items-center justify-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
+             className={cn(buttonClass("secondary", "sm"), "w-[8.5rem] shrink-0 px-2.5")}>
             Open {name} <ExternalLink className="size-3" />
           </a>
         </Tip>
       </div>
       {k === "instagram" && (   // in view, not only in a tooltip: every post was cut to a square (D194)
-        <p className="mt-1 pl-[7rem] text-xs text-warning">At the crop step, click the crop icon (bottom left) and pick <b>Original</b>, or Instagram cuts off the top and bottom.</p>
+        <p className="mt-1 text-xs text-warning sm:pl-[7rem]">At the crop step, click the crop icon (bottom left) and pick <b>Original</b>, or Instagram cuts off the top and bottom.</p>
       )}
       {accounts.length > 0 && (
         <p className="mt-1 flex flex-wrap items-center gap-1 pl-[7rem] text-xs text-muted">

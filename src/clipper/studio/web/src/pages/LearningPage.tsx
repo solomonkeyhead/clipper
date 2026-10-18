@@ -121,7 +121,7 @@ export function LearningPage() {
         </div>
         {report.reasons.length > 0 && (
           <div>
-            <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Reasons you give most</h3>
+            <h3 className="mb-1.5 font-sans text-xs font-semibold tracking-wide text-muted uppercase">Reasons you give most</h3>
             <div className="flex flex-wrap gap-1.5">
               {report.reasons.map((r) => (
                 <span key={r.key} className="text-xs text-muted">{r.label} <b className="tabular text-fg">{r.count}</b></span>
@@ -131,7 +131,7 @@ export function LearningPage() {
         )}
         {(report.edit_problems ?? []).length > 0 && (
           <div>
-            <h3 className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Edit problems you've flagged</h3>
+            <h3 className="mb-1 font-sans text-xs font-semibold tracking-wide text-muted uppercase">Edit problems you've flagged</h3>
             <p className="mb-1.5 text-xs text-subtle">About how a clip was made, not which moment: kept out of your taste so good moments aren't avoided.</p>
             <div className="flex flex-wrap gap-1.5">
               {(report.edit_problems ?? []).map((r) => (

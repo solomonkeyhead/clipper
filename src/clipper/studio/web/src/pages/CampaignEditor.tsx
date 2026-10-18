@@ -376,7 +376,7 @@ export function CampaignEditorPage() {
           <Field label="Language of the footage" hint="Captions, hooks and descriptions are written in it. Detect it finds it from the speech.">
             {(id) => (
               <select id={id} value={form.language} onChange={(e) => set("language", e.target.value)}
-                      className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm sm:w-1/3">
+                      className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm sm:w-1/3">
                 <option value="en">English</option><option value="auto">Detect it</option>
                 {[["es", "Spanish"], ["fr", "French"], ["de", "German"], ["pt", "Portuguese"], ["it", "Italian"], ["nl", "Dutch"], ["pl", "Polish"],
                   ["tr", "Turkish"], ["ru", "Russian"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"], ["ar", "Arabic"], ["hi", "Hindi"], ["id", "Indonesian"]]

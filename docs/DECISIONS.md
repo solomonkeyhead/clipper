@@ -3826,3 +3826,17 @@ Marc had every page clicked through for what a general user wouldn't need or und
 - Setup checklist: AI key, first video (a Short or clips), accounts. "Add a campaign" assumed clipping.
 - Smaller: "Summer Show S2" as the example name, no masked-word examples, no Whop env var names, the empty-state
   wording on Clips and the Post queue, and `/campaigns/new` no longer asks for `/api/campaigns/`.
+
+## D222 — Polish pass over every page: one button style, flat numbers, nothing off a phone screen (2026-10-17)
+- Every page was screenshotted at 1440 (dark) and 390 (light) and scanned for clipped text and sideways overflow.
+- Download, Open TikTok/Instagram/YouTube, Stats, Campaign page, Edit, Copy page, Open again and Download proof
+  pack were hand-made white outlined boxes; they use `buttonClass("secondary")` now, the grey slab of D215.
+- Post queue: on a narrow screen "Description" was cut to "Descripti". A platform's row now wraps, the Instagram
+  crop note is only indented from `sm`, and the Post it panel lost its extra box (its siblings are plain sections).
+- Campaign cards: Ready / Posted / Skipped / Views were boxed tiles inside the card; now flat `.num` numbers.
+- Headings: Settings groups (AI, Clipping...) and "Your channel" use `.row-head`; the small upper-case labels
+  (Post it, Caption, Posts...) are set in Sofia Sans, as the condensed face at 13px read like 10px.
+- Phone: the dashboard's Create card puts its button under the text; selects are capped at the screen width;
+  a left-aligned More menu near the right edge slides back on screen when it opens.
+- Smaller: "Nothing to edit" lost its warning sign (only "Can't open the editor" keeps it), and New clips' bottom
+  bar is as wide as the steps above it on a desktop.

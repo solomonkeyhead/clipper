@@ -56,15 +56,16 @@ function CampaignCard({ c }: { c: Campaign }) {
           </div>
         )}
       </div>
-      <div className="tabular grid grid-cols-4 gap-2 text-center">
+      {/* Numbers set flat on the card (DESIGN.md: no boxed metric tiles, no cards in cards). */}
+      <div className="tabular grid grid-cols-4 gap-3">
         {(c.submits
           // Live: posted or submitted (D196); "0 Submitted" read as nothing happening with 15 clips up.
           ? [["Ready", c.counts.ready], ["Live", c.counts.posted + c.counts.submitted], ["To submit", c.counts.posted - (c.counts.waiting ?? 0)], ["Views", formatCount(c.views)]]
           : [["Ready", c.counts.ready], ["Posted", c.counts.posted + c.counts.submitted], ["Skipped", c.counts.skipped], ["Views", formatCount(c.views)]]
         ).map(([label, value]) => (
-          <div key={label} className="rounded-md bg-surface-2 py-2">
-            <div className="text-md font-semibold">{value}</div>
-            <div className="truncate px-1 text-[12px] text-muted">{label}</div>
+          <div key={label} className="min-w-0">
+            <div className="num text-xl leading-none">{value}</div>
+            <div className="mt-1 truncate text-xs text-muted">{label}</div>
           </div>
         ))}
       </div>
@@ -118,7 +119,7 @@ export function CampaignsPage() {
         actions={<>
           {list.length > 1 && (
             <select value={sort} onChange={(e) => setSort(e.target.value as keyof typeof SORTS)} aria-label="Sort campaigns"
-                    className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+                    className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm">
               {Object.entries(SORTS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           )}
@@ -148,7 +149,7 @@ export function CampaignsPage() {
       {!showArchived && !isLoading && channels.length > 0 && (
         <section className="mt-8 flex flex-col gap-3">
           <div>
-            <h2 className="text-sm font-semibold">Your channel</h2>
+            <h2 className="row-head mb-1.5">Your channel</h2>
             <p className="text-sm text-muted">Your own videos, made in Create. Not a paid campaign, so no pay or rules.</p>
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">{channels.map((c) => <CampaignCard key={c.name} c={c} />)}</div>
@@ -364,20 +365,20 @@ export function CampaignPage() {
               </Link>)}
           {posts.length > 0 && (
             <Link to="/stats" search={{ campaign: c.name }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
+                  className={buttonClass()}>
               <BarChart3 className="size-4" /> Stats
             </Link>
           )}
           {brief?.campaign_url && (
             <a href={brief.campaign_url} target="_blank" rel="noopener noreferrer"
-               className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
+               className={buttonClass()}>
               <ExternalLink className="size-4" /> Campaign page
             </a>
           )}
           {/* Your own channel is changed in Create's Channel settings, not in the campaign form (D221). */}
           {c.has_brief && !c.own_channel && (
             <Link to="/campaigns/$name/edit" params={{ name: c.name }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3.5 text-sm font-medium hover:bg-surface-3">
+                  className={buttonClass()}>
               <Pencil className="size-4" /> Edit
             </Link>
           )}

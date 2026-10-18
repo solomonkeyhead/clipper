@@ -134,7 +134,7 @@ function ChannelCard({ quiet = false }: { quiet?: boolean }) {
   return (
     <Card className="flex flex-wrap items-center gap-3 px-4 py-3">
       <Wand2 className="size-5 shrink-0 text-muted" />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-56">
         <div className="text-xs font-semibold text-muted">{data.channel.name}</div>
         <div className="text-sm">{text}</div>
       </div>

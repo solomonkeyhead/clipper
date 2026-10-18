@@ -353,7 +353,15 @@ export function MoreMenu({ label = "More", children, align = "left", size = "md"
     return () => { document.removeEventListener("pointerdown", away); document.removeEventListener("keydown", esc); };
   }, [open]);
   return (
-    <details ref={box} className={cn("relative", className)} onToggle={(e) => setOpen(e.currentTarget.open)}
+    <details ref={box} className={cn("relative", className)} onToggle={(e) => {
+      const el = e.currentTarget, panel = el.lastElementChild as HTMLElement;
+      setOpen(el.open);
+      // On a phone a left-aligned menu near the right edge ran off the screen: slide it back in.
+      if (!el.open || align !== "left") return;
+      panel.style.left = "";
+      const over = el.getBoundingClientRect().left + panel.offsetWidth - document.documentElement.clientWidth + 8;   // not its rect: it opens scaled
+      if (over > 0) panel.style.left = `-${over}px`;
+    }}
              onClick={(e) => { if ((e.target as HTMLElement).closest("[data-menu-item]")) e.currentTarget.removeAttribute("open"); }}>
       <summary className={cn(buttonClass("ghost", size), "cursor-pointer list-none [&::-webkit-details-marker]:hidden")}>
         <MoreHorizontal className="size-4" /> {label}

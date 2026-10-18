@@ -264,13 +264,13 @@ export function StatsPage() {
         actions={<div className="flex flex-wrap gap-2">
           {platforms.length > 1 && (
             <select value={platform} onChange={(e) => setPlatform(e.target.value)}
-                    className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm" aria-label="Platform">
+                    className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm" aria-label="Platform">
               <option value="all">All platforms</option>
               {platforms.map((p) => <option key={p} value={p}>{PLATFORM_NAME[p] ?? p}</option>)}
             </select>
           )}
           <select value={campaign} onChange={(e) => setCampaign(e.target.value)}
-                  className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm" aria-label="Campaign">
+                  className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm" aria-label="Campaign">
             <option value="all">All campaigns</option>
             {campaigns.filter((c) => c.clips > 0).map((c) => <option key={c.name} value={c.name}>{c.title}</option>)}
           </select>

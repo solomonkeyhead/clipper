@@ -181,7 +181,7 @@ function CaptionSection({ clip }: { clip: Clip }) {
   return (
     <section>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Caption</h3>
+        <h3 className="font-sans text-xs font-semibold tracking-wide text-muted uppercase">Caption</h3>
         <span className="flex items-center gap-1.5">
           {draft === null && <CaptionChoice clip={clip} />}
           {editable && draft === null &&
@@ -254,7 +254,7 @@ function ProofPanel({ clip }: { clip: Clip }) {
         </li>
       </ul>
       <a href={proofUrl(clip.id)} download
-         className="inline-flex h-8 w-fit items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-3 text-xs font-medium hover:bg-surface-3">
+         className={cn(buttonClass("secondary", "sm"), "w-fit")}>
         <Download className="size-3.5" /> Download proof pack
       </a>
       <p className="text-xs text-subtle">If a campaign rejects this clip after it gets views, send them the pack: their brief as it was, the checks, the posts and their views.</p>
@@ -383,11 +383,7 @@ function DownloadButton({ clip, label = true, size = "sm" }: {
         download
         onClick={(e) => e.stopPropagation()}
         aria-label="Download the video"
-        className={cn(
-          "inline-flex items-center justify-center gap-1.5 rounded-sm border border-line bg-surface-2 font-medium text-fg",
-          "transition-colors duration-[var(--dur-fast)] hover:border-line-strong hover:bg-surface-3",
-          size === "sm" ? "h-8 px-3 text-xs pointer-coarse:h-11" : "h-9 px-3.5 text-sm",
-        )}
+        className={buttonClass("secondary", size)}
       >
         <Download className="size-3.5" />{label && "Download"}
       </a>
@@ -859,7 +855,7 @@ export function ClipSheet() {
 
                 {(clip.posts.length > 0 || clip.watching) && (
                   <section>
-                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Posts</h3>
+                    <h3 className="mb-1.5 font-sans text-xs font-semibold tracking-wide text-muted uppercase">Posts</h3>
                     {clip.posts.length ? (
                       <div className="flex flex-col gap-2">
                         {clip.posts.map((p) => <PostStats key={p.url} post={p} campaignUrl={campaignUrl} need={clip.submit_at_views ?? 0} />)}
@@ -883,13 +879,13 @@ export function ClipSheet() {
 
                 {(clip.status === "posted" || clip.status === "submitted") && (
                   <section>
-                    <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Proof for disputes</h3>
+                    <h3 className="mb-1.5 font-sans text-xs font-semibold tracking-wide text-muted uppercase">Proof for disputes</h3>
                     <ProofPanel clip={clip} />
                   </section>
                 )}
 
                 {!own && <details className="group">
-                  <summary className="cursor-pointer text-xs font-semibold tracking-wide text-muted uppercase hover:text-fg">
+                  <summary className="cursor-pointer font-sans text-xs font-semibold tracking-wide text-muted uppercase hover:text-fg">
                     Why Clipper picked it{clip.score != null && <span className="ml-1.5 normal-case">· {clip.score.toFixed(1)}</span>}
                   </summary>
                   <div className="mt-2"><ScoreBreakdown clip={clip} /></div>

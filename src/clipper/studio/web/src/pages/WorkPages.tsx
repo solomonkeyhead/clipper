@@ -112,7 +112,7 @@ export function ClipsPage() {
           )}
           <select value={campaign} aria-label="Campaign"
                   onChange={(e) => void navigate({ search: (s) => ({ ...s, campaign: e.target.value }) })}
-                  className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+                  className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm">
             <option value="active">Active campaigns</option>
             <option value="all">All, including archived</option>
             {campaigns.filter((c) => c.clips > 0).map((c) => <option key={c.name} value={c.name}>{c.title}</option>)}

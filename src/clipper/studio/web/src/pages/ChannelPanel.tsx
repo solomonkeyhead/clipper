@@ -196,7 +196,7 @@ export function ChannelBar({ data }: { data: CreateView }) {
       <div className="flex flex-wrap items-center gap-2">
         {data.channels.length > 1 && (
           <select value={data.channel.slug} onChange={(e) => void switchTo(e.target.value)} aria-label="Channel"
-                  className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+                  className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm">
             {data.channels.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
           </select>
         )}

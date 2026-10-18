@@ -160,7 +160,7 @@ export function JobResults({ job }: { job: Job }) {
         <div className="mt-3 flex flex-col gap-3">
           {report.reasons.length > 0 && (
             <div>
-              <div className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Why the others were left out</div>
+              <div className="mb-1 font-sans text-xs font-semibold tracking-wide text-muted uppercase">Why the others were left out</div>
               <ul className="flex flex-col gap-0.5 text-sm">
                 {report.reasons.map((r) => (
                   <li key={r.reason} className="flex justify-between gap-3"><span>{r.reason}</span><span className="tabular text-muted">{r.count}</span></li>
@@ -170,7 +170,7 @@ export function JobResults({ job }: { job: Job }) {
           )}
           {report.near_misses.length > 0 && (
             <div>
-              <div className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Closest calls</div>
+              <div className="mb-1 font-sans text-xs font-semibold tracking-wide text-muted uppercase">Closest calls</div>
               <div className="flex flex-col gap-2">
                 {report.near_misses.map((m, i) => (
                   <div key={i} className="flex items-start gap-3 rounded-md border border-line bg-bg p-2.5">

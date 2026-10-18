@@ -11,7 +11,7 @@ import {
 import { Field, TextInput } from "@/components/form";
 import { GroupsCard } from "@/components/groups";
 import { PlatformIcon } from "@/components/PlatformIcon";
-import { Button, Card, CopyButton, PageHeader, Skeleton, Switch, Tip } from "@/components/ui";
+import { Button, Card, CopyButton, PageHeader, Skeleton, Switch, Tip, buttonClass } from "@/components/ui";
 import { notifyOn, notifySupported, setNotify } from "@/lib/notify";
 import { useUI } from "@/lib/store";
 import { cn, formatCount, openTab } from "@/lib/utils";
@@ -44,7 +44,7 @@ function SiteCopy({ page }: { page: string }) {
   };
   return (
     <button type="button" onClick={() => copy()}
-            className="ml-1 inline-flex h-8 pointer-coarse:h-11 items-center gap-1 rounded-sm border border-line bg-surface-2 px-2 text-xs font-medium text-fg hover:bg-surface-3">
+            className={cn(buttonClass("secondary", "sm"), "ml-1")}>
       Copy page
     </button>
   );
@@ -194,7 +194,7 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, waiti
         {trouble && Date.now() - waiting.since > 25_000 && <p className="rounded-md bg-warning/10 p-2.5 text-sm text-warning">{trouble}</p>}
         <div className="flex gap-2">
           <a href={waiting.url} target="_blank" rel="noopener noreferrer"
-             className="inline-flex h-8 pointer-coarse:h-11 items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 text-xs font-medium hover:bg-surface-3">
+             className={buttonClass("secondary", "sm")}>
             <ExternalLink className="size-3.5" /> Open {name} again
           </a>
           <CopyButton text={waiting.url} what="Link" label="Copy link" />
@@ -519,7 +519,7 @@ function WhichAI() {
   };
   return (
     <select value={data.choice} aria-label="Which AI" onChange={(e) => void set(e.target.value)}
-            className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+            className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm">
       {/* Picks made per job before D216 keep working until one choice replaces them. */}
       {data.choice === "mixed" && <option value="mixed" disabled>Your own pick per job</option>}
       <option value="">Automatic</option>
@@ -667,7 +667,7 @@ export function SettingsPage() {
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
       {/* Under headings (D199): one long card mixed clipping, the app and this computer. */}
-      <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">AI</h2>
+      <h2 className="row-head">AI</h2>
       <AIKey />
       <Card className="px-5" id="create-ai">
         <Row title="Which AI"
@@ -675,7 +675,7 @@ export function SettingsPage() {
              control={<WhichAI />} />
       </Card>
       <FootageKeys />
-      <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Clipping</h2>
+      <h2 className="row-head mt-6">Clipping</h2>
       <Card className="divide-y divide-line px-5">
         <Row
           title="Open on the payoff"
@@ -694,7 +694,7 @@ export function SettingsPage() {
           ) : <Skeleton className="h-5 w-9" />}
         />
       </Card>
-      <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">The app</h2>
+      <h2 className="row-head mt-6">The app</h2>
       <Card className="divide-y divide-line px-5">
         <Row
           title="Sync every"
@@ -702,7 +702,7 @@ export function SettingsPage() {
           control={settings ? (
             <select value={settings.sync_minutes} aria-label="Sync interval"
                     onChange={(e) => save.mutate({ sync_minutes: e.target.value })}
-                    className="h-9 rounded-sm border border-line bg-surface-2 px-3 text-sm">
+                    className="h-9 max-w-full rounded-sm border border-line bg-surface-2 px-3 text-sm">
               {["5", "15", "30", "60"].map((m) => <option key={m} value={m}>{m} minutes</option>)}
             </select>
           ) : <Skeleton className="h-9 w-32" />}
@@ -717,7 +717,7 @@ export function SettingsPage() {
           account setups already offer where they're needed. */}
       {/* Hosted, this computer is the server's: nothing to set or check here. */}
       {!status?.hosted && <>
-        <h2 className="mt-3 -mb-1 text-xs font-semibold tracking-wide text-muted uppercase">This computer</h2>
+        <h2 className="row-head mt-6">This computer</h2>
         <Card className="divide-y divide-line px-5">
         <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />
         </Card>
