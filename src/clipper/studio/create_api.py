@@ -166,6 +166,8 @@ def _view() -> dict:
         v["stage"], v["pct"] = (stage if stage else (None, None))
         v["started"] = _started.get(v["id"])
         timings = v.pop("timings", None)
+        # The voice's words and when each ends, for placing the sound hits (D223).
+        v["words"] = [[w["text"], round(w["end"], 2)] for w in (timings or {}).get("words") or []]
         history = v.pop("history", None) or []   # the page needs only what Undo would undo (D193)
         v["undo"] = history[-1]["why"] if history else ""
         v["takes"] = len(history)   # earlier versions to compare (D199)
@@ -540,6 +542,95 @@ def routes(app: FastAPI, publish) -> None:
                 script[k] = None if body[k] is None else bool(body[k])
         store.update_video(video_id, script=script)
         return {"ok": True}
+
+    @app.put("/api/create/videos/{video_id}/hits")
+    def create_hits(video_id: int, body: dict) -> dict:
+        """The meme sound hits (D223): hits_on (the whole video), and/or hits, the full list as the page has it
+        ([{word, sound, name, auto}]), each after one of the voice's words. The next build uses them."""
+        from ..create import sfx
+        from ..create.script import Hit
+
+        row = video_or_404(video_id)
+        _editable(row)
+        script = dict(row["script"])
+        if "hits_on" in body:
+            script["hits_on"] = bool(body["hits_on"])
+        if "hits" in body:
+            words = len((row.get("timings") or {}).get("words") or [])
+            try:
+                hits = [Hit.model_validate(h) for h in body["hits"] or []]
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(400, "a hit needs a word and a sound") from exc
+            for h in hits:
+                if not 0 <= h.word < words:
+                    raise HTTPException(400, "a hit must come after a word of the voice")
+                if h.sound not in sfx.PACK and not (h.sound.startswith("freesound:") and h.sound[10:].isdigit()
+                                                     and sfx.library_file(h.sound[10:]).is_file()):
+                    raise HTTPException(400, f"no sound called {h.sound}")
+            script["hits"] = [h.model_dump() for h in sorted(hits, key=lambda h: h.word)]
+        store.update_video(video_id, script=script)
+        return {"ok": True}
+
+    @app.post("/api/create/videos/{video_id}/hits/suggest")
+    def create_hits_suggest(video_id: int) -> dict:
+        """Clipper's picks again (D223), in place of the list; uses the AI once (its answer is kept)."""
+        from ..create import sfx
+        from ..create.build import loops
+        from ..create.script import Script
+        from ..create.voice import Timings
+
+        row = video_or_404(video_id)
+        _editable(row)
+        if not row.get("timings"):
+            raise HTTPException(400, "add the voice first: hits go after its words")
+        script = Script.model_validate(row["script"])
+        last = len(script.beats) - 1
+        timings = Timings.model_validate(row["timings"])
+        script.hits = ai(sfx.suggest, script, timings, {last, last - 1} if loops(script, timings) else {last})
+        store.update_video(video_id, script={**row["script"], "hits": [h.model_dump() for h in script.hits], "hits_on": True})
+        return {"ok": True, "hits": len(script.hits)}
+
+    @app.get("/api/create/sfx")
+    def create_sfx_pack() -> dict:
+        """The built-in sounds and whether the library can be searched (D223)."""
+        from ..create import sfx
+
+        return {"pack": [{"sound": k, "name": v} for k, v in sfx.PACK.items()], "library": bool(sfx.key())}
+
+    @app.get("/api/create/sfx/search")
+    def create_sfx_search(q: str) -> dict:
+        """Freesound's CC0 sounds for q (D223)."""
+        from ..create import sfx
+
+        return {"results": ai(sfx.search, q)}
+
+    @app.post("/api/create/sfx/library/{sound_id}")
+    def create_sfx_fetch(sound_id: int) -> dict:
+        """A library sound downloaded for the build (D223): {sound, name} to put on a hit."""
+        from ..create import sfx
+
+        return ai(sfx.fetch, sound_id)
+
+    @app.get("/api/create/sfx/play/{name}")
+    def create_sfx_play(name: str):
+        """One sound to preview (D223): a pack kind made now, or a library sound already downloaded."""
+        import io
+
+        from fastapi.responses import FileResponse, Response
+
+        from ..create import sfx, sound
+
+        if name.startswith("freesound:") and name[10:].isdigit():
+            found = sfx.library_file(name[10:])
+            if not found.is_file():
+                raise HTTPException(404, "that sound isn't downloaded")
+            return FileResponse(found, media_type="audio/mpeg")
+        if name not in sfx.PACK:
+            raise HTTPException(404, "no such sound")
+        x, _ = sfx.clip(name, 1)
+        buf = io.BytesIO()
+        sound.write(x, buf)
+        return Response(buf.getvalue(), media_type="audio/wav", headers={"Cache-Control": "max-age=3600"})
 
     @app.put("/api/create/videos/{video_id}/edit")
     def create_edit_style(video_id: int, body: dict) -> dict:

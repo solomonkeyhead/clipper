@@ -50,9 +50,14 @@ if __name__ == "__main__":
                        "fill='#18181a'/><text x='300' y='300'>bone</text><text x='700' y='300'>air</text></svg>")
                 b = b.model_copy(update={"visual": b.visual.model_copy(update={"sketch": Sketch(svg=svg, count=6, grid=900)})})
             beats.append(b)
-        store.update_video(vid, script={**script.model_copy(update={"beats": beats}).model_dump(), "take": 1})
+        # The voice's words spread over each sentence's 4 s, and two hits a build would have picked (D223).
+        words = [{"text": w, "start": i * 4.0 + 4.0 * k / len(b.text.split()), "end": i * 4.0 + 4.0 * (k + 0.8) / len(b.text.split())}
+                 for i, b in enumerate(beats) for k, w in enumerate(b.text.split())]
+        firsts = [sum(len(x.text.split()) for x in beats[:i]) for i in range(n)]
+        hits = [{"word": firsts[2] - 1, "sound": "boom", "auto": True}, {"word": firsts[6] - 1, "sound": "scratch", "auto": True}]
+        store.update_video(vid, script={**script.model_copy(update={"beats": beats}).model_dump(), "take": 1, "hits": hits})
         store.update_video(vid, status="built", voice=str(data / "v.mp3"), clip_id=clip_id,
-                           timings={"words": [], "beats": [(i * 4.0, i * 4.0 + 4.0) for i in range(n)], "duration": n * 4.0, "matched": 1.0})
+                           timings={"words": words, "beats": [(i * 4.0, i * 4.0 + 4.0) for i in range(n)], "duration": n * 4.0, "matched": 1.0})
         add()   # a second video, still a draft: the "active" one
         # A small WebM for the footage previews: the open-source Chromium the walkthrough uses can't play
         # H.264 (Chrome and Edge can), so the hover test plays this instead (D130).
@@ -111,6 +116,8 @@ if __name__ == "__main__":
     _stock.search = _fake_search
     _stock.photos = _fake_photos
     _stock.ask = _fake_ask
+    from clipper.create import sfx as _sfx
+    _sfx.ask = _fake_ask   # Pick again guesses from the words: no AI usage in the test setup (D223)
 
     # A slow stand-in for the writer (D188): the page shows "writing" with its steps, then the draft.
     import time as _time

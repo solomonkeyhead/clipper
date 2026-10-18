@@ -79,7 +79,8 @@ def tap(seed: int = 0, pitch: float = 1.0) -> np.ndarray:
 #: each while the voice (-14 LUFS) speaks, FX_LIFT dB fuller between words. On video 25's voice the effects alone
 #: came to -29 LUFS and the mix stayed at -14.0.
 FX_DB = {"whoosh": -14.0, "zoom": -15.0, "swish": -20.0, "thump": -12.0, "pop": -16.0, "ding": -19.0,
-         "scratch": -14.0, "bonk": -13.0, "boing": -14.0, "riser": -18.0, "swell": -18.0, "chalk": -22.0}
+         "scratch": -14.0, "bonk": -13.0, "boing": -14.0, "riser": -18.0, "swell": -18.0, "chalk": -22.0,
+         "boom": -9.0}
 FX_LIFT = 3.0
 #: The most important first: of two within FX_GAP s, the one earlier in this list stays.
 FX_ORDER = ("riser", "swell", "scratch", "bonk", "boing", "whoosh", "zoom", "thump", "pop", "ding", "swish")
@@ -195,6 +196,13 @@ def effect(kind: str, seed: int) -> tuple[np.ndarray, float]:
         chord = sum(np.sin(2 * np.pi * f * t) for f in CHORDS[0] + (440.0,))
         x = np.convolve(chord, tail)[: len(tail)][::-1]
         lead = len(x) / RATE
+    elif kind == "boom":              # a meme boom (D223): a deep pitch-dropping hit, saturated, with a long dark tail
+        t = np.arange(int(RATE * 1.6)) / RATE
+        body = _glide(j(44, 52) + 90 * np.exp(-t / 0.05)) * np.exp(-t / j(0.45, 0.6))
+        tail = signal.sosfilt(signal.butter(2, 400, "low", fs=RATE, output="sos"), noise(1.6)) * np.exp(-t / 0.35)
+        x = np.tanh(2.5 * (body + 0.4 * tail / np.abs(tail).max())) * np.minimum(1, t / 0.003)
+        x[-2400:] *= np.linspace(1, 0, 2400)
+        lead = 0.0
     elif kind == "chalk":             # chalk on the board: a scratchy hiss in strokes, grit in it
         d = 0.45
         t = np.arange(int(RATE * d)) / RATE
@@ -232,8 +240,9 @@ def _speech(words: list[tuple[float, float]], n: int) -> np.ndarray:
     return out
 
 
-def load(path: Path, seconds: float) -> np.ndarray:
-    """An audio file of the user's own (a track from YouTube's Audio Library, say) as mono samples, looped to length."""
+def load(path: Path, seconds: float, loop: bool = True) -> np.ndarray:
+    """An audio file of the user's own (a track from YouTube's Audio Library, say) as mono samples, looped to length;
+    with `loop` off, as it is, cut to `seconds` (a library sound hit, D223)."""
     import subprocess
 
     from ..render.ffmpeg import ffmpeg_path
@@ -242,6 +251,8 @@ def load(path: Path, seconds: float) -> np.ndarray:
                           "-f", "s16le", "-"], capture_output=True, check=True, timeout=120).stdout
     data = np.frombuffer(raw, dtype="<i2").astype(float) / 32768
     n = int(RATE * seconds)
+    if not loop:
+        return data[:n]
     return np.tile(data, n // max(1, len(data)) + 1)[:n] if len(data) else np.zeros(n)
 
 
@@ -273,7 +284,7 @@ def bed(seconds: float, *, words: list[tuple[float, float]], quiet_from: float, 
 
 def write(track: np.ndarray, path: Path) -> Path:
     data = (np.clip(track, -1, 1) * 32767).astype("<i2")
-    with wave.open(str(path), "wb") as f:
+    with wave.open(str(path) if isinstance(path, (str, Path)) else path, "wb") as f:   # a file, or bytes for the page
         f.setnchannels(1)
         f.setsampwidth(2)
         f.setframerate(RATE)

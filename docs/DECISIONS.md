@@ -3840,3 +3840,27 @@ Marc had every page clicked through for what a general user wouldn't need or und
   a left-aligned More menu near the right edge slides back on screen when it opens.
 - Smaller: "Nothing to edit" lost its warning sign (only "Can't open the editor" keeps it), and New clips' bottom
   bar is as wide as the steps above it on a desktop.
+
+## D223 — Sound hits: a few meme sounds after a word, Clipper's pick, the user's to change (2026-10-17)
+- Marc wants meme-style hits in his Shorts, like a vine boom right after a surprising line. The edit's own effects
+  (D197) mark cuts and drawings, off by default; hits mark lines, and are on by default.
+- `create/sfx.py`: `Script.hits` is a list of `Hit` (the voice's word it comes after, the sound, `auto`), None until
+  the first build asks the AI once (`job="sfx"`, the quick model, `keep=True`) for at most one per 15 s (2 to 5), at
+  least 4 s apart, never in the punchline's sentence (its silence is the joke). No AI answers: the lines that shout,
+  ask, turn ("but", "actually") or carry a number get a boom, so a build never stops for it.
+- The sounds: a built-in pack made by `sound.effect` like D197's (a new deep "boom", and scratch, bonk, boing, ding,
+  pop, whoosh, riser, thump), so nothing ships as a file and nothing licensed goes in a video; listed in
+  `docs/SOUND_PACK.md`. We made our own boom instead of shipping the vine boom, whose source and licence are unclear.
+- The library: Freesound's official API with `FREESOUND_API_KEY` (Settings, now "Footage and sound libraries"),
+  CC0 sounds of 5 s or less only, the preview MP3 downloaded once to `<data>/create/sfx/`. Its terms leave
+  commercial use of the API to be agreed case by case: fine for Marc picking a few sounds, ask them before a hosted
+  Clipper. Pixabay's API has no sound search, so its key doesn't cover its sound effects.
+- Mixing: the hits go into the same track as music and effects (`sound.bed`), just after their word, peaking about
+  -9 dBFS for the boom (the voice is -14 LUFS), 6 dB lower where one runs on under speech, then the existing
+  alimiter. Checked with generated audio through the same amix and limiter (`test_sfx.py`): peaks under 0.9, the voice's
+  level within a few dB where it speaks, the boom clear in the gap. Not heard on a real build yet.
+- The page: a "Sound hits" fold beside "Look and sound" on a built video: per hit the word it follows (a list of
+  every word with its time), the sound, Play, Remove; Add a hit (after the word the player is on), Pick again (AI),
+  and off for the video. A Freesound search opens under a hit from its Sound list. Changes count as "not built yet".
+- `scripts/ui/walkthrough.py` checks the fold, and runs on Windows in Edge when the cloud Chromium isn't there.
+  Its earlier draft steps fail since D222 (the draft bar's More); the hits block was run on its own.

@@ -48,6 +48,7 @@ is the order I'd build them.
 | Poses on sentences | The writer tags up to 4 sentences (D158) | Pose picker on every sentence; poses per channel | Done | - |
 | Music and chalk sounds | Off; Clipper's own tune or your tracks folder (D156) | On, off or channel default per video | Done | - |
 | Sound effects | Off until turned on in Channel settings; made by Clipper on transitions, punch-ins, drawings, the hook, cut-ins and before the punchline, spaced and never over the punchline (D197) | On, off or channel default per video; which effects and where | Partial | S |
+| Sound hits | A few meme hits (a boom after a surprising line...), picked by the AI on the first build, else guessed from the words; never on the punchline (D223) | Per hit: move to another word, swap the sound (built-in or a CC0 Freesound one), hear it, remove it; add one; pick again; off for the video | Done | - |
 | Cover frame | Best still picked automatically | Pause the player and "Use this frame" (D171) | Done | - |
 | Watermark | Channel setting | On/off and corner per video | Gap | S |
 | Loudness and music | Always normalised; no music | Normalisation off or a level; an optional music bed with ducking under the voice | Gap | M |

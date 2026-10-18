@@ -1127,11 +1127,12 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
     inputs = ["-i", str(voice)]
     graph = (f"[1:a]loudnorm=I={rc.loudness_lufs}:TP={rc.true_peak_dbtp}:LRA=11,"
              f"aresample={rc.audio_rate},apad[vo]")
-    # Music and sound effects (D156, D197): one track under the voice, levelled for a voice at -14 LUFS, then a
+    # Music, sound effects and hits (D156, D197, D223): one track under the voice, levelled for a voice at -14 LUFS, then a
     # limiter, with its auto level off: on, it lifted the whole mix about 1 dB and pushed the peaks to 0 dBFS.
     music = channel.music if script.music is None else script.music
     sfx = channel.sfx if script.sfx is None else script.sfx
-    if music or sfx:
+    hits = script.hits if script.hits_on and script.hits else []
+    if music or sfx or hits:
         before = max(0.0, max((w.end for w in timings.words if w.end <= punchline), default=punchline))
         said_to = loop_at if loop_at is not None else timings.words[-1].end if timings.words else timings.duration
         # Nothing over the punchline but the logo: the silence is the joke.
@@ -1145,6 +1146,11 @@ def assemble(parts: list[Path], voice: Path, script: Script, timings: Timings, o
                           quiet_from=timings.duration if loop else before, effects=effects,
                           logo_at=punchline if sfx and not loop else None, with_music=music, seed=seed,
                           track=_music_track(channel, seed) if music else None)
+        if hits:   # the meme hits (D223), under the same limiter
+            from . import sfx
+
+            track = track + sfx.track(hits, timings, seed)
+            picture_notes.append(f"Sound hits: {len(hits)}.")
         inputs += ["-i", str(sound.write(track, out.with_name("bed.wav")))]
         graph += (f";[2:a]aresample={rc.audio_rate}[bd];[vo][bd]amix=inputs=2:normalize=0:duration=first,"
                   f"alimiter=limit=0.89:level=0[a]")
@@ -1269,6 +1275,12 @@ def _build(video_id: int, progress) -> int:
         script = drawn
         store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     notes += failed
+    if script.hits is None and script.hits_on:   # the meme hits, picked once, then the user's (D223)
+        from . import sfx
+
+        last = len(script.beats) - 1
+        script.hits = sfx.suggest(script, timings, {last, last - 1} if loops(script, timings) else {last})
+        store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     if not stock._pexels_key():   # D196: it was missing for days, and footage came from one library
         notes.append("Pexels isn't searched (no PEXELS_API_KEY in .env): footage comes from Pixabay only. "
                      "A free key from pexels.com/api adds its library.")

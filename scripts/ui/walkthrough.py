@@ -8,7 +8,9 @@ from playwright.sync_api import sync_playwright, expect
 
 OUT = sys.argv[1]
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path=next(__import__("glob").iglob("/opt/pw-browsers/chromium-*/chrome-linux/chrome")))
+    # A cloud session's pre-installed Chromium, else Edge, as svgfilm films in (on Marc's Windows machine).
+    exe = next(__import__("glob").iglob("/opt/pw-browsers/chromium-*/chrome-linux/chrome"), None)
+    b = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch(channel="msedge")
     page = b.new_page(viewport={"width": 1400, "height": 1000})
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -20,13 +22,13 @@ with sync_playwright() as p:
     draft = cards.nth(0)
     if draft.get_attribute("aria-expanded") == "false":
         draft.click()
-    expect(page.get_by_label("Sentence 3")).to_be_visible()
+    expect(page.get_by_label("Sentence 3", exact=True)).to_be_visible()
     assert page.get_by_label("Picture", exact=True).count() == 0, "a draft opened with every sentence's controls"
-    page.get_by_label("Sentence 3").click()
+    page.get_by_label("Sentence 3", exact=True).click()
     expect(page.get_by_label("Picture", exact=True)).to_have_count(1)
-    three = page.get_by_label("Sentence 3").input_value()
+    three = page.get_by_label("Sentence 3", exact=True).input_value()
     page.get_by_role("button", name="Move down").click()
-    expect(page.get_by_label("Sentence 4")).to_have_value(three)
+    expect(page.get_by_label("Sentence 4", exact=True)).to_have_value(three)
     expect(page.locator("[data-open=true] textarea")).to_have_value(three)   # the controls went with it
     page.get_by_role("button", name="Move up").click()
     expect(page.get_by_label("Description")).to_have_count(0)                # folded
@@ -64,6 +66,23 @@ with sync_playwright() as p:
 
     print("parts listed:", footage.count())
     page.screenshot(path=f"{OUT}/1_open.png", full_page=True)
+    # D223: the sound hits a build picked, each after a word: swap one, add one, hear one, pick again, turn off
+    hits = page.get_by_role("button", name="Sound hits (2)")
+    hits.click()
+    expect(page.get_by_text("Clipper's pick")).to_have_count(2)
+    page.get_by_label("Sound", exact=True).first.select_option("bonk")
+    expect(page.get_by_text("Clipper's pick")).to_have_count(1)   # changed by hand: no longer Clipper's
+    page.get_by_role("button", name="Add a hit").click()
+    expect(page.get_by_role("button", name="Sound hits (3)")).to_be_visible()
+    assert page.evaluate("fetch('/api/create/sfx/play/bonk').then(r => r.headers.get('content-type'))") == "audio/wav"
+    page.get_by_role("button", name="Sound hits (3)").locator("xpath=..").screenshot(path=f"{OUT}/1c_hits.png")
+    page.get_by_role("button", name="Pick again").click()
+    expect(page.get_by_text("Clipper's pick")).to_have_count(2)
+    page.get_by_text("Sound hits in this video").click()
+    expect(page.get_by_role("button", name="Sound hits (off)")).to_be_visible()
+    page.get_by_text("Sound hits in this video").click()
+    page.get_by_role("button", name="Sound hits (2)").click()   # folded again for the steps below
+    print("sound hits: swapped, added, picked again, off and on")
 
     # choose new footage for the last part in the picker (D129), then a drawing on another
     choose(footage.last).get_by_role("button", name="New footage").click()
@@ -275,12 +294,12 @@ with sync_playwright() as p:
     assert page.get_by_role("link", name="Add an AI key").count() == 0, "the AI fix shows twice on the Dashboard"
     # the footage libraries card in Settings (D130)
     page.goto("http://127.0.0.1:8799/settings")
-    expect(page.get_by_text("Footage libraries for Create")).to_be_visible()
-    for name in ("Pixabay", "Pexels", "Coverr"):
+    expect(page.get_by_text("Footage and sound libraries for Create")).to_be_visible()
+    for name in ("Pixabay", "Pexels", "Coverr", "Freesound (sound hits)"):
         expect(page.get_by_label(name, exact=True)).to_be_visible()
-    page.get_by_text("Footage libraries for Create").scroll_into_view_if_needed()
+    page.get_by_text("Footage and sound libraries for Create").scroll_into_view_if_needed()
     page.screenshot(path=f"{OUT}/5_settings.png")
-    print("settings: footage card with Pixabay, Pexels, Coverr")
+    print("settings: footage and sound card with Pixabay, Pexels, Coverr, Freesound")
     # D216: one AI choice for every job, no theme switch, no auto-post; Learning without the score charts
     expect(page.get_by_label("Which AI")).to_be_visible()
     for gone in ("Who does what: clipping", "Theme", "Auto-post approved clips", "What you use Clipper for"):

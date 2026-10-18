@@ -582,18 +582,20 @@ function FootageKeys() {
     ["PIXABAY_API_KEY", "Pixabay", "https://pixabay.com/api/docs/", "Sign in, and your key is shown in the Parameters section."],
     ["PEXELS_API_KEY", "Pexels", "https://www.pexels.com/api/", "Sign in, then Your API key. The best people footage, and photos."],
     ["COVERR_API_KEY", "Coverr", "https://coverr.co/developers", "Make a free account, then create an app: the key is shown at once."],
+    ["FREESOUND_API_KEY", "Freesound (sound hits)", "https://freesound.org/apiv2/apply", "Sign in, then apply for a key: the Client secret is the key. Only free-to-use (CC0) sounds are offered."],
   ];
   const typed = Object.entries(values).filter(([, v]) => v.trim());
   return (
     <Card className="flex flex-col gap-4 p-5" id="footage">
       <div>
-        <h2 className="text-md font-semibold">Footage libraries for Create</h2>
+        <h2 className="text-md font-semibold">Footage and sound libraries for Create</h2>
         <p className="mt-0.5 text-sm text-muted">
           Create searches every library you have a key for, and NASA's video library, which needs none. All are free; more
-          libraries mean more footage to choose from.
+          libraries mean more footage to choose from. Freesound adds sounds to pick from for the sound hits;
+          Pixabay's key covers only its footage, as its sounds aren't in its API.
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {libraries.map(([name, title, href, how]) => (
           <Field key={name} label={title}
                  hint={<>{setup?.keys[name] ? <span className="text-success">Key saved.</span> : <>No key yet. <Ext href={href}>Get one</Ext>: {how}</>}</>}>
@@ -606,7 +608,7 @@ function FootageKeys() {
         <span className="text-xs text-muted">NASA: always on, no key needed.</span>
         <Button variant="primary" disabled={!typed.length || save.isPending}
                 onClick={() => save.mutateAsync(Object.fromEntries(typed), {
-                  onSuccess: () => { setValues({}); toast.success("Footage keys saved"); },
+                  onSuccess: () => { setValues({}); toast.success("Library keys saved"); },
                 })}>
           <KeyRound className="size-4" /> Save keys
         </Button>

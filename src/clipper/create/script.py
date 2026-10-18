@@ -104,6 +104,14 @@ class Beat(BaseModel):
     nudge: float = 0.0
 
 
+class Hit(BaseModel):
+    """A meme sound hit (D223): a boom, a scratch... right after one word of the voice, chosen by Clipper or the user."""
+    word: int                       # the voice's word it comes after (an index into the timed words)
+    sound: str = "boom"             # a kind of the built-in pack (sfx.PACK), or "freesound:<id>" from the library
+    name: str = ""                  # a library sound's title, for the page
+    auto: bool = True               # Clipper's pick; False once the user placed or changed it
+
+
 class Script(BaseModel):
     title: str
     beats: list[Beat]
@@ -119,6 +127,9 @@ class Script(BaseModel):
     # Music and chalk sounds for this video: None = the channel's setting (D156), so two videos can differ.
     music: bool | None = None
     sfx: bool | None = None
+    # Meme sound hits (D223): None until the build suggests them, then the user's to change; off for the whole video.
+    hits: list[Hit] | None = None
+    hits_on: bool = True
     # The edit's flourishes for this video (D165): punch-in zooms on footage, camera cut-ins on the Professor,
     # and how shots change: auto (cut, with a whip or zoom where the picture changes kind), cut, whip or zoom.
     zooms: bool = True

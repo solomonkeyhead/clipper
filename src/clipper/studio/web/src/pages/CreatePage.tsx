@@ -2,12 +2,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, Archive, ArchiveRestore, ArrowDown, ArrowUp, CheckCircle2, ChevronRight, ClipboardCopy, Film, Lightbulb, Loader2, Mic, PenLine, Plus, RefreshCw, Shapes,
-  ExternalLink, Redo2, Trash2, Undo2, Upload, Wand2, X,
+  ExternalLink, Play, Redo2, Search, Trash2, Undo2, Upload, Wand2, X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
 import {
-  createApi, useClips, useCreate, useCreateAI, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual,
+  createApi, useClips, useCreate, useCreateAI, type CreateHit, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual, type SfxSound,
 } from "@/api/client";
 import { JobProgress, type Step } from "@/components/progress";
 import { Button, CaptionTitle, Card, EmptyState, MenuItem, MoreMenu, Skeleton, Tip } from "@/components/ui";
@@ -1408,6 +1408,9 @@ function Built({ video, wps, lead, busy, onPictures, onRebuild }: {
           <CoverChoice video={video} player={player} />
         </div>
       </Fold>
+      <Fold id={`hits-${video.id}`} title={`Sound hits${video.script.hits_on === false ? " (off)" : video.script.hits?.length ? ` (${video.script.hits.length})` : ""}`}>
+        <HitsEditor video={video} now={now} seek={seek} />
+      </Fold>
       <Fold id={`review-${video.id}`} title="Change parts you don't like" startOpen>
         <ShotReview video={video} seek={seek} onRebuild={onRebuild} rebuilding={busy === "rebuild"} now={now} />
       </Fold>
@@ -1449,6 +1452,169 @@ function Built({ video, wps, lead, busy, onPictures, onRebuild }: {
         </div>
       )}
       </div>
+    </div>
+  );
+}
+
+const selectClass = "h-8 pointer-coarse:h-11 min-w-0 rounded-sm border border-line bg-surface-2 px-1.5 text-xs";
+
+/** Plays a sound hit's preview: a pack sound or a downloaded library one from the server, else a library preview's address. */
+function play(sound: string, url?: string) {
+  void new Audio(url || `/api/create/sfx/play/${encodeURIComponent(sound)}`).play().catch((e: Error) => toast.error(e.message));
+}
+
+/** The meme sound hits (D223): Clipper's few picks, each after one word of the voice, all the user's to move, swap,
+ *  preview, remove or add to, or to turn off for the video. Used on Build again. */
+function HitsEditor({ video, now, seek }: { video: CreateVideo; now: number | null; seek: (t: number) => void }) {
+  const qc = useQueryClient();
+  const { data: sfx } = useQuery({ queryKey: ["create-sfx"], queryFn: createApi.sfx, staleTime: 60_000 });
+  const [busy, setBusy] = useState(false);
+  const [finding, setFinding] = useState<number | null>(null);   // the row whose sound is being looked for in the library
+  const words = video.words ?? [];
+  const hits = video.script.hits ?? [];
+  const on = video.script.hits_on !== false;
+  const locked = video.status === "building" || busy;
+  const save = (body: { hits_on?: boolean; hits?: CreateHit[] }) => createApi.hits(video.id, body)
+    .then(() => qc.invalidateQueries({ queryKey: ["create"] }), (err: Error) => toast.error(err.message));
+  const change = (i: number, edit: Partial<CreateHit>) =>
+    save({ hits: hits.map((h, k) => (k === i ? { ...h, ...edit, auto: false } : h)) });
+  const pickAgain = async () => {
+    setBusy(true);
+    try {
+      const { hits: n } = await createApi.hitsSuggest(video.id);
+      await qc.invalidateQueries({ queryKey: ["create"] });
+      toast.success(n ? `${n} spot${n === 1 ? "" : "s"} picked` : "No line needed a hit");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  // A new hit after the word the player is on, else the middle of the video.
+  const add = () => {
+    const at = now ?? (words.length ? words[Math.floor(words.length / 2)][1] : 0);
+    const word = Math.max(0, words.findIndex(([, end]) => end >= at));
+    void save({ hits: [...hits, { word, sound: "boom", auto: false }] });
+  };
+  if (!words.length) return <p className="text-sm text-muted">Hits go after the voice's words: add the voice first.</p>;
+  const pack = sfx?.pack ?? [];
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <label className="flex min-h-8 items-center gap-1.5 text-xs text-muted">
+        <input type="checkbox" className="accent-[var(--text)]" checked={on} disabled={locked}
+               onChange={(e) => void save({ hits_on: e.target.checked })} />
+        Sound hits in this video: a boom after a surprising line, a few in all
+      </label>
+      {on && video.script.hits == null && (
+        <p className="text-muted">Clipper picks a few spots on the next build. Or pick them now and change them before you build.</p>
+      )}
+      {on && hits.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {hits.map((hit, i) => {
+            const end = words[hit.word]?.[1] ?? 0;
+            const library = hit.sound.startsWith("freesound:");
+            return (
+              <li key={`${hit.word}-${i}`} className="flex flex-col gap-2 border-t border-line pt-2 first:border-t-0 first:pt-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => seek(Math.max(0, end - 2))} aria-label={`Play the video from just before ${end.toFixed(1)}s`}>
+                    {end.toFixed(1)}s
+                  </Button>
+                  <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                    After
+                    <select value={hit.word} aria-label="Comes after the word" disabled={locked} className={cn(selectClass, "max-w-40")}
+                            onChange={(e) => void change(i, { word: Number(e.target.value) })}>
+                      {words.map(([text, t], k) => <option key={k} value={k}>{text} ({t.toFixed(1)}s)</option>)}
+                    </select>
+                  </label>
+                  <label className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                    Sound
+                    <select value={hit.sound} aria-label="Sound" disabled={locked} className={cn(selectClass, "max-w-44")}
+                            onChange={(e) => e.target.value === "find" ? setFinding(i) : void change(i, { sound: e.target.value, name: "" })}>
+                      {pack.map((p) => <option key={p.sound} value={p.sound}>{p.name}</option>)}
+                      {library && <option value={hit.sound}>{hit.name || "Library sound"}</option>}
+                      {sfx?.library && <option value="find">Find in Freesound…</option>}
+                    </select>
+                  </label>
+                  <Button size="icon" variant="ghost" aria-label="Hear this sound" onClick={() => play(hit.sound)}><Play className="size-4" /></Button>
+                  <Button size="icon" variant="ghost" aria-label="Remove this hit" disabled={locked}
+                          onClick={() => void save({ hits: hits.filter((_, k) => k !== i) })}><X className="size-4" /></Button>
+                  {hit.auto && <span className="text-xs text-subtle">Clipper's pick</span>}
+                </div>
+                {finding === i && (
+                  <LibrarySearch onClose={() => setFinding(null)}
+                                 onUse={(found) => { setFinding(null); void change(i, { sound: found.sound, name: found.name }); }} />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {on && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="secondary" disabled={locked} onClick={add}><Plus className="size-3.5" /> Add a hit</Button>
+          <Tip label="Clipper picks the spots again, in place of these. Uses AI once">
+            <Button size="sm" variant="ghost" disabled={locked} onClick={() => void pickAgain()}>
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />} {video.script.hits == null ? "Pick spots now" : "Pick again"}
+            </Button>
+          </Tip>
+          <span className="text-xs text-subtle">
+            {sfx?.library ? "Built-in sounds, or any free (CC0) sound from Freesound." : "Built-in sounds. A Freesound key in Settings adds its free sounds."} Changes show on Build again.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Freesound's free (CC0) sounds for a word (D223): hear one, then use it. */
+function LibrarySearch({ onUse, onClose }: { onUse: (s: SfxSound) => void; onClose: () => void }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<SfxSound[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const find = async () => {
+    setBusy("search");
+    try {
+      setResults((await createApi.sfxSearch(q)).results);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const use = async (s: SfxSound) => {
+    setBusy(s.sound);
+    try {
+      onUse(await createApi.sfxFetch(s.sound.split(":")[1]));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-line p-3">
+      <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (q.trim()) void find(); }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="vine boom, bruh, airhorn…" aria-label="Search Freesound"
+               className="h-8 pointer-coarse:h-11 min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-sm" autoFocus />
+        <Button size="sm" variant="secondary" type="submit" disabled={!q.trim() || busy !== null}>
+          {busy === "search" ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />} Search
+        </Button>
+        <Button size="sm" variant="ghost" type="button" onClick={onClose}>Close</Button>
+      </form>
+      {results && !results.length && <p className="text-xs text-muted">No free sound for that. Try another word.</p>}
+      {results && results.length > 0 && (
+        <ul className="flex flex-col">
+          {results.map((r) => (
+            <li key={r.sound} className="flex min-h-10 items-center gap-2 text-sm">
+              <Button size="icon" variant="ghost" aria-label={`Hear ${r.name}`} onClick={() => play(r.sound, r.preview)}><Play className="size-4" /></Button>
+              <span className="min-w-0 flex-1 truncate" title={r.name}>{r.name} <span className="text-xs text-subtle">{r.seconds}s · {r.by}</span></span>
+              <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void use(r)}>
+                {busy === r.sound && <Loader2 className="size-3.5 animate-spin" />} Use
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

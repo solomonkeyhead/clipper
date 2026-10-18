@@ -622,6 +622,8 @@ export interface CreateScript { title: string; beats: CreateBeat[]; description:
   length?: string;
   /** Music and sound effects for this video; null or missing: the channel's setting (D156, D197). */
   music?: boolean | null; sfx?: boolean | null; bit?: string;
+  /** Meme sound hits (D223): null until the first build picks them; off for the whole video. */
+  hits?: CreateHit[] | null; hits_on?: boolean;
   /** Zooms on footage, cut-ins on the Professor, and the transition (D165). */
   zooms?: boolean; cut_ins?: boolean; transitions?: string;
   /** The presenter the whole video ("all") or the opening and the punchline only ("ends") (D203). */
@@ -632,6 +634,9 @@ export interface CreateScript { title: string; beats: CreateBeat[]; description:
   captions?: boolean; cover?: number | null;
   /** How the captions look (D180): size, place (a share of the height, + down), the lit word's colour ("" the channel's). */
   caption_size?: number; caption_shift?: number; caption_colour?: string }
+/** A sound hit right after one of the voice's words (D223): a pack sound ("boom") or "freesound:<id>". */
+export interface CreateHit { word: number; sound: string; name?: string; auto?: boolean }
+export interface SfxSound { sound: string; name: string; by?: string; seconds?: number; preview?: string }
 export interface CreateTopic { id: number; question: string; angle: string; felt: number; status: string;
   /** The planner's score of 21, and the series it belongs to (D155). */
   score?: number | null; series?: string }
@@ -642,6 +647,8 @@ export interface CreateVideo {
   /** Epoch seconds its writing or build began (D189). */
   started?: number | null;
   shots?: { beats: number[]; start: number; end: number }[]; updated_at?: string; problem?: string;
+  /** The voice's words and when each ends, for the sound hits (D223). */
+  words?: [string, number][];
   /** The archive (D131): posted videos move there by themselves; any can be moved in or out by hand. */
   archived?: boolean; archived_at?: string | null; posted?: boolean; posts?: CreatePost[];
   /** How many earlier versions of the script there are to compare (D199). */
@@ -714,6 +721,11 @@ export const createApi = {
                                     caption_size?: number; caption_shift?: number; caption_colour?: string }) =>
     send("PUT", `/api/create/videos/${video}/edit`, body),
   sound: (video: number, body: { music?: boolean | null; sfx?: boolean | null }) => send("PUT", `/api/create/videos/${video}/sound`, body),
+  hits: (video: number, body: { hits_on?: boolean; hits?: CreateHit[] }) => send("PUT", `/api/create/videos/${video}/hits`, body),
+  hitsSuggest: (video: number) => send<{ hits: number }>("POST", `/api/create/videos/${video}/hits/suggest`),
+  sfx: () => send<{ pack: SfxSound[]; library: boolean }>("GET", "/api/create/sfx"),
+  sfxSearch: (q: string) => send<{ results: SfxSound[] }>("GET", `/api/create/sfx/search?q=${encodeURIComponent(q)}`),
+  sfxFetch: (id: string) => send<SfxSound>("POST", `/api/create/sfx/library/${id}`),
   approve: (video: number) => send("POST", `/api/create/videos/${video}/approve`),
   undo: (video: number) => send<{ undid: string }>("POST", `/api/create/videos/${video}/undo`),
   forward: (video: number) => send<{ undid: string }>("POST", `/api/create/videos/${video}/undo?forward=true`),

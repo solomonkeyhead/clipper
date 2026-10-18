@@ -86,7 +86,8 @@ def _video(row) -> dict:
 #: here: a change of words sends the video back to its voice, and the rest isn't in the video.
 SHOWN = {"music": "music", "sfx": "sound effects", "zooms": "zoom-ins", "cut_ins": "cut-ins", "loop": "the loop",
          "transitions": "transitions", "on_screen": "the presenter", "cover": "the cover", "captions": "captions", "caption_size": "caption size",
-         "caption_shift": "caption place", "caption_colour": "caption colour", "hook": "the on-screen hook"}
+         "caption_shift": "caption place", "caption_colour": "caption colour", "hook": "the on-screen hook",
+         "hits": "sound hits", "hits_on": "sound hits on or off"}
 
 
 def unbuilt(script: dict, built: dict | None) -> list[str] | None:
@@ -94,7 +95,7 @@ def unbuilt(script: dict, built: dict | None) -> list[str] | None:
     D199). The parts list counted only new footage and drawings, and said "No changes yet" after music or a cover."""
     if not built:
         return None
-    usual = {"on_screen": "all"}   # a field newer than the build: its default isn't a change (D203)
+    usual = {"on_screen": "all", "hits_on": True}   # a field newer than the build: its default isn't a change (D203)
     out = [label for key, label in SHOWN.items() if script.get(key, usual.get(key)) != built.get(key, usual.get(key))]
     now, then = script.get("beats") or [], built.get("beats") or []
     out += [f"sentence {i}" for i, (a, b) in enumerate(zip(now, then, strict=False), 1) if a != b]

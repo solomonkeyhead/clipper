@@ -29,6 +29,7 @@ KEYS = {
     "PIXABAY_API_KEY": "Pixabay (free): stock footage for Create",
     "PEXELS_API_KEY": "Pexels (free): stock footage for Create",
     "COVERR_API_KEY": "Coverr (free): stock footage for Create",
+    "FREESOUND_API_KEY": "Freesound (free): sound hits for Create (D223)",
     "TIKTOK_CLIENT_KEY": "Your TikTok developer app's client key",
     "TIKTOK_CLIENT_SECRET": "Your TikTok developer app's client secret",
     "YOUTUBE_CLIENT_ID": "Your Google app's client ID: reads your YouTube Shorts' stats",
