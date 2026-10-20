@@ -158,7 +158,7 @@ def watch_candidates(candidates: list[Candidate], values: list[SignalValues], so
                 clip = cut(source, c.start, c.end, Path(tmp) / f"{c.candidate_id}.mp4")
                 response = backend.complete(LLMRequest(
                     system=variant.system, user=user, temperature=0.2,
-                    response_schema=Watched, media=[(clip, "video/mp4")]))
+                    response_schema=Watched, media=[(clip, "video/mp4")], job="watch"))
             except (LLMError, ffmpeg.FFmpegError, OSError) as exc:
                 # The transcript score stands; one unwatched moment isn't a failed run.
                 log.warning("couldn't watch %s: %s", c.candidate_id, str(exc)[:200])

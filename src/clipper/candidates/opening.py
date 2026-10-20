@@ -245,7 +245,7 @@ def choose(candidates: list[Candidate], sentences: list[Sentence], backends: lis
         from ..transcribe.correct import _ask
 
         answered = _ask(backends, SYSTEM, build_user(items, sentences), list[_Choice],
-                        cache=cache, prompt_key=PROMPT_VERSION)
+                        cache=cache, prompt_key=PROMPT_VERSION, job="opening")
         for choice in _parse(answered[0] if answered else ""):
             if 1 <= choice.clip <= len(items):
                 item = items[choice.clip - 1]

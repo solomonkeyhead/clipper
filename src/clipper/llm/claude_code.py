@@ -28,8 +28,10 @@ from .base import (
     LLMRequest,
     LLMResponse,
     RateLimited,
+    effort,
     register,
 )
+from .usage import record
 
 log = get_logger(__name__)
 
@@ -39,16 +41,26 @@ EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/we
 
 #: When `cli` last looked, and what it found.
 _looked: tuple[float, str | None] = (-60.0, None)
+_said_hosted = False
 
 
 def cli() -> str | None:
     """The `claude` command, if Claude Code is installed: on PATH, or where its Windows
     installers put it (a desktop icon's Clipper may not have the terminal's PATH, D116).
     Looked for once a minute at most: a long PATH takes ~30 ms a look, and Create's AI note
-    asked for every job each time a video changed (D173)."""
+    asked for every job each time a video changed (D173). None on a server for other people (D227): a
+    personal Claude plan is for its owner's own use (Anthropic's terms), so there only the API key answers."""
     import os
 
-    global _looked
+    from ..hosting import hosted
+
+    global _looked, _said_hosted
+    if hosted():
+        if not _said_hosted:
+            _said_hosted = True
+            log.info("Claude Code is off here: this Clipper is hosted, and a personal Claude plan can't serve "
+                     "other people; Claude answers through ANTHROPIC_API_KEY only")
+        return None
     if time.monotonic() - _looked[0] < 60:
         return _looked[1]
     found = shutil.which("claude")
@@ -109,6 +121,8 @@ class ClaudeCodeBackend(LLMBackend):
                     "--no-session-persistence", "--setting-sources", "",
                     "--tools", "Read" if names else "", *(["--allowedTools", "Read"] if names else []),
                     "--system-prompt-file", "instructions.txt"]
+            if level := effort(request.job):   # per job (D227), as on the API
+                args += ["--effort", level]
             wanted = schema if isinstance(schema, type) and issubclass(schema, BaseModel) else None
             if wanted and _shim(self.command):
                 # No JSON on a .cmd command line either (cmd.exe and quotes): asked for in words.
@@ -130,6 +144,11 @@ class ClaudeCodeBackend(LLMBackend):
             reply = json.loads(done.stdout)
         except ValueError as exc:
             raise LLMError(f"Claude Code answered oddly: {(done.stderr or done.stdout)[-300:]}") from exc
+        usage = reply.get("usage") or {}
+        # What the call would cost on the API (D227); on the user's plan nothing is charged per call.
+        record(self.name, self.model, request.job, input_tokens=usage.get("input_tokens") or 0,
+               output_tokens=usage.get("output_tokens") or 0, cache_read=usage.get("cache_read_input_tokens") or 0,
+               cache_write=usage.get("cache_creation_input_tokens") or 0)
         text = reply.get("result") or ""
         if reply.get("is_error") or done.returncode:
             if "limit" in text.lower():  # the plan's usage limit: the next model answers instead
@@ -145,6 +164,5 @@ class ClaudeCodeBackend(LLMBackend):
             text = _json_in(text, "[")
         if not text.strip():
             raise LLMError("Claude Code returned nothing")
-        usage = reply.get("usage") or {}
         return LLMResponse(text=text, model=self.model, prompt_tokens=usage.get("input_tokens", 0),
                            output_tokens=usage.get("output_tokens", 0), latency=time.perf_counter() - started)

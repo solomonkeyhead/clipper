@@ -37,6 +37,15 @@ def _no_real_claude_code(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _usage_to_a_temporary_file(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """A test backend's answers are recorded in its own usage.sqlite, never the user's data/usage.sqlite."""
+    from clipper.llm import usage
+
+    path = tmp_path_factory.mktemp("usage") / "usage.sqlite"
+    monkeypatch.setattr(usage, "db_path", lambda: path)
+
+
+@pytest.fixture(autouse=True)
 def _sketches_as_marks(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sketches drawn as marks, as on a machine without a browser, so a test runs the same everywhere; the SVG
     drawings (D219) have their own tests, which film with the real browser when there is one."""

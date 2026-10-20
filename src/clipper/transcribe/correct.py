@@ -214,11 +214,11 @@ def names_in(words: list[Word], *, min_count: int = 2) -> frozenset[str]:
 
 
 def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
-         cache: LLMCache | None, prompt_key: str) -> tuple[str, LLMBackend] | None:
+         cache: LLMCache | None, prompt_key: str, job: str = "caption_fix") -> tuple[str, LLMBackend] | None:
     """The first answer from the backends in order, cached. None if all fail. Any of them's answer
     kept from before comes first (D185): a re-run waited out the stronger model's time-out again
     before finding the fallback's answer, and `prefetch` keeps each clip's answer under the model
-    that gave it."""
+    that gave it. `job` names the call for its effort and in usage.sqlite (D227)."""
     keys = [cache.key(backend=b.name, model=b.cache_model(), prompt_key=prompt_key, payload=user)
             if cache is not None else None for b in backends]
     for backend, key in zip(backends, keys, strict=True):
@@ -227,7 +227,7 @@ def _ask(backends: list[LLMBackend], system: str, user: str, schema, *,
     for backend, key in zip(backends, keys, strict=True):
         try:
             response = backend.complete(LLMRequest(
-                system=system, user=user, temperature=0.0, response_schema=schema))
+                system=system, user=user, temperature=0.0, response_schema=schema, job=job))
         except Exception as exc:  # a caption fix (or scene split, or opening) must never fail a render
             log.log(miss_level(exc), "%s: %s did not answer (%s)", prompt_key,
                     backend.describe(), str(exc)[:160])

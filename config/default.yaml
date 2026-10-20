@@ -84,6 +84,26 @@ llm:
   # your Claude plan (counts toward its usage, about 10 calls a video); Gemini still watches the
   # video and is the fallback. null = the free Gemini models judge.
   judge_model: claude-opus-5-5
+  # Prompt B, the judge's second opinion, on a cheaper model (not asked yet). null = judge_model.
+  judge_second_model: claude-haiku-5-5
+  # Create's cheaper tiers, for the jobs moved to them: small checks ("cheap") and the look-and-fix ("review").
+  create_cheap_model: claude-haiku-5-5
+  review_model: claude-sonnet-5-5
+  # How hard Claude thinks per job (low | medium | high); a job not listed gets the model's default. Opus 5.5
+  # can't turn thinking off, so this is how its cost comes down. Set a job to null for the model's default.
+  effort:
+    judge_a: low
+    judge_b: low
+    opening: low
+    sketch: medium
+    review: low
+    script: medium
+    check: low
+    critic: low
+    footage: low
+    place: low
+    topics: low
+    sfx: low
   use_few_shot_examples: false
   few_shot_count: 3
   rubric_weights:

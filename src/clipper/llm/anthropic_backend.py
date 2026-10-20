@@ -31,13 +31,17 @@ from .base import (
     LLMRequest,
     LLMResponse,
     RateLimited,
+    effort,
     register,
 )
+from .usage import record
 
 log = get_logger(__name__)
 
 DEFAULT_MODEL = "claude-opus-5-5"
 IMAGE_TYPES = ("image/jpeg", "image/png", "image/gif", "image/webp")
+#: Models that refuse `output_config.effort` with a 400: no effort is sent to them.
+NO_EFFORT = ("claude-sonnet-4-5", "claude-haiku-4-5", "claude-3")
 
 
 @register
@@ -87,6 +91,10 @@ class AnthropicBackend(LLMBackend):
             if request.system else request.system
         kwargs = {"model": self.model, "max_tokens": request.max_output_tokens or 16000,
                   "system": system, "messages": [{"role": "user", "content": self.content(request)}]}
+        # How hard Claude thinks, per job (D227): Opus 5.5 can't turn thinking off, so effort is the lever on
+        # cost. messages.parse merges this with its schema's output_config.format.
+        if (level := effort(request.job)) and not self.model.startswith(NO_EFFORT):
+            kwargs["output_config"] = {"effort": level}
         try:
             if isinstance(schema, type) and issubclass(schema, BaseModel):
                 message = self.client.messages.parse(output_format=schema, **kwargs)
@@ -105,6 +113,10 @@ class AnthropicBackend(LLMBackend):
         except ValueError as exc:  # structured output that didn't validate against the schema
             raise LLMError(f"Anthropic's answer didn't fit the schema: {exc}") from exc
 
+        used = message.usage
+        record(self.name, self.model, request.job, input_tokens=used.input_tokens or 0,
+               output_tokens=used.output_tokens or 0, cache_read=getattr(used, "cache_read_input_tokens", 0) or 0,
+               cache_write=getattr(used, "cache_creation_input_tokens", 0) or 0)
         if message.stop_reason == "refusal":
             raise ContentBlocked("Claude declined this request")
         text = "".join(block.text for block in message.content if block.type == "text")

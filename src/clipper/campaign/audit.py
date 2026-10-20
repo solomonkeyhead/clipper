@@ -210,7 +210,7 @@ def _ask(system: str, user: str, backends: list[LLMBackend], cache, parse, schem
                 cache.forget(cache_key)
         try:
             response = backend.complete(LLMRequest(system=system, user=user, temperature=0.0,
-                                                   response_schema=schema))
+                                                   response_schema=schema, job="audit"))
         except ContentBlocked as exc:
             refused = True
             log.info("rule check: %s refused to read it (%s)", backend.describe(), str(exc)[:160])

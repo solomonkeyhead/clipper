@@ -122,7 +122,8 @@ def write(clips: list[tuple[str, str, str]], campaign: CampaignConfig, backends:
     todo = [k for k, c in enumerate(clips) if c[0].strip()]
     for chunk in (todo[i:i + BATCH] for i in range(0, len(todo), BATCH)):
         user = build_user([clips[k] for k in chunk], campaign, brief=brief)
-        answered = _ask(backends, SYSTEM, user, _Answer, cache=cache, prompt_key=f"extras-batch:{EXTRAS_VERSION}")
+        answered = _ask(backends, SYSTEM, user, _Answer, cache=cache, prompt_key=f"extras-batch:{EXTRAS_VERSION}",
+                        job="extras")
         if answered is None:
             continue
         try:

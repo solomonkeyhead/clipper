@@ -93,6 +93,22 @@ class LLMRequest:
     # Video or image to look at alongside `user`: (bytes, mime type) pairs. Only
     # backends with `supports_video` accept them (signals/visual.py).
     media: list[tuple[bytes, str]] = field(default_factory=list)
+    # What is being done ("judge_a", "sketch"): sets the effort (`llm.effort`) and names the call in
+    # usage.sqlite (D227). "" = unnamed, the model's own effort.
+    job: str = ""
+
+
+def effort(job: str) -> str:
+    """The effort `llm.effort` gives `job` ("low", "medium", "high"), or "" for the model's default (D227)."""
+    if not job:
+        return ""
+    from ..config import Config
+
+    try:
+        return Config.load().llm.effort.get(job, "") or ""
+    except Exception as exc:  # a broken config.yaml says so elsewhere; the call still goes
+        log.debug("no effort for %s (%s)", job, exc)
+        return ""
 
 
 @dataclass
@@ -247,6 +263,11 @@ class LLMBackend(ABC):
         limit rests it only as long as the provider said (D168), and a quota out
         for hours rests any model that long, so no call asks it again meanwhile.
         """
+        from .usage import before_call
+
+        # The plan's AI allowance first (D227): spent, nothing is sent, and the BudgetExceeded is neither
+        # retried nor rests this model.
+        before_call(request.job)
         key = (self.name, self.model)
         # A failure or a minute's limit rests only the models that fall through rather than wait (the same model
         # as a run's main one waits it out); a quota out for hours rests every one.

@@ -101,7 +101,7 @@ def judge_text(header: str, text: str, profile: str, backend: LLMBackend | list[
     fence = "~~~~" if "```" in text else "```"
     user = (f"Clipper profile:\n{profile.strip()}\n\n{header}\n"
             f"Body:\n{fence}\n{text}\n{fence}")
-    answered = _ask(backends, SYSTEM, user, Verdict, cache=cache, prompt_key=PROMPT_VERSION)
+    answered = _ask(backends, SYSTEM, user, Verdict, cache=cache, prompt_key=PROMPT_VERSION, job="alerts")
     if answered is None:
         return None
     try:

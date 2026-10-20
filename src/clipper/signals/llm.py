@@ -323,6 +323,7 @@ def _score_batch(
         user=user,
         temperature=cfg.temperature,
         response_schema=list[RubricItem if variant.writes else RubricVerdict] if backend.supports_schema else None,
+        job=f"judge_{variant.key.split(':')[0]}",   # judge_a, judge_b: their effort and usage rows (D227)
     )
 
     try:
@@ -381,6 +382,7 @@ def _repair(backend: LLMBackend, request: LLMRequest, bad_text: str,
         user=request.user + "\n\nYour previous reply, which was invalid:\n" + bad_text[:4000],
         temperature=0.0,
         response_schema=request.response_schema,
+        job=request.job,
     )
     try:
         return _parse_items(backend.complete(repair).text)

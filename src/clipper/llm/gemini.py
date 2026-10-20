@@ -30,6 +30,7 @@ from .base import (
     RateLimited,
     register,
 )
+from .usage import record
 
 log = get_logger(__name__)
 
@@ -200,6 +201,8 @@ class GeminiBackend(LLMBackend):
             raise LLMError(f"Gemini request failed: {str(exc)[:300]}") from exc
 
         latency = time.perf_counter() - started
+        tokens = usage_of(response)
+        record(self.name, model, request.job, **tokens)   # before the checks below: an empty answer is billed too
         text = response.text or ""
         if not text.strip():
             reason = _finish_reason(response)
@@ -210,14 +213,23 @@ class GeminiBackend(LLMBackend):
                 f"{reason}). This usually means a safety filter fired."
             )
 
-        usage = getattr(response, "usage_metadata", None)
         return LLMResponse(
             text=text,
             model=model,
-            prompt_tokens=getattr(usage, "prompt_token_count", 0) or 0,
-            output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
+            prompt_tokens=tokens["input_tokens"] + tokens["cache_read"],
+            output_tokens=tokens["output_tokens"],
             latency=latency,
         )
+
+
+def usage_of(response) -> dict[str, int]:
+    """A response's billed tokens (D227): the prompt count includes video, audio and the cached part, which is
+    billed at the cache price; thinking is billed as output."""
+    usage = getattr(response, "usage_metadata", None)
+    prompt = getattr(usage, "prompt_token_count", 0) or 0
+    cached = getattr(usage, "cached_content_token_count", 0) or 0
+    out = (getattr(usage, "candidates_token_count", 0) or 0) + (getattr(usage, "thoughts_token_count", 0) or 0)
+    return {"input_tokens": max(0, prompt - cached), "output_tokens": out, "cache_read": cached}
 
 
 def _looks_rate_limited(message: str) -> bool:

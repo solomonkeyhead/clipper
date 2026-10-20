@@ -474,6 +474,29 @@ def ai_check() -> None:
         raise typer.Exit(1) from exc
 
 
+@app.command()
+def usage(days: Annotated[int, typer.Option("--days", min=1, help="How many days back.")] = 30) -> None:
+    """What the AI calls cost, by job and model, from usage.sqlite (D227). Claude Code rows show what the
+    same calls would cost on the API; on your plan nothing is charged per call."""
+    import time
+
+    from .llm import usage as ai_usage
+
+    rows = ai_usage.summary(time.time() - days * 86400)
+    if not rows:
+        console.print(f"No AI calls recorded in the last {days} days.")
+        return
+    table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+    for name in ("job", "model", "calls", "input", "output", "cache read", "cache write", "USD"):
+        table.add_column(name, justify="left" if name in ("job", "model") else "right")
+    for r in rows:
+        table.add_row(r["job"] or "(unnamed)", r["model"], str(r["calls"]), f"{r['input_tokens']:,}",
+                      f"{r['output_tokens']:,}", f"{r['cache_read']:,}", f"{r['cache_write']:,}", f"{r['usd']:.4f}")
+    console.print(table)
+    console.print(f"Total: {sum(r['calls'] for r in rows)} calls, ${sum(r['usd'] for r in rows):.2f} "
+                  f"in the last {days} days.")
+
+
 instagram_app = typer.Typer(help="Your Instagram Reels' stats and links, via Instagram's "
                                  "official API.", no_args_is_help=True)
 app.add_typer(instagram_app, name="instagram")

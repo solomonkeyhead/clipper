@@ -242,6 +242,18 @@ class LLMConfig(StrictModel):
     # Claude Code on the user's plan (create_via_claude_plan). Gemini still watches the video
     # (Claude can't) and answers whatever Claude doesn't. null = the free models judge.
     judge_model: str | None = None
+    # The model for prompt B, the judge's second opinion (D227); None = judge_model. Not asked yet.
+    judge_second_model: str | None = None
+    # Create's cheaper tiers (D227), asked with ai.ask(tier="cheap") and tier="review"; None = create_model.
+    create_cheap_model: str | None = None
+    review_model: str | None = None
+    # How hard Claude thinks, per job (D227): job -> low | medium | high, sent as the API's effort and Claude
+    # Code's --effort. A job not listed gets the model's own default. Opus 5.5 can't turn thinking off; effort is
+    # how its cost comes down.
+    effort: dict[str, Literal["low", "medium", "high"]] = Field(default_factory=lambda: {
+        "judge_a": "low", "judge_b": "low", "opening": "low", "sketch": "medium", "review": "low",
+        "script": "medium", "check": "low", "critic": "low", "footage": "low", "place": "low", "topics": "low",
+        "sfx": "low"})
 
     @field_validator("rejected_caption_fixes")
     @classmethod

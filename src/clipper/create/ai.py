@@ -35,13 +35,15 @@ class CreateError(RuntimeError):
 def _chosen(config, model: str | None, job: str) -> list:
     """The provider the user picked for `job` in Settings > Which AI (D148, D216), as a backend, or nothing
     when it's automatic or can't be set up (then the usual order answers)."""
+    from ..hosting import hosted
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
 
     pick = config.llm.job_providers.get(job, "") if job else ""
     model = model or config.llm.create_model
     try:
-        if pick == "claude_api" and os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        # Hosted, "on my plan" can't be (no personal plan on a server, D227): the key answers instead.
+        if (pick == "claude_api" or (pick == "claude_plan" and hosted())) and os.environ.get("ANTHROPIC_API_KEY", "").strip():
             return [create_backend("anthropic", model=model, max_retries=1, requests_per_minute=config.llm.requests_per_minute,
                                    timeout=CLAUDE_TIMEOUT)]
         if pick == "claude_plan" and cli():
@@ -88,13 +90,15 @@ def backends(config, model: str | None = None, job: str = "") -> list:
 
 
 def _default_backends(config, model: str | None = None, job: str = "") -> list:
+    from ..hosting import hosted
     from ..llm.base import create as create_backend
     from ..llm.claude_code import cli
 
     chosen = []
     model = model or config.llm.create_model
-    # The paid API only for the jobs the user allowed it (D142); the rest on their plan or Gemini.
-    if model and os.environ.get("ANTHROPIC_API_KEY", "").strip() and job in config.llm.paid_api_jobs:
+    # The paid API only for the jobs the user allowed it (D142); the rest on their plan or Gemini. Hosted there is
+    # no plan (D227): every job may use the key, and paid_api_jobs and create_via_claude_plan don't apply.
+    if model and os.environ.get("ANTHROPIC_API_KEY", "").strip() and (hosted() or job in config.llm.paid_api_jobs):
         try:
             chosen.append(create_backend("anthropic", model=model, max_retries=1,
                                          requests_per_minute=config.llm.requests_per_minute,
@@ -105,7 +109,7 @@ def _default_backends(config, model: str | None = None, job: str = "") -> list:
         # No key: the user's own Claude plan, through Claude Code (D113).
         chosen.append(create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60,
                                      timeout=CLAUDE_TIMEOUT + 60))
-    elif model and config.llm.create_via_claude_plan:
+    elif model and config.llm.create_via_claude_plan and not hosted():
         misses["claude_code"] = "Claude Code isn't installed here, or `claude` isn't on this window's PATH"
         missed_at["claude_code"] = time.time()
     try:
@@ -159,15 +163,24 @@ def _repaired(schema, text: str) -> str | None:
     return None
 
 
-def _ordered(config, job: str = "", quick: bool = False):
+def _ordered(config, job: str = "", tier: str = ""):
     """Who answers `job`, in the order asked: (order, the Claude ones, the user's pick, Gemini first?)."""
-    order = backends(config, config.llm.create_quick_model if quick else None, job)
+    order = backends(config, _tier_model(config, tier), job)
     claude = [b for b in order if b.name in ("anthropic", "claude_code")]
     picked = config.llm.job_providers.get(job, "") if job else ""
     gemini_first = picked == "gemini" if picked else job in config.llm.create_gemini_jobs
     if gemini_first:
         order = [b for b in order if b not in claude] + claude
     return order, claude, picked, gemini_first
+
+
+def _tier_model(config, tier: str) -> str | None:
+    """The Claude model for a tier (D227): "" create_model, "quick" create_quick_model (D116), "cheap"
+    create_cheap_model, "review" review_model; each unset one is create_model."""
+    if tier not in ("", "quick", "cheap", "review"):
+        raise ValueError(f"unknown tier {tier!r}")
+    return {"quick": config.llm.create_quick_model, "cheap": config.llm.create_cheap_model,
+            "review": config.llm.review_model}.get(tier)
 
 
 def _family(name: str) -> str:
@@ -187,16 +200,18 @@ def first_choice(config, job: str) -> str:
 
 
 def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple[bytes, str]] | None = None,
-        quick: bool = False, job: str = "", keep: bool = False, unlike: str = "") -> str:
+        quick: bool = False, job: str = "", keep: bool = False, unlike: str = "", tier: str = "") -> str:
     """The first model's answer. `job` names what is being done: one in `llm.create_gemini_jobs`
     goes to Gemini first, then Claude if Gemini can't (D136), and is never stopped by
     `create_claude_only`; any other goes to Claude first and stops when Claude can't answer (D117).
     `quick` is for small, many-times jobs (the footage judge), which go to `llm.create_quick_model`
-    to spare the plan's usage (D116). `keep`: the answer is remembered by its question, so the same
+    to spare the plan's usage (D116); it is `tier="quick"`. `tier` picks the Claude model: "" create_model,
+    "quick", "cheap" (create_cheap_model) or "review" (review_model), D227. `keep`: the answer is remembered by its question, so the same
     question again (a rebuild, a retry, the check pressed twice) costs no call. `unlike` (a `last_used`
     value): another AI family answers first if one is set up, as for the editor's read of a script (D155)."""
     from ..config import Config
     from ..llm.base import LLMRequest, miss_level
+    from ..llm.usage import BudgetExceeded
 
     global last_used
     config = Config.load()
@@ -205,7 +220,7 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
         if (hit := cache.get(key)) is not None:
             last_used = hit.model
             return hit.text
-    order, claude, picked, gemini_first = _ordered(config, job, quick)
+    order, claude, picked, gemini_first = _ordered(config, job, tier or ("quick" if quick else ""))
     if unlike:
         order = [b for b in order if _family(b.name) != _family(unlike)] + [b for b in order if _family(b.name) == _family(unlike)]
     if gemini_first:
@@ -226,7 +241,7 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
         log.debug("create: asking %s for %s", backend.describe(), job or "a question")   # a hang shows where (D188)
         try:
             text = backend.complete(LLMRequest(system=system, user=user, temperature=temperature,
-                                               response_schema=schema, media=list(media or []))).text
+                                               response_schema=schema, media=list(media or []), job=job)).text
             if schema is not None and not _valid(schema, text):
                 if (fixed := _repaired(schema, text)) is not None:
                     text = fixed
@@ -245,6 +260,8 @@ def ask(system: str, user: str, schema, *, temperature: float, media: list[tuple
             log.info("create: %s answered by %s in %.1fs%s", job or "a question", last_used,
                      time.monotonic() - started, f" (before it: {', '.join(missed)})" if missed else "")
             return text
+        except BudgetExceeded:
+            raise   # the plan's AI allowance is spent: no other model is asked either (D227)
         except Exception as exc:
             log.log(miss_level(exc), "create: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             misses[backend.describe()] = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__

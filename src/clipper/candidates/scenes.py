@@ -252,7 +252,7 @@ def propose_scene_starts(sentences: list[Sentence], backend: LLMBackend | list[L
              f"(gap {s.gap_before:.1f}s) {s.text.strip()}" for s in sentences]
     backends = backend if isinstance(backend, list) else [backend]
     answered = _ask(backends, SYSTEM, "\n".join(lines), list[_Proposal],
-                    cache=cache, prompt_key=PROMPT_VERSION)
+                    cache=cache, prompt_key=PROMPT_VERSION, job="scenes")
     if answered is None:
         log.warning("scene segmentation unavailable; treating the source as one scene")
         return [(0, "")]

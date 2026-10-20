@@ -127,16 +127,21 @@ def stage_keys(config: Config, backend_override: str | None) -> dict[str, str]:
     stage's. A change redoes the stage; the LLM cache still answers unchanged questions,
     so a rescore after a small change costs only the questions that changed."""
     candidates = content_hash(config.candidates.model_dump(mode="json"))
-    signals = content_hash(candidates, config.llm.model_dump(mode="json"), backend_override)
+    # The settings added for costs (D227) are left out, so adding them didn't redo every source's signals.
+    llm = config.llm.model_dump(mode="json", exclude={"effort", "judge_second_model", "create_cheap_model",
+                                                      "review_model"})
+    signals = content_hash(candidates, llm, backend_override)
     scored = content_hash(signals, config.weights.model_dump(mode="json"))
     return {"candidates": candidates, "signals": signals, "combine": scored}
 
 
 def judge_backend(config: Config, backend_override: str | None = None) -> LLMBackend | None:
     """Claude, when the user set `llm.judge_model` and has Claude (D139): by API key, else on
-    their plan through Claude Code. None: the scoring model judges, as before."""
+    their plan through Claude Code. None: the scoring model judges, as before. Hosted there is no plan (D227):
+    the API key judges, whatever paid_api_jobs says."""
     import os
 
+    from .hosting import hosted
     from .llm.claude_code import cli
 
     pick = config.llm.job_providers.get("judge", "")
@@ -146,8 +151,8 @@ def judge_backend(config: Config, backend_override: str | None = None) -> LLMBac
     if not model:
         return None
     try:
-        paid_ok = pick == "claude_api" or (not pick and "judge" in config.llm.paid_api_jobs)
-        if pick == "claude_plan":
+        paid_ok = hosted() or pick == "claude_api" or (not pick and "judge" in config.llm.paid_api_jobs)
+        if pick == "claude_plan" and not hosted():
             if cli():
                 return create_backend("claude_code", model=model, max_retries=1, requests_per_minute=60, timeout=420)
             return None

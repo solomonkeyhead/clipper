@@ -3898,3 +3898,20 @@ Marc had every page clicked through for what a general user wouldn't need or und
   permissions, the DMCA agent, Paddle's products and webhook, the lawyer, the beta and its gates.
 - The privacy page promises what the code must keep: YouTube data deleted within 7 days of a disconnect and 30 days
   of a revoke, stats re-checked every 30 days, platform stats never sent to an AI provider.
+
+## D227 — What every AI call costs, a budget per plan, an effort per job (2026-10-20)
+- Clipper kept no record of what its AI calls cost, so a hosted plan couldn't be held to a budget. Every backend now
+  writes each answer to `<data>/usage.sqlite` (`llm/usage.py`): who answered, which job asked (`LLMRequest.job`:
+  judge_a, judge_b, opening, watch, caption_fix, description, scenes, extras, audit, alerts, and Create's jobs), the
+  tokens, and their price from one table of October 2026 prices. Claude Code rows hold what the call would cost on
+  the API. `clipper usage` shows the totals by job and model.
+- Before any request `before_call` reads `plan.json` (written by the hosted gateway) and stops once this period's
+  spending reaches `ai_budget_usd`; the stop is never retried or passed to another model. An unreadable plan.json
+  stops it too: this is a money path. No plan.json (Marc's own copy): no limit.
+- `llm.effort` sends an effort level per job (`output_config.effort` on the API, `--effort` to Claude Code): low for
+  judging, opening lines, checks and footage, medium for drawing and scripts. Opus 5.5 can't turn thinking off, so
+  effort is how its cost comes down. Create gets two cheaper tiers in `ask(tier=)`: "cheap" (`create_cheap_model`,
+  Haiku 5.5) and "review" (`review_model`, Sonnet 5.5); clipping gets `judge_second_model` for prompt B.
+- Hosted, Claude Code is off (a personal plan can't serve other people under Anthropic's terms) and every job, the
+  judge included, may use the API key. The new settings are left out of the signals stage key, so adding them redid
+  no cached source.

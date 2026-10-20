@@ -159,7 +159,7 @@ def describe(transcript: str, campaign: CampaignConfig, caption_line: str,
                     return found
         try:
             response = backend.complete(LLMRequest(system=SYSTEM, user=user, temperature=0.2,
-                                                   response_schema=_Description))
+                                                   response_schema=_Description, job="description"))
         except Exception as exc:  # a description must never fail a render
             log.log(miss_level(exc), "description: %s did not answer (%s)", backend.describe(), str(exc)[:160])
             continue
