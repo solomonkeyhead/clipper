@@ -267,10 +267,20 @@ class TestRejectedConfig:
         with pytest.raises(ValidationError, match="heard -> replacement"):
             LLMConfig(rejected_caption_fixes=["bot bite"])
 
-    def test_the_default_config_rejects_the_reported_fixes(self):
+    def test_the_users_config_rejects_the_reported_fixes(self, tmp_path, monkeypatch):
+        """The reported fixes live in the user's own `<data>/config.yaml` since D145, not the generic default:
+        checked on a data folder of its own, so the test passes anywhere, not only on Marc's computer (D225)."""
+        from clipper import paths
         from clipper.config import Config
 
-        pairs = Config.load().llm.rejected_fix_pairs
+        (tmp_path / "config.yaml").write_text(
+            "llm:\n  rejected_caption_fixes: ['bot -> bite', 'pickies -> piques']\n", encoding="utf-8")
+        monkeypatch.setenv("CLIPPER_DATA_DIR", str(tmp_path))
+        paths.data_root.cache_clear()
+        try:
+            pairs = Config.load().llm.rejected_fix_pairs
+        finally:
+            paths.data_root.cache_clear()
         assert ("bot", "bite") in pairs
         assert ("pickies", "piques") in pairs
 
