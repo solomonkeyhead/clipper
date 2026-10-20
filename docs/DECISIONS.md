@@ -3915,3 +3915,20 @@ Marc had every page clicked through for what a general user wouldn't need or und
 - Hosted, Claude Code is off (a personal plan can't serve other people under Anthropic's terms) and every job, the
   judge included, may use the API key. The new settings are left out of the signals stage key, so adding them redid
   no cached source.
+
+## D228 — The hosted gateway: accounts in front, one Clipper per user behind (2026-10-20)
+- A paying site needs accounts, but Clipper is built for one person and their whole library. Clipper stays
+  single-user; a gateway in front (`python -m clipper.hosted`, `src/clipper/hosted/`) signs people up (scrypt
+  passwords, sessions and reset tokens stored only as sha256, 18+ and terms accepted at sign-up, 10 tries per 10
+  minutes per IP and email) and starts one `clipper studio` per signed-in user with its own data folder, port and
+  random token. It writes that user's `plan.json` from the launch prices (`catalog.py`) and streams every other
+  request to their Clipper, passing the browser's Host and Origin through so Clipper's own checks still hold.
+- A studio stops after 20 idle minutes unless it is clipping, building a Short or moving a file; the next request
+  starts it again in about 2 s. The event stream neither wakes nor keeps one alive (an open tab would never let it
+  stop). Stopping kills the whole process tree.
+- `/billing` shows the plan and allowance, the data download (the user's folder without caches) and account
+  deletion (for real: the folder is removed, the row keeps only ids). `/admin` (CLIPPER_ADMINS) lists users, sizes,
+  processes and pending reset links, sets a plan by hand, and warns under 15% disk. Reset links go by SMTP when
+  `SMTP_URL` is set, else wait on /admin. Not built yet: Agency's 5 seats.
+- Why: no change to Marc's own copy, each user's files stay apart without touching Clipper's global state, and
+  billing and metering attach at `billing_section`, `users.update` and `catalog.refresh`.
