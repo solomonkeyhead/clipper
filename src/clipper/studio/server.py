@@ -82,7 +82,9 @@ LOOPBACK = ("127.0.0.1", "localhost", "::1")
 
 def hosted() -> bool:
     """On a server others reach (CLIPPER_HOST set to something other than this computer)."""
-    return HOST not in LOOPBACK or os.environ.get("CLIPPER_HOSTED", "") == "1"
+    from ..hosting import hosted as _hosted
+
+    return _hosted()
 HEARTBEAT_SECONDS = 15
 SESSION_GAP_MINUTES = 30
 #: After "Mark posted", sync every FAST_SYNC_SECONDS for this long, so the post's
