@@ -1,0 +1,135 @@
+<!-- Draft written for Marc to have a lawyer review before launch -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copyright complaints (DMCA) | Clipper</title>
+<meta name="description" content="How to report copyright infringement on Clipper, how to send a counter-notice, and our repeat infringer policy.">
+<meta name="color-scheme" content="dark light">
+<style>
+:root{--bg:#E8EAEE;--s1:#F4F5F7;--s2:#FFFFFF;--s3:#DCDFE4;--line:rgb(16 19 24 / .10);--text:#101318;--muted:#474D57;--subtle:#5A616C;--accent:#F5B30F;--accent-fg:#17110A;--ink:#8A5900;--money:#0B7A45;--focus:#101318;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0C0E12;--s1:#13161B;--s2:#1B1F26;--s3:#262B33;--line:rgb(255 255 255 / .07);--text:#ECEDEF;--muted:#A6ABB4;--subtle:#8A909A;--accent:#FFC229;--accent-fg:#17110A;--ink:#FFC229;--money:#52D08F;--focus:#ECEDEF;color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Sofia Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+.narrow{max-width:720px}
+a{color:var(--text);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+h1,h2,h3{font-family:"Sofia Sans Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;text-transform:uppercase;font-weight:800;margin:0}
+h1{font-size:clamp(2.1rem,6vw,3.1rem);line-height:.92}
+h2{font-size:26px;line-height:1;letter-spacing:.03em;margin:48px 0 14px}
+h3{font-size:19px;line-height:1.1;letter-spacing:.03em;margin:28px 0 8px}
+p,ul,ol,dl{margin:0 0 14px}
+ul,ol{padding-left:22px}
+li{margin-bottom:6px}
+.lead{font-size:17px;color:var(--muted);max-width:60ch}
+.muted{color:var(--muted)}
+.small{font-size:13px;color:var(--subtle)}
+header.top{border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;flex-wrap:wrap}
+.brand{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:21px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+nav.main{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+nav.main a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;text-decoration:none;color:var(--muted)}
+nav.main a:hover{color:var(--text);text-decoration:underline}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;font-weight:700;text-decoration:none;background:var(--s3);color:var(--text)}
+.btn:hover{background:var(--s2)}
+.btn.primary{background:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.hero{padding:56px 0 24px;display:grid;gap:32px;grid-template-columns:1fr}
+.hero .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.wall{display:none}
+@media (min-width:760px){.hero{grid-template-columns:1.3fr .7fr;align-items:center}.wall{display:flex;gap:10px;justify-content:flex-end}}
+.poster{width:92px;aspect-ratio:9/16;background:var(--s2);border-radius:6px;position:relative;opacity:.55}
+.poster::after{content:"";position:absolute;left:8px;right:8px;bottom:10px;height:8px;border-radius:3px;background:var(--s3)}
+.poster.focus{opacity:1;transform:translateY(-6px);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.steps{display:grid;gap:22px;grid-template-columns:1fr;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;margin:0}
+.steps li::before{content:counter(s);display:block;font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--ink)}
+.steps b{display:block;margin:4px 0 2px}
+@media (min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+.plans{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:640px){.plans{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:980px){.plans{grid-template-columns:repeat(4,1fr)}}
+.plan{background:var(--s1);border-radius:6px;padding:18px 16px}
+.plan h3{margin:0 0 6px;font-size:21px}
+.price{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--money)}
+.price small{font-family:"Sofia Sans",system-ui,sans-serif;font-weight:600;font-size:13px;color:var(--muted)}
+.plan ul{padding-left:18px;margin:12px 0 0;font-size:14px}
+.packs{width:100%;border-collapse:collapse;margin:8px 0 6px}
+.packs th,.packs td{text-align:left;padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.packs th{font-weight:700}
+.packs td.n{white-space:nowrap;color:var(--money);font-weight:700}
+details{border-bottom:1px solid var(--line);padding:2px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;list-style-position:inside}
+details p{color:var(--muted);margin:0 0 14px}
+.legal{padding:40px 0 8px}
+.legal h1{margin-bottom:10px}
+.toc{background:var(--s1);border-radius:6px;padding:14px 16px;margin:18px 0 0;font-size:14px}
+.toc a{display:inline-block;margin:2px 10px 2px 0}
+.note{background:var(--s1);border-radius:6px;padding:12px 16px;margin:0 0 14px}
+footer.foot{margin-top:64px;border-top:1px solid var(--line);padding:24px 0 40px;font-size:13px;color:var(--subtle)}
+footer.foot nav{display:flex;flex-wrap:wrap;gap:0 4px;margin-bottom:10px}
+footer.foot nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px 0 0;color:var(--muted)}
+code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13px;background:var(--s1);padding:1px 5px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="brand" href="/">Clipper</a>
+<nav class="main" aria-label="Main">
+<a href="/#pricing">Pricing</a><a href="/#faq">Questions</a><a href="/login">Log in</a><a class="btn primary" href="/signup">Sign up free</a>
+</nav></div></header>
+<main><div class="wrap narrow legal">
+<h1>Copyright complaints (DMCA)</h1>
+<p class="muted">Last updated: 20 October 2026</p>
+<p>{{operator_name}} respects copyright. Clipper stores videos that users upload or link, and clips made from them. If you believe something on Clipper infringes your copyright, send us a notice using the steps below. We respond under section 512 of the US Digital Millennium Copyright Act (17 U.S.C. 512).</p>
+
+<h2>Designated agent</h2>
+<p>
+Name: [FILL: agent name]<br>
+Company: {{operator_name}}<br>
+Address: [FILL: postal address, the same one listed in the Copyright Office directory]<br>
+Email: <a href="mailto:{{contact_email}}">{{contact_email}}</a>
+</p>
+<p class="small">Use this agent only for copyright notices. Other questions go to the same email address and may take longer to be answered.</p>
+
+<h2>How to send a notice</h2>
+<p>Your notice must be in writing and include all of these:</p>
+<ol>
+<li>Your physical or electronic signature, as the copyright owner or a person allowed to act for the owner.</li>
+<li>A description of the copyrighted work you say has been infringed.</li>
+<li>Where the material is on Clipper, with enough detail for us to find it (a link to the clip or the name of the account and the clip).</li>
+<li>Your name, address, telephone number and email address.</li>
+<li>A statement that you believe in good faith that the use is not authorized by the copyright owner, its agent or the law.</li>
+<li>A statement that the information in your notice is accurate and, under penalty of perjury, that you are the owner or are allowed to act for the owner.</li>
+</ol>
+<p>Knowingly sending a false notice can make you liable for damages under section 512(f).</p>
+
+<h2>What we do</h2>
+<p>When we get a complete notice, we remove or disable access to the material and tell the person who uploaded it, with a copy of your notice (your contact details included). If a notice is missing something, we may ask you to complete it.</p>
+
+<h2>Counter-notice</h2>
+<p>If you believe we removed your material by mistake or because it was wrongly identified, you can send us a counter-notice with:</p>
+<ol>
+<li>Your physical or electronic signature.</li>
+<li>A description of the material and where it was before we removed it.</li>
+<li>A statement, under penalty of perjury, that you believe in good faith that the material was removed because of a mistake or misidentification.</li>
+<li>Your name, address and telephone number, and a statement that you agree to the jurisdiction of the federal court for your address (or, if you are outside the United States, any judicial district where we can be found), and that you will accept service of process from the person who sent the notice.</li>
+</ol>
+<p>We send your counter-notice to the person who made the complaint. If they do not tell us within 10 business days that they have started a court action, we may put the material back between 10 and 14 business days after we received the counter-notice.</p>
+
+<h2>Repeat infringers</h2>
+<p>We close the account of anyone who is the subject of repeated valid copyright notices, and sooner in serious cases. A person whose account is closed for this may not open another.</p>
+
+<h2>Other rights</h2>
+<p>For anything that is not copyright, such as a trademark, privacy or a safety concern, write to <a href="mailto:{{contact_email}}">{{contact_email}}</a> and say what you are reporting and where it is.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+<nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/dmca">Copyright (DMCA)</a><a href="/#pricing">Pricing</a><a href="mailto:{{contact_email}}">{{contact_email}}</a></nav>
+<p>Clipper is run by {{operator_name}}. Orders are processed by Paddle.com, our Merchant of Record. Clipper is not affiliated with TikTok, Instagram, YouTube, Whop or Vyro; those names belong to their owners.</p>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!-- Draft written for Marc to have a lawyer review before launch -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy | Clipper</title>
+<meta name="description" content="What Clipper collects, why, who handles it, how long it is kept, and how to export or delete your data, including YouTube API Services information.">
+<meta name="color-scheme" content="dark light">
+<style>
+:root{--bg:#E8EAEE;--s1:#F4F5F7;--s2:#FFFFFF;--s3:#DCDFE4;--line:rgb(16 19 24 / .10);--text:#101318;--muted:#474D57;--subtle:#5A616C;--accent:#F5B30F;--accent-fg:#17110A;--ink:#8A5900;--money:#0B7A45;--focus:#101318;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0C0E12;--s1:#13161B;--s2:#1B1F26;--s3:#262B33;--line:rgb(255 255 255 / .07);--text:#ECEDEF;--muted:#A6ABB4;--subtle:#8A909A;--accent:#FFC229;--accent-fg:#17110A;--ink:#FFC229;--money:#52D08F;--focus:#ECEDEF;color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Sofia Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+.narrow{max-width:720px}
+a{color:var(--text);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+h1,h2,h3{font-family:"Sofia Sans Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;text-transform:uppercase;font-weight:800;margin:0}
+h1{font-size:clamp(2.1rem,6vw,3.1rem);line-height:.92}
+h2{font-size:26px;line-height:1;letter-spacing:.03em;margin:48px 0 14px}
+h3{font-size:19px;line-height:1.1;letter-spacing:.03em;margin:28px 0 8px}
+p,ul,ol,dl{margin:0 0 14px}
+ul,ol{padding-left:22px}
+li{margin-bottom:6px}
+.lead{font-size:17px;color:var(--muted);max-width:60ch}
+.muted{color:var(--muted)}
+.small{font-size:13px;color:var(--subtle)}
+header.top{border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;flex-wrap:wrap}
+.brand{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:21px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+nav.main{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+nav.main a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;text-decoration:none;color:var(--muted)}
+nav.main a:hover{color:var(--text);text-decoration:underline}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;font-weight:700;text-decoration:none;background:var(--s3);color:var(--text)}
+.btn:hover{background:var(--s2)}
+.btn.primary{background:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.hero{padding:56px 0 24px;display:grid;gap:32px;grid-template-columns:1fr}
+.hero .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.wall{display:none}
+@media (min-width:760px){.hero{grid-template-columns:1.3fr .7fr;align-items:center}.wall{display:flex;gap:10px;justify-content:flex-end}}
+.poster{width:92px;aspect-ratio:9/16;background:var(--s2);border-radius:6px;position:relative;opacity:.55}
+.poster::after{content:"";position:absolute;left:8px;right:8px;bottom:10px;height:8px;border-radius:3px;background:var(--s3)}
+.poster.focus{opacity:1;transform:translateY(-6px);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.steps{display:grid;gap:22px;grid-template-columns:1fr;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;margin:0}
+.steps li::before{content:counter(s);display:block;font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--ink)}
+.steps b{display:block;margin:4px 0 2px}
+@media (min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+.plans{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:640px){.plans{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:980px){.plans{grid-template-columns:repeat(4,1fr)}}
+.plan{background:var(--s1);border-radius:6px;padding:18px 16px}
+.plan h3{margin:0 0 6px;font-size:21px}
+.price{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--money)}
+.price small{font-family:"Sofia Sans",system-ui,sans-serif;font-weight:600;font-size:13px;color:var(--muted)}
+.plan ul{padding-left:18px;margin:12px 0 0;font-size:14px}
+.packs{width:100%;border-collapse:collapse;margin:8px 0 6px}
+.packs th,.packs td{text-align:left;padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.packs th{font-weight:700}
+.packs td.n{white-space:nowrap;color:var(--money);font-weight:700}
+details{border-bottom:1px solid var(--line);padding:2px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;list-style-position:inside}
+details p{color:var(--muted);margin:0 0 14px}
+.legal{padding:40px 0 8px}
+.legal h1{margin-bottom:10px}
+.toc{background:var(--s1);border-radius:6px;padding:14px 16px;margin:18px 0 0;font-size:14px}
+.toc a{display:inline-block;margin:2px 10px 2px 0}
+.note{background:var(--s1);border-radius:6px;padding:12px 16px;margin:0 0 14px}
+footer.foot{margin-top:64px;border-top:1px solid var(--line);padding:24px 0 40px;font-size:13px;color:var(--subtle)}
+footer.foot nav{display:flex;flex-wrap:wrap;gap:0 4px;margin-bottom:10px}
+footer.foot nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px 0 0;color:var(--muted)}
+code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13px;background:var(--s1);padding:1px 5px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="brand" href="/">Clipper</a>
+<nav class="main" aria-label="Main">
+<a href="/#pricing">Pricing</a><a href="/#faq">Questions</a><a href="/login">Log in</a><a class="btn primary" href="/signup">Sign up free</a>
+</nav></div></header>
+<main><div class="wrap narrow legal">
+<h1>Privacy policy</h1>
+<p class="muted">Last updated: 20 October 2026</p>
+<p>{{operator_name}} ("we", "us") runs Clipper at {{public_url}}. We are the controller of the personal data described here. This page says what we collect, why, who else handles it, how long we keep it, and what you can do about it. Questions: <a href="mailto:{{contact_email}}">{{contact_email}}</a>.</p>
+<div class="toc"><a href="#collect">What we collect</a><a href="#why">Why</a><a href="#processors">Who handles it</a><a href="#youtube">YouTube</a><a href="#retention">Retention</a><a href="#cookies">Cookies</a><a href="#delete">Export and delete</a><a href="#rights">Your rights</a><a href="#children">Children</a><a href="#contact">Contact</a></div>
+
+<h2 id="collect">What we collect</h2>
+<ul>
+<li><b>Account:</b> your email address and a password hash (we never store your password itself).</li>
+<li><b>Your videos:</b> the files you upload or the public Google Drive or Dropbox links you give us, the copies we download from those links, the audio, transcripts, frames and other working files made from them, and any voice recording you upload for Create.</li>
+<li><b>What Clipper makes:</b> the clips, Shorts, captions, titles, hashtags, scripts and drawings, and the changes you make to them.</li>
+<li><b>Campaign briefs</b> that you type or paste in.</li>
+<li><b>Connected platform data:</b> if you connect a TikTok, Instagram or YouTube account, the account's name and handle, the sign-in tokens, and the account's video statistics (views, likes, comments and similar counts, and for YouTube, analytics such as average view duration and shares). All access is read-only.</li>
+<li><b>Usage records:</b> what you ran, when, how many minutes and Shorts it used, and what it cost us in AI calls. We use them to enforce your allowance and keep costs under control.</li>
+<li><b>Billing:</b> Paddle handles your payment details. We receive your plan, the status of your subscription, the country and the receipt reference. We do not see your card number.</li>
+<li><b>Server logs:</b> the time, page and IP address of requests, kept for security and fixing faults.</li>
+<li><b>Messages</b> you send us, such as support and copyright notices.</li>
+</ul>
+
+<h2 id="why">Why we use it</h2>
+<ul>
+<li>To give you Clipper: sign you in, process your videos, make and store your clips, show your statistics, and apply your plan. Basis: our contract with you.</li>
+<li>To take payment, send receipts and handle refunds and tax, through Paddle. Basis: contract and legal obligations.</li>
+<li>To keep the service safe, stop abuse and enforce allowances and limits. Basis: our legitimate interest in running a secure service.</li>
+<li>To answer you and to act on copyright notices. Basis: legitimate interest and legal obligations.</li>
+<li>To read your connected accounts' statistics. Basis: your consent, which you can withdraw at any time by disconnecting the account.</li>
+</ul>
+<p>We do not sell your data, we do not share it for advertising, we do not show ads, and we do not use your videos, clips or statistics to train AI models.</p>
+
+<h2 id="processors">Who else handles your data</h2>
+<p>We use these companies to run Clipper. Each gets only what its job needs.</p>
+<ul>
+<li><b>Anthropic</b> (Claude): text such as transcripts, campaign briefs and scripts, and where a step needs to look at a picture, frames from your video. It picks moments, checks clips against a brief, and writes captions, titles and scripts.</li>
+<li><b>Google</b> (Gemini): parts of your video, which Gemini watches to judge moments, and text. We use Google's paid service, under which Google does not use what we send to improve its products.</li>
+<li><b>Groq</b>: the audio of your video, to turn speech into text.</li>
+<li><b>Paddle</b>: our Merchant of Record. It handles payment, tax, receipts and refunds, and is a separate controller of your payment details. See <a href="https://www.paddle.com/legal/privacy">Paddle's privacy notice</a>.</li>
+<li><b>Our hosting provider</b> ([FILL: hosting provider name and country]): the servers where Clipper runs and your files are stored.</li>
+<li><b>Stock libraries</b> (Pexels, Pixabay, Coverr and Freesound): when Create looks for footage and sounds, we send a search phrase taken from your script. We do not send your videos or your account details.</li>
+<li><b>Email delivery</b> ([FILL: email service, or "our hosting provider"]): to send you sign-in, reset and billing emails.</li>
+</ul>
+<p>Some of these companies are in the United States or process data there. Where the law requires it, we rely on standard contractual clauses or an adequacy decision for the transfer. We may also disclose data when the law requires it.</p>
+<p>The AI companies receive your data through paid API accounts. Under their commercial terms they do not use it to train their models, and they keep it only for the short time they say they need for abuse checks.</p>
+
+<h2 id="youtube">YouTube API Services</h2>
+<p>If you connect a YouTube channel, Clipper uses YouTube API Services. By connecting, you agree to be bound by the <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>. Google's use of data is described in the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>.</p>
+<ul>
+<li><b>What we access:</b> read-only access (<code>youtube.readonly</code> and <code>yt-analytics.readonly</code>) to the channel's name and handle, its uploaded videos (title, description, publish date, length), and each video's public counts and analytics. We cannot upload, change or delete anything on YouTube.</li>
+<li><b>What we store:</b> the sign-in tokens and that data, in your own account's storage on our servers.</li>
+<li><b>How we use and share it:</b> only to show you how your own videos are doing inside Clipper and to match each video to the clip it came from. We do not sell it, share it with others, use it for advertising or use it to train AI models. We do not send it to Anthropic, Google Gemini or Groq.</li>
+<li><b>Cookies and device storage:</b> see the cookies section below.</li>
+<li><b>Limited Use:</b> Clipper's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</li>
+<li><b>Revoking access:</b> you can disconnect the channel in Clipper, which revokes the token and deletes the stored YouTube data promptly and no later than 7 days. You can also revoke Clipper's access at any time in <a href="https://security.google.com/settings/security/permissions">Google's security settings</a> (also at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>). If access is revoked there, or a token stops working, we delete the stored YouTube data within 30 days.</li>
+<li><b>Freshness:</b> we refresh YouTube statistics at least every 30 days and check that your authorization is still valid and that the video still exists. Data we cannot refresh is deleted.</li>
+<li>Deleting data in Clipper does not delete anything on YouTube.</li>
+</ul>
+
+<h2 id="platforms">TikTok and Instagram</h2>
+<p>The same rules apply to TikTok (<code>user.info.basic</code>, <code>video.list</code>) and Instagram (<code>instagram_business_basic</code>, <code>instagram_business_manage_insights</code>): read-only, used only to show you your own statistics, deleted when you disconnect (promptly, and no later than 7 days) and when you delete your account. You can also remove Clipper's access in each app's own settings (TikTok: Settings and privacy, Security and permissions, Apps and services permissions; Instagram: Settings, Website permissions, Apps and websites). Before the platforms have approved Clipper, only accounts that the platform allows as testers can connect.</p>
+<p>To log in, you are sent through a small sign-in service run by us. It passes you to the platform, receives the sign-in tokens and hands them to your Clipper account. It stores none of them and keeps no accounts, statistics or logs of them.</p>
+
+<h2 id="retention">How long we keep things</h2>
+<table class="packs">
+<tr><th scope="row">Clips and Shorts</th><td>Free plan 7 days, Starter 30 days, Pro 90 days, Agency 180 days, counted from when they were made. Clips from a one-campaign pack are kept 30 days. Then they are deleted.</td></tr>
+<tr><th scope="row">Source videos and working files</th><td>Deleted 14 days after their last job.</td></tr>
+<tr><th scope="row">Connected account data</th><td>Kept while the account is connected. Deleted when you disconnect (no later than 7 days), when you delete your account, or within 30 days of a revoked or failed authorization. YouTube data is also re-checked every 30 days.</td></tr>
+<tr><th scope="row">Account and usage records</th><td>Kept while your account exists, then deleted with it. Paddle keeps payment and tax records for as long as the law requires.</td></tr>
+<tr><th scope="row">Server logs</th><td>Up to 30 days.</td></tr>
+<tr><th scope="row">Backups</th><td>Copies of deleted data are overwritten in the backups within 30 days.</td></tr>
+</table>
+<p>Download the clips you want to keep before they are deleted. If you change plan, the new retention applies to clips made from then on.</p>
+
+<h2 id="cookies">Cookies</h2>
+<p>Clipper sets one cookie: a session cookie that keeps you signed in. It is needed for the site to work, it is not used to track you, and it ends when you sign out or expires on its own after a while. We use no analytics, advertising or tracking cookies, and no tracking scripts. When you open Paddle's checkout from the Billing page, Paddle may set its own cookies; see its privacy notice.</p>
+
+<h2 id="delete">Export and delete</h2>
+<p>On the Billing page you can export your data and delete your account. Deleting removes your videos, clips, connected accounts and records from our live systems right away, and from backups within 30 days. If you have a subscription, cancel it first so it does not renew. Deleting your account does not itself cancel a subscription held at Paddle.</p>
+
+<h2 id="rights">Your rights</h2>
+<p>You can ask us to access, correct, delete or export your data, to restrict or object to how we use it, and to withdraw consent you gave. Most of this you can do yourself on the Billing page; for the rest, email us. We answer within one month. If you live in the EU, the UK or Switzerland you can also complain to your data protection authority.</p>
+<p><b>California and other US states.</b> You can ask what personal information we hold about you, ask us to correct or delete it, and we will not treat you worse for asking. We do not sell personal information and we do not share it for cross-context advertising.</p>
+
+<h2 id="security">Security</h2>
+<p>Traffic is encrypted with HTTPS, passwords are stored only as salted hashes, each account's files are kept in their own folder and run in a separate process, and AI provider keys are kept on the server and never sent to your browser. No system is perfectly safe. If a breach affects your data, we tell you and the authorities as the law requires.</p>
+
+<h2 id="children">Children</h2>
+<p>Clipper is for people 18 or older. We do not knowingly collect data from anyone under 18. If you think a child has an account, write to us and we will delete it.</p>
+
+<h2 id="changes">Changes</h2>
+<p>If we change this policy in a way that matters, we tell you by email before it applies. The date at the top shows the latest version.</p>
+
+<h2 id="contact">Contact</h2>
+<p>{{operator_name}}, [FILL: registered address]. Email: <a href="mailto:{{contact_email}}">{{contact_email}}</a>.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+<nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/dmca">Copyright (DMCA)</a><a href="/#pricing">Pricing</a><a href="mailto:{{contact_email}}">{{contact_email}}</a></nav>
+<p>Clipper is run by {{operator_name}}. Orders are processed by Paddle.com, our Merchant of Record. Clipper is not affiliated with TikTok, Instagram, YouTube, Whop or Vyro; those names belong to their owners.</p>
+</div></footer>
+</body>
+</html>

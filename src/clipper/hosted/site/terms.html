@@ -1,0 +1,172 @@
+<!-- Draft written for Marc to have a lawyer review before launch -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of service | Clipper</title>
+<meta name="description" content="The terms for using Clipper: accounts, your videos, AI output, plans and payment, and ending your account.">
+<meta name="color-scheme" content="dark light">
+<style>
+:root{--bg:#E8EAEE;--s1:#F4F5F7;--s2:#FFFFFF;--s3:#DCDFE4;--line:rgb(16 19 24 / .10);--text:#101318;--muted:#474D57;--subtle:#5A616C;--accent:#F5B30F;--accent-fg:#17110A;--ink:#8A5900;--money:#0B7A45;--focus:#101318;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0C0E12;--s1:#13161B;--s2:#1B1F26;--s3:#262B33;--line:rgb(255 255 255 / .07);--text:#ECEDEF;--muted:#A6ABB4;--subtle:#8A909A;--accent:#FFC229;--accent-fg:#17110A;--ink:#FFC229;--money:#52D08F;--focus:#ECEDEF;color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Sofia Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+.narrow{max-width:720px}
+a{color:var(--text);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+h1,h2,h3{font-family:"Sofia Sans Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;text-transform:uppercase;font-weight:800;margin:0}
+h1{font-size:clamp(2.1rem,6vw,3.1rem);line-height:.92}
+h2{font-size:26px;line-height:1;letter-spacing:.03em;margin:48px 0 14px}
+h3{font-size:19px;line-height:1.1;letter-spacing:.03em;margin:28px 0 8px}
+p,ul,ol,dl{margin:0 0 14px}
+ul,ol{padding-left:22px}
+li{margin-bottom:6px}
+.lead{font-size:17px;color:var(--muted);max-width:60ch}
+.muted{color:var(--muted)}
+.small{font-size:13px;color:var(--subtle)}
+header.top{border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;flex-wrap:wrap}
+.brand{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:21px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+nav.main{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+nav.main a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;text-decoration:none;color:var(--muted)}
+nav.main a:hover{color:var(--text);text-decoration:underline}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;font-weight:700;text-decoration:none;background:var(--s3);color:var(--text)}
+.btn:hover{background:var(--s2)}
+.btn.primary{background:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.hero{padding:56px 0 24px;display:grid;gap:32px;grid-template-columns:1fr}
+.hero .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.wall{display:none}
+@media (min-width:760px){.hero{grid-template-columns:1.3fr .7fr;align-items:center}.wall{display:flex;gap:10px;justify-content:flex-end}}
+.poster{width:92px;aspect-ratio:9/16;background:var(--s2);border-radius:6px;position:relative;opacity:.55}
+.poster::after{content:"";position:absolute;left:8px;right:8px;bottom:10px;height:8px;border-radius:3px;background:var(--s3)}
+.poster.focus{opacity:1;transform:translateY(-6px);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.steps{display:grid;gap:22px;grid-template-columns:1fr;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;margin:0}
+.steps li::before{content:counter(s);display:block;font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--ink)}
+.steps b{display:block;margin:4px 0 2px}
+@media (min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+.plans{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:640px){.plans{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:980px){.plans{grid-template-columns:repeat(4,1fr)}}
+.plan{background:var(--s1);border-radius:6px;padding:18px 16px}
+.plan h3{margin:0 0 6px;font-size:21px}
+.price{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--money)}
+.price small{font-family:"Sofia Sans",system-ui,sans-serif;font-weight:600;font-size:13px;color:var(--muted)}
+.plan ul{padding-left:18px;margin:12px 0 0;font-size:14px}
+.packs{width:100%;border-collapse:collapse;margin:8px 0 6px}
+.packs th,.packs td{text-align:left;padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.packs th{font-weight:700}
+.packs td.n{white-space:nowrap;color:var(--money);font-weight:700}
+details{border-bottom:1px solid var(--line);padding:2px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;list-style-position:inside}
+details p{color:var(--muted);margin:0 0 14px}
+.legal{padding:40px 0 8px}
+.legal h1{margin-bottom:10px}
+.toc{background:var(--s1);border-radius:6px;padding:14px 16px;margin:18px 0 0;font-size:14px}
+.toc a{display:inline-block;margin:2px 10px 2px 0}
+.note{background:var(--s1);border-radius:6px;padding:12px 16px;margin:0 0 14px}
+footer.foot{margin-top:64px;border-top:1px solid var(--line);padding:24px 0 40px;font-size:13px;color:var(--subtle)}
+footer.foot nav{display:flex;flex-wrap:wrap;gap:0 4px;margin-bottom:10px}
+footer.foot nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px 0 0;color:var(--muted)}
+code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13px;background:var(--s1);padding:1px 5px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="brand" href="/">Clipper</a>
+<nav class="main" aria-label="Main">
+<a href="/#pricing">Pricing</a><a href="/#faq">Questions</a><a href="/login">Log in</a><a class="btn primary" href="/signup">Sign up free</a>
+</nav></div></header>
+<main><div class="wrap narrow legal">
+<h1>Terms of service</h1>
+<p class="muted">Last updated: 20 October 2026</p>
+<p>These terms are the agreement between you and {{operator_name}} ("we", "us") about Clipper, the service at {{public_url}}. By creating an account or using Clipper, you agree to them. If you do not agree, do not use Clipper.</p>
+
+<h2>1. What Clipper is</h2>
+<p>Clipper turns long videos into ranked vertical clips for paid clipping campaigns, reads a campaign brief and checks each clip against its rules, and writes captions, titles and hashtags. Create (beta) makes original faceless explainer Shorts from an idea. Clipper can also read the statistics of the TikTok, Instagram and YouTube accounts you connect. Clipper does not post for you, and it does not make a voice for you.</p>
+
+<h2>2. Your account</h2>
+<ul>
+<li>You must be 18 or older.</li>
+<li>Give a real email address and keep your password to yourself. You are responsible for what happens under your account.</li>
+<li>One account is for one person. The Agency plan includes 5 seats for the people on your team. Do not sell or share access with others.</li>
+</ul>
+
+<h2>3. Your videos and your rights</h2>
+<ul>
+<li>You must own every video you upload or link, or be authorized to use it for this purpose. For a paid clipping campaign, that includes following the campaign's own rules about the source footage.</li>
+<li>You keep your rights in your videos and in the clips made from them. You give us a limited licence to store, process and copy them as needed to run Clipper for you, including sending parts of them to the AI providers listed in the <a href="/privacy">privacy policy</a>. The licence ends when the content is deleted, except for copies kept for a short time in backups.</li>
+<li>Stock footage, pictures and sounds that Create adds come from third-party libraries under their own licences. Using them in your Short is allowed. Taking them out of your Short and reselling them on their own is not.</li>
+</ul>
+
+<h2>4. What you may not do</h2>
+<ul>
+<li>Upload or link anything that infringes someone's copyright or other rights.</li>
+<li>Upload or link anything illegal, anything that sexualises or endangers minors, or anything that attacks people for who they are (hateful content), threatens or harasses people, or is meant to deceive people.</li>
+<li>Use Clipper to break the rules of a platform or a campaign, or to evade a platform's limits.</li>
+<li>Try to get around the allowances and limits of your plan, probe or attack the service, scrape it, or resell access to it.</li>
+<li>Use the output or the service to build a competing product, or to train an AI model.</li>
+</ul>
+
+<h2>5. Copyright complaints</h2>
+<p>We respond to notices of claimed infringement as described on the <a href="/dmca">copyright page</a>. We close the accounts of people who repeatedly infringe.</p>
+
+<h2>6. AI output can be wrong</h2>
+<p>Clipper uses AI to pick moments, check clips against a brief, write captions and titles, write scripts and judge footage. It can be wrong. A pick can miss the best moment, a rule check can miss a rule or flag one that does not apply, a caption can mis-hear a word, and a script can state something false. You must check every clip and every Short before you post it, and you are responsible for what you post, including following each campaign's rules, each platform's rules and the rules for labelling paid content.</p>
+<p>We do not promise that a clip will be accepted by a campaign, earn a payout or reach any number of views. Clipper is not affiliated with TikTok, Instagram, YouTube, Whop or Vyro.</p>
+
+<h2>7. Plans, payment and renewal</h2>
+<ul>
+<li>Paid plans renew every month or every year, depending on what you chose, until you cancel. Your payment method is charged at each renewal.</li>
+<li>Our order process is run by Paddle.com, which is the Merchant of Record for all our orders. Paddle takes your payment, collects any tax that applies, and sends your receipt. Paddle's checkout terms apply to your purchase as well as these terms.</li>
+<li>You can cancel at any time on the Billing page. You keep your plan until the end of the period you have paid for, and then it ends. We do not refund the rest of a period except as the <a href="/refunds">refund policy</a> says.</li>
+<li>Each plan has an allowance of footage minutes and Create Shorts for the period. Allowances do not roll over. When an allowance is used up, work that needs it stops until the next period or until you buy a pack. We never bill you for going over.</li>
+<li>Packs are one-time purchases and do not expire.</li>
+<li>If we change a price, the new price applies from your next renewal after we have told you by email at least 30 days ahead.</li>
+</ul>
+
+<h2>8. Free plan and beta</h2>
+<p>The free plan has a small allowance and a watermark after the first clips. Create is in beta, so it can change, break or be withdrawn. We may change the free plan or the beta, and we will tell you if a change takes away something you already paid for.</p>
+
+<h2>9. Connected accounts and YouTube</h2>
+<p>You may connect only accounts that are yours or that you are allowed to manage. Clipper asks for read-only access to statistics. You can disconnect an account in Clipper at any time. If you connect a YouTube channel, you also agree to be bound by the <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a>, and Google's <a href="https://policies.google.com/privacy">Privacy Policy</a> applies to what YouTube holds. You can revoke Clipper's access at any time in <a href="https://security.google.com/settings/security/permissions">Google's security settings</a>.</p>
+
+<h2>10. Keeping and deleting your content</h2>
+<p>How long we keep clips and source videos depends on your plan and is set out in the <a href="/privacy#retention">privacy policy</a>. Download what you want to keep before it is deleted. You can export your data and delete your account on the Billing page.</p>
+
+<h2>11. Suspension and ending</h2>
+<ul>
+<li>We may suspend or close an account, and remove content, if you break these terms, if someone with the right to do so complains about your content, if your use harms the service or other people, or if the law requires it. Where we can, we tell you why. If we close your account for breaking these terms, we do not refund the rest of the period.</li>
+<li>You can stop using Clipper and delete your account at any time.</li>
+<li>If we end the service, we refund the unused part of any period or pack you have paid for.</li>
+</ul>
+
+<h2>12. No guarantee</h2>
+<p>Clipper is provided as it is. We work to keep it running, but we do not promise it will always be available, free of errors or fit for your particular purpose. Statistics from the platforms and earnings figures are estimates that can be late or wrong. This does not take away any rights you have by law that cannot be taken away.</p>
+
+<h2>13. Limit of liability</h2>
+<p>To the extent the law allows, we are not liable for indirect or consequential loss, lost profit, lost views or lost campaign payouts, and our total liability to you for anything connected with Clipper is limited to the amount you paid us in the 12 months before the event that led to the claim. Nothing in these terms limits liability that cannot be limited by law, such as for death or personal injury caused by negligence, or for fraud.</p>
+
+<h2>14. Claims about your content</h2>
+<p>If someone makes a claim against us because of content you uploaded or linked, or because of how you used a clip, you will cover our reasonable costs and losses from that claim, to the extent the claim comes from your breach of these terms.</p>
+
+<h2>15. Changes to these terms</h2>
+<p>We may change these terms. For a change that matters, we tell you by email at least 30 days before it applies. If you keep using Clipper after that date, you accept the change. If you do not accept it, cancel before the date.</p>
+
+<h2>16. Governing law</h2>
+<p>These terms are governed by the laws of [FILL: governing law, for example the state or country of the operator], and the courts of [FILL: place] can decide disputes, except that if you are a consumer you keep the protection of the mandatory laws of the country where you live and may bring a claim in its courts.</p>
+
+<h2>17. Who we are and how to reach us</h2>
+<p>{{operator_name}}, [FILL: registered address]. Email: <a href="mailto:{{contact_email}}">{{contact_email}}</a>.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+<nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/dmca">Copyright (DMCA)</a><a href="/#pricing">Pricing</a><a href="mailto:{{contact_email}}">{{contact_email}}</a></nav>
+<p>Clipper is run by {{operator_name}}. Orders are processed by Paddle.com, our Merchant of Record. Clipper is not affiliated with TikTok, Instagram, YouTube, Whop or Vyro; those names belong to their owners.</p>
+</div></footer>
+</body>
+</html>

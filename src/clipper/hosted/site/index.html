@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipper: ranked clips for paid clipping campaigns</title>
+<meta name="description" content="Clipper turns long videos into ranked vertical clips for paid clipping campaigns, checks each clip against the campaign brief, and writes captions, titles and hashtags.">
+<meta name="color-scheme" content="dark light">
+<style>
+:root{--bg:#E8EAEE;--s1:#F4F5F7;--s2:#FFFFFF;--s3:#DCDFE4;--line:rgb(16 19 24 / .10);--text:#101318;--muted:#474D57;--subtle:#5A616C;--accent:#F5B30F;--accent-fg:#17110A;--ink:#8A5900;--money:#0B7A45;--focus:#101318;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0C0E12;--s1:#13161B;--s2:#1B1F26;--s3:#262B33;--line:rgb(255 255 255 / .07);--text:#ECEDEF;--muted:#A6ABB4;--subtle:#8A909A;--accent:#FFC229;--accent-fg:#17110A;--ink:#FFC229;--money:#52D08F;--focus:#ECEDEF;color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Sofia Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+.narrow{max-width:720px}
+a{color:var(--text);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+h1,h2,h3{font-family:"Sofia Sans Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;text-transform:uppercase;font-weight:800;margin:0}
+h1{font-size:clamp(2.1rem,6vw,3.1rem);line-height:.92}
+h2{font-size:26px;line-height:1;letter-spacing:.03em;margin:48px 0 14px}
+h3{font-size:19px;line-height:1.1;letter-spacing:.03em;margin:28px 0 8px}
+p,ul,ol,dl{margin:0 0 14px}
+ul,ol{padding-left:22px}
+li{margin-bottom:6px}
+.lead{font-size:17px;color:var(--muted);max-width:60ch}
+.muted{color:var(--muted)}
+.small{font-size:13px;color:var(--subtle)}
+header.top{border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;flex-wrap:wrap}
+.brand{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:21px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+nav.main{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+nav.main a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;text-decoration:none;color:var(--muted)}
+nav.main a:hover{color:var(--text);text-decoration:underline}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;font-weight:700;text-decoration:none;background:var(--s3);color:var(--text)}
+.btn:hover{background:var(--s2)}
+.btn.primary{background:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.hero{padding:56px 0 24px;display:grid;gap:32px;grid-template-columns:1fr}
+.hero .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.wall{display:none}
+@media (min-width:760px){.hero{grid-template-columns:1.3fr .7fr;align-items:center}.wall{display:flex;gap:10px;justify-content:flex-end}}
+.poster{width:92px;aspect-ratio:9/16;background:var(--s2);border-radius:6px;position:relative;opacity:.55}
+.poster::after{content:"";position:absolute;left:8px;right:8px;bottom:10px;height:8px;border-radius:3px;background:var(--s3)}
+.poster.focus{opacity:1;transform:translateY(-6px);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.steps{display:grid;gap:22px;grid-template-columns:1fr;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;margin:0}
+.steps li::before{content:counter(s);display:block;font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--ink)}
+.steps b{display:block;margin:4px 0 2px}
+@media (min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+.plans{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:640px){.plans{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:980px){.plans{grid-template-columns:repeat(4,1fr)}}
+.plan{background:var(--s1);border-radius:6px;padding:18px 16px}
+.plan h3{margin:0 0 6px;font-size:21px}
+.price{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--money)}
+.price small{font-family:"Sofia Sans",system-ui,sans-serif;font-weight:600;font-size:13px;color:var(--muted)}
+.plan ul{padding-left:18px;margin:12px 0 0;font-size:14px}
+.packs{width:100%;border-collapse:collapse;margin:8px 0 6px}
+.packs th,.packs td{text-align:left;padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.packs th{font-weight:700}
+.packs td.n{white-space:nowrap;color:var(--money);font-weight:700}
+details{border-bottom:1px solid var(--line);padding:2px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;list-style-position:inside}
+details p{color:var(--muted);margin:0 0 14px}
+.legal{padding:40px 0 8px}
+.legal h1{margin-bottom:10px}
+.toc{background:var(--s1);border-radius:6px;padding:14px 16px;margin:18px 0 0;font-size:14px}
+.toc a{display:inline-block;margin:2px 10px 2px 0}
+.note{background:var(--s1);border-radius:6px;padding:12px 16px;margin:0 0 14px}
+footer.foot{margin-top:64px;border-top:1px solid var(--line);padding:24px 0 40px;font-size:13px;color:var(--subtle)}
+footer.foot nav{display:flex;flex-wrap:wrap;gap:0 4px;margin-bottom:10px}
+footer.foot nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px 0 0;color:var(--muted)}
+code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13px;background:var(--s1);padding:1px 5px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="brand" href="/">Clipper</a>
+<nav class="main" aria-label="Main">
+<a href="/#pricing">Pricing</a><a href="/#faq">Questions</a><a href="/login">Log in</a><a class="btn primary" href="/signup">Sign up free</a>
+</nav></div></header>
+<main>
+<div class="wrap">
+<section class="hero">
+<div>
+<h1>Long videos in. Ranked clips out.</h1>
+<p class="lead" style="margin-top:16px">Clipper turns a long video into vertical clips for paid clipping campaigns. It reads the campaign brief, checks every clip against the brief's rules, and writes the captions, title and hashtags. You see why each clip was picked, and you can change any part of it by hand.</p>
+<div class="cta"><a class="btn primary" href="/signup">Sign up free</a><a class="btn" href="/login">Log in</a></div>
+<p class="small" style="margin-top:12px">Free plan: 60 minutes of footage and 1 Short. No card needed.</p>
+</div>
+<div class="wall" aria-hidden="true"><div class="poster"></div><div class="poster focus"></div><div class="poster"></div></div>
+</section>
+
+<h2>How it works</h2>
+<ol class="steps">
+<li><b>Put a video in</b>Upload a file, or paste a public Google Drive or Dropbox link. Add the campaign brief.</li>
+<li><b>Get ranked clips</b>Clipper finds the strongest moments, cuts them to vertical, and shows a reason for each pick. It checks each clip against the brief's rules and writes captions, a title and hashtags.</li>
+<li><b>Change what you like, then post</b>Move the start or end, rewrite the hook or the captions, change the framing. Download the clip and post it yourself.</li>
+</ol>
+
+<h2>What you get</h2>
+<ul>
+<li><b>Clipping.</b> Long videos in, ranked vertical clips out, for paid clipping campaigns. Each clip is checked against the brief before you post it.</li>
+<li><b>Every part can be changed by hand.</b> Start, end, hook, captions and framing. The same controls are on every plan, the free one included. Plans differ only in how much you can make, the watermark, how long clips are kept, how many accounts and seats you get, and how fast the queue is.</li>
+<li><b>Create (beta).</b> Original faceless explainer Shorts from an idea: a script, stock footage, chalk drawings and captions. You record or upload your own voice.</li>
+<li><b>Stats.</b> Connect your TikTok, Instagram and YouTube accounts to see how your posts perform and match each post to the clip it came from. Stats sync starts on each platform once that platform approves Clipper.</li>
+</ul>
+<p class="muted">Not here yet: Clipper does not post for you (you download your clips and post them), and it does not make a voice for you.</p>
+
+<h2 id="pricing">Pricing</h2>
+<p class="muted">Prices are in US dollars. Taxes, where they apply, are shown at checkout. Pay monthly, or yearly for about 20% less.</p>
+<div class="plans">
+<div class="plan"><h3>Free</h3><div class="price">$0</div>
+<ul><li>60 minutes of footage</li><li>1 Create Short, once</li><li>First 3 clips without a watermark, then a small watermark</li><li>Clips kept 7 days</li><li>1 account per platform</li></ul></div>
+<div class="plan"><h3>Starter</h3><div class="price">$15 <small>a month</small></div><div class="small">or $12 a month billed yearly ($144)</div>
+<ul><li>300 minutes of footage a month</li><li>3 Create Shorts a month</li><li>No watermark</li><li>Clips kept 30 days</li><li>1 account per platform</li></ul></div>
+<div class="plan"><h3>Pro</h3><div class="price">$29 <small>a month</small></div><div class="small">or $23 a month billed yearly ($276)</div>
+<ul><li>600 minutes of footage a month</li><li>8 Create Shorts a month</li><li>No watermark</li><li>Several accounts per platform, and groups</li><li>Clips kept 90 days</li><li>Faster queue</li></ul></div>
+<div class="plan"><h3>Agency</h3><div class="price">$79 <small>a month</small></div><div class="small">or $63 a month billed yearly ($756)</div>
+<ul><li>1,800 minutes of footage a month</li><li>20 Create Shorts a month</li><li>No watermark</li><li>5 seats</li><li>Clips kept 180 days</li><li>Fastest queue</li></ul></div>
+</div>
+<p class="small" style="margin-top:12px">Every manual control is on every plan. Unused allowance does not roll over to the next month. When an allowance reaches zero, work stops until the next period or until you buy a pack. Nothing is billed beyond your plan.</p>
+
+<h3>Packs</h3>
+<p class="muted">One-time purchases that never expire. They add to your plan, or stand alone.</p>
+<table class="packs">
+<tr><th scope="row">One campaign</th><td>120 minutes. No subscription needed. No watermark on those clips, kept 30 days.</td><td class="n">$5</td></tr>
+<tr><th scope="row">300 minutes</th><td>More footage whenever you run out.</td><td class="n">$10</td></tr>
+<tr><th scope="row">5 Shorts</th><td>Five more Create Shorts.</td><td class="n">$7.50</td></tr>
+</table>
+
+<h2 id="faq">Questions</h2>
+<details><summary>What counts as a minute?</summary><p>Minutes of source video you put in. A one-hour video uses 60 minutes. A video is billed at least 10 minutes, so a 3-minute video uses 10.</p></details>
+<details><summary>What does a Short include?</summary><p>One Short is one first build of a Create video plus 5 redraws. A redraw is New drawing, Change drawing, or a drawing replaced by New pictures or Redraw all. Every further 5 redraws use one more Short. Rebuilds that redraw nothing are free.</p></details>
+<details><summary>Can I cancel anytime?</summary><p>Yes. Cancel on the Billing page. You keep your plan until the end of the period you paid for, and it does not renew.</p></details>
+<details><summary>What about refunds?</summary><p>If you ask within 14 days of your first payment for a plan, you get your money back. The <a href="/refunds">refund policy</a> has the full rules, including the right to withdraw for buyers in the EU and UK.</p></details>
+<details><summary>Which platforms does it work with?</summary><p>Clips are plain vertical video files, so you can post them anywhere. Stats sync works with TikTok, Instagram and YouTube accounts that you connect, starting once each platform approves Clipper. Clipper does not post for you yet.</p></details>
+<details><summary>Is my footage used to train AI?</summary><p>No. Clipper sends parts of your video and text to Anthropic (Claude), Google (Gemini) and Groq (speech to text) through paid API accounts. Under those terms the providers do not use what we send to train their models. <a href="/privacy">The privacy policy</a> lists every provider and what it receives.</p></details>
+<details><summary>Do I need the rights to my videos?</summary><p>Yes. You must own the video or have permission to use it for clipping. The <a href="/terms">terms</a> say what that means.</p></details>
+<details><summary>Does the AI get it right every time?</summary><p>No. Picks, captions and rule checks can be wrong. That is why each pick shows its reason and each part can be changed. Check every clip before you post it.</p></details>
+<details><summary>Who is behind it?</summary><p>Clipper is run by {{operator_name}}. Questions: <a href="mailto:{{contact_email}}">{{contact_email}}</a>.</p></details>
+
+<h2>Try it free</h2>
+<p class="lead">60 minutes of footage and one Short, no card needed.</p>
+<p><a class="btn primary" href="/signup">Sign up free</a> <a class="btn" href="/login">Log in</a></p>
+</div>
+</main>
+<footer class="foot"><div class="wrap">
+<nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/dmca">Copyright (DMCA)</a><a href="/#pricing">Pricing</a><a href="mailto:{{contact_email}}">{{contact_email}}</a></nav>
+<p>Clipper is run by {{operator_name}}. Orders are processed by Paddle.com, our Merchant of Record. Clipper is not affiliated with TikTok, Instagram, YouTube, Whop or Vyro; those names belong to their owners.</p>
+</div></footer>
+</body>
+</html>

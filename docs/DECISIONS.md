@@ -3885,3 +3885,16 @@ Marc had every page clicked through for what a general user wouldn't need or und
   usage, kept 14 days; footage and clips aren't backed up (re-uploaded or rebuilt). `check_disk.py` warns under 15%.
 - Updates are by hand from a tag whose CI run (`.github/workflows/test.yml`: tests and ruff) passed; no auto-deploy,
   so a bad push to master can't reach paying users. `docs/DEPLOY.md` has the steps.
+
+## D226 — Public pages and the owner's launch checklist (2026-10-20)
+- Paddle, TikTok, Meta and Google reviewers open a site's pricing, terms, privacy and refund pages, so the hosted
+  site has five plain HTML pages in `src/clipper/hosted/site/` (landing with pricing and FAQ, terms, privacy, DMCA,
+  refunds), filled by the gateway with `{{contact_email}}`, `{{public_url}}`, `{{operator_name}}`. They are drafts
+  for a lawyer (a comment at the top of each says so); `[FILL: ...]` marks what only Marc can supply.
+- Refunds: an unconditional 14 days after a plan's first payment, once per account, since Paddle rejects "unreasonable
+  qualifiers" and the AI budget per account caps what a refund can cost. Packs: refunded within 14 days if unused.
+- `docs/LAUNCH_TODO.md` lists, in order and with text to paste, what only Marc can do: platform app reviews (after the
+  site is live: TikTok refuses a bare login page), Anthropic and Gemini paid keys with limits, stock and sound library
+  permissions, the DMCA agent, Paddle's products and webhook, the lawyer, the beta and its gates.
+- The privacy page promises what the code must keep: YouTube data deleted within 7 days of a disconnect and 30 days
+  of a revoke, stats re-checked every 30 days, platform stats never sent to an AI provider.

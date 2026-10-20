@@ -1,0 +1,118 @@
+<!-- Draft written for Marc to have a lawyer review before launch -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refund policy | Clipper</title>
+<meta name="description" content="How refunds work for Clipper subscriptions and packs, including the 14 day window and the right to withdraw in the EU and UK.">
+<meta name="color-scheme" content="dark light">
+<style>
+:root{--bg:#E8EAEE;--s1:#F4F5F7;--s2:#FFFFFF;--s3:#DCDFE4;--line:rgb(16 19 24 / .10);--text:#101318;--muted:#474D57;--subtle:#5A616C;--accent:#F5B30F;--accent-fg:#17110A;--ink:#8A5900;--money:#0B7A45;--focus:#101318;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0C0E12;--s1:#13161B;--s2:#1B1F26;--s3:#262B33;--line:rgb(255 255 255 / .07);--text:#ECEDEF;--muted:#A6ABB4;--subtle:#8A909A;--accent:#FFC229;--accent-fg:#17110A;--ink:#FFC229;--money:#52D08F;--focus:#ECEDEF;color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Sofia Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+.narrow{max-width:720px}
+a{color:var(--text);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+h1,h2,h3{font-family:"Sofia Sans Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;text-transform:uppercase;font-weight:800;margin:0}
+h1{font-size:clamp(2.1rem,6vw,3.1rem);line-height:.92}
+h2{font-size:26px;line-height:1;letter-spacing:.03em;margin:48px 0 14px}
+h3{font-size:19px;line-height:1.1;letter-spacing:.03em;margin:28px 0 8px}
+p,ul,ol,dl{margin:0 0 14px}
+ul,ol{padding-left:22px}
+li{margin-bottom:6px}
+.lead{font-size:17px;color:var(--muted);max-width:60ch}
+.muted{color:var(--muted)}
+.small{font-size:13px;color:var(--subtle)}
+header.top{border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;flex-wrap:wrap}
+.brand{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:21px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+nav.main{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+nav.main a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;font-weight:600;text-decoration:none;color:var(--muted)}
+nav.main a:hover{color:var(--text);text-decoration:underline}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;font-weight:700;text-decoration:none;background:var(--s3);color:var(--text)}
+.btn:hover{background:var(--s2)}
+.btn.primary{background:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.hero{padding:56px 0 24px;display:grid;gap:32px;grid-template-columns:1fr}
+.hero .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.wall{display:none}
+@media (min-width:760px){.hero{grid-template-columns:1.3fr .7fr;align-items:center}.wall{display:flex;gap:10px;justify-content:flex-end}}
+.poster{width:92px;aspect-ratio:9/16;background:var(--s2);border-radius:6px;position:relative;opacity:.55}
+.poster::after{content:"";position:absolute;left:8px;right:8px;bottom:10px;height:8px;border-radius:3px;background:var(--s3)}
+.poster.focus{opacity:1;transform:translateY(-6px);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent)}
+.steps{display:grid;gap:22px;grid-template-columns:1fr;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;margin:0}
+.steps li::before{content:counter(s);display:block;font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--ink)}
+.steps b{display:block;margin:4px 0 2px}
+@media (min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+.plans{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:640px){.plans{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:980px){.plans{grid-template-columns:repeat(4,1fr)}}
+.plan{background:var(--s1);border-radius:6px;padding:18px 16px}
+.plan h3{margin:0 0 6px;font-size:21px}
+.price{font-family:"Sofia Sans Condensed","Arial Narrow",system-ui,sans-serif;font-weight:800;font-size:2.1rem;line-height:1;color:var(--money)}
+.price small{font-family:"Sofia Sans",system-ui,sans-serif;font-weight:600;font-size:13px;color:var(--muted)}
+.plan ul{padding-left:18px;margin:12px 0 0;font-size:14px}
+.packs{width:100%;border-collapse:collapse;margin:8px 0 6px}
+.packs th,.packs td{text-align:left;padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.packs th{font-weight:700}
+.packs td.n{white-space:nowrap;color:var(--money);font-weight:700}
+details{border-bottom:1px solid var(--line);padding:2px 0}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700;list-style-position:inside}
+details p{color:var(--muted);margin:0 0 14px}
+.legal{padding:40px 0 8px}
+.legal h1{margin-bottom:10px}
+.toc{background:var(--s1);border-radius:6px;padding:14px 16px;margin:18px 0 0;font-size:14px}
+.toc a{display:inline-block;margin:2px 10px 2px 0}
+.note{background:var(--s1);border-radius:6px;padding:12px 16px;margin:0 0 14px}
+footer.foot{margin-top:64px;border-top:1px solid var(--line);padding:24px 0 40px;font-size:13px;color:var(--subtle)}
+footer.foot nav{display:flex;flex-wrap:wrap;gap:0 4px;margin-bottom:10px}
+footer.foot nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 10px 0 0;color:var(--muted)}
+code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:13px;background:var(--s1);padding:1px 5px;border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+<a class="brand" href="/">Clipper</a>
+<nav class="main" aria-label="Main">
+<a href="/#pricing">Pricing</a><a href="/#faq">Questions</a><a href="/login">Log in</a><a class="btn primary" href="/signup">Sign up free</a>
+</nav></div></header>
+<main><div class="wrap narrow legal">
+<h1>Refund policy</h1>
+<p class="muted">Last updated: 20 October 2026</p>
+<p>Clipper is sold by {{operator_name}}. Our order process is run by Paddle.com, the Merchant of Record for all our orders. Paddle takes your payment and sends your refund.</p>
+
+<h2>Subscriptions (Starter, Pro, Agency)</h2>
+<ul>
+<li><b>Within 14 days of your first payment</b> for a plan, you get a full refund, whatever you used. Ask once per account.</li>
+<li>After 14 days we do not refund part of a period that has already started. You can still cancel at any time, and you keep your plan until the end of the period you paid for.</li>
+<li>Renewals: cancel before the renewal date to avoid the next charge. If a renewal charged you and you had no use of it, write to us the same week and we will look at it.</li>
+</ul>
+
+<h2>Packs</h2>
+<p>You can have a refund for a pack within 14 days of buying it if none of it has been used. Once part of a pack is used, we do not refund the rest.</p>
+
+<h2>If you live in the EU or the UK</h2>
+<p>As a consumer you have the right to withdraw from a purchase within 14 days without giving a reason. Clipper starts working as soon as you use it, so if you have already used part of the service, the refund is reduced in proportion to what you used. Paddle handles these requests for us under its checkout terms, and your rights under the law of your country stay as they are.</p>
+
+<h2>If something went wrong on our side</h2>
+<p>If Clipper failed to deliver what you paid for, for example a build that never finished and used your allowance, write to us. We will give the allowance back or refund you, whichever you prefer.</p>
+
+<h2>How to ask</h2>
+<ol>
+<li>Open the receipt Paddle emailed you and follow the link to request a refund, or go to <a href="https://paddle.net">paddle.net</a> and look up your order.</li>
+<li>Or email <a href="mailto:{{contact_email}}">{{contact_email}}</a> with the email address on your account and the date of the payment.</li>
+</ol>
+<p>Approved refunds go back to the original payment method. The time it takes to show up depends on your bank or card, usually 5 to 10 business days.</p>
+</div></main>
+<footer class="foot"><div class="wrap">
+<nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/dmca">Copyright (DMCA)</a><a href="/#pricing">Pricing</a><a href="mailto:{{contact_email}}">{{contact_email}}</a></nav>
+<p>Clipper is run by {{operator_name}}. Orders are processed by Paddle.com, our Merchant of Record. Clipper is not affiliated with TikTok, Instagram, YouTube, Whop or Vyro; those names belong to their owners.</p>
+</div></footer>
+</body>
+</html>
