@@ -1,0 +1,18 @@
+{$CLIPPER_DOMAIN} {
+	encode zstd gzip
+
+	# Multi-GB footage uploads: no cap here, the app enforces CLIPPER_MAX_UPLOAD_GB.
+	request_body {
+		max_size 0
+	}
+
+	reverse_proxy app:8080 {
+		header_up X-Forwarded-Proto {scheme}
+		# flush_interval -1 sends each SSE event at once (/api/events).
+		flush_interval -1
+		transport http {
+			read_timeout 0
+			write_timeout 0
+		}
+	}
+}

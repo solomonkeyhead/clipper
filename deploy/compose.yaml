@@ -1,0 +1,34 @@
+# Clipper hosted site: the app plus Caddy for automatic HTTPS. Run from this folder:
+#   docker compose up -d
+services:
+  app:
+    build:
+      context: ..
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - clipper-data:/srv/clipper
+      # Backups land on the host, off the data volume (docs/DEPLOY.md).
+      - ${BACKUP_DIR:-/srv/clipper-backups}:/backups
+    expose:
+      - "8080"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Same as CLIPPER_PUBLIC_URL without https:// (the Caddyfile site address).
+      CLIPPER_DOMAIN: ${CLIPPER_DOMAIN:?set CLIPPER_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  clipper-data:
+  caddy-data:
+  caddy-config:

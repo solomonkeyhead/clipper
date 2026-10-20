@@ -1,0 +1,28 @@
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install the project
+        run: pip install -e ".[dev,anthropic]"
+      - name: Fetch the two test fonts
+        run: |
+          mkdir -p assets/fonts
+          base=https://raw.githubusercontent.com/google/fonts/main/ofl
+          curl -fsSL -o assets/fonts/Caveat.ttf "$base/caveat/Caveat%5Bwght%5D.ttf"
+          curl -fsSL -o assets/fonts/Inter.ttf "$base/inter/Inter%5Bopsz%2Cwght%5D.ttf"
+      - run: python -m pytest tests/unit -q
+      - run: ruff check src tests/unit

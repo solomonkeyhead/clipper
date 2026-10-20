@@ -3864,3 +3864,24 @@ Marc had every page clicked through for what a general user wouldn't need or und
   and off for the video. A Freesound search opens under a hit from its Sound list. Changes count as "not built yet".
 - `scripts/ui/walkthrough.py` checks the fold, and runs on Windows in Edge when the cloud Chromium isn't there.
   Its earlier draft steps fail since D222 (the draft bar's More); the hits block was run on its own.
+
+## D224 — A hosted Clipper for paying users: the launch plan Marc accepted (2026-10-20)
+- An audit of every cost, risk and gap (the report "Clipper: ship audit, costs and pricing") found Clipper can't take
+  money as it is: on paid API keys a Short costs about $1.60 (up to $12 with redraws) and an hour of footage about
+  $1.70, most of it Opus; there are no accounts, no billing, and a stranger could read others' files or run code on
+  the server. Marc accepted the whole plan and chose: clipping is the paid product with Create in beta, sign-in built
+  into Clipper, payments through Paddle, measuring test runs on his Claude plan.
+- Prices: Free (60 minutes, 1 Short once), Starter $15 (300 min, 3 Shorts), Pro $29 (600, 8), Agency $79 (1,800, 20),
+  packs $5 / $10 / $7.50; every manual control on every plan (D120), plans differ only in volume and extras.
+- `clipper.hosting.hosted()` is the one place any module asks whether it runs on a server; `studio.server.hosted()`
+  delegates to it. Everything for the hosted site is gated on it, so Marc's own copy keeps working as before.
+
+## D225 — The hosted site runs from one Docker image behind Caddy (2026-10-20)
+- `Dockerfile`: python 3.12 slim, Debian's ffmpeg (has libass), Chromium for the drawings, fonts and the face model
+  fetched at build; CPU only, as the hosted site transcribes through Groq. The project is installed editable because
+  Clipper finds `assets/` from its source tree. `deploy/compose.yaml` adds Caddy for HTTPS (no buffering for the
+  event stream, no body limit: the app caps uploads), `deploy/env.example` lists every variable.
+- Backups (`scripts/ops/backup.py`): SQLite's online backup of the gateway's and every user's databases, plans and
+  usage, kept 14 days; footage and clips aren't backed up (re-uploaded or rebuilt). `check_disk.py` warns under 15%.
+- Updates are by hand from a tag whose CI run (`.github/workflows/test.yml`: tests and ruff) passed; no auto-deploy,
+  so a bad push to master can't reach paying users. `docs/DEPLOY.md` has the steps.
