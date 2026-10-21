@@ -401,7 +401,7 @@ def yt_has_app() -> bool:
     """A Google app to sign in with: the user's own, or one built into Clipper (D84)."""
     from ..youtube import api as yt_api
 
-    return yt_api.has_app() or connect.enabled()
+    return yt_api.has_app() or connect.enabled("youtube")
 
 
 def scoped(snap: Snapshot, scope: str | None) -> list[Clip]:

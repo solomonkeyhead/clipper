@@ -4092,3 +4092,14 @@ Marc had every page clicked through for what a general user wouldn't need or und
 - Checked on the real gateway (serve_hosted.py, a test sign-up, the real meter): Free shows 0 of 60 min and 0 of 1
   free Short; Settings has no AI keys or This computer. `scripts/ui/hosted_walkthrough.py` checks the rest at 1400,
   900 and 375 px, dark and light.
+
+## D239 — Connecting accounts on the hosted site (2026-10-21)
+- The connect service's page (D151) posted tokens back cross-site to 127.0.0.1; on the hosted site that post carried no
+  session cookie and was refused. Decided: the gateway serves `clipper.broker` itself at `<site>/connect`, so the
+  post-back is same-site, carries the session, and reaches the signed-in user's Clipper, whose nonce check is unchanged.
+- Each user's Clipper gets `CLIPPER_BROKER_URL=<site>/connect`, `CLIPPER_BROKER_LOCAL_URL` (the gateway's own port, for
+  refreshes, which have no session) and `CLIPPER_BROKER_PLATFORMS` (only platforms with keys are offered). The app
+  secrets and the signing key stay with the gateway. The broker now reads a return address's host properly (a
+  `127.0.0.1:1@evil.example` address passed its prefix check) and never signs with an empty key.
+- Why: one origin needs no cross-site cookie and one redirect URI per platform (LAUNCH_TODO section 7). Local mode is
+  unchanged. Left: Meta's deauthorize callback; a cancelled login's return page still says "Connected".

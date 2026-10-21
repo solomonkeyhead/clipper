@@ -158,7 +158,7 @@ def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
     """Open Google's consent page, wait for the redirect, keep the channel's tokens."""
     from .. import connect
 
-    if connect.enabled():       # a service address means: log in through it, whatever keys are also saved
+    if connect.enabled("youtube"):       # a service address means: log in through it, whatever keys are also saved
         return _finish_login({**connect.login("youtube", timeout=timeout, open_browser=open_browser), "via": "service"})
     cid, secret = client()
     verifier = secrets.token_urlsafe(48)

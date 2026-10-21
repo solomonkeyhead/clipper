@@ -7,11 +7,16 @@ a refresh token. Settings, all environment variables:
 
   PUBLIC_URL             this service's public address, e.g. https://connect.example.com
   BROKER_SIGNING_KEY     a long random string; signs the state that rides through the platform's login
+                         (unset: a random one per process, so a restart ends the logins under way)
   TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET          a TikTok "Login Kit for web" app, redirect PUBLIC_URL/callback/tiktok
   YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET         a Google "Web application" client, redirect PUBLIC_URL/callback/youtube
   INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET           a Meta app with Instagram login, redirect PUBLIC_URL/callback/instagram
 
 The platforms' own review decides who may log in (sandbox: listed testers only; after review: anyone).
+
+The hosted site's gateway (D239) serves this same app at `<CLIPPER_PUBLIC_URL>/connect` (MOUNT), with PUBLIC_URL
+left unset: its address, and so its redirects, are then CLIPPER_PUBLIC_URL + MOUNT, and besides a Clipper on the
+user's own computer it hands logins back to the site's own return address (`connect.RETURN`).
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ import hmac
 import html
 import json
 import os
+import secrets
 import time
 import urllib.parse
 
@@ -29,27 +35,44 @@ import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from .. import connect
 from ..instagram import api as ig
 from ..tiktok import api as tt
 from ..youtube import api as yt
 
 LOCAL = ("http://127.0.0.1:", "http://localhost:")      # where a login may be handed back to
 STATE_LIFE = 600
+MOUNT = "/connect"          # where the hosted gateway serves this app on its own site (D239)
+#: Each platform's app: its id and its secret.
+KEYS = {"tiktok": ("TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"), "youtube": ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"),
+        "instagram": ("INSTAGRAM_APP_ID", "INSTAGRAM_APP_SECRET")}
+# ponytail: per process; set BROKER_SIGNING_KEY when more than one process serves logins.
+_SPARE_KEY = secrets.token_hex(32)
 
 
 def _env(name: str) -> str:
     return os.environ.get(name, "").strip()
 
 
+def ready(platform: str) -> bool:
+    """This service has an app for `platform`."""
+    return platform in KEYS and all(_env(name) for name in KEYS[platform])
+
+
+def _mac(body: str) -> str:
+    # Never an empty key: anyone could then sign a state that sends a login's tokens to their own address.
+    key = _env("BROKER_SIGNING_KEY") or _SPARE_KEY
+    return hmac.new(key.encode(), body.encode(), hashlib.sha256).hexdigest()
+
+
 def sign(data: dict) -> str:
     body = base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
-    mac = hmac.new(_env("BROKER_SIGNING_KEY").encode(), body.encode(), hashlib.sha256).hexdigest()
-    return f"{body}.{mac}"
+    return f"{body}.{_mac(body)}"
 
 
 def unsign(state: str) -> dict:
     body, _, mac = state.rpartition(".")
-    good = hmac.new(_env("BROKER_SIGNING_KEY").encode(), body.encode(), hashlib.sha256).hexdigest()
+    good = _mac(body)
     if not body or not hmac.compare_digest(mac, good):
         raise HTTPException(400, "bad state")
     data = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
@@ -58,8 +81,24 @@ def unsign(state: str) -> dict:
     return data
 
 
+def public_url() -> str:
+    """PUBLIC_URL; inside the hosted gateway, the site's address + MOUNT (D239)."""
+    site = _env("CLIPPER_PUBLIC_URL").rstrip("/")
+    return _env("PUBLIC_URL").rstrip("/") or (site + MOUNT if site else "")
+
+
+def may_return_to(back: str) -> bool:
+    """A Clipper on the user's own computer; on the hosted site also the site's own return address (D239): same
+    site, so the browser sends the user's session with the post and the gateway gives it to their Clipper.
+    The host is read as a browser would, so `http://127.0.0.1:1@evil.example/` is not this computer."""
+    if back.startswith(LOCAL) and urllib.parse.urlsplit(back).hostname in ("127.0.0.1", "localhost"):
+        return True
+    site = _env("CLIPPER_PUBLIC_URL").rstrip("/")
+    return bool(site) and back == site + connect.RETURN
+
+
 def redirect_uri(platform: str) -> str:
-    return f"{_env('PUBLIC_URL').rstrip('/')}/callback/{platform}"
+    return f"{public_url()}/callback/{platform}"
 
 
 def _post(url: str, data: dict) -> dict:
@@ -137,8 +176,8 @@ def create_app() -> FastAPI:
     def start(platform: str, request: Request) -> RedirectResponse:
         # `return` is a Python keyword, so the query is read by hand.
         nonce, back = request.query_params.get("nonce", ""), request.query_params.get("return", "")
-        if not back.startswith(LOCAL) or not nonce:
-            raise HTTPException(400, "this login must come from Clipper on your own computer")
+        if not may_return_to(back) or not nonce:
+            raise HTTPException(400, "this login must come from Clipper")
         return RedirectResponse(authorize_url(platform, sign({"p": platform, "n": nonce, "b": back, "t": time.time()})))
 
     @app.get("/callback/{platform}")

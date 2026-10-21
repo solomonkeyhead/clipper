@@ -9,6 +9,12 @@ TikTok and Google want the secret for that.
 
 Set `CLIPPER_BROKER_URL` (in `.env`, or in the copy of Clipper you give people) to the service's address. A
 user who has put in their own app keys keeps using those; the service is only for a platform with none.
+
+Hosted (D239), the gateway serves the service on the site itself (`<site>/connect`) and sets this Clipper's
+CLIPPER_BROKER_URL to it: the page posting the tokens back is then on the site's own address, so the browser
+sends the session cookie with it and the gateway passes it to this user's Clipper. It also sets
+CLIPPER_BROKER_LOCAL_URL (the gateway's own port, for refreshes, which carry no session) and
+CLIPPER_BROKER_PLATFORMS (the platforms the site has an app for).
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ from pathlib import Path
 import httpx
 
 PLATFORMS = ("tiktok", "youtube", "instagram")
+RETURN = "/api/accounts/broker/return"     # where the service's page posts a finished login
 _pending: dict[str, dict] = {}     # nonce -> {"event": Event, "payload": dict | None}
 
 
@@ -39,8 +46,11 @@ def url() -> str:
     return found.rstrip("/")
 
 
-def enabled() -> bool:
-    return bool(url())
+def enabled(platform: str | None = None) -> bool:
+    """A service is set up (for `platform`: hosted, one the site has an app for, D239; any other service is
+    taken to have all three)."""
+    listed = os.environ.get("CLIPPER_BROKER_PLATFORMS")
+    return bool(url()) and (platform is None or listed is None or platform in listed.split(","))
 
 
 def refreshes_via_service(token: dict, own_app: bool) -> bool:
@@ -52,9 +62,16 @@ def refreshes_via_service(token: dict, own_app: bool) -> bool:
 
 
 def local_return() -> str:
+    """This Clipper on 127.0.0.1; hosted, the site's own address, which the gateway passes to the signed-in
+    user's Clipper (D239)."""
+    from .hosting import hosted
+
+    site = os.environ.get("CLIPPER_PUBLIC_URL", "").strip().rstrip("/")
+    if site and hosted():
+        return site + RETURN
     from .studio import server
 
-    return f"http://127.0.0.1:{server.PORT}/api/accounts/broker/return"
+    return f"http://127.0.0.1:{server.PORT}{RETURN}"
 
 
 def login(platform: str, *, timeout: float = 300.0, open_browser=None) -> dict:
@@ -86,9 +103,11 @@ def deliver(nonce: str, payload: dict) -> bool:
 
 
 def refresh(platform: str, refresh_token: str) -> dict:
-    """New tokens for a refresh token, from the service (it holds the app secret)."""
+    """New tokens for a refresh token, from the service (it holds the app secret). Hosted straight to the
+    gateway's own port (D239): a refresh carries no session, and needn't leave the machine."""
+    base = os.environ.get("CLIPPER_BROKER_LOCAL_URL", "").strip().rstrip("/") or url()
     try:
-        r = httpx.post(f"{url()}/refresh/{platform}", data={"refresh_token": refresh_token}, timeout=90)   # a free host may be waking up
+        r = httpx.post(f"{base}/refresh/{platform}", data={"refresh_token": refresh_token}, timeout=90)   # a free host may be waking up
     except httpx.HTTPError as exc:
         raise ConnectError(f"couldn't reach the connect service: {exc}") from exc
     if r.status_code >= 400:

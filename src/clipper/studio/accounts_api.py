@@ -87,7 +87,7 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
     @app.post("/api/accounts/youtube/connect")
     def youtube_connect() -> dict[str, str]:
         """Start Google's sign-in; the page opens the returned consent link."""
-        if not server.yt_has_app() and not connect.enabled():
+        if not server.yt_has_app():
             raise HTTPException(400, "Save your Google app's client ID and secret first")
         return youtube.start()
 
@@ -113,7 +113,7 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
         """Start Instagram's login; the page opens the returned consent link (D150)."""
         from ..instagram import api as ig_api
 
-        if not ig_api.has_app() and not connect.enabled():
+        if not ig_api.has_app() and not connect.enabled("instagram"):
             raise HTTPException(400, "Save your Meta app's ID and secret first")
         return instagram.start()
 
@@ -145,11 +145,11 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
         ai = setup.ai_status()
         return Setup(ai_ready=ai["ready"], ai_backend=ai["backend"], ai_detail=ai["detail"],
                      keys={k: setup.key_set(k) for k in setup.KEYS},
-                     tiktok_app=connect.enabled() or (setup.key_set("TIKTOK_CLIENT_KEY")
+                     tiktok_app=connect.enabled("tiktok") or (setup.key_set("TIKTOK_CLIENT_KEY")
                                                      and setup.key_set("TIKTOK_CLIENT_SECRET")),
                      tiktok_connect=tiktok.view(),
                      youtube_app=server.yt_has_app(),
-                     instagram_app=connect.enabled() or (setup.key_set("INSTAGRAM_APP_ID") and setup.key_set("INSTAGRAM_APP_SECRET")))
+                     instagram_app=connect.enabled("instagram") or (setup.key_set("INSTAGRAM_APP_ID") and setup.key_set("INSTAGRAM_APP_SECRET")))
 
     @app.put("/api/setup/keys")
     def put_keys(values: dict[str, str]) -> Setup:

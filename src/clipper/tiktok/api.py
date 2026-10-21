@@ -147,7 +147,7 @@ def login(*, timeout: float = 300.0, open_browser=webbrowser.open) -> dict:
     own, the connect service does it (D151)."""
     from .. import connect
 
-    if connect.enabled():       # a service address means: log in through it, whatever keys are also saved
+    if connect.enabled("tiktok"):       # a service address means: log in through it, whatever keys are also saved
         return finish_login({**connect.login("tiktok", timeout=timeout, open_browser=open_browser), "via": "service"})
     key, secret = client()
     verifier, challenge = pkce_pair()

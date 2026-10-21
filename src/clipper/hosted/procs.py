@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from ..broker import app as broker
 from ..utils.logging import get_logger
 from . import data_dir, user_dir
 
@@ -31,8 +32,10 @@ log = get_logger(__name__)
 IDLE_SECONDS = 20 * 60
 READY_SECONDS = 30.0
 MAX_TRANSFER = 6 * 3600
-#: Gateway secrets a user's Clipper never needs (billing, mail, who the admins are).
-GATEWAY_ONLY = ("SMTP_URL", "CLIPPER_ADMINS", "CLIPPER_HOSTED_ROOT")
+#: Gateway secrets a user's Clipper never needs (billing, mail, who the admins are, the connect service's: the
+#: platforms' app secrets stay with the gateway, D239), and an outside connect service's address (connect_env).
+GATEWAY_ONLY = ("SMTP_URL", "CLIPPER_ADMINS", "CLIPPER_HOSTED_ROOT", "BROKER_SIGNING_KEY", "PUBLIC_URL",
+                "CLIPPER_BROKER_URL", *(name for pair in broker.KEYS.values() for name in pair))
 
 
 class StartFailed(RuntimeError):
@@ -89,11 +92,26 @@ def _kill(popen: subprocess.Popen) -> None:
         popen.wait(5)
 
 
+def connect_env() -> dict[str, str]:
+    """Where a user's Clipper connects accounts (D239): the connect service this gateway serves on the site
+    itself, so the page that posts a login back is on the site and the browser sends the session with it (an
+    outside service's cross-site post carries no SameSite=Lax cookie). Refreshes carry no session: they go
+    to the gateway's own port. Nothing when the site has no platform app or no public address."""
+    from . import env, port  # here: _start names its own `port`
+
+    site, offered = env("CLIPPER_PUBLIC_URL").rstrip("/"), [p for p in broker.KEYS if broker.ready(p)]
+    if not site or not offered:
+        return {}
+    return {"CLIPPER_BROKER_URL": site + broker.MOUNT, "CLIPPER_BROKER_LOCAL_URL": f"http://127.0.0.1:{port()}{broker.MOUNT}",
+            "CLIPPER_BROKER_PLATFORMS": ",".join(offered)}
+
+
 def user_env(user_id: int) -> dict[str, str]:
     """What a user's Clipper runs with: the gateway's environment less its own secrets, hosted, on their folder."""
-    env = {k: v for k, v in os.environ.items() if k not in GATEWAY_ONLY and not k.startswith("PADDLE_")}
-    return env | {"CLIPPER_HOSTED": "1", "CLIPPER_HOST": "127.0.0.1", "CLIPPER_DATA_DIR": str(data_dir(user_id)),
-                  "CLIPPER_NO_UPDATE": "1", "PYTHONUNBUFFERED": "1"}
+    mine = {k: v for k, v in os.environ.items() if k not in GATEWAY_ONLY and not k.startswith("PADDLE_")}
+    return mine | connect_env() | {"CLIPPER_HOSTED": "1", "CLIPPER_HOST": "127.0.0.1",
+                                   "CLIPPER_DATA_DIR": str(data_dir(user_id)), "CLIPPER_NO_UPDATE": "1",
+                                   "PYTHONUNBUFFERED": "1"}
 
 
 #: What a stopped user's Clipper would do each day if it ran (D237): delete stored platform data not refreshed

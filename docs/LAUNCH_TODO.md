@@ -364,11 +364,27 @@ English, signed in with a test account. Say nothing you cannot show.
 | 42 to 54 | Back in Clipper: the connected account, the video list with views, likes, comments, and a clip matched to its post. | "Clipper shows the account's name and my videos' statistics, and matches each post to the clip it came from." |
 | 54 to 60 | Click Disconnect, then show the account gone. Open `/privacy` in a tab. | "I can disconnect at any time, which deletes the data. The privacy policy says how it is handled." |
 
+**The redirect URIs.** The site serves the connect service itself at `<public url>/connect` (D239), so each
+platform's app gets exactly one redirect URI, with `<public url>` being `CLIPPER_PUBLIC_URL` (https, no slash at the end):
+
+| Platform | Where in the platform's dashboard | Redirect URI |
+|---|---|---|
+| TikTok | Login Kit, Redirect URI (web) | `<public url>/connect/callback/tiktok` |
+| Google | OAuth client (Web application), Authorized redirect URIs | `<public url>/connect/callback/youtube` |
+| Meta | Instagram API with Instagram login, the business login settings' OAuth redirect URIs | `<public url>/connect/callback/instagram` |
+
+Then put each app's keys in `deploy/.env` (`TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `YOUTUBE_CLIENT_ID`,
+`YOUTUBE_CLIENT_SECRET`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`) and a long random `BROKER_SIGNING_KEY`, and
+restart. A platform shows its Add button once both of its keys are set; until then the page says it isn't
+available yet. Leave `PUBLIC_URL` and `CLIPPER_BROKER_URL` unset on the server. Your own Clipper at home can use
+the same apps: set `CLIPPER_BROKER_URL=<public url>/connect` in its `.env` (accounts connected through the old
+service then need connecting again, since a login renews only through the app that made it).
+
 Per platform:
 
 - **TikTok** ([review rules](https://developers.tiktok.com/docs/en/app-review-guidelines)). Create a *Login Kit for
-  web* app with the Display API, scopes `user.info.basic` and `video.list`, redirect `<public url>/callback/tiktok`
-  (or the hosted redirect the connect service uses). Fill in: name (not "TikTok", not a description of what it does),
+  web* app with the Display API, scopes `user.info.basic` and `video.list`, redirect
+  `<public url>/connect/callback/tiktok`. Fill in: name (not "TikTok", not a description of what it does),
   a 1024-pixel icon, a description that says what it does, the website URL (the site's home), Privacy and Terms
   links, the scope explanations (use the use-case text), and the demo video. The video must show the real site, and
   its domain must match the website URL you gave. A first submission needs the sandbox demonstration done first.

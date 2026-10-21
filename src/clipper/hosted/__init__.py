@@ -15,6 +15,11 @@ def env(name: str, default: str = "") -> str:
     return os.environ.get(name, "").strip() or default
 
 
+def port() -> int:
+    """The gateway's port: users' Clippers reach its connect service there (D239)."""
+    return int(env("PORT", "8080"))
+
+
 def root() -> Path:
     """Everything the gateway keeps: its database and every user's folder."""
     return Path(env("CLIPPER_HOSTED_ROOT", "/srv/clipper"))

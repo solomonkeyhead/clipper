@@ -35,6 +35,9 @@ Where it is set, every "Add an account" button is one click and logs in through 
 ## Not covered
 - **X** has no login in this: its stats are read with a developer token billed per post read, so a shared
   token would put every user's reads on Marc's bill. Users keep their own token and type a username.
-- **Hosted Clipper** (`CLIPPER_HOST`): the tokens post back with a cross-site form, which the access cookie's
-  SameSite=strict refuses. Only the local Clipper is covered.
+- **A Clipper hosted on its own** (`CLIPPER_HOST`, no gateway): the tokens post back with a cross-site form,
+  which the access cookie's SameSite=strict refuses. The hosted site's gateway is covered (D239): it serves this
+  service itself at `<public url>/connect` (redirects `<public url>/connect/callback/<platform>`), so the post-back
+  is same-site and carries the session; it sets each user's Clipper's `CLIPPER_BROKER_URL` to it, and refreshes
+  go to the gateway's own port. Its keys are the same env names as above, on the gateway; leave `PUBLIC_URL` unset there.
 - Trust: the service sees each login's tokens for a moment. Say so in the privacy page.

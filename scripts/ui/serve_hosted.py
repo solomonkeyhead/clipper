@@ -14,6 +14,7 @@ if __name__ == "__main__":
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="clipper-hosted-"))
     os.environ["CLIPPER_HOSTED_ROOT"] = str(root)
     os.environ.setdefault("CLIPPER_PUBLIC_URL", "http://127.0.0.1:8090")
+    os.environ["PORT"] = "8090"   # users' Clippers refresh logins through the gateway's port (D239)
     os.environ.setdefault("CLIPPER_ADMINS", "admin@example.com")
     os.environ.pop("SMTP_URL", None)
     import uvicorn

@@ -1,7 +1,9 @@
 """The gateway's web app (D228): sign-up, sign-in, billing and admin pages, and the proxy to each user's Clipper.
 
 Gateway-owned paths are the shared contract's list (/login /signup /logout /reset /billing /pricing /terms
-/privacy /dmca /refunds /admin /paddle/* /healthz /_gw/*). Everything else, signed in, goes to the user's
+/privacy /dmca /refunds /admin /paddle/* /healthz /_gw/*), plus /connect/*: the connect service (D151) served
+on the site itself (D239), so its page posting a login back is same-site and carries the session cookie, and
+refreshes reach it with no session. Everything else, signed in, goes to the user's
 own Clipper; signed out, / is the landing page and the rest asks to log in. Pages are plain HTML in
 Clipper's colours (DESIGN.md), no framework: a few forms.
 """
@@ -30,6 +32,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
+from ..broker import app as broker
 from ..utils.logging import get_logger
 from . import billing, catalog, data_dir, env, proxy, root, user_dir, users
 from .procs import Procs, StartFailed
@@ -40,7 +43,7 @@ COOKIE = proxy.SESSION_COOKIE
 TERMS_VERSION = "2026-10-20"
 SITE = Path(__file__).parent / "site"
 OWNED = {"login", "signup", "logout", "reset", "billing", "pricing", "terms", "privacy", "dmca", "refunds",
-         "admin", "paddle", "healthz", "_gw"}
+         "admin", "paddle", "healthz", "_gw", "connect"}
 #: What "Download my data" leaves out: caches Clipper rebuilds, and footage it downloads again (D228).
 EXPORT_SKIP = {("cache",), ("work",), ("models",), ("create", "stock")}
 STORED = {".mp4", ".mov", ".mkv", ".webm", ".mp3", ".m4a", ".wav", ".aac", ".jpg", ".jpeg", ".png", ".webp", ".zip"}
@@ -354,6 +357,7 @@ def create_app(procs: Procs | None = None) -> FastAPI:
     app.state.procs = procs
     app.state.pending_resets = pending
     app.mount("/_gw/site", StaticFiles(directory=SITE, check_dir=False), name="site")
+    app.mount(broker.MOUNT, broker.create_app(), name="connect")
 
     def current(request: Request) -> dict | None:
         return users.session_user(request.cookies.get(COOKIE, ""))
