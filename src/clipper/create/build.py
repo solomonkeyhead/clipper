@@ -249,12 +249,12 @@ def _too_dark(shot: Path) -> bool:
 
     from PIL import Image, ImageStat
 
-    from ..render.ffmpeg import ffmpeg_path
+    from ..render.ffmpeg import ffmpeg_path, safe_inputs
 
     seconds = probe(shot).duration or 1.0
     try:
-        png = subprocess.run([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{seconds / 3:.2f}", "-i", str(shot),
-                              "-frames:v", "1", "-vf", "scale=270:480", "-f", "image2pipe", "-vcodec", "png", "-"],
+        png = subprocess.run(safe_inputs([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{seconds / 3:.2f}", "-i", str(shot),
+                              "-frames:v", "1", "-vf", "scale=270:480", "-f", "image2pipe", "-vcodec", "png", "-"]),
                              capture_output=True, timeout=60, check=True).stdout
         stat = ImageStat.Stat(Image.open(io.BytesIO(png)).convert("L"))
     except (subprocess.SubprocessError, OSError):

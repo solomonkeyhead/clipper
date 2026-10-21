@@ -361,7 +361,7 @@ def test_inputs_are_files_and_pipes_only_and_lavfi_is_left_alone():
     from clipper.render import ffmpeg
 
     cmd = ffmpeg.safe_inputs(["ffmpeg", "-ss", "1", "-i", "a.mp4", "-f", "lavfi", "-i", "color=black", "out.mp4"])
-    assert cmd == ["ffmpeg", "-ss", "1", "-protocol_whitelist", "file,pipe", "-i", "a.mp4",
+    assert cmd == ["ffmpeg", "-ss", "1", "-protocol_whitelist", "file,pipe,fd", "-i", "a.mp4",
                    "-f", "lavfi", "-i", "color=black", "out.mp4"]
     assert ffmpeg.safe_inputs(cmd) == cmd
 
@@ -397,7 +397,7 @@ def test_ffmpeg_and_ffprobe_get_the_whitelist_and_a_timeout(monkeypatch, tmp_pat
     media = tmp_path / "a.mp4"
     media.write_bytes(b"x")
     probe.probe_raw(media)
-    assert calls[-1][0][1:3] == ["-protocol_whitelist", "file,pipe"] and calls[-1][1] == 600
+    assert calls[-1][0][1:3] == ["-protocol_whitelist", "file,pipe,fd"] and calls[-1][1] == 600
     with pytest.raises(ffmpeg.FFmpegError, match="stopped"):
         ffmpeg.run(["-f", "lavfi", "-i", "color", "out.mp4"])
     with pytest.raises(subprocess.TimeoutExpired):   # a caller's own limit is the caller's (the NVENC probe)

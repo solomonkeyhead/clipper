@@ -156,7 +156,9 @@ def scan_cuts(video: Path, *, ffmpeg: str = "ffmpeg") -> CutScan:
     black_start: float | None = None
     previous = None
     index = 0
-    with subprocess.Popen(command, stdout=subprocess.PIPE) as proc:
+    from ..render.ffmpeg import safe_inputs
+
+    with subprocess.Popen(safe_inputs(command), stdout=subprocess.PIPE) as proc:
         assert proc.stdout is not None
         while True:
             raw = proc.stdout.read(size)

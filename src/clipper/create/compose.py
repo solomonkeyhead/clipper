@@ -33,7 +33,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFile, ImageFilter, ImageFont
 
 from ..paths import REPO_ROOT
-from ..render.ffmpeg import ffmpeg_path
+from ..render.ffmpeg import ffmpeg_path, safe_inputs
 from ..utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -119,10 +119,10 @@ def decode(src: Path, size: tuple[int, int], *, start: float = 0.0, seconds: flo
     vf = (f"setpts={slow:.4f}*PTS," if slow != 1.0 else "") + f"fps={FPS},scale={w}:{h}:flags=lanczos,setsar=1"
     if filters:
         vf += "," + filters
-    args = [str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-nostdin",
+    args = safe_inputs([str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-nostdin",
             *(["-stream_loop", "-1"] if loop else ["-ss", f"{max(0.0, start):.3f}"]),
             "-i", str(src), "-t", f"{seconds + 0.2:.3f}", "-an", "-vf", vf,
-            "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+            "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
     return subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
 
@@ -168,8 +168,8 @@ class Writer:
         codec = (["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "16", "-b:v", "0"] if footage and _nvenc()
                  else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "14"])
         self.proc = subprocess.Popen(
-            [str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-             "-s", f"{w}x{h}", "-r", str(FPS), "-i", "-", *codec, "-pix_fmt", "yuv420p", str(out)],
+            safe_inputs([str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
+             "-s", f"{w}x{h}", "-r", str(FPS), "-i", "-", *codec, "-pix_fmt", "yuv420p", str(out)]),
             stdin=subprocess.PIPE)
 
     def write(self, frame: np.ndarray) -> None:
@@ -856,10 +856,10 @@ def render(edit: Edit, out: Path, audio_inputs: list[str], audio_graph: str, enc
     Professor, any cut-in on him, then the words on top (captions, hook, sign-off, watermark)."""
     board = edit.board if edit.board is not None else base_board((24, 24, 26), (240, 240, 236))
     proc = subprocess.Popen(
-        [str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y",
+        safe_inputs([str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-y",
          "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
          *audio_inputs, "-filter_complex", audio_graph, "-map", "0:v", "-map", "[a]", "-t", f"{duration:.3f}",
-         *encode, "-pix_fmt", "yuv420p", "-r", str(FPS), "-movflags", "+faststart", str(out)],
+         *encode, "-pix_fmt", "yuv420p", "-r", str(FPS), "-movflags", "+faststart", str(out)]),
         stdin=subprocess.PIPE)
     plain = None   # the board with no panel edge, for a cut-in
     try:

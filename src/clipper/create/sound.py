@@ -245,10 +245,10 @@ def load(path: Path, seconds: float, loop: bool = True) -> np.ndarray:
     with `loop` off, as it is, cut to `seconds` (a library sound hit, D223)."""
     import subprocess
 
-    from ..render.ffmpeg import ffmpeg_path
+    from ..render.ffmpeg import ffmpeg_path, safe_inputs
 
-    raw = subprocess.run([str(ffmpeg_path()), "-loglevel", "error", "-i", str(path), "-ac", "1", "-ar", str(RATE),
-                          "-f", "s16le", "-"], capture_output=True, check=True, timeout=120).stdout
+    raw = subprocess.run(safe_inputs([str(ffmpeg_path()), "-loglevel", "error", "-i", str(path), "-ac", "1", "-ar", str(RATE),
+                          "-f", "s16le", "-"]), capture_output=True, check=True, timeout=120).stdout
     data = np.frombuffer(raw, dtype="<i2").astype(float) / 32768
     n = int(RATE * seconds)
     if not loop:

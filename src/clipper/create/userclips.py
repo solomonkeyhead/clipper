@@ -29,7 +29,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from ..ingest.probe import probe
-from ..render.ffmpeg import FFmpegError, ffmpeg_path
+from ..render.ffmpeg import FFmpegError, ffmpeg_path, safe_inputs
 from ..utils.logging import get_logger
 from . import channel as channels
 from .ai import CreateError, ask
@@ -113,8 +113,8 @@ def file_path(video_id: int, clip_id: str) -> Path | None:
 
 def _thumb(src: Path, seconds: float, out: Path) -> None:
     try:
-        subprocess.run([str(ffmpeg_path()), "-loglevel", "error", "-y", "-ss", f"{min(1.0, seconds / 2):.2f}",
-                        "-i", str(src), "-frames:v", "1", "-vf", "scale=360:-2", str(out)],
+        subprocess.run(safe_inputs([str(ffmpeg_path()), "-loglevel", "error", "-y", "-ss", f"{min(1.0, seconds / 2):.2f}",
+                        "-i", str(src), "-frames:v", "1", "-vf", "scale=360:-2", str(out)]),
                        capture_output=True, timeout=60, check=True)
     except (subprocess.SubprocessError, OSError) as exc:  # the thumbnail is a nicety
         log.info("create: no thumbnail for %s (%s)", src.name, exc)
@@ -327,8 +327,8 @@ def filmstrip(path: Path, duration: float, frames: int = 4, height: int = 220) -
     for k in range(frames):
         t = duration * (k + 0.5) / frames
         try:
-            png = subprocess.run([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(path),
-                                  "-frames:v", "1", "-vf", f"scale=-2:{height}", "-f", "image2pipe", "-vcodec", "png", "-"],
+            png = subprocess.run(safe_inputs([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(path),
+                                  "-frames:v", "1", "-vf", f"scale=-2:{height}", "-f", "image2pipe", "-vcodec", "png", "-"]),
                                  capture_output=True, timeout=60, check=True).stdout
             shots.append(Image.open(io.BytesIO(png)).convert("RGB"))
         except (subprocess.SubprocessError, OSError):

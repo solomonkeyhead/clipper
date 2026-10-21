@@ -1288,7 +1288,7 @@ def routes(app: FastAPI, publish) -> None:
 
         from fastapi.responses import Response
 
-        from ..render.ffmpeg import ffmpeg_path
+        from ..render.ffmpeg import ffmpeg_path, safe_inputs
         from . import db, library
 
         row = video_or_404(video_id)
@@ -1300,8 +1300,8 @@ def routes(app: FastAPI, publish) -> None:
         if not path or not path.is_file():
             raise HTTPException(404, "the video file isn't there")
         try:
-            jpg = subprocess.run([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{max(0.0, t):.2f}", "-i", str(path),
-                                  "-frames:v", "1", "-vf", "scale=216:-2", "-f", "image2pipe", "-vcodec", "mjpeg", "-"],
+            jpg = subprocess.run(safe_inputs([str(ffmpeg_path()), "-loglevel", "error", "-ss", f"{max(0.0, t):.2f}", "-i", str(path),
+                                  "-frames:v", "1", "-vf", "scale=216:-2", "-f", "image2pipe", "-vcodec", "mjpeg", "-"]),
                                  capture_output=True, timeout=30, check=True).stdout
         except (subprocess.SubprocessError, OSError) as exc:
             raise HTTPException(500, "couldn't read a frame") from exc

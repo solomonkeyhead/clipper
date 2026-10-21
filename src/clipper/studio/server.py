@@ -830,6 +830,7 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
         from .. import hardware
         from ..config import Config
 
+        own_computer_only()  # the server's hardware is nobody's business on the hosted site (D229)
         hw = hardware.detect()
         plan = hardware.recommend(hw)
         mine = hardware.current(Config.load())

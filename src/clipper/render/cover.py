@@ -20,7 +20,7 @@ import numpy as np
 
 from ..config import Config
 from ..utils.logging import get_logger
-from .ffmpeg import ffmpeg_path, ffprobe_path, run
+from .ffmpeg import ffmpeg_path, ffprobe_path, run, safe_inputs
 from .teaser import hook_filter, reencode_args
 
 log = get_logger(__name__)
@@ -160,8 +160,8 @@ def _parameter_sets(video: Path) -> bytes:
     """A video's H.264 parameter sets (SPS and PPS) as its first frame carries them; b"" if unreadable."""
     import subprocess
 
-    raw = subprocess.run([str(ffmpeg_path()), "-v", "error", "-i", str(video), "-map", "0:v:0", "-c:v", "copy",
-                          "-bsf:v", "h264_mp4toannexb", "-frames:v", "1", "-f", "h264", "-"],
+    raw = subprocess.run(safe_inputs([str(ffmpeg_path()), "-v", "error", "-i", str(video), "-map", "0:v:0", "-c:v", "copy",
+                          "-bsf:v", "h264_mp4toannexb", "-frames:v", "1", "-f", "h264", "-"]),
                          capture_output=True, timeout=60).stdout
     units = [u.rstrip(b"\0") for u in raw.split(b"\0\0\1") if u]
     return b"|".join(sorted(u for u in units if u and u[0] & 0x1F in (7, 8)))

@@ -54,10 +54,10 @@ def write_silence(path: Path, seconds: float) -> Path:
     """A silent audio file `seconds` long, for a video with no voice."""
     import subprocess
 
-    from ..render.ffmpeg import ffmpeg_path
+    from ..render.ffmpeg import ffmpeg_path, safe_inputs
 
-    subprocess.run([str(ffmpeg_path()), "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-t", f"{seconds + TAIL:.3f}",
-                    str(path)], check=True, capture_output=True)
+    subprocess.run(safe_inputs([str(ffmpeg_path()), "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono", "-t", f"{seconds + TAIL:.3f}",
+                    str(path)]), check=True, capture_output=True)
     return path
 
 
@@ -120,10 +120,10 @@ def levels(path: Path, raw: bool = False) -> list[float]:
 
     import numpy as np
 
-    from ..render.ffmpeg import ffmpeg_path
+    from ..render.ffmpeg import ffmpeg_path, safe_inputs
 
-    raw = subprocess.run([str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-i", str(path), "-ac", "1",
-                          "-ar", "16000", "-f", "s16le", "-"], capture_output=True, check=True).stdout
+    raw = subprocess.run(safe_inputs([str(ffmpeg_path()), "-hide_banner", "-loglevel", "error", "-i", str(path), "-ac", "1",
+                          "-ar", "16000", "-f", "s16le", "-"]), capture_output=True, check=True).stdout
     x = np.frombuffer(raw, np.int16).astype(np.float32) / 32768
     n = len(x) // 160
     if not n:

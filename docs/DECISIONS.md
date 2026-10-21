@@ -4035,3 +4035,9 @@ Marc had every page clicked through for what a general user wouldn't need or und
 - Why: Paddle is the merchant of record, so Clipper only mirrors what its signed events say, and every change goes
   through `users.update` and `catalog.refresh` as D228 planned. LAUNCH_TODO lists the Paddle setup (events, default
   payment link, env).
+
+## D235 — Every FFmpeg call reads files and pipes only (2026-10-20)
+- D229 put `-protocol_whitelist` on the shared `render.ffmpeg.run`, but thirteen calls built their own command (Create's
+  frame readers and writers, thumbnails, the voice and sound readers, scene detection, the cover check). They now go
+  through `safe_inputs` too. The list is `file,pipe,fd`: newer FFmpeg reads "-" (stdin) through `fd`, and Create's
+  frame writer failed without it. Hosted, GET /api/compute (the server's hardware) answers 403 like its apply.

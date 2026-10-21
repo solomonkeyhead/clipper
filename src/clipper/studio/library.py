@@ -227,7 +227,7 @@ def thumbnail(video: Path, *, at: float = 1.5) -> Path | None:
     """A cached JPEG still of `video` (library/.thumbs/), remade when the video changes."""
     import subprocess
 
-    from ..render.ffmpeg import ffmpeg_path
+    from ..render.ffmpeg import ffmpeg_path, safe_inputs
 
     folder = ensure(library_dir() / ".thumbs")
     stat = video.stat()
@@ -236,8 +236,8 @@ def thumbnail(video: Path, *, at: float = 1.5) -> Path | None:
     if still.exists():
         return still
     try:
-        subprocess.run([str(ffmpeg_path()), "-v", "error", "-y", "-ss", f"{at}", "-i", str(video),
-                        "-frames:v", "1", "-vf", "scale=270:-2", "-q:v", "4", str(still)],
+        subprocess.run(safe_inputs([str(ffmpeg_path()), "-v", "error", "-y", "-ss", f"{at}", "-i", str(video),
+                        "-frames:v", "1", "-vf", "scale=270:-2", "-q:v", "4", str(still)]),
                        check=True, timeout=30, capture_output=True)
     except (OSError, subprocess.SubprocessError):
         return None

@@ -112,7 +112,7 @@ def ffprobe_path() -> Path:
 
 #: Inputs may only be read from files and pipes (D229): a user's "video" can be a playlist or a concat list
 #: naming http:// or other addresses, which FFmpeg would otherwise fetch from wherever Clipper runs.
-SAFE_INPUT = ["-protocol_whitelist", "file,pipe"]
+SAFE_INPUT = ["-protocol_whitelist", "file,pipe,fd"]   # fd: newer FFmpeg reads "-" (stdin) through it
 #: The shortest a run may take before it is stopped as hung (D229); longer media get about 10x their length.
 MIN_TIMEOUT = 600.0
 
