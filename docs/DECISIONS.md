@@ -3981,3 +3981,21 @@ Marc had every page clicked through for what a general user wouldn't need or und
 - Left for the gateway: a user whose Clipper isn't started for 30 days gets no sweep, so the gateway runs
   `python -m clipper.studio.platform_data` for each user monthly. TikTok and Instagram don't yet delete on a
   failed token; only YouTube does.
+
+## D232 — Clipping an hour of footage costs less AI (2026-10-20)
+- Read from the code: an hour with no clip cap asked Opus 21 times, watched 46 moments with their sound, wrote 20
+  descriptions each resending the brief, and re-judged and re-watched everything after any new rating.
+- Prompt B, the second opinion, answers on `llm.judge_second_model` (Haiku 5.5) by the judge's own provider rules;
+  null means the judge answers both, as before. The disagreement merge is unchanged.
+- At most `llm.watch_moments` (15) moments are watched, quiet ones included, without sound (`-an`): the transcript
+  has the words, and the audio was about a third of each clip's tokens. Cached verdicts are reused.
+- Descriptions go 8 to a call with the brief once (the picks' plans are built ahead, in rank order). Hosted, caption
+  fixes and rule audits go straight to the scoring model, so a timeout can't bill two calls. Local is unchanged.
+- A source keeps the taste it was first scored with (`<work>/taste.json`, per campaign). Trade-off: re-running an old
+  video doesn't learn from ratings given since, until its campaign changes or a rescore is forced; new videos always
+  use today's taste, and learnt weights still apply (they ask nothing new).
+- Every clipping job's calls carry `source:<id>` in usage.sqlite. `scripts/cost/judge_eval.py` compares judge models
+  against the owner's ratings. One-time cost: every source re-scores once on its next run (the watch size is in the
+  signals key); prompt A and most watches come from the cache.
+- Risks Marc should watch: Haiku on prompt B may disagree more with Opus and lower totals (fewer clips over 5.5;
+  `judge_second_model: null` goes back); silent watching misses laughs, tone and timing.

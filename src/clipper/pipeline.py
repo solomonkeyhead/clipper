@@ -135,17 +135,19 @@ def stage_keys(config: Config, backend_override: str | None) -> dict[str, str]:
     return {"candidates": candidates, "signals": signals, "combine": scored}
 
 
-def judge_backend(config: Config, backend_override: str | None = None) -> LLMBackend | None:
+def judge_backend(config: Config, backend_override: str | None = None, *,
+                  model: str | None = None) -> LLMBackend | None:
     """Claude, when the user set `llm.judge_model` and has Claude (D139): by API key, else on
     their plan through Claude Code. None: the scoring model judges, as before. Hosted there is no plan (D227):
-    the API key judges, whatever paid_api_jobs says."""
+    the API key judges, whatever paid_api_jobs says. `model`: another Claude model by the same rules
+    (prompt B's `judge_second_model`, D232)."""
     import os
 
     from .hosting import hosted
     from .llm.claude_code import cli
 
     pick = config.llm.job_providers.get("judge", "")
-    model = config.llm.judge_model or (config.llm.create_model if pick else None)
+    model = model or config.llm.judge_model or (config.llm.create_model if pick else None)
     if pick == "gemini" or backend_override:   # the user said Gemini: the scoring backend judges
         return None
     if not model:
@@ -185,6 +187,7 @@ def compute_signals(
     backend: LLMBackend,
     llm_cache: LLMCache | None = None,
     judge: LLMBackend | None = None,
+    second: LLMBackend | None = None,
 ) -> Signals:
     """Compute all four signal families for every candidate.
 
@@ -225,7 +228,7 @@ def compute_signals(
     # The LLM last: it is the slowest and the only one that can cost money, so
     # a failure in a cheap signal surfaces before any quota is spent.
     # Moments with no dialogue have nothing to read; only watching judges them.
-    llm_result = _judged([c for c in items if not c.quiet], config, backend, judge, llm_cache)
+    llm_result = _judged([c for c in items if not c.quiet], config, backend, judge, llm_cache, second)
     if llm_result.totals or llm_result.drops:
         available.append("llm")
 
@@ -263,14 +266,16 @@ def compute_signals(
 
 
 def _judged(items, config: Config, backend: LLMBackend, judge: LLMBackend | None,
-            llm_cache: LLMCache | None) -> llm_signal.LLMSignalResult:
+            llm_cache: LLMCache | None, second: LLMBackend | None = None) -> llm_signal.LLMSignalResult:
     """The rubric scores: from the judge (Claude) when there is one, and from `backend` for
-    any moment the judge couldn't score, or for all of them if it can't run at all."""
+    any moment the judge couldn't score, or for all of them if it can't run at all. `second` gives
+    the judge's prompt B (D232)."""
     examples = _few_shot_examples(config)
     if judge is None:
         return llm_signal.score_candidates(items, backend, config.llm, cache=llm_cache, examples=examples)
     try:
-        result = llm_signal.score_candidates(items, judge, config.llm, cache=llm_cache, examples=examples)
+        result = llm_signal.score_candidates(items, judge, config.llm, cache=llm_cache, examples=examples,
+                                             second=second)
     except LLMConfigError as exc:
         log.warning("%s can't judge (%s); %s will", judge.describe(), exc, backend.describe())
         return llm_signal.score_candidates(items, backend, config.llm, cache=llm_cache, examples=examples)
@@ -344,8 +349,13 @@ def score(
         backend = build_backend(config, override=backend_override)
         log.info("scoring %d candidates with %s", len(candidates.candidates), backend.describe())
         judge = judge_backend(config, backend_override)
+        # Prompt B on its own, cheaper model (D232); null: the judge answers both, as before.
+        second = (judge_backend(config, backend_override, model=config.llm.judge_second_model)
+                  if judge is not None and config.llm.judge_second_model
+                  and config.llm.judge_second_model != judge.model else None)
         signals = compute_signals(
-            info, transcript, candidates, config, backend=backend, llm_cache=llm_cache, judge=judge
+            info, transcript, candidates, config, backend=backend, llm_cache=llm_cache, judge=judge,
+            second=second,
         )
         signals.save(signals_path)
         cache.keep("signals.json", keys["signals"])

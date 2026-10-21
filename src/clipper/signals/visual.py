@@ -5,8 +5,9 @@ reaction or a sight gag. In FX's Adults a guest asks for "black" beans and the
 host's eyes go to the one Black man in the room; on paper it's a joke about a
 word, on screen it's the joke. So after the transcript scoring, the moments
 with the best rubric totals (and so the only ones selection would reach) are
-cut small -- 360p, 2 frames a second, mono sound -- and the model watches each
-one with its transcript. It scores the same rubric again as a viewer would, says
+cut small -- 360p, 2 frames a second, no sound (D232: the transcript carries the
+words, and the audio track was a cost that added little) -- and the model watches
+each one with its transcript. It scores the same rubric again as a viewer would, says
 how much the picture adds, what it sees that the words miss, and may offer a
 hook line drawing on it. `combine` blends the watched total into the rubric
 total; nothing outside the shortlist changes.
@@ -17,6 +18,7 @@ input tokens at low media resolution, and the model named the look.
 
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import json
 import tempfile
@@ -36,6 +38,7 @@ from ..utils.logging import get_logger
 
 log = get_logger(__name__)
 
+# Kept at v1 when the sound went (D232): a verdict made with sound is no worse, and keeping it spares a re-watch.
 PROMPT_VERSION = "watch-v1"
 #: A moment is cut this much wider each side, so a reaction just before the
 #: first word or after the last one is in view.
@@ -43,11 +46,12 @@ MARGIN = 1.5
 WORKERS = 3
 
 SYSTEM = f"""You pick moments from long videos to post as short vertical clips.
-You are shown one moment -- picture and sound -- with its transcript. Watch it
-as someone scrolling past would, who has never seen the source.
+You are shown one moment -- the picture, without sound -- with its transcript, which
+has every word said. Watch it as someone scrolling past would, who has never seen
+the source.
 
 Score it on the same rubric as a clip, 0-10 each, judging what is SEEN as well as
-said: a look, a reaction, a pause, physical comedy or something on screen can
+said: a look, a reaction, physical comedy or something on screen can
 make a line land -- or show that a funny-reading line falls flat.
   hook_strength        would the first 3 seconds stop a scroll
   standalone_clarity   understandable with zero prior context
@@ -116,11 +120,12 @@ def shortlist(values: list[SignalValues], candidates: dict[str, Candidate],
 
 
 def cut(source: Path, start: float, end: float, out: Path) -> bytes:
-    """The moment, small: 360p, 2 fps, mono. A 40s moment is ~1 MB."""
+    """The moment, small: 360p, 2 fps, no sound (D232): Gemini bills a clip's audio track as tokens on top
+    of its frames, for words the transcript already gives it."""
     ffmpeg.run(["-v", "error", "-y", "-ss", f"{max(0.0, start - MARGIN):.2f}",
                 "-t", f"{end - start + 2 * MARGIN:.2f}", "-i", str(source),
                 "-vf", "scale=-2:360,fps=2", "-c:v", "libx264", "-preset", "veryfast",
-                "-crf", "32", "-c:a", "aac", "-ac", "1", "-b:a", "48k", str(out)],
+                "-crf", "32", "-an", str(out)],
                timeout=120)
     return out.read_bytes()
 
@@ -132,9 +137,11 @@ def watch_candidates(candidates: list[Candidate], values: list[SignalValues], so
     if not cfg.watch_video or not backend.supports_video:
         return {}
     by_id = {c.candidate_id: c for c in candidates}
-    chosen, same = shortlist(values, by_id, cfg.watch_shortlist)
-    # Moments with no dialogue are always watched: nothing else can judge them.
-    chosen += [c.candidate_id for c in candidates if c.quiet and c.candidate_id not in chosen]
+    # Moments with no dialogue are always watched, nothing else can judge them, and count inside the
+    # shortlist (D232): they came on top of it, 46 moments where 40 were meant.
+    quiet = [c.candidate_id for c in candidates if c.quiet][:cfg.watch_shortlist]
+    chosen, same = shortlist(values, by_id, cfg.watch_shortlist - len(quiet))
+    chosen += quiet
     variant = with_taste(with_focus(WATCH_PROMPT, cfg.campaign_focus), cfg.user_taste)
     out: dict[str, Watched] = {}
     with tempfile.TemporaryDirectory(prefix="clipper-watch-") as tmp:
@@ -173,7 +180,9 @@ def watch_candidates(candidates: list[Candidate], values: list[SignalValues], so
         # Named after the calling thread, so a job's progress log still sees them.
         with ThreadPoolExecutor(max_workers=WORKERS,
                                 thread_name_prefix=f"{threading.current_thread().name}-watch") as pool:
-            for c, watched in zip(chosen, pool.map(one, [by_id[i] for i in chosen]), strict=True):
+            # Each in a copy of this thread's context, so its usage rows carry the job's tag (D232).
+            futures = [pool.submit(contextvars.copy_context().run, one, by_id[i]) for i in chosen]
+            for c, watched in zip(chosen, (f.result() for f in futures), strict=True):
                 if watched is not None:
                     out[c] = watched
     for cid, twin in same.items():

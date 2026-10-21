@@ -106,8 +106,11 @@ def score_candidates(
     *,
     cache: LLMCache | None = None,
     examples: list[dict] | None = None,
+    second: LLMBackend | None = None,
 ) -> LLMSignalResult:
-    """Score every candidate with prompt A and, if enabled, prompt B."""
+    """Score every candidate with prompt A and, if enabled, prompt B. `second` answers prompt B when given
+    (`llm.judge_second_model`, D232): a second opinion that only adds a verdict needs no Opus. None, or one
+    that can't run, leaves B to `backend` as before."""
     result = LLMSignalResult()
     if not candidates:
         return result
@@ -119,9 +122,15 @@ def score_candidates(
     per_variant: dict[str, dict[str, RubricScores]] = {}
     for variant in variants:
         # Keyed by "a"/"b": a campaign focus lengthens the variant's own key.
-        per_variant[variant.key.split(":")[0]] = _score_with_variant(
-            candidates, backend, cfg, variant, cache=cache, examples=examples,
-        )
+        side = variant.key.split(":")[0]
+        voice = second if side == "b" and second is not None else backend
+        try:
+            per_variant[side] = _score_with_variant(candidates, voice, cfg, variant, cache=cache, examples=examples)
+        except LLMConfigError as exc:
+            if voice is backend:
+                raise
+            log.warning("%s can't give the second opinion (%s); %s will", voice.describe(), exc, backend.describe())
+            per_variant[side] = _score_with_variant(candidates, backend, cfg, variant, cache=cache, examples=examples)
 
     weights = cfg.rubric_weights.as_dict()
     for candidate in candidates:

@@ -95,6 +95,11 @@ class _Description(BaseModel):
 def build_user(transcript: str, campaign: CampaignConfig, caption_line: str, *,
                hook: str = "", brief: str | None = None) -> str:
     """The prompt's facts: the brief's rules first, then the clip."""
+    return _brief_part(campaign, brief) + _clip_part(transcript, caption_line, hook) + _language_note(campaign)
+
+
+def _brief_part(campaign: CampaignConfig, brief: str | None) -> str:
+    """What every clip of the campaign shares: sent once for a batch (D232)."""
     from .audit import brief_text, code_checked
 
     keywords = ", ".join(campaign.description_keywords) or "(none)"
@@ -104,10 +109,13 @@ def build_user(transcript: str, campaign: CampaignConfig, caption_line: str, *,
             f"Rules Clipper adds to the caption itself:\n{checked}\n\n"
             f"What the clips should be about: {campaign.selection_focus.strip() or '(not said)'}\n"
             f"Context (the show, the people): {campaign.description_context.strip() or '(none)'}\n"
-            f"Keywords: {keywords}\n\n"
-            f"Caption line above it: {caption_line.strip()}\n"
+            f"Keywords: {keywords}\n\n")
+
+
+def _clip_part(transcript: str, caption_line: str, hook: str) -> str:
+    return (f"Caption line above it: {caption_line.strip()}\n"
             f"On-screen hook: {hook.strip() or '(none)'}\n\n"
-            f"Transcript of the clip:\n{transcript.strip()}" + _language_note(campaign))
+            f"Transcript of the clip:\n{transcript.strip()}")
 
 
 def _language_note(campaign: CampaignConfig) -> str:
@@ -147,16 +155,11 @@ def describe(transcript: str, campaign: CampaignConfig, caption_line: str,
     if not campaign.long_description or not transcript.strip():
         return ""
     user = build_user(transcript, campaign, caption_line, hook=hook, brief=brief)
+    # Every model's kept answer first: a batch (describe_many) may have been answered by the fallback.
+    if (found := _kept(user, backends, cache)) is not None:
+        return found
     for backend in backends:
-        key = None
-        if cache is not None:
-            key = cache.key(backend=backend.name, model=backend.cache_model(),
-                            prompt_key=f"description:{DESCRIPTION_VERSION}", payload=user)
-            entry = cache.get(key)
-            if entry is not None:
-                found = _parse(entry.text)
-                if found:
-                    return found
+        key = _key(backend, user, cache) if cache is not None else None
         try:
             response = backend.complete(LLMRequest(system=SYSTEM, user=user, temperature=0.2,
                                                    response_schema=_Description, job="description"))
@@ -177,3 +180,74 @@ def _parse(text: str) -> str | None:
         return clean(json.loads(text).get("description", ""))
     except (ValueError, AttributeError):
         return None
+
+
+def _key(backend: LLMBackend, user: str, cache) -> str:
+    return cache.key(backend=backend.name, model=backend.cache_model(),
+                     prompt_key=f"description:{DESCRIPTION_VERSION}", payload=user)
+
+
+def _kept(user: str, backends: list[LLMBackend], cache) -> str | None:
+    if cache is None:
+        return None
+    for backend in backends:
+        entry = cache.get(_key(backend, user, cache))
+        if entry is not None and (found := _parse(entry.text)):
+            return found
+    return None
+
+
+#: Clips described in one call (D232): the brief, most of the prompt, goes once for all of them.
+BATCH = 8
+BATCH_SYSTEM = SYSTEM.removesuffix('Return JSON: {"description": "..."}') + (
+    "You are given several clips of this campaign, each with its own caption line, hook and transcript. "
+    "Write one description for each, from that clip's own facts only.\n\n"
+    'Return JSON: {"descriptions": [{"clip": 1, "description": "..."}, ...]}, one per clip.')
+
+
+class _Numbered(BaseModel):
+    clip: int
+    description: str
+
+
+class _Batch(BaseModel):
+    descriptions: list[_Numbered]
+
+
+def describe_many(clips: list[tuple[str, str, str]], campaign: CampaignConfig, backends: list[LLMBackend], *,
+                  cache, brief: str | None = None) -> None:
+    """Several clips' descriptions asked BATCH at a time with the brief sent once (D232), like the caption
+    fixes (D185). Each answer is kept as that clip's own question's would be, so `describe` finds it and asks
+    nothing; one that breaks the rules (`clean`), a failed batch or a lone clip is left to its own call.
+    `clips`: (transcript, caption line, hook) as `describe` will be given them."""
+    if not campaign.long_description or cache is None:
+        return
+    head, note = _brief_part(campaign, brief), _language_note(campaign)
+    todo: dict[str, str] = {}   # the clip's own question -> its part of the batch
+    for transcript, line, hook in clips:
+        part = _clip_part(transcript, line, hook)
+        user = head + part + note
+        if transcript.strip() and user not in todo and _kept(user, backends, cache) is None:
+            todo[user] = part
+    asked = list(todo.items())
+    for chunk in (asked[i:i + BATCH] for i in range(0, len(asked), BATCH)):
+        if len(chunk) < 2:
+            continue
+        message = head + "\n\n".join(f"=== CLIP {n} ===\n{part}" for n, (_, part) in enumerate(chunk, 1)) + note
+        for backend in backends:
+            try:
+                response = backend.complete(LLMRequest(system=BATCH_SYSTEM, user=message, temperature=0.2,
+                                                       response_schema=_Batch, job="description"))
+                got = {d.clip: clean(d.description)
+                       for d in _Batch.model_validate_json(response.text).descriptions}
+            except Exception as exc:  # each clip still asks on its own
+                log.log(miss_level(exc), "descriptions: %s did not answer a batch (%s)", backend.describe(),
+                        str(exc)[:160])
+                continue
+            for n, (user, _) in enumerate(chunk, 1):
+                if got.get(n):
+                    cache.put(_key(backend, user, cache), text=json.dumps({"description": got[n]}),
+                              model=response.model)
+            break
+    if asked:
+        log.info("descriptions: %d clip(s) asked in batches of up to %d", len(asked), BATCH)

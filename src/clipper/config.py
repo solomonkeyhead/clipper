@@ -237,10 +237,15 @@ class LLMConfig(StrictModel):
     # Caption fixes ruled wrong, as "heard -> replacement"; never applied.
     rejected_caption_fixes: list[str] = Field(default_factory=list)
     # The "watch it" pass (signals/visual.py): the model watches the best-scoring
-    # moments -- picture and sound -- since a look or a reaction can make a joke
-    # the words alone don't. Backends that can't take video skip it.
+    # moments -- the picture, with the transcript for the words (no sound since D232) --
+    # since a look or a reaction can make a joke the words alone don't. Backends that
+    # can't take video skip it.
     watch_video: bool = True
     watch_shortlist: int = Field(default=12, ge=1, le=40)
+    # The most moments one source has watched, moments with no dialogue included (D232): twice the clip
+    # count, at least watch_shortlist, at most this. It was 40 (+6 quiet) with no clip cap; the transcript
+    # gate (D141) already decides which moments pass, watching reorders the best of them.
+    watch_moments: int = Field(default=15, ge=1, le=40)
     watch_model: str | None = None  # null = the scoring model
     # Claude judges the moments and picks each clip's opening line (D139): API key first, else
     # Claude Code on the user's plan (create_via_claude_plan). Gemini still watches the video

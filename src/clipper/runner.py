@@ -13,6 +13,7 @@ A reserve is only ever a candidate that already cleared the quality gate
 
 from __future__ import annotations
 
+import contextvars
 import dataclasses
 import json
 import threading
@@ -24,7 +25,7 @@ from pathlib import Path
 from .campaign import compliance, rotation
 from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
 from .candidates.boundaries import RefinedBounds, refine
-from .config import CampaignConfig, Config
+from .config import CampaignConfig, Config, LLMConfig
 from .editing import ClipEdit, Piece, apply_fixes, kept_words
 from .ingest.download import IngestError, is_url, probe_rights
 from .ingest.probe import probe
@@ -41,7 +42,7 @@ from .render.graph import output_size
 from .select.pick import Pick
 from .transcribe.correct import WordFix, correct_words, names_in, prefetch
 from .transcribe.recheck import AudioRecheck
-from .utils.cache import slugify
+from .utils.cache import content_hash, slugify
 from .utils.logging import get_logger
 from .utils.timecode import to_slug_timestamp
 
@@ -83,18 +84,31 @@ def run(
     backend_override: str | None = None,
     force: set[str] | None = None,
 ) -> RunResult:
-    """Ingest through manifest for one source."""
+    """Ingest through manifest for one source. Its AI calls carry "source:<id>" in usage.sqlite (D232), so
+    `clipper usage` can show what one job cost; the source is read first, since its id comes from the file."""
+    from .ingest.download import ingest as run_ingest
+    from .llm import usage
+    from .paths import work_dir
+    from .utils.cache import StageCache
+
     started = time.perf_counter()
-    timings: dict[str, float] = {}
     campaign = platform_limits(campaign)
     config = campaign_config(config, campaign)
     check_rights(source, campaign)
+    info = run_ingest(source, force=bool(force and "ingest" in force))
+    force = StageCache._expand(force or ()) - {"ingest"}   # read once: what's left are the later stages
+    config = pinned_taste(config, campaign, work_dir(info.source_id), force)
+    with usage.tag(f"source:{info.source_id}"):
+        return _run(source, config=config, campaign=campaign, out_root=out_root, top=top, draft=draft,
+                    backend_override=backend_override, force=force, started=started)
 
+
+def _run(source: str, *, config: Config, campaign: CampaignConfig, out_root: Path, top: int | None, draft: bool,
+         backend_override: str | None, force: set[str], started: float) -> RunResult:
+    timings: dict[str, float] = {}
     limit = clip_limit(top, campaign)
-    # Watch at least twice as many moments as will be made (up to 40), so a
-    # long source asked for many clips isn't ranked on its words alone.
-    shortlist = min(40, max(config.llm.watch_shortlist, 2 * min(limit, 20)))
-    config = config.model_copy(update={"llm": config.llm.model_copy(update={"watch_shortlist": shortlist})})
+    config = config.model_copy(update={"llm": config.llm.model_copy(
+        update={"watch_shortlist": watch_size(limit, config.llm)})})
     score_started = time.perf_counter()
     outcome = score(source, config, backend_override=backend_override, force=force)
     timings["score"] = time.perf_counter() - score_started
@@ -212,6 +226,39 @@ def _skip_rejected(outcome: ScoreOutcome) -> None:
         outcome.scored.scored = kept
 
 
+def watch_size(limit: int, llm: LLMConfig) -> int:
+    """How many moments to watch: twice the clips to make, at least watch_shortlist, at most watch_moments
+    (D232; with no clip cap it was 40, the dearest part of a run)."""
+    return min(llm.watch_moments, max(llm.watch_shortlist, 2 * min(limit, 20)))
+
+
+def pinned_taste(config: Config, campaign: CampaignConfig, work: Path, force: set[str]) -> Config:
+    """`config` with the taste this source was first scored under (D232). The taste block changes with every
+    rating, it is in the prompts' cache keys and the signals stage key, so one new star made a re-run of any
+    source re-judge and re-watch every moment. Kept per campaign in the source's `taste.json`: the same
+    campaign (name, focus, language, moment rules) reuses it; a changed one, or a forced rescore, takes the
+    current taste and keeps that. New sources always get the current taste."""
+    path = work / "taste.json"
+    key = content_hash(campaign.name, config.candidates.model_dump(mode="json"), config.llm.campaign_focus,
+                       config.llm.language, config.llm.drop_needs_prior_context)
+    try:
+        pins = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, ValueError) as exc:
+        log.warning("taste.json unreadable (%s); using today's taste", exc)
+        pins = {}
+    if key in pins and "signals" not in force:
+        if pins[key] != config.llm.user_taste:
+            log.info("scoring with the taste this video was first scored with; a forced rescore uses today's")
+        return config.model_copy(update={"llm": config.llm.model_copy(update={"user_taste": pins[key]})})
+    pins[key] = config.llm.user_taste
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(pins, ensure_ascii=False), encoding="utf-8")
+    except OSError as exc:  # unpinned: the next run takes the taste of its day
+        log.warning("couldn't keep the taste in %s (%s)", path, exc)
+    return config
+
+
 def payoff_first() -> bool:
     """The Control Center's "Open on the payoff" setting (on unless turned off)."""
     from .studio import db
@@ -269,13 +316,25 @@ def cut(
     moments gets them cut as given -- no refinement, no scene clamp, no silence
     trim -- and still goes through the same render, QA and compliance checks.
     """
-    from .pipeline import run_ingest, run_transcribe
+    from .llm import usage
+    from .pipeline import run_ingest
 
     started = time.perf_counter()
     config = campaign_config(config, campaign)
     check_rights(source, campaign)
 
     info = run_ingest(source)
+    with usage.tag(f"source:{info.source_id}"):   # its AI calls, by source in usage.sqlite (D232)
+        return _cut_ranges(info, ranges, config=config, campaign=campaign, out_root=out_root, draft=draft,
+                           backend_override=backend_override, first_rank=first_rank, edits=edits,
+                           started=started)
+
+
+def _cut_ranges(info: SourceInfo, ranges: list[tuple[float, float]], *, config: Config, campaign: CampaignConfig,
+                out_root: Path, draft: bool, backend_override: str | None, first_rank: int,
+                edits: list[ClipEdit] | None, started: float) -> RunResult:
+    from .pipeline import run_transcribe
+
     transcript, stats = run_transcribe(info, config.transcription)
     result = RunResult(info=info, selection_note="ranges chosen by hand")
 
@@ -667,6 +726,8 @@ def _render_with_replacement(
     """
     _ask_corrections_ahead(picks[:limit], outcome, config=config, campaign=campaign,
                            corrector=corrector, recheck=recheck)
+    ahead = _describe_ahead(picks[:limit], outcome, config=config, campaign=campaign,
+                            corrector=corrector, recheck=recheck)
     queue = list(picks)
     spare = list(reserves)
     attempted: set[str] = set()
@@ -686,12 +747,45 @@ def _render_with_replacement(
                 # made two rejected files collide on both id and filename.
                 attempt += 1
                 rank = len(result.accepted) + len(wave) + 1
+                # In a copy of this thread's context: the clip's AI calls keep the job's usage tag (D232).
                 wave.append(pool.submit(
+                    contextvars.copy_context().run,
                     _produce_one, pick, outcome, config=config, campaign=campaign,
                     clips_dir=clips_dir, work=work, draft=draft,
-                    rank=rank, attempt=attempt, corrector=corrector, recheck=recheck))
+                    rank=rank, attempt=attempt, corrector=corrector, recheck=recheck,
+                    planned=ahead.pop(pick.candidate.candidate_id, NOT_PLANNED)))
             for future in wave:
                 _settle(future.result(), queue, spare, result, rejected_dir, config)
+
+
+#: `_produce_one` builds its own plan (a reserve, or a campaign without descriptions).
+NOT_PLANNED = object()
+
+
+def _describe_ahead(picks: list[Pick], outcome: ScoreOutcome, *, config: Config, campaign: CampaignConfig,
+                    corrector: list[LLMBackend] | None, recheck: AudioRecheck | None) -> dict:
+    """The picks' descriptions asked BATCH to a call before any of them renders (D232), so each clip's own
+    `describe` finds its answer kept. That needs each clip's exact facts, so the picks' plans are built here,
+    in order (candidate id -> plan, None if refinement dropped it) and handed to `_produce_one`; their caption
+    fixes come from the cache `_ask_corrections_ahead` just filled. A reserve asks on its own."""
+    from .campaign.description import describe_many, pasted_brief
+
+    if not campaign.long_description or not picks:
+        return {}
+    plans = {p.candidate.candidate_id: _build_plan(p, outcome, config=config, campaign=campaign,
+                                                    rank=i, attempt=i)
+             for i, p in enumerate(picks, 1)}
+    clips = []
+    for plan in (p for p in plans.values() if p is not None):
+        # ponytail: an audio-rechecked fix is heard twice (here and in the render); a few short Whisper runs.
+        words, _ = _corrected_words(outcome.transcript.words, plan, corrector, recheck, config.llm.rejected_fix_pairs)
+        clips.append((_clip_text(words, plan), plan.suggested_caption, plan.hook_text if plan.hook_shown else ""))
+    try:
+        describe_many(clips, campaign, corrector or [build_backend(config)], cache=LLMCache(),
+                      brief=pasted_brief(campaign.name))
+    except Exception as exc:  # only a look ahead: each clip still asks for itself
+        log.warning("descriptions weren't asked ahead (%s)", exc)
+    return plans
 
 
 def _ask_corrections_ahead(picks: list[Pick], outcome: ScoreOutcome, *, config: Config, campaign: CampaignConfig,
@@ -771,10 +865,15 @@ def _produce_one(
     attempt: int,
     corrector: list[LLMBackend] | None = None,
     recheck: AudioRecheck | None = None,
+    planned=NOT_PLANNED,
 ) -> ClipRecord | None:
-    """Refine, reframe, render and check one candidate. None if it was dropped."""
-    plan = _build_plan(pick, outcome, config=config, campaign=campaign,
-                       rank=rank, attempt=attempt)
+    """Refine, reframe, render and check one candidate. None if it was dropped. `planned`: its plan, built
+    ahead for the descriptions (`_describe_ahead`), which gets this attempt's rank and id here."""
+    if planned is NOT_PLANNED:
+        plan = _build_plan(pick, outcome, config=config, campaign=campaign, rank=rank, attempt=attempt)
+    else:
+        plan = planned and planned.model_copy(update={
+            "rank": rank, "clip_id": f"{attempt:03d}_{to_slug_timestamp(planned.start)}"})
     if plan is None:
         return None
     entry = next((s for s in outcome.scored.scored
@@ -1260,13 +1359,16 @@ def _loudness(info: SourceInfo):
     return _LOUDNESS[path]
 
 
+def _clip_text(words: list[Word], plan: ClipPlan) -> str:
+    return " ".join(w.text for w in words if plan.start <= (w.start + w.end) / 2 < plan.end).strip()
+
+
 def _description(plan: ClipPlan, words: list[Word], campaign: CampaignConfig,
                  backends: list[LLMBackend] | None, config: Config) -> str:
     """The clip's searchable description (campaign/description.py), or "" on any failure."""
     from .campaign.description import describe, pasted_brief
 
-    text = " ".join(w.text for w in words
-                    if plan.start <= (w.start + w.end) / 2 < plan.end).strip()
+    text = _clip_text(words, plan)
     if not backends:
         try:
             backends = [build_backend(config)]
@@ -1299,9 +1401,13 @@ def _correction_backends(config: Config, override: str | None) -> list[LLMBacken
     and 429 quota errors. Waiting through that for every clip turned a 3-minute
     run into 22; falling back promptly keeps the run fast.
     """
+    from .hosting import hosted
+
     default = build_backend(config, override=override)
     preferred = config.llm.correction_model
-    if not preferred or preferred == default.model:
+    # Hosted, the scoring model only (D232): a try-first call that times out has still been billed, so
+    # every slow answer cost two calls.
+    if not preferred or preferred == default.model or hosted():
         return [default]
     strong = create_backend(default.name, model=preferred, max_retries=0,
                             requests_per_minute=config.llm.requests_per_minute,
