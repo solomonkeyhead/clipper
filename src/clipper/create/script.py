@@ -494,7 +494,8 @@ def recent_endings(limit: int = 10) -> list[str]:
 
 def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", steer: str = "",
           shape: str | None = None, ending: str | None = None, bit: tuple[str, str] | None = None,
-          draft: Script | None = None, previous: Script | None = None, length: str | None = None) -> Script:
+          draft: Script | None = None, previous: Script | None = None, length: str | None = None,
+          tier: str = "") -> Script:
     """A new script for `question`; `take` asks for a fresh attempt, `feedback` for fixes to `draft`, `steer` is
     the owner's note on what to change (D153). The channel's own standing guidance applies every time.
     `shape` and `ending` default to the channel's next in turn (D155). The draft is shown with the fixes (D168):
@@ -525,7 +526,7 @@ def write(question: str, angle: str = "", *, take: int = 1, feedback: str = "", 
             + ("\nYour last draft:\n" + "\n".join(b.text for b in draft.beats) + "\n" if feedback and draft else "")
             + (f"\nFix these problems from the last draft, keeping what works in it:\n{feedback}\n" if feedback else "")
             + f"\n(take {take})")
-    answer = ask(_system(channel), user, _WordsScript, temperature=0.85, job="script")
+    answer = ask(_system(channel), user, _WordsScript, temperature=0.85, job="script", tier=tier)
     try:
         got = _WordsScript.model_validate(json.loads(answer))
     except (ValueError, TypeError) as exc:
@@ -1011,12 +1012,17 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
                    length=keep.length if keep else None)
     writer = ai.last_used
     notes: list[str] = []
-    step(f"The editor's read and the {channels.check_name().lower()}", 30)
+    from ..config import Config
+
+    # The editor's read is off unless `create.critic` (D233): it mostly found what lint finds for free.
+    critic = Config.load().create.critic
+    step(f"The editor's read and the {channels.check_name().lower()}" if critic else
+         f"The {channels.check_name().lower()}", 30)
     with ThreadPoolExecutor(1) as pool:
         # The fact check and the editor's read don't wait for each other (D168): two models, asked at once.
-        editor = pool.submit(critique, script, writer)
+        editor = pool.submit(critique, script, writer) if critic else None
         review = _check_or_note(script, notes)
-        edits = editor.result()
+        edits = editor.result() if editor else []
     facts = review.problems if not review.ok else []
     rules = lint(script, channel)
     planned = None
@@ -1026,8 +1032,11 @@ def write_checked(question: str, angle: str = "", *, take: int = 1, steer: str =
         if bit[0]:   # the same law number as the first draft was asked for
             bit = (bit[0], bit[1].replace("{n}", str(1 + sum(v["script"].get("bit") == bit[0] for v in _videos()))))
         step("Rewriting with the fixes", 50)
+        # Only the countable rules broken (D233): a word count or a banned word is review_model's to fix; a fact or
+        # the editor's read still goes to the writer's own model.
         script = write(question, angle, take=take, steer=steer, feedback=feedback, shape=script.shape,
-                       ending=script.ending, bit=bit, draft=script, previous=keep, length=script.length)
+                       ending=script.ending, bit=bit, draft=script, previous=keep, length=script.length,
+                       tier="" if facts or edits else "review")
         writer = ai.last_used
         step("Planning the pictures", 70)
         # The director plans on the final words, then one check reads the words and the diagrams (D183): the

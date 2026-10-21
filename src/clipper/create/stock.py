@@ -308,10 +308,14 @@ def nasa(q: str) -> list[dict]:
     return hits
 
 
-CANDIDATES = 12
+#: What the judge sees at most, and how big (D233): 12 at 360 px was most of a Short's footage cost, and the
+#: judge reads a thumbnail as well at 256. The build's shortlist is the same 8; the picker may offer more, unscored.
+JUDGED = 8
+JUDGE_PX = 256
+CANDIDATES = JUDGED
 PER_QUERY = 8
 #: Photos among a sentence's candidates (D162): after the videos, a few, as a video that fits is better.
-PHOTOS = 3
+PHOTOS = 2
 
 #: One judge for the build and for the picker (D181): it scores every candidate, so a sentence long enough
 #: for two clips takes its second from the same scores (it was a call a part), and the picker shows them.
@@ -386,6 +390,18 @@ def _thumb(hit: dict) -> bytes | None:
     return cached.read_bytes()
 
 
+def _small(jpeg: bytes) -> bytes:
+    """A thumbnail at JUDGE_PX on its long side, for the judge; the page keeps the 360 px one."""
+    try:
+        img = Image.open(io.BytesIO(jpeg)).convert("RGB")
+        img.thumbnail((JUDGE_PX, JUDGE_PX))
+        out = io.BytesIO()
+        img.save(out, "JPEG", quality=80)
+        return out.getvalue()
+    except OSError:
+        return jpeg
+
+
 def _listing(shown: list[tuple[dict, bytes]]) -> str:
     """The thumbnails' numbers, shape and library tags, as the judge is told them."""
     listed = "\n".join(f"{i}. {'photo' if is_photo(h) else 'video'}, {'tall' if h['height'] > h['width'] else 'wide'}, "
@@ -402,15 +418,16 @@ def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "",
     """Every candidate with a thumbnail, with the judge's score (0-10, None if it gave none) and where its
     subject sits across the frame, best first (the libraries' order breaks ties), and the better searches it
     suggests when none is good enough. Raises _NoAnswer when no model could look."""
-    shown = [(h, t) for h in hits if (t := _thumb(h))]
+    thumbed = [(h, t) for h in hits if (t := _thumb(h))]
+    shown, rest = thumbed[:JUDGED], [h for h, _ in thumbed[JUDGED:]]
     if not shown:
         raise _NoAnswer
     try:
         prompt = ((f"The whole script, for context:\n{context}\n\n" if context else "") + (OPENING if opening else "")
                   + f"Sentence: {sentence}\n"
                   + (f"Searched for: {query}\n" if query else "") + _listing(shown))
-        answer = ask(JUDGE, prompt, _Ranks, temperature=0.0, media=[(t, "image/jpeg") for _, t in shown], quick=True,
-                     job="footage", keep=True)
+        answer = ask(JUDGE, prompt, _Ranks, temperature=0.0, media=[(_small(t), "image/jpeg") for _, t in shown],
+                     tier="cheap", job="footage", keep=True)
         got = _Ranks.model_validate(json.loads(answer))
     except (CreateError, ValueError, TypeError) as exc:
         raise _NoAnswer from exc
@@ -422,6 +439,7 @@ def _scored(sentence: str, hits: list[dict], context: str = "", query: str = "",
         out.append({**h, "score": None if score is None else max(0, min(10, int(score))),
                     "center": min(1.0, max(0.0, float(center))), "center_y": min(1.0, max(0.0, float(middle)))})
     out.sort(key=lambda h: -(h["score"] if h["score"] is not None else -1))
+    out += [{**h, "score": None, "center": 0.5, "center_y": 0.5} for h in rest]   # offered in the picker, not judged
     return out, [" ".join(str(q).split()[:5]) for q in got.better if str(q).strip()][:3]
 
 
@@ -552,7 +570,7 @@ def plan_searches(sentence: str, context: str = "", wish: str = "", tried: list[
             + (f"The user wants to see: {wish}\n" if wish else "")
             + (f"Already tried: {', '.join(tried)}\n" if tried else ""))
     try:
-        answer = ask(channels.fill(SEARCHES), user, _Searches, temperature=0.3, quick=True, job="footage", keep=True)
+        answer = ask(channels.fill(SEARCHES), user, _Searches, temperature=0.3, tier="cheap", job="footage", keep=True)
         found = _Searches.model_validate(json.loads(answer)).searches
     except (CreateError, ValueError, TypeError) as exc:
         log.info("create: no searches planned (%s)", exc)

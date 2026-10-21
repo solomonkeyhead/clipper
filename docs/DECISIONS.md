@@ -3999,3 +3999,23 @@ Marc had every page clicked through for what a general user wouldn't need or und
   signals key); prompt A and most watches come from the cache.
 - Risks Marc should watch: Haiku on prompt B may disagree more with Opus and lower totals (fewer clips over 5.5;
   `judge_second_model: null` goes back); silent watching misses laughs, tone and timing.
+
+## D233 — A Short costs a third of the Opus calls (2026-10-20)
+- Read from videos 30-33: about 22 Opus calls a Short. Each drawing was drawn and then rewritten whole by its
+  look-and-fix (14 of 14), and since D219 every SVG stand-in drawing was paid for and then thrown away for a chalk
+  card, because `build._fallback` checked `drawn.marks` and an SVG has none (video 33: 7 paid, 0 shown). Fixed:
+  stand-ins show again, within the limit below.
+- The look is now review_model (Sonnet) on the frames and the words, answering only a list of problems; Opus
+  redraws only when the list has something, from the problems, its SVG and the same frames. "review" left the
+  default `create_gemini_jobs` (each false alarm costs an Opus redraw). Titles moved to the user message, so the
+  draw system prompt is the same all build long and cached.
+- `create.max_auto_drawings` (4): planned sketches count first, then stand-ins; after that a chalk card with a note
+  pointing to New drawing, which is never limited (D120).
+- Footage judge, searches and sound picks on Haiku; the judge sees 8 thumbnails at 256 px (photos 3 -> 2 to keep
+  the share). The editor's read is off (`create.critic`, the rules check mostly repeats it); a rules-only rewrite
+  runs on Sonnet. Ideas see the newest 50 past ideas on Sonnet; repeats are dropped in code. Hosted, no platform
+  stats or YouTube comments go into the idea prompt (privacy page).
+- New pictures plans and waits for Build. Cancel drops drawings not started and stops the filming workers, so a
+  cancelled round caches nothing. `create/meterhooks.py` (`on_first_build`, `on_redraw`) is where the hosted plan
+  counts Shorts and redraws; every build's calls are tagged `video:<id>` in usage.sqlite.
+- To get the old behaviour back locally: `create: {critic: true, max_auto_drawings: 10}` in data/config.yaml.

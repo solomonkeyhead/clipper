@@ -85,8 +85,13 @@ def steering(channel, steer: str = "", skipped: list[str] | None = None) -> str:
 
 def viewer_comments(channel, videos: int = 10) -> list[str]:
     """Comments on the channel's latest YouTube Shorts (D156), so viewers' own questions become ideas. Nothing when
-    the channel isn't connected or its comments can't be read; ideas don't wait on it."""
+    the channel isn't connected or its comments can't be read; ideas don't wait on it. Nothing on the hosted site
+    (D233): its privacy page promises YouTube data never goes to an AI provider."""
+    from ..hosting import hosted
     from ..youtube import api as yt
+
+    if hosted():
+        return []
 
     handle = channel.handle.lstrip("@").lower()
     try:
@@ -107,7 +112,9 @@ RECORD_MIN = 3
 def track_record(rows: list[dict[str, str]] | None = None) -> list[str]:
     """How the channel's posted videos did, best first (D198): views on every platform together, and the share of
     each video watched where the platform says, once two days old. The planner only had its built-in guess of what works; video 19 got
-    73 views and 23% watched on YouTube, video 18 got 613 and 53%, and nothing told it which was which."""
+    73 views and 23% watched on YouTube, video 18 got 613 and 53%, and nothing told it which was which. Nothing on
+    the hosted site (D233): platform stats never go to an AI provider there (its privacy page)."""
+    from ..hosting import hosted
     from ..learn import log as perf
     from ..studio.stats import ZERO_HOURS, age_hours
 
@@ -124,7 +131,7 @@ def track_record(rows: list[dict[str, str]] | None = None) -> list[str]:
             views[cid] = views.get(cid, 0) + n
         if (pct := perf.number(r.get("avg_view_pct") or "")) is not None:
             watched[cid] = pct
-    if len(views) < RECORD_MIN:
+    if len(views) < RECORD_MIN or hosted():
         return []
     return [f"{titles[c]}: {round(views[c])} views" + (f", {round(watched[c])}% of it watched on average" if c in watched else "")
             for c in sorted(views, key=lambda c: -views[c])]
@@ -133,13 +140,15 @@ def track_record(rows: list[dict[str, str]] | None = None) -> list[str]:
 def generate(count: int = 30, steer: str = "") -> int:
     """Add `count` new ideas to the backlog; returns how many were new."""
     channel = channels.load()
-    done = [t["question"] for t in store.topics(status=None)] + [e["title"] for e in channel.examples]
+    every = sorted(store.topics(status=None), key=lambda t: t["id"])
+    done = [e["title"] for e in channel.examples] + [t["question"] for t in every]
     skipped = [t["question"] for t in store.topics(status="skipped")]
-    series = sorted({t["series"] for t in store.topics(status=None) if t.get("series")})
-    heard = viewer_comments(channel)
+    series = sorted({t["series"] for t in every if t.get("series")})
+    heard = viewer_comments(channel)   # both nothing on the hosted site (D233)
     record = track_record()
+    # The newest PAST_SENT only (D233): every idea ever was most of the call, and a repeat is caught below.
     user = (steering(channel, steer, skipped) + f"Channel: {channel.name} ({channel.niche}).\n"
-            f"Already made or planned, don't repeat:\n" + "\n".join(f"- {q}" for q in done) +
+            f"Already made or planned, don't repeat:\n" + "\n".join(f"- {q}" for q in done[-PAST_SENT:]) +
             (f"\n\nSeries so far: {', '.join(series)}." if series else "") +
             (("\n\nWhat viewers said under recent videos. A real question here is a good idea: answer it, and put "
               "it in the series \"You Asked\":\n" + "\n".join(f"- {c}" for c in heard[:60])) if heard else "") +
@@ -149,12 +158,16 @@ def generate(count: int = 30, steer: str = "") -> int:
             # The month (D198): a few ideas about what people are doing now (cold mornings, a holiday) catch a wave.
             f"\n\nIt is {date.today():%B}. A few ideas about what people meet this month are welcome." +
             f"\n\nGive {count} new ideas.")
-    answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9, job="topics")
+    answer = ask(channels.fill(SYSTEM, channel), user, list[_Idea], temperature=0.9, job="topics", tier="review")
     try:
         ideas = _kept([_Idea.model_validate(i) for i in json.loads(answer)])
     except (ValueError, TypeError) as exc:
         raise CreateError("the ideas came back unreadable; try again") from exc
-    return store.add_topics(ideas)
+    return store.add_topics([i for i in ideas if not made_already(i["question"], done)])
+
+
+#: How many past ideas the planner is shown (D233).
+PAST_SENT = 50
 
 
 #: Words that say nothing about the subject of a question.

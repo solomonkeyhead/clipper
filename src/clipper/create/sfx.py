@@ -83,7 +83,7 @@ silence is the joke). For each give the sentence's number, the word of that sent
 
 def _asked(script: Script, most_n: int, skip: set[int]) -> list[tuple[int, str, str]]:
     user = "\n".join(f"{i + 1}. {b.text.strip()}" for i, b in enumerate(script.beats))
-    answer = ask(SYSTEM.format(most=most_n, sounds=", ".join(PACK)), user, _Spots, temperature=0.3, quick=True,
+    answer = ask(SYSTEM.format(most=most_n, sounds=", ".join(PACK)), user, _Spots, temperature=0.3, tier="cheap",
                  job="sfx", keep=True)
     return [(s.sentence - 1, s.word, s.sound) for s in _Spots.model_validate_json(answer).spots
             if 0 < s.sentence <= len(script.beats) and s.sentence - 1 not in skip]

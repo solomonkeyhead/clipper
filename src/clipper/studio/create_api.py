@@ -765,7 +765,8 @@ def routes(app: FastAPI, publish) -> None:
 
     @app.post("/api/create/videos/{video_id}/pictures")
     async def create_pictures(video_id: int) -> dict:
-        """New pictures for the same words and voice, then built again."""
+        """New pictures planned for the same words and voice. Not built (D233): the video shows them as not built
+        yet, and the user presses Build again, so a replan they don't like costs no drawings."""
         from ..create import script
         from ..create.script import Script
 
@@ -775,9 +776,9 @@ def routes(app: FastAPI, publish) -> None:
             raise HTTPException(400, "drop the voiceover in first")
         planned, notes = await asyncio.to_thread(ai, script.replan, Script.model_validate(row["script"]))
         store.update_video(video_id, script={**planned.model_dump(), "take": row["script"].get("take", 1)},
-                           check_notes=notes, status="voiced", error="")
-        _start(video_id, publish)
-        return {"queued": True}
+                           check_notes=notes, error="")
+        publish("create.changed", {"id": video_id})
+        return {"queued": False}
 
     @app.post("/api/create/videos/{video_id}/build")
     def create_build(video_id: int) -> dict:

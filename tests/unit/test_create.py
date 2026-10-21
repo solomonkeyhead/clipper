@@ -614,8 +614,8 @@ def test_a_few_photos_come_after_the_videos_and_download_as_pictures():
     photo = lambda i: {"id": f"photo-pixabay-{i}", "duration": 0, "width": 1280, "height": 853}  # noqa: E731
     pool = [vid(1, 2), photo(1), vid(2, 9), photo(2), photo(3), photo(4), *[vid(k, 9) for k in range(3, 20)]]
     got = stock._shortlist(pool, 5.0, 12)
-    assert len(got) == 12 and [stock.is_photo(h) for h in got] == [False] * 9 + [True] * 3
-    assert got[0]["id"] == "pexels-2" and got[-3]["id"] == "photo-pixabay-1"     # long enough first; photos in order
+    assert len(got) == 12 and [stock.is_photo(h) for h in got] == [False] * 10 + [True] * 2   # D233: 2 of 8 judged
+    assert got[0]["id"] == "pexels-2" and got[-2]["id"] == "photo-pixabay-1"     # long enough first; photos in order
     assert stock.is_photo({"id": "photo-pexels-5"}) and not stock.is_photo({"id": 5})
 
 

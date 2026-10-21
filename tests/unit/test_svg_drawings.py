@@ -44,22 +44,37 @@ def test_a_drawing_is_there_when_it_has_marks_or_an_svg_with_no_change_waiting()
     assert not sketch.drawn(sketch.Sketch(svg=SVG, ask="make it bigger"))
 
 
-def test_opus_draws_then_looks_at_its_frames_and_fixes(monkeypatch, data_root):
-    asked = []
+def test_opus_draws_then_a_cheaper_model_looks_and_opus_fixes_only_what_it_found(monkeypatch, data_root):
+    import json
+
+    asked, problems = [], ["the motion is too small at 1.0 s"]
 
     def fake_ask(system, user, schema, **kw):
         asked.append((system, user, kw))
+        if kw.get("job") == "review":   # D233: the look names problems only, no SVG
+            assert schema is sketch._Problems and kw["tier"] == "review" and "<svg" not in user
+            return json.dumps({"problems": problems})
         assert schema is None   # the SVG as plain text: in JSON it came back unreadable
         if "media" not in kw:
             return "Here it is:\n" + SVG
-        return "- the motion is too small\n" + SVG.replace("600px", "800px")
+        return SVG.replace("600px", "800px")
 
     monkeypatch.setattr(sketch, "ask", fake_ask)
     monkeypatch.setattr(svgfilm, "sheet", lambda *a, **k: (b"png", [0.5, 1.0]))
-    got = sketch.draw_svg("The pad squeezes water out and grips.", "a pad on a disc")
+    got = sketch.draw_svg("The pad squeezes water out and grips.", "a pad on a disc", title="Brakes")
     assert "800px" in got.svg and got.count == 7 and not got.marks
     assert "w3=squeezes" in asked[0][1] and "--w1" in asked[0][0]
-    assert asked[1][2]["media"] == [(b"png", "image/png")] and all(kw["job"] == "sketch" for _, _, kw in asked)
+    assert [kw["job"] for _, _, kw in asked] == ["sketch", "review", "sketch"]
+    fix = asked[2]
+    assert fix[2]["media"] == [(b"png", "image/png")] and fix[2].get("tier", "") == ""   # Opus, the same frames
+    assert problems[0] in fix[1] and SVG in fix[1]                                          # the problems and its SVG
+    # The title is in the user message (D233): every drawing's system prompt is the same, so it is cached.
+    assert fix[0] == asked[0][0] == sketch._svg_prompt() and "Brakes" not in asked[0][0] and "Brakes" in asked[0][1]
+
+    asked.clear()
+    problems = []   # an OK look: no redraw, the drawing as drawn
+    got = sketch.draw_svg("The pad grips.", "a pad")
+    assert [kw["job"] for _, _, kw in asked] == ["sketch", "review"] and "600px" in got.svg
 
     asked.clear()
     sketch.draw_svg("The pad grips.", "a pad", base=SVG, change="make the spring bigger", rounds=0)

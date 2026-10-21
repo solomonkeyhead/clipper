@@ -170,7 +170,7 @@ Write a single self-contained SVG:
   in chalk. Lines 4-8 px, heavier for what matters.
 - Text: font-family "Caveat" (a chalk hand, loaded for you), about 52-72 px; "Inter" for numbers.
 - Use the whole board, the main objects big. Everything inside 40 px of the edges. Keep the bottom-right corner
-  (x > {cx} and y > {cy}) EMPTY: the app's buttons cover it.{title}
+  (x > {cx} and y > {cy}) EMPTY: the app's buttons cover it.
 - Animate with CSS @keyframes in a <style> block. TIMING: the words are numbered (below), and the page sets the CSS
   variable --w1 to the second word 1 is said, --w2 to word 2, and so on, and --d to the shot's length. Start each
   step on its word: animation-delay: var(--w7), or calc(var(--w7) + 0.2s). Give each step its own animation with a
@@ -184,12 +184,28 @@ Write a single self-contained SVG:
 
 Answer with the SVG only, from <svg to </svg>: no JSON, no fence, nothing before or after."""
 
-SVG_REVIEW = """Now you see your drawing as filmed: a contact sheet of {n} frames, left to right then top to bottom, at
-{times} (timed at the usual pace of speech). Judge it as a viewer on a phone with the sound off, against what the words
-say at each moment. Fix: motion too small or too quick to see, anything nobody would recognise, labels overlapping each
+#: D233: the look-and-fix's look, on review_model. It used to answer with the whole drawing rewritten (Opus, 14 of 14
+#: times in a row): now it only names what is wrong, and Opus redraws only when it names something.
+SVG_REVIEW = """You check an animated chalkboard drawing for a {subject} video watched on a phone. You see a contact sheet of
+its frames as filmed, left to right then top to bottom, at the moments given (timed at the usual pace of speech), with
+the words it plays under. Judge it as a viewer on a phone with the sound off, against what the words say at each moment.
+Problems worth fixing: motion too small or too quick to see, anything nobody would recognise, labels overlapping each
 other or the drawing, an empty or crowded board, the main action not standing out, the {subject} shown wrong, a moment
-where the picture says something other than the words, anything in the bottom-right corner. If it works, answer
-just OK. Otherwise list the problems, one per line starting with "- ", then the whole improved SVG, from <svg to </svg>."""
+where the picture says something other than the words, anything in the bottom-right corner (the app's buttons cover it).
+Matters of taste are not problems. Answer {"problems": [...]}: each a short line saying what is wrong, where, and when;
+an empty list when the drawing works."""
+
+SVG_FIX = """You see your drawing as filmed: a contact sheet of {n} frames, left to right then top to bottom, at {times}.
+A reviewer watching it on a phone found these problems:
+{problems}
+Fix them, keeping what works. Answer with the whole improved SVG only, from <svg to </svg>.
+
+Your SVG:
+{svg}"""
+
+
+class _Problems(BaseModel):
+    problems: list[str] = Field(default_factory=list)
 
 SVG_CHANGE = """The person who owns this video asked for a change to your drawing: "{ask}". Make that change to the SVG
 below, keeping everything else as it is unless the change needs it. The same rules apply.
@@ -205,7 +221,9 @@ The earlier SVG:
 {svg}"""
 
 
-def _svg_prompt(title: str) -> str:
+def _svg_prompt() -> str:
+    """The drawing's system prompt: the same for every drawing of a channel (the title is in the user message,
+    D233), so the API reads it from its prompt cache after the first."""
     from .diagrams import BLUE, BOARD, CHALK, DIM, YELLOW, H, W
 
     def hexed(c: tuple[int, int, int]) -> str:
@@ -214,29 +232,30 @@ def _svg_prompt(title: str) -> str:
     return (channels.fill(SVG_DRAW).replace("{w}", str(W)).replace("{h}", str(H))
             .replace("{board}", hexed(BOARD)).replace("{chalk}", hexed(CHALK)).replace("{yellow}", hexed(YELLOW))
             .replace("{blue}", hexed(BLUE)).replace("{dim}", hexed(DIM))
-            .replace("{cx}", str(round(W * 0.88))).replace("{cy}", str(round(H * 0.86)))
-            .replace("{title}", f'\n- Write the title "{title}" across the top, in yellow, about 70 px.' if title else ""))
+            .replace("{cx}", str(round(W * 0.88))).replace("{cy}", str(round(H * 0.86))))
 
 
-def _svg_user(sentence: str, idea: str, script_text: str) -> str:
+def _svg_user(sentence: str, idea: str, script_text: str, title: str = "") -> str:
     from . import svgfilm
 
     said = svgfilm.words(sentence)
     return ((f"The video's script, for context:\n{script_text}\n\n" if script_text else "")
             + f"The words this drawing plays under: {sentence}\nNumbered: "
             + " ".join(f"w{k}={w}" for k, w in enumerate(said, 1))
-            + f"\nAbout {svgfilm.guessed(len(said))} seconds in all.\nWhat to draw: {idea}\n")
+            + f"\nAbout {svgfilm.guessed(len(said))} seconds in all.\nWhat to draw: {idea}\n"
+            + (f'Write the title "{title}" across the top, in yellow, about 70 px.\n' if title else ""))
 
 
 def draw_svg(sentence: str, idea: str, script_text: str = "", title: str = "", rounds: int = 1, keep: bool = False,
              base: str = "", change: str = "", on_top: str = "") -> Sketch:
     """An animated SVG drawing of `idea` for `sentence` by Opus (D219), filmed, looked at `rounds` times and fixed.
     `base` with `change`: that drawing with the user's change made. `on_top`: an earlier drawing it goes on with.
-    The look-and-fix goes to Claude too (job "sketch"): the review job's Gemini rewrote Opus's drawings."""
+    The look (D233) is review_model's, a list of problems only; Opus redraws only when it lists one, from the
+    problems, its SVG and the same frames. The look-and-fix used to be one Opus call that rewrote every drawing."""
     from . import svgfilm
     from .diagrams import BOARD, H, W
 
-    system, user = _svg_prompt(title), _svg_user(sentence, idea, script_text)
+    system, user = _svg_prompt(), _svg_user(sentence, idea, script_text, title)
     if base and change:
         user += "\n" + SVG_CHANGE.replace("{ask}", change).replace("{svg}", base)
     elif on_top:
@@ -250,19 +269,24 @@ def draw_svg(sentence: str, idea: str, script_text: str = "", title: str = "", r
     for _ in range(rounds):
         try:
             png, times = svgfilm.sheet(svg, sentence, BOARD, W, H)
-            look = (system + "\n\n" + channels.fill(SVG_REVIEW).replace("{n}", str(len(times)))
-                    .replace("{times}", ", ".join(f"{t} s" for t in times)))
-            review = ask(look, user + "\nYour SVG:\n" + svg, None, temperature=0.0, media=[(png, "image/png")],
-                         job="sketch", keep=True)
-        except Exception as exc:   # nobody to look, or it couldn't be filmed: keep what we have
+            at = ", ".join(f"{t} s" for t in times)
+            looked = ask(channels.fill(SVG_REVIEW), f"The words: {sentence}\nWhat it should show: {idea}\n"
+                         + (f'Its title: "{title}"\n' if title else "") + f"Frames at: {at}\n", _Problems,
+                         temperature=0.0, media=[(png, "image/png")], job="review", keep=True, tier="review")
+            problems = [" ".join(str(p).split()) for p in _Problems.model_validate_json(looked).problems if str(p).strip()]
+        except Exception as exc:   # nobody to look, it couldn't be filmed, or the look can't be read: keep what we have
             log.info("create: drawing not reviewed (%s)", exc)
             break
-        if "<svg" not in review:   # OK
+        if not problems:   # it works
             break
-        log.info("create: drawing fixed: %s", " ".join(review[:review.find("<svg")].split())[:200])
+        log.info("create: drawing to fix: %s", "; ".join(problems)[:200])
+        fix = (SVG_FIX.replace("{n}", str(len(times))).replace("{times}", at)
+               .replace("{problems}", "\n".join(f"- {p}" for p in problems)).replace("{svg}", svg))
         try:
-            svg = svgfilm.clean(review)
-        except ValueError:   # the "fix" broke it: keep the one we had
+            svg = svgfilm.clean(ask(system, user + "\n" + fix, None, temperature=0.4, media=[(png, "image/png")],
+                                    job="sketch", keep=True))
+        except Exception as exc:   # the fix broke it, or nobody answered: keep the one we had
+            log.info("create: drawing not fixed (%s)", exc)
             break
     return Sketch(title=title, svg=svg, grid=900, count=len(svgfilm.words(sentence)))
 
@@ -500,7 +524,7 @@ def draw(sentence: str, idea: str, script_text: str = "", title: str = "", round
         try:
             answer = ask(_prompt(DRAW + "\n\n" + REVIEW), user + "\nYour sketch:\n" + sketch.model_dump_json(exclude={"grid"}),
                          _Review, temperature=0.0, media=[(_png(sketch, title), "image/png")],
-                         job="review", keep=True)
+                         job="review", keep=True, tier="review")
             review = _Review.model_validate(json.loads(answer))
         except (CreateError, ValueError, TypeError) as exc:  # no one to look: keep what we have
             log.info("create: sketch not reviewed (%s)", exc)
@@ -543,14 +567,24 @@ def draw_on(sentence: str, idea: str, earlier: Sketch, script_text: str = "") ->
     return earlier.model_copy(update={"marks": [*earlier.marks, *new.marks], "base": len(earlier.marks)})
 
 
-def draw_all(script) -> tuple[object, list[str]]:
+def missing(script) -> list[int]:
+    """The sentences whose planned drawing a build still has to make (a clip of the user's: drawn only if needed)."""
+    return [i for i, b in enumerate(script.beats) if b.visual.kind == "diagram" and b.visual.template == "sketch"
+            and not drawn(b.visual.sketch) and not b.visual.clip]
+
+
+def draw_all(script, progress=None) -> tuple[object, list[str]]:
     """Every sketch beat of `script` drawn (at once: each takes the model a while); a beat
-    whose sketch fails becomes stock footage with its card. Returns the script and notes."""
+    whose sketch fails becomes stock footage with its card. Returns the script and notes.
+    `progress(stage, pct)` hears each one done and may raise to stop (a cancel): the drawings not started yet are
+    then never started (D233), and none of this round is kept."""
+    import contextvars
+    from concurrent.futures import as_completed
+
     from .script import spans
 
     beats = list(script.beats)
-    todo = [i for i, b in enumerate(beats) if b.visual.kind == "diagram" and b.visual.template == "sketch"
-            and not drawn(b.visual.sketch) and not b.visual.clip]  # a clip of the user's: drawn only if needed
+    todo = missing(script)
     notes = []
 
     def one(i: int, earlier: Sketch | None = None):
@@ -565,15 +599,28 @@ def draw_all(script) -> tuple[object, list[str]]:
             return draw_on(said, v.idea, earlier, script.text)
         return draw(said, v.idea, script.text, v.title)
 
+    def said(n: int) -> None:
+        if progress:
+            progress(f"Drawing the sketches: {n} of {len(todo)}", 4 + 4 * n / max(1, len(todo)))
+
     building = [i for i in todo if beats[i].visual.builds]
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        done = list(pool.map(lambda i: (i, _safe(one, i)), [i for i in todo if i not in building]))
+    done = []
+    pool = ThreadPoolExecutor(max_workers=4)
+    try:
+        # Each in a copy of this thread's context, so the build's usage tag (video:<id>) reaches its calls.
+        futures = {pool.submit(contextvars.copy_context().run, _safe, one, i): i for i in todo if i not in building}
+        for f in as_completed(futures):
+            done.append((futures[f], f.result()))
+            said(len(done))
+    finally:   # a cancel: the drawings waiting for a worker are dropped, not drawn
+        pool.shutdown(wait=False, cancel_futures=True)
     # The building drawings last, in order, each on the drawing before it (this build's, else the saved one).
     for i in building:
         before = [(j, b.visual.sketch) for j, b in enumerate(beats[:i]) if drawn(b.visual.sketch)]
         before += [(j, s) for j, s in done if s is not None and j < i]
         earlier = max(before, key=lambda p: p[0])[1] if before else None   # none: drawn on a blank board
         done.append((i, _safe(lambda k, e=earlier: one(k, e), i)))
+        said(len(done))
     for i, sketch in done:
         v = beats[i].visual
         if sketch is None:

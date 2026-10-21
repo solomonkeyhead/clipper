@@ -69,9 +69,9 @@ llm:
   # Claude set up but out of usage? Stop and say so, rather than let Gemini make it (D117).
   create_claude_only: true
   # Create jobs Gemini does first (free key), Claude only if it can't answer (D136): script (writing
-  # and re-planning), check (physics), review (sketch look-and-fix), footage (judging stock clips).
-  # Drawing the sketches stays with Claude. Remove a name to give that job back to Claude.
-  create_gemini_jobs: [script, check, review, footage]
+  # and re-planning), check (physics), footage (judging stock clips); add review (the sketch look-and-fix,
+  # on review_model otherwise) to give it to Gemini. Drawing the sketches stays with Claude.
+  create_gemini_jobs: [script, check, footage]
   # The Gemini models Create asks, best first, each tried when the one before is busy (D162). All free on a
   # Gemini key (checked 2026-10-08). The lite models are left out: their drawings came back broken.
   create_gemini_models: [gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash, gemini-flash-latest]
@@ -182,3 +182,10 @@ watch:
     is authorized to use. Not interested in product ads, supplements, AI tools,
     crypto or gambling.
   platforms: ["tiktok"]
+
+create:
+  # Drawings a build makes by itself (each is an Opus call or two): the script's planned sketches count first,
+  # then stand-ins for sentences no footage fits; past it those get a chalk card. New drawing is never limited.
+  max_auto_drawings: 4
+  # The editor's read of each new script, on top of the rules check it mostly repeats. true = as before.
+  critic: false

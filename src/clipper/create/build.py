@@ -13,6 +13,7 @@ like every clip.
 
 from __future__ import annotations
 
+import contextvars
 import functools
 import hashlib
 import itertools
@@ -20,6 +21,7 @@ import json
 import math
 import os
 import shutil
+import threading
 import time
 from collections import Counter
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed, wait
@@ -35,10 +37,10 @@ from ..render.teaser import reencode_args
 from ..utils.cache import slugify
 from ..utils.logging import get_logger
 from . import channel as channels
-from . import compose, diagrams, stock, store, userclips
+from . import compose, diagrams, meterhooks, stock, store, userclips
 from .ai import CreateError
 from .script import FIRST_DIAGRAM_WORDS, Script, Visual, _query_from, loops_back, spans
-from .sketch import draw_all
+from .sketch import draw_all, missing
 from .sketch import drawn as is_drawn
 from .voice import Timings, folder, nudged
 
@@ -269,11 +271,42 @@ def _fallback(beat, script: Script, text: str = "", keep: bool = False) -> Visua
         idea = beat.visual.idea.strip() or (f"A simple, striking sketch of what this sentence shows; the key idea: "
                                             f"{beat.visual.card or beat.emphasis}.")  # the user's own idea, if they gave one (D120)
         drawn = draw(text or beat.text, idea, script.text, keep=keep)
-        if drawn.marks:
+        # Marks or an SVG (D219): checking marks alone threw every SVG stand-in away for a chalk card, after it
+        # was paid for (D233).
+        if is_drawn(drawn):
             return Visual(kind="diagram", template="sketch", sketch=drawn)
     except CreateError as exc:
         log.info("create: no fallback sketch (%s)", exc)
+    return _card(beat)
+
+
+def _card(beat) -> Visual:
+    """The sentence's phrase chalked on the board: free, no AI."""
     return Visual(kind="diagram", template="card", title=beat.visual.card or beat.emphasis or beat.text)
+
+
+#: Stand-in drawings this build may still make by itself (D233): `create.max_auto_drawings` less the planned
+#: sketches the video has; None outside a build: no limit. The footage threads take from it at once, hence the lock.
+_auto_left: list[int | None] = [None]
+_auto_lock = threading.Lock()
+
+
+def _auto_drawings(script: Script, most: int) -> int:
+    """How many stand-ins a build may draw: `most` less the drawings the script plans or kept by itself (one per
+    picture, a held sentence counts with its drawing); the user's own (New drawing) aren't counted."""
+    planned = sum(1 for g in spans(script) if (v := script.beats[g[0]].visual).kind == "diagram"
+                  and v.template == "sketch" and not v.manual)
+    return max(0, most - planned)
+
+
+def _may_draw() -> bool:
+    with _auto_lock:
+        if _auto_left[0] is None:
+            return True
+        if _auto_left[0] <= 0:
+            return False
+        _auto_left[0] -= 1
+        return True
 
 
 #: What this build chose for each sentence's picture (sentence index -> {"picked": hits},
@@ -470,6 +503,11 @@ def _drawn(i: int, beat, script: Script, tag: str) -> Visual:
     # Neither is one after the user's own clip: both are remembered by their question instead, so a rebuild
     # where footage still doesn't fit draws the same one for free (D182).
     stand_in = beat.visual.kind == "stock" and _opening(i, script)
+    if beat.visual.kind != "diagram" and not _may_draw():
+        # Footage didn't fit and this build's drawings are used up (D233): the chalk card, and the way to more.
+        picture_notes.append(f"Sentence {i + 1}: no footage fit, and this video's automatic drawings are used up, so "
+                             "it shows its words on the board. Press New drawing on it for a drawing.")
+        return _card(beat)
     made = _fallback(beat, script, " ".join(script.beats[k].text for k in group), keep=stand_in or bool(tag))
     if not tag and made.template == "sketch" and is_drawn(made.sketch) and not stand_in:
         chosen[i] = {"drawn": made}
@@ -567,7 +605,8 @@ def _prefetch(script: Script, timings: Timings, groups: list[list[int]], progres
     # Counted as each one is chosen: a slow AI kept one number on screen for minutes (D154).
     out: dict[int, _Footage] = {}
     with ThreadPoolExecutor(max_workers=FOOTAGE_WORKERS) as pool:
-        for n, done in enumerate(as_completed([pool.submit(one, job) for job in todo]), 1):
+        # Each in a copy of this thread's context, so the build's usage tag (video:<id>) reaches its AI calls.
+        for n, done in enumerate(as_completed([pool.submit(contextvars.copy_context().run, one, job) for job in todo]), 1):
             i, got = done.result()
             if got:
                 out[i] = got
@@ -1216,15 +1255,27 @@ def _campaign(channel: channels.Channel) -> None:
 
 def build(video_id: int, progress=None) -> int:
     """Make the video and file it; returns its clip id in the library."""
+    from ..llm import usage
+
     global shot_cache, _pool
+    finished = False
     try:
-        return _build(video_id, progress)
+        with usage.tag(f"video:{video_id}"):   # every AI call of the build carries the video (D233)
+            clip_id = _build(video_id, progress)
+        finished = True
+        return clip_id
     finally:
         shot_cache = None  # also when it failed: the cache belongs to one build
+        _auto_left[0] = None
         _drawing.clear()
-        if _pool is not None:   # a drawing under way when a build stops still lands in the cache, whole
+        if _pool is not None:
+            # A cancelled or failed build stops its drawings under way too (D233): they went on filming and landed
+            # in the cache. ponytail: the pool's private process list; Python 3.14's terminate_workers() replaces it.
+            workers = list((getattr(_pool, "_processes", None) or {}).values())
             _pool.shutdown(wait=False, cancel_futures=True)
             _pool = None
+            for p in workers if not finished else []:
+                p.terminate()
 
 
 def _build(video_id: int, progress) -> int:
@@ -1244,6 +1295,9 @@ def _build(video_id: int, progress) -> int:
     if not row["voice"] or not row["timings"]:
         raise CreateError("drop the voiceover in first")
     script, timings = Script.model_validate(row["script"]), Timings.model_validate(row["timings"])
+    first = not row["clip_id"]
+    if first:   # before any AI call of it, so a plan with no Shorts left stops here (D233)
+        meterhooks.on_first_build(video_id)
     script = retry_opening_footage(script)
     timings = nudged(script, timings)
     if loops(script, timings):
@@ -1270,11 +1324,15 @@ def _build(video_id: int, progress) -> int:
         store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     if progress:
         progress("Drawing the sketches", 4)
-    drawn, failed = draw_all(script)  # the sketches the script is still missing, a few at once (D136)
+    if not first and (redrawn := len(missing(script))):   # the user's New drawing, Change drawing, New pictures
+        meterhooks.on_redraw(video_id, redrawn)
+    # The sketches the script is still missing, a few at once (D136); a cancel stops those not started.
+    drawn, failed = draw_all(script, progress)
     if drawn != script:
         script = drawn
         store.update_video(video_id, script={**script.model_dump(), "take": row["script"].get("take", 1)})
     notes += failed
+    _auto_left[0] = _auto_drawings(script, config.create.max_auto_drawings)
     if script.hits is None and script.hits_on:   # the meme hits, picked once, then the user's (D223)
         from . import sfx
 

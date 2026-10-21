@@ -205,9 +205,10 @@ class LLMConfig(StrictModel):
     # The Create jobs Gemini does first, Claude only if Gemini can't answer (D124, D136): "script"
     # (writing and re-planning), "check" (the physics check), "review" (the sketch look-and-fix)
     # and "footage" (judging, ranking and searching stock footage). Drawing the sketches and
-    # the rest stay with Claude. create_claude_only doesn't apply to these jobs.
+    # the rest stay with Claude. create_claude_only doesn't apply to these jobs. "review" is no longer a
+    # default (D233): it only lists problems now, on review_model, and each one it lists costs an Opus redraw.
     create_gemini_jobs: list[Literal["script", "check", "review", "footage"]] = Field(
-        default_factory=lambda: ["script", "check", "review", "footage"])
+        default_factory=lambda: ["script", "check", "footage"])
     # The Gemini models Create asks, best first (D162): each one tried in turn when the one before is busy
     # or out of quota. The lite models are left out: a drawing from one came back as a single endless number.
     # Empty = the clipping models above (correction_model, then the scoring model).
@@ -484,6 +485,16 @@ def _known(model: type[BaseModel], data: dict, where: str = "") -> dict:
     return out
 
 
+class CreateConfig(StrictModel):
+    """What a Create build may spend on its own (D233)."""
+
+    # Drawings a build makes by itself, the script's planned sketches counted first; a sentence no footage fits
+    # after that gets the free chalk card. A drawing asked for by hand (New drawing) is never counted or stopped.
+    max_auto_drawings: int = Field(default=4, ge=0)
+    # The editor's read of each new script (D155), on top of the rules check (lint) it mostly repeats.
+    critic: bool = False
+
+
 class Config(StrictModel):
     """The whole of `config/default.yaml`."""
 
@@ -496,6 +507,7 @@ class Config(StrictModel):
     refine: RefineConfig = RefineConfig()
     qa: QAConfig = QAConfig()
     watch: WatchConfig = WatchConfig()
+    create: CreateConfig = CreateConfig()
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:

@@ -212,6 +212,7 @@ def test_the_fact_check_and_the_editors_read_are_asked_at_once(data_root, monkey
         return json.dumps({"ok": True, "problems": []})
 
     monkeypatch.setattr(scripts, "ask", ask)
+    (data_root / "config.yaml").write_text("create:\n  critic: true\n", encoding="utf-8")   # off by default (D233)
     out, _ = scripts.write_checked("Why does the lift make you heavier?")
     assert len(out.beats) == 3
 

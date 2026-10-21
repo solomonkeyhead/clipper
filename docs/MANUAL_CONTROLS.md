@@ -18,6 +18,8 @@ is the order I'd build them.
 | Picture per sentence | AI plans footage or a diagram | Choose footage by your own search words, a chalk phrase, or a drawing you describe; "Plan pictures" only fills the ones you left alone | **Done** | |
 | Your own footage | none | Drop clips; place by hand, in order, or by AI; fill gaps by hand or automatically | **Done** (D119) | |
 | Stopping a build | Ran to the end | Cancel while it builds (stops at the next step; a finished version stays); Build again on a finished video | **Done** (D122) | |
+| Stand-in drawings | A build draws by itself up to `create.max_auto_drawings` (4, planned sketches first); past it a sentence with no footage gets a chalk card and a note | New drawing on that sentence, never limited | **Done** (D233) | |
+| New pictures | Replans every picture you didn't choose | Plans only; you press Build to make them | **Done** (D233) | |
 | How long a drawing stays up | One picture per sentence, unless the plan holds a drawing | "Keep the drawing above, building on" on any sentence after a drawing | **Done** (D124) | |
 | Archiving a posted video | Moves to the Archive once posted (found or marked in Clips) | Archive any video by hand; "Back to Create" keeps it out | **Done** (D131) | |
 | Who does each AI job | Gemini first for script, check, review and footage; Claude draws (`llm.create_gemini_jobs`, D136) | "Which AI" in Settings: one choice for every job (D216; a list per job before, D148); per job only in config (`llm.job_providers`) | **Exists** | |
