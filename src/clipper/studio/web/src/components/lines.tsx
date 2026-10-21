@@ -2,14 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useCampaign, useEditCaption, type Clip } from "@/api/client";
+import { failure, useCampaign, useEditCaption, type Clip } from "@/api/client";
 import { Button, Tip } from "./ui";
 
 async function rerender(id: number, hook?: string) {
   const res = await fetch(`/api/clips/${id}/rerender`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(hook ? { hook } : {}) });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || res.statusText);
+  if (!res.ok) throw failure(res.status, data.detail, res.statusText);
   return data as { hook: string };
 }
 

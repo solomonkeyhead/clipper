@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Fi
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  sourceVideoUrl, startJob, stopJob, uploadVideo, useCampaignTitle, useCampaigns, useJobs, useSettings, useSetup, useSources,
+  sourceVideoUrl, startJob, stopJob, uploadVideo, useCampaignTitle, useCampaigns, useHosted, useJobs, useSettings, useSetup, useSources,
   type Job, type JobMode, type Source,
 } from "@/api/client";
 import { JobResults, LinkImport } from "@/components/footage";
@@ -388,6 +388,7 @@ export function NewClipsPage() {
   const { data: sources = [] } = useSources();
   const { data: jobs = [] } = useJobs();
   const { data: setup } = useSetup();
+  const hosted = useHosted();   // the AI key is the site's there (D229)
   const { data: settings } = useSettings();
   const qc = useQueryClient();
   const active = campaigns.filter((c) => c.has_brief && !c.archived && !c.own_channel);  // never clip for your own channel (D140)
@@ -489,7 +490,7 @@ export function NewClipsPage() {
       <PageHeader title="New clips"
         subtitle="Give Clipper a campaign's footage and it finds the best moments, frames them, captions them and files them under the campaign." />
       <div className="flex flex-col gap-4">
-        {setup && !setup.ai_ready && (
+        {setup && !setup.ai_ready && hosted === false && (
           <Card className="flex flex-wrap items-center gap-3 border-warning/40 p-4 text-sm">
             <AlertTriangle className="size-4 shrink-0 text-warning" />
             <span className="flex-1">Clipper needs your free AI key to find and score moments.</span>
@@ -541,7 +542,9 @@ export function NewClipsPage() {
             <>
               <div className="mt-4 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="font-medium text-muted">
-                  {mode === "manual" ? "Or pick a video already on this PC" : "Or pick videos already on this PC"}
+                  {/* Hosted, only the user's own uploads are listed: the server's Downloads are nobody's (D229). */}
+                  {hosted ? (mode === "manual" ? "Or pick a video you uploaded before" : "Or pick videos you uploaded before")
+                    : mode === "manual" ? "Or pick a video already on this PC" : "Or pick videos already on this PC"}
                 </span>
                 {picked.length > 0 && mode !== "manual" && (
                   <button className="text-muted hover:text-fg" onClick={() => setPicked([])}>Clear ({picked.length} picked)</button>

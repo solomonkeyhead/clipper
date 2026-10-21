@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Settings2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { createApi, type ChannelEdit, type CreateView } from "@/api/client";
+import { createApi, useHosted, type ChannelEdit, type CreateView } from "@/api/client";
 import { Button, Card } from "@/components/ui";
 
 const input = "h-9 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm outline-none focus:border-line-strong";
@@ -75,6 +75,7 @@ const BOARDS: [string, string][] = [["slate", "Slate green"], ["one_accent", "Sl
 /** Everything a channel's prompts say, editable. */
 function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void }) {
   const qc = useQueryClient();
+  const hosted = useHosted();
   const { data } = useQuery({ queryKey: ["create", "channel", slug], queryFn: async () => {
     const res = await fetch(`/api/create/channels/${slug}`);
     if (!res.ok) throw new Error(res.statusText);
@@ -137,6 +138,8 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
           {BOARDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </select></Field>
         <Field label="Sign-off" hint="Small, on screen for the last second. Empty: none."><input className={input} value={val("signoff") as string} placeholder="e.g. See you tomorrow." onChange={(e) => set({ signoff: e.target.value })} /></Field>
+        {/* Hosted, a path names a file on the server, so pictures by path aren't taken there (D229). */}
+        {hosted === false && <>
         <Field label="Character picture" hint="A file on this computer. Shown bottom left at the start. A transparent background is used as it is; any other is cut to a circle.">
           <input className={input} value={val("character") as string} placeholder="e.g. C:\Pictures\me.png" onChange={(e) => set({ character: e.target.value })} /></Field>
         <Field label="Reaction pictures (one per line)" hint="One of these at the punchline, a different one each video. Empty: the character picture.">
@@ -147,6 +150,7 @@ function ChannelSettings({ slug, onClose }: { slug: string; onClose: () => void 
         <Field label="Presenting picture" hint="Shown for a moment as the first drawing appears. Empty: none.">
           <input className={input} value={val("presenter") as string} placeholder="e.g. C:\Pictures\me-pointing.png" onChange={(e) => set({ presenter: e.target.value })} /></Field>
         <Field label="Watermark" hint="A small logo in the top right. Empty: none."><input className={input} value={val("watermark") as string} onChange={(e) => set({ watermark: e.target.value })} /></Field>
+        </>}
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" className="accent-[var(--text)]" checked={val("music") as boolean} onChange={(e) => set({ music: e.target.checked })} />

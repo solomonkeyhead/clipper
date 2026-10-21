@@ -7,10 +7,10 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { toast } from "sonner";
 import {
-  createApi, useClips, useCreate, useCreateAI, type CreateHit, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual, type SfxSound,
+  createApi, useClips, useCreate, useCreateAI, useHosted, type CreateHit, type CreatePost, type CreateScript, type CreateTopic, type CreateVideo, type CreateView, type CreateVisual, type SfxSound,
 } from "@/api/client";
 import { JobProgress, type Step } from "@/components/progress";
-import { Button, CaptionTitle, Card, EmptyState, MenuItem, MoreMenu, Skeleton, Tip } from "@/components/ui";
+import { Button, CaptionTitle, Card, EmptyState, MenuItem, MoreMenu, Skeleton, Tag, Tip } from "@/components/ui";
 import { useUI } from "@/lib/store";
 import { PLATFORM_NAME, cn, copyText, formatCount } from "@/lib/utils";
 import { ChannelBar, NewChannel } from "./ChannelPanel";
@@ -43,6 +43,17 @@ function useDoneToasts(videos: CreateVideo[] | undefined) {
   }, [videos]);
 }
 
+/** The page's title; "Beta" beside it on the hosted site, which sells clipping with Create in beta (D224, D238). */
+function CreateTitle() {
+  const hosted = useHosted();
+  return (
+    <div className="flex items-start gap-2.5">
+      <CaptionTitle text="Make a Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+      {hosted && <Tag className="mt-1 text-xs">Beta</Tag>}
+    </div>
+  );
+}
+
 export function CreatePage() {
   const { data, isLoading } = useCreate();
   useDoneToasts(data?.videos);
@@ -51,7 +62,7 @@ export function CreatePage() {
   if (data.channels.length === 0) {
     return (
       <div className="fade-in flex max-w-3xl flex-col gap-6">
-        <CaptionTitle text="Make a Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+        <CreateTitle />
         <NewChannel onDone={() => undefined} first />
       </div>
     );
@@ -63,7 +74,7 @@ export function CreatePage() {
   return (
     <div className="fade-in flex flex-col gap-6">
       <div>
-        <CaptionTitle text="Make a Short" className="text-[clamp(1.9rem,3.2vw,2.6rem)]" />
+        <CreateTitle />
         <p className="mt-2 text-sm text-muted">
           For <b className="text-fg">{data.channel.name}</b>{data.channel.handle && ` (${data.channel.handle})`}. Pick an idea or write your own script, approve it,
           add your voice: Clipper builds the rest. Every step has a manual option.
@@ -178,10 +189,11 @@ const buildSteps = (drawings: boolean): Step[] => [
 function GeminiStruggling() {
   const { data: ai } = useCreateAI();
   const qc = useQueryClient();
+  const hosted = useHosted();
   const [busy, setBusy] = useState(false);
   const miss = Object.entries(ai?.misses ?? {}).find(([k]) => k.startsWith("gemini"));
   if (!ai || !miss) return null;
-  const claude = ai.order.some((b) => b.startsWith("claude_code"));
+  const claude = hosted === false && ai.order.some((b) => b.startsWith("claude_code"));   // Which AI is the site's, hosted (D229)
   const until = /until (\d\d:\d\d)/.exec(miss[1])?.[1];   // a day's quota says when it's back (D168)
   const useClaude = async () => {
     setBusy(true);
@@ -225,7 +237,8 @@ const PROVIDER: Record<string, string> = { gemini: "Gemini", claude_code: "Claud
 /** Which AI does what, always in view: Claude or Gemini was a guess for two videos (D118). */
 function AIStrip() {
   const { data: ai } = useCreateAI();
-  if (!ai) return null;
+  const hosted = useHosted();
+  if (!ai || hosted !== false) return null;   // hosted, the AI and its keys are the site's, not the user's to see or change (D229)
   const first = ai.order[0] ?? "";
   const claude = first.startsWith("claude_code") || first.startsWith("anthropic");
   const miss = Object.entries(ai.misses)[0];
@@ -1082,6 +1095,7 @@ function Picture({ visual }: { visual: CreateScript["beats"][number]["visual"] }
 
 function VoiceStep({ video, title = "Step 2 of 4: add the voice" }: { video: CreateVideo; title?: string }) {
   const qc = useQueryClient();
+  const hosted = useHosted();
   const { data: create } = useCreate();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -1124,10 +1138,14 @@ function VoiceStep({ video, title = "Step 2 of 4: add the voice" }: { video: Cre
         <Step n={1}>
           <span className="flex-1">Copy the script.</span>
           <Button size="sm" variant="primary" onClick={() => copyText(text, "Script")}><ClipboardCopy className="size-3.5" /> Copy script</Button>
-          {/elevenlabs/i.test(how) && (
-            <Tip label="A sentence a line and a [pause] before the punchline, for Eleven v3. Try stability 0.55 to 0.65, similarity 0.75, style 0 to 0.1, and make the punchline 2 or 3 times to keep the flattest.">
-              <Button size="sm" variant="secondary" onClick={() => copyText(eleven, "Script for ElevenLabs")}><ClipboardCopy className="size-3.5" /> For ElevenLabs</Button>
-            </Tip>
+          {/elevenlabs/i.test(how) && (hosted
+            // Hosted, no one voice app is everyone's (D238): the same copy, in general words.
+            ? <Tip label="A sentence a line and a [pause] before the punchline, for a voice app that reads [pause].">
+                <Button size="sm" variant="secondary" onClick={() => copyText(eleven, "Script with pauses")}><ClipboardCopy className="size-3.5" /> With pauses</Button>
+              </Tip>
+            : <Tip label="A sentence a line and a [pause] before the punchline, for Eleven v3. Try stability 0.55 to 0.65, similarity 0.75, style 0 to 0.1, and make the punchline 2 or 3 times to keep the flattest.">
+                <Button size="sm" variant="secondary" onClick={() => copyText(eleven, "Script for ElevenLabs")}><ClipboardCopy className="size-3.5" /> For ElevenLabs</Button>
+              </Tip>
           )}
         </Step>
         <Step n={2}>
@@ -1468,6 +1486,7 @@ function play(sound: string, url?: string) {
 function HitsEditor({ video, now, seek }: { video: CreateVideo; now: number | null; seek: (t: number) => void }) {
   const qc = useQueryClient();
   const { data: sfx } = useQuery({ queryKey: ["create-sfx"], queryFn: createApi.sfx, staleTime: 60_000 });
+  const hosted = useHosted();   // library keys are the site's there (D229)
   const [busy, setBusy] = useState(false);
   const [finding, setFinding] = useState<number | null>(null);   // the row whose sound is being looked for in the library
   const words = video.words ?? [];
@@ -1558,7 +1577,7 @@ function HitsEditor({ video, now, seek }: { video: CreateVideo; now: number | nu
             </Button>
           </Tip>
           <span className="text-xs text-subtle">
-            {sfx?.library ? "Built-in sounds, or any free (CC0) sound from Freesound." : "Built-in sounds. A Freesound key in Settings adds its free sounds."} Changes show on Build again.
+            {sfx?.library ? "Built-in sounds, or any free (CC0) sound from Freesound." : hosted ? "Built-in sounds." : "Built-in sounds. A Freesound key in Settings adds its free sounds."} Changes show on Build again.
           </span>
         </div>
       )}

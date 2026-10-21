@@ -5,7 +5,7 @@ import {
   Settings, UserCircle2, Wand2,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCampaigns, useClips, useSyncNow } from "@/api/client";
+import { useCampaigns, useClips, useLearningOpen, useSyncNow } from "@/api/client";
 import { useUI } from "@/lib/store";
 
 /**
@@ -60,6 +60,7 @@ export function CommandPalette() {
   const sync = useSyncNow();
   const { data: campaigns = [] } = useCampaigns();
   const { data: clips = [] } = useClips();
+  const learning = useLearningOpen();
 
   const run = (fn: () => void) => () => { setOpen(false); fn(); };
   const go = (to: string, search?: Record<string, string>) => run(() => void navigate({ to, search }));
@@ -91,7 +92,7 @@ export function CommandPalette() {
           <Item icon={<Inbox />} label="Clips to submit" onSelect={go("/clips", { status: "posted" })} />
           <Item icon={<Plus />} label="New campaign" onSelect={go("/campaigns/new")} />
           <Item icon={<BarChart3 />} label="Stats" onSelect={go("/stats")} />
-          <Item icon={<GraduationCap />} label="Learning: what Clipper has learned" onSelect={go("/learning")} />
+          {learning && <Item icon={<GraduationCap />} label="Learning: what Clipper has learned" onSelect={go("/learning")} />}
           <Item icon={<UserCircle2 />} label="Accounts" onSelect={go("/accounts")} />
           <Item icon={<Settings />} label="Settings" onSelect={go("/settings")} />
         </Group>

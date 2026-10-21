@@ -139,6 +139,11 @@ export function CopyButton({ text, what, label, size = "sm", variant = "secondar
 }
 
 /* ---------- Chips and status ---------- */
+/** A small word after a page's name, as Create's "Beta" on the hosted site (D238). */
+export const Tag = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <span className={cn("text-[11px] font-bold tracking-wide text-subtle uppercase", className)}>{children}</span>
+);
+
 
 /** A word of metadata (D215): coloured text, no pill. The wall sets "9.1 · 0:41 · Ready to post" as plain words;
  *  a row of rounded chips was the stock dashboard look. */

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   checkAlerts, disconnectWhop, saveAlertPrefs, startWhopConnect, useAlerts,
-  useSetKeys, useWhopFeeds, watchWhopFeeds, whopConnectState, type Alerts,
+  useHosted, useSetKeys, useWhopFeeds, watchWhopFeeds, whopConnectState, type Alerts,
 } from "@/api/client";
 import { cn, ago, openTab } from "@/lib/utils";
 import { Field, TextArea, TextInput } from "./form";
@@ -282,8 +282,10 @@ function Watching({ alerts, onEdit }: { alerts: Alerts; onEdit: () => void }) {
 /** The top of Find campaigns: an invitation, the setup, or what's being watched. */
 export function CampaignAlerts() {
   const { data: alerts } = useAlerts();
+  const hosted = useHosted();
   const [editing, setEditing] = useState(false);
-  if (!alerts) return null;
+  // Hosted, alerts need a Whop app of one's own (keys refused there, D229) and a sign-in that returns to this computer.
+  if (!alerts || hosted !== false) return null;
   const ready = alerts.whop_signed_in && alerts.whop_feeds.length > 0;
   if (ready && !editing) return <Watching alerts={alerts} onEdit={() => setEditing(true)} />;
   if (!ready && !editing) {

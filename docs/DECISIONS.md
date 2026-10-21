@@ -4077,3 +4077,18 @@ Marc had every page clicked through for what a general user wouldn't need or und
   meter.sqlite (losing it would bill every source again). Locally there is no plan.json and nothing changes.
 - Left: redraws are counted when a build starts, so one cancelled before drawing counts again on retry; a clip that
   fails QA still uses one of Free's clean clips; Create Shorts are never watermarked.
+
+## D238 — The page on the hosted site: plan usage, limits, and nothing that only works at home (2026-10-21)
+- The hosted page showed one owner's setup: AI keys, Which AI, platform app keys, picture paths, Whop alerts, "this
+  PC", ElevenLabs. The server refuses most of these there (D229).
+- Hosted, the shell shows the plan's minutes and Shorts used this period, pack credits, the reset date, "Plan and
+  billing" (the gateway's page) and Log out (a POST): the sidebar's foot on a desktop, the More menu on a phone.
+  /api/usage (D237) is asked again when a job or a build ends, not on a timer.
+- A 402 plan limit shows its message once with See plans, and the action stops; this sits in the API client's one
+  error path, not in each page (the same toast within 5 seconds shows once).
+- Hidden when hosted: everything above, the AI pill and strip and the AI key step; they wait for the status to say
+  "local", so they never flash up. Create says Beta; Learning appears from 30 rated clips; a new campaign starts with
+  the flagged-words mask off. Everywhere, money that is an estimate says so; recorded payouts are as they were.
+- Checked on the real gateway (serve_hosted.py, a test sign-up, the real meter): Free shows 0 of 60 min and 0 of 1
+  free Short; Settings has no AI keys or This computer. `scripts/ui/hosted_walkthrough.py` checks the rest at 1400,
+  900 and 375 px, dark and light.

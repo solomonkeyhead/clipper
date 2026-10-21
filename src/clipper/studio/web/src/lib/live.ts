@@ -68,6 +68,7 @@ export function useLiveUpdates() {
                              { description: job.clips ? "They're in Clips, ready to post." : job.message });
           if (job.status === "done") refreshClips();
         }
+        if (finished) void qc.invalidateQueries({ queryKey: ["usage"] });   // footage minutes used (D238; asked only hosted)
         qc.setQueryData<{ id: number }[]>(["jobs"], (old = []) => {
           const rest = old.filter((j) => j.id !== job.id);
           return [job, ...rest].sort((a, b) => b.id - a.id);

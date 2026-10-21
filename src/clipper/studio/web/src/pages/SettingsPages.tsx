@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   connectInstagram, instagramConnectState, runSystemCheck, startInstagramConnect, startTikTokConnect, startYouTubeConnect, testAI, tiktokConnectState, youtubeConnectState, useAccounts, useDisconnect,
-  useSetKeys, useSetSettings, useSettings, useSetup, useStatus, type Account, type CheckResult,
+  useHosted, useSetKeys, useSetSettings, useSettings, useSetup, type Account, type CheckResult,
 } from "@/api/client";
 import { Field, TextInput } from "@/components/form";
 import { GroupsCard } from "@/components/groups";
@@ -157,6 +157,7 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, waiti
   start: () => Promise<ConnectState>; state: () => Promise<ConnectState>; waitingHint: string; trouble?: string;
 }) {
   const qc = useQueryClient();
+  const hosted = useHosted();
   const [needKeys, setNeedKeys] = useState(false);
   const [waiting, setWaiting] = useState<{ url: string; since: number } | null>(null);
   const [, tick] = useState(0);
@@ -202,6 +203,8 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, waiti
       </div>
     );
   }
+  // Hosted, app keys are the site's (D229): without the site's own app for this platform there's nothing to set up here.
+  if (hosted && !ready) return <span className="text-sm text-muted">Connecting {name} isn't available on this site yet.</span>;
   if (needKeys && !ready) return <>{appKeys}</>;
   return (
     <Button variant={ready ? "primary" : "secondary"} onClick={() => (ready ? void connect() : setNeedKeys(true))}>
@@ -410,6 +413,7 @@ function PlatformCard({ platform, title, accounts, add }: {
 
 export function AccountsPage() {
   const { data, isLoading } = useAccounts();
+  const hosted = useHosted();
   const list = data ?? [];
   return (
     <div className="fade-in max-w-3xl">
@@ -422,7 +426,7 @@ export function AccountsPage() {
           <PlatformCard platform="instagram" title="Instagram" accounts={list.filter((a) => a.platform === "instagram")} add={<AddInstagram />} />
           <PlatformCard platform="youtube" title="YouTube Shorts" accounts={list.filter((a) => a.platform === "youtube")} add={<AddYouTube />} />
           <p className="text-xs text-subtle">
-            Clipper only reads stats through each platform's official API. Logins are stored on this PC only, in Clipper's data folder.
+            Clipper only reads stats through each platform's official API. {hosted ? "Logins are kept in your account's own folder on Clipper's server." : "Logins are stored on this PC only, in Clipper's data folder."}
           </p>
         </div>
       )}
@@ -663,21 +667,24 @@ function SystemCheck() {
 
 export function SettingsPage() {
   const { data: settings } = useSettings();
-  const { data: status } = useStatus();
+  const hosted = useHosted();
   const save = useSetSettings();
   return (
     <div className="fade-in flex max-w-3xl flex-col gap-4">
       <PageHeader title="Settings" />
       {/* Under headings (D199): one long card mixed clipping, the app and this computer. */}
-      <h2 className="row-head">AI</h2>
-      <AIKey />
-      <Card className="px-5" id="create-ai">
-        <Row title="Which AI"
-             body="Automatic picks the best AI you have for each job. Watching a video is always Gemini."
-             control={<WhichAI />} />
-      </Card>
-      <FootageKeys />
-      <h2 className="row-head mt-6">Clipping</h2>
+      {/* Hosted, the AI and the footage libraries are the site's, with its keys (D229): none of it is set here. */}
+      {hosted === false && <>
+        <h2 className="row-head">AI</h2>
+        <AIKey />
+        <Card className="px-5" id="create-ai">
+          <Row title="Which AI"
+               body="Automatic picks the best AI you have for each job. Watching a video is always Gemini."
+               control={<WhichAI />} />
+        </Card>
+        <FootageKeys />
+      </>}
+      <h2 className={cn("row-head", hosted === false && "mt-6")}>Clipping</h2>
       <Card className="divide-y divide-line px-5">
         <Row
           title="Open on the payoff"
@@ -718,7 +725,7 @@ export function SettingsPage() {
       {/* The plan preview and the GitHub Pages copies went (D221): a tier switch with nothing billed, and pages the
           account setups already offer where they're needed. */}
       {/* Hosted, this computer is the server's: nothing to set or check here. */}
-      {!status?.hosted && <>
+      {hosted === false && <>
         <h2 className="row-head mt-6">This computer</h2>
         <Card className="divide-y divide-line px-5">
         <Row title="This computer" body="Clipper reads every video's speech. A model too big for your graphics card runs out of memory; too small and the captions suffer. This picks the one that fits." control={<Computer />} />

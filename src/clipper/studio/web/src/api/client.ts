@@ -1,9 +1,33 @@
 import createClient from "openapi-fetch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { components, paths } from "./schema";
 import { useUI } from "@/lib/store";
 
 const api = createClient<paths>({ baseUrl: "" });
+
+/** The last plan limit shown, so the page's own error toast for the same failure doesn't show it twice. */
+let shownLimit = { message: "", at: 0 };
+const showError = toast.error;
+// Every action's catch toasts its error's words (80-odd places); a plan limit is already shown with its
+// "See plans" action, so the same words within a few seconds are dropped here instead of in each of them.
+toast.error = ((message, data) => Date.now() - shownLimit.at < 5000
+  && (message === shownLimit.message || data?.description === shownLimit.message)
+  ? "plan-limit" : showError(message, data)) as typeof toast.error;
+
+/** The error a failed request throws. A plan limit (402 with {code, message, billing_url}, D238) is shown here, once,
+ *  with "See plans": the action that hit it only stops, as on any error. */
+export function failure(status: number, detail: unknown, fallback: string): Error {
+  const limit = status === 402 && detail && typeof detail === "object" ? detail as { message?: string; billing_url?: string } : null;
+  if (limit?.message) {
+    shownLimit = { message: limit.message, at: Date.now() };
+    const billing = limit.billing_url || "/billing";
+    showError(limit.message, { id: "plan-limit", duration: 15_000,
+      action: { label: "See plans", onClick: () => location.assign(billing) } });   // the gateway's page: a full load
+    return new Error(limit.message);
+  }
+  return new Error((detail as string) || fallback);
+}
 
 export type Clip = components["schemas"]["Clip"];
 export type Post = components["schemas"]["Post"];
@@ -18,8 +42,7 @@ export type ClipStatus = "ready" | "posted" | "submitted" | "skipped";
 async function unwrap<T>(p: Promise<{ data?: T; error?: unknown; response: Response }>): Promise<T> {
   const { data, error, response } = await p;
   if (error !== undefined || data === undefined) {
-    const detail = (error as { detail?: string } | undefined)?.detail;
-    throw new Error(detail || `${response.status} ${response.statusText}`);
+    throw failure(response.status, (error as { detail?: unknown } | undefined)?.detail, `${response.status} ${response.statusText}`);
   }
   return data;
 }
@@ -39,6 +62,19 @@ export const keys = {
 export const useStatus = () =>
   useQuery({ queryKey: keys.status, queryFn: () => unwrap(api.GET("/api/status")),
              refetchInterval: 60_000 });
+/** On the hosted site (D224): what only works on one's own computer is hidden. Undefined until the status has loaded,
+ *  so that waits for `hosted === false`: hosted, a key form or a step for one's own computer never flashes up. */
+export const useHosted = (): boolean | undefined => useStatus().data?.hosted;
+
+/** The plan's allowance this period (GET /api/usage, D238). Asked only on the hosted site. */
+export interface Usage {
+  hosted: boolean; plan?: string; status?: string; period_end?: string;
+  minutes?: { used: number; limit: number; credits_left: number };
+  shorts?: { used: number; limit: number; credits_left: number; once?: boolean };
+  billing_url?: string; logout_url?: string;
+}
+export const useUsage = (enabled: boolean) =>
+  useQuery({ queryKey: ["usage"], enabled, queryFn: () => send<Usage>("GET", "/api/usage") });
 /** The clip list on screen: its cache key carries the viewing scope. */
 const clipsKey = () => [...keys.clips, useUI.getState().accountScope];
 
@@ -258,7 +294,7 @@ export async function startJob(campaign: string, sources: string | string[], mod
   const res = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" },
                                          body: JSON.stringify({ campaign, sources: [sources].flat(), mode, ...options }) });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || res.statusText);
+  if (!res.ok) throw failure(res.status, data.detail, res.statusText);
   return data as Job[];
 }
 
@@ -275,7 +311,7 @@ export function uploadVideo(file: File, onProgress: (fraction: number) => void, 
       try {
         const data = JSON.parse(xhr.responseText);
         if (xhr.status >= 200 && xhr.status < 300) resolve(data as Source);
-        else reject(new Error(data.detail || xhr.statusText));
+        else reject(failure(xhr.status, data.detail, xhr.statusText));
       } catch {
         reject(new Error(xhr.statusText || "Upload failed"));
       }
@@ -397,8 +433,17 @@ export const sourceVideoUrl = (path: string) => `/api/sources/video?path=${encod
 /* ---------- ratings and learning ---------- */
 
 export type Learning = components["schemas"]["Learning"];
-export const useLearning = () =>
-  useQuery({ queryKey: ["learning"], queryFn: () => unwrap(api.GET("/api/learning")) });
+export const useLearning = (enabled = true) =>
+  useQuery({ queryKey: ["learning"], enabled, queryFn: () => unwrap(api.GET("/api/learning")) });
+
+/** Clips rated (posted, or marked good or not good) before Learning shows on the hosted site (D238): with fewer it
+ *  has little to show a new user. On one's own computer it is always there. */
+export const LEARNING_AFTER = 30;
+export function useLearningOpen() {
+  const hosted = useHosted();
+  const { data } = useLearning(hosted === true);
+  return hosted === false || (data?.rated ?? 0) >= LEARNING_AFTER;
+}
 
 export function useRateClip() {
   const qc = useQueryClient();
@@ -424,7 +469,7 @@ export const useCampaignBrief = (name: string | undefined) =>
 export async function saveCampaignBrief(name: string, text: string) {
   const res = await fetch(`/api/campaigns/${name}/brief`, {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-  if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+  if (!res.ok) throw failure(res.status, (await res.json()).detail, res.statusText);
 }
 
 /** One click on a ready clip: skip it and learn from it; `undo` restores it (D74). */
@@ -433,7 +478,7 @@ export async function markNotGood(id: number, undo?: { status: string }, reasons
   const res = await fetch(`/api/clips/${id}/not-good`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(undo ? { undo: true, status: undo.status } : { reasons }) });
-  if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+  if (!res.ok) throw failure(res.status, (await res.json()).detail, res.statusText);
 }
 
 /* ---------- finding campaigns ---------- */
@@ -498,7 +543,7 @@ export interface FootageImport {
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || res.statusText);
+  if (!res.ok) throw failure(res.status, data.detail, res.statusText);
   return data as T;
 }
 
@@ -577,7 +622,7 @@ export const usePeaks = (sourceId: string | undefined) =>
 async function post<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || res.statusText);
+  if (!res.ok) throw failure(res.status, data.detail, res.statusText);
   return data as T;
 }
 
@@ -692,7 +737,7 @@ export const setStayed = (url: string, pct: number | null) => send("PUT", "/api/
 async function send<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || res.statusText);
+  if (!res.ok) throw failure(res.status, data.detail, res.statusText);
   return data as T;
 }
 
@@ -756,7 +801,7 @@ export const createApi = {
   clipAdd: async (video: number, file: File) => {
     const res = await fetch(`/api/create/videos/${video}/clips/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || res.statusText);
+    if (!res.ok) throw failure(res.status, data.detail, res.statusText);
     return data as MineClip;
   },
   clipRemove: (video: number, clip: string) => send("DELETE", `/api/create/videos/${video}/clips/${clip}`),
@@ -768,6 +813,6 @@ export const createApi = {
   voice: async (video: number, file: File) => {
     const res = await fetch(`/api/create/videos/${video}/voice/${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || res.statusText);
+    if (!res.ok) throw failure(res.status, data.detail, res.statusText);
   },
 };

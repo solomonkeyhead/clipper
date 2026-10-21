@@ -311,5 +311,11 @@ with sync_playwright() as p:
         assert page.get_by_text(gone).count() == 0, f"{gone!r} is back on Learning"
     assert page.get_by_role("button", name="Ask Clipper").count() == 0, "the Ask button is back"
     print("D216: Which AI in Settings; Learning, Ask, theme and auto-post trimmed")
+    # D238: on one's own computer none of the hosted site's parts show (scripts/ui/hosted_walkthrough.py has those)
+    side = page.locator("aside")
+    expect(side.get_by_role("link", name="Learning")).to_be_visible()
+    expect(side.get_by_role("link", name="Create", exact=True)).to_be_visible()   # no "Beta"
+    assert side.get_by_role("link", name="Plan and billing").count() == 0, "the hosted usage line shows locally"
+    print("local: Learning in the nav, no Beta, no plan usage")
     print("page errors:", errors)
     b.close()

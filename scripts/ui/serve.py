@@ -148,4 +148,5 @@ if __name__ == "__main__":
         store.add_topics([{"question": "Why does a spoon flip your reflection?", "angle": "concave mirror", "felt": True}])
 
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8799, log_level="warning")
+    # Another port to run a hosted one beside it (CLIPPER_HOSTED=1 and CLIPPER_TOKEN, as the gateway starts it; D238).
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("CLIPPER_UI_PORT", "8799")), log_level="warning")

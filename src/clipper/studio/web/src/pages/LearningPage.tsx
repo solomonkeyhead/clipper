@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { Lightbulb } from "lucide-react";
-import { useLearning, useSetSettings, useSettings, type Learning } from "@/api/client";
-import { Card, PageHeader, Skeleton, Switch } from "@/components/ui";
+import { GraduationCap, Lightbulb } from "lucide-react";
+import { LEARNING_AFTER, useHosted, useLearning, useSetSettings, useSettings, type Learning } from "@/api/client";
+import { Card, EmptyState, PageHeader, Skeleton, Switch } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 type Report = Learning;
@@ -48,10 +48,19 @@ export function LearningPage() {
   const { data: report, isLoading } = useLearning();
   const { data: settings } = useSettings();
   const save = useSetSettings();
+  const hosted = useHosted();
 
   if (isLoading || !report) return <div className="flex flex-col gap-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-64" /></div>;
   const learning = settings ? settings.learn_from_feedback === "1" : report.active;
   const toWeights = Math.max(0, report.min_for_weights - report.weights_n);
+  // Hosted, the page waits for enough ratings (D238); its nav entry is hidden until then, an old link lands here.
+  if (hosted && report.rated < LEARNING_AFTER) {
+    return (
+      <EmptyState icon={<GraduationCap />} title={`Learning opens after ${LEARNING_AFTER} rated clips`}
+        body={<>Mark clips good or not good, or post them, and Clipper picks moments with your taste in mind. You have {report.rated} so far.</>}
+        action={<Link to="/clips" search={{ rate: true }} className="text-sm font-medium link">Rate clips</Link>} />
+    );
+  }
 
   return (
     <div className="fade-in flex max-w-5xl flex-col gap-6">

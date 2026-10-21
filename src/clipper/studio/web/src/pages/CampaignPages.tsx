@@ -22,7 +22,7 @@ function daysLeft(deadline: string): number | null {
 const SORTS = {
   usual: { label: "Sort: as added", by: () => 0 },
   ending: { label: "Sort: ending soon", by: (a: Campaign, b: Campaign) => (daysLeft(a.deadline) ?? 1e9) - (daysLeft(b.deadline) ?? 1e9) },
-  earnings: { label: "Sort: earned so far", by: (a: Campaign, b: Campaign) => (b.est_earnings ?? -1) - (a.est_earnings ?? -1) },
+  earnings: { label: "Sort: est. earnings", by: (a: Campaign, b: Campaign) => (b.est_earnings ?? -1) - (a.est_earnings ?? -1) },
   rate: { label: "Sort: pay per 1K", by: (a: Campaign, b: Campaign) => (b.reward_per_1k_usd ?? -1) - (a.reward_per_1k_usd ?? -1) },
 } as const;
 
@@ -84,7 +84,7 @@ function CampaignCard({ c }: { c: Campaign }) {
         </span>
         <span className="flex flex-wrap justify-end gap-1.5">
           {c.warning && <Chip tone="danger" title={c.warning}>{c.warning.split(" · ")[0]}</Chip>}
-          {c.locked_usd > 0 && <Chip tone="warning" title="Earned on paper, but under this campaign's minimum payout, so it pays nothing yet">{formatMoney(c.locked_usd)} under minimum</Chip>}
+          {c.locked_usd > 0 && <Chip tone="warning" title="Estimated, but under this campaign's minimum payout, so it pays nothing yet">Est. {formatMoney(c.locked_usd)} under minimum</Chip>}
         </span>
       </div>
     </Link>
@@ -284,7 +284,7 @@ function MoneyCard({ c }: { c: Campaign }) {
       </div>
       {c.locked_usd > 0 && (
         <p className="text-xs text-muted">
-          <b className="text-warning">{formatMoney(c.locked_usd)}</b> is earned on paper by {c.locked_posts} post{c.locked_posts === 1 ? "" : "s"} still under
+          An estimated <b className="text-warning">{formatMoney(c.locked_usd)}</b> sits on {c.locked_posts} post{c.locked_posts === 1 ? "" : "s"} still under
           the {c.min_payout_usd != null ? formatMoney(c.min_payout_usd) : "campaign's"} minimum payout. It pays nothing until each reaches it, so it isn't in Estimated.
         </p>
       )}

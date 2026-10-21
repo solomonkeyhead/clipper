@@ -3,7 +3,7 @@ import { useState } from "react";
 import { AlertTriangle, BadgeDollarSign, CheckCircle2, Clock, Pin, ExternalLink, Link2, Loader2, ShieldCheck, Upload, Wand2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
-  useAccountGroups, useAccounts, useAddPostLink, useCampaigns, usePosts, useRecheckRules,
+  failure, useAccountGroups, useAccounts, useAddPostLink, useCampaigns, usePosts, useRecheckRules,
   type Account, type Clip, type PostCopy,
 } from "@/api/client";
 import { useUI } from "@/lib/store";
@@ -297,7 +297,7 @@ function FixButton({ clip }: { clip: Clip }) {
     mutationFn: async () => {
       const res = await fetch(`/api/clips/${clip.id}/fix`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || res.statusText);
+      if (!res.ok) throw failure(res.status, data.detail, res.statusText);
       return data as { fixed: string[] };
     },
     onSuccess: (res) => {

@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  downloadUrl, useStatus, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useSetTask, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
+  downloadUrl, useHosted, useStatus, markNotGood, proofUrl, revealClip, useCampaignTitle, usePostHistory, useSetTask, useCampaigns, useClips, useDeleteClip, useRateClip, useSetClipStatus, useEditCaption, useSetClipSubmitted, useSetNote,
   type Clip, type ClipStatus, type Post,
 } from "@/api/client";
 import { useUI } from "@/lib/store";
@@ -139,6 +139,7 @@ export function SubmitLinkButton({ post, campaignUrl, size = "sm", label = "Copy
 /** Already posted: the clips this one repeats, and where they're up. */
 function DuplicateWarning({ clip }: { clip: Clip }) {
   const open = useUI((s) => s.setOpenClip);
+  const hosted = useHosted();   // Vyro is the owner's campaign site, not every user's (D238)
   if (!clip.duplicates.length || clip.status === "skipped") return null;
   const accounts = [...new Set(clip.duplicates.flatMap((d) => d.posted_on))];
   return (
@@ -155,7 +156,7 @@ function DuplicateWarning({ clip }: { clip: Clip }) {
           ))}
         </ul>
         <p className="text-xs text-muted">
-          Posting it again on the same account breaks Vyro's rules, and Instagram stops recommending accounts that repeat
+          Posting it again on the same account breaks {hosted ? "most campaigns' rules" : "Vyro's rules"}, and Instagram stops recommending accounts that repeat
           themselves. Post it on a different account, or skip it.
         </p>
       </div>

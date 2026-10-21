@@ -4,7 +4,7 @@ import { CheckCircle2, CircleHelp, ExternalLink, Loader2, Plus, Search, X, XCirc
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  checkCampaign, checkFound, dismissFound, prefillCampaign, useFound,
+  checkCampaign, checkFound, dismissFound, prefillCampaign, useFound, useHosted,
   type CampaignCheck, type FoundCampaign,
 } from "@/api/client";
 import { CampaignAlerts } from "@/components/alerts";
@@ -57,6 +57,7 @@ function FitResult({ result, onDismiss }: { result: CampaignCheck; onDismiss?: (
 }
 
 function CheckBox() {
+  const hosted = useHosted();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<CampaignCheck | null>(null);
@@ -75,7 +76,7 @@ function CheckBox() {
       <div>
         <h2 className="text-md font-semibold">Check a campaign</h2>
         <p className="mt-0.5 text-sm text-muted">
-          Found one on Content Rewards, Vyro, Discord or X? Paste its page or brief to see how it fits you before joining.
+          Found one on {hosted ? "a campaign site" : "Content Rewards, Vyro"}, Discord or X? Paste its page or brief to see how it fits you before joining.
         </p>
       </div>
       <TextArea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the campaign here…" aria-label="Campaign to check" />

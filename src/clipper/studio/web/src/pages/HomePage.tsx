@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { ArrowRight, CheckCircle2, Inbox, ListChecks, TrendingUp, Wand2 } from "lucide-react";
-import { useCampaignTitle, useCampaigns, useClips, useCreate, useHome, usePosts, useSetTask, type Clip } from "@/api/client";
+import { useCampaignTitle, useCampaigns, useClips, useCreate, useHome, useHosted, usePosts, useSetTask, type Clip } from "@/api/client";
 import { Button, Card, Skeleton, Tip, buttonClass } from "@/components/ui";
 import { Poster, PosterTile, WallRow } from "@/components/wall";
 import { useUI } from "@/lib/store";
@@ -36,11 +36,11 @@ function Numbers({ est, paid, views, posts, locked, lockedPosts, window, medians
           <Tip key="paid" label="The payouts you've recorded on each campaign's page. Only this is money received.">
             <Link to="/stats" className="hover:text-fg"><b className="num text-lg text-money">{paid == null ? "–" : formatMoney(paid)}</b> actually paid (all time)</Link>
           </Tip>,
-          waiting > 0 && <span key="wait"><b className="tabular text-fg">{formatMoney(waiting)}</b> earned, not paid yet{paid == null && ": record payouts on each campaign's page"}</span>,
+          waiting > 0 && <span key="wait"><b className="tabular text-fg">{formatMoney(waiting)}</b> estimated, not paid yet{paid == null && ": record payouts on each campaign's page"}</span>,
         ])}
       </p>
       {all && locked > 0 && (
-        <p><b className="tabular text-warning">{formatMoney(locked)}</b> more on {lockedPosts} post{lockedPosts === 1 ? "" : "s"} still under the campaign's minimum payout (pays nothing until it's reached)</p>
+        <p>An estimated <b className="tabular text-warning">{formatMoney(locked)}</b> more on {lockedPosts} post{lockedPosts === 1 ? "" : "s"} still under the campaign's minimum payout (pays nothing until it's reached)</p>
       )}
       <p className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         {dots([
@@ -122,13 +122,14 @@ function NextUp({ clip, label, run }: { clip: Clip; label: string; run: () => vo
 /** Where today's Short stands and the one thing to do next, with a button to it (D118). */
 function ChannelCard({ quiet = false }: { quiet?: boolean }) {
   const { data } = useCreate();
+  const hosted = useHosted();
   if (!data) return null;
   const video = data.videos.find((v) => v.status !== "built");
   const last = data.videos[0];
   const [text, action]: [string, string] = !video
     ? [last ? `Last Short: “${last.script.title || "Untitled"}”. Ready for the next one?` : "No Short yet.", "Make a Short"]
     : video.status === "draft" ? [`“${video.script.title || "Untitled"}” is written: read it and approve it.`, "Open the script"]
-    : video.status === "approved" ? [`“${video.script.title}” is approved: make the voice on ElevenLabs and drop it in.`, "Add the voice"]
+    : video.status === "approved" ? [`“${video.script.title}” is approved: ${hosted ? "record or upload your voice" : "make the voice on ElevenLabs and drop it in"}.`, "Add the voice"]
     : video.status === "failed" ? [`“${video.script.title}” didn't build: ${video.error || "see why"}.`, "See why"]
     : [`“${video.script.title}” is building${video.pct != null ? `: ${Math.round(video.pct)}%` : ""}.`, "Watch it"];
   return (
@@ -159,7 +160,9 @@ const STEPS: { key: string; title: string; body: string; to: string; action: str
 /** Setting up, as one list (D209): the next step is open with its button, the rest are a line each, and the list goes
  *  when all are done. Its first step asked what you'd use and hid the rest (D145); everything shows since D216. */
 function Setup({ done }: { done: Record<string, boolean> }) {
-  const steps = STEPS;
+  // Hosted, the AI is the site's (D229): there is no key to add.
+  const hosted = useHosted();
+  const steps = hosted === false ? STEPS : STEPS.filter((s) => s.key !== "ai");
   const isDone = (key: string) => Boolean(done[key]);
   const next = steps.find((s) => !isDone(s.key));
   if (!next) return null;

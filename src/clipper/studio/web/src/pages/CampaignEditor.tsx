@@ -3,7 +3,7 @@ import { ArrowLeft, Loader2, Plus, Save, Sparkles, Trash2, Wand2, X } from "luci
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  readBrief, saveCampaignBrief, useCampaign, useCampaignBrief, useCampaignForm, useDeleteCampaign, useSaveCampaign,
+  readBrief, saveCampaignBrief, useCampaign, useCampaignBrief, useCampaignForm, useDeleteCampaign, useHosted, useSaveCampaign,
   type CampaignForm, type CaptionRule,
 } from "@/api/client";
 import {
@@ -165,6 +165,7 @@ export function CampaignEditorPage() {
   const params = useParams({ strict: false }) as { name?: string };
   const editing = params.name;
   const navigate = useNavigate();
+  const hosted = useHosted();
   const { data: loaded, isLoading } = useCampaignForm(editing);
   const { data: detail } = useCampaign(editing ?? "");
   const save = useSaveCampaign();
@@ -185,6 +186,8 @@ export function CampaignEditorPage() {
 
   const set = <K extends keyof CampaignForm>(key: K, value: CampaignForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+  // Hosted, a new campaign starts with "Mask words that get posts flagged" off (D238): it's the user's to turn on.
+  useEffect(() => { if (hosted && !editing) setForm((f) => ({ ...f, censor_flagged_words: false })); }, [hosted, editing]);
 
   // The brief as pasted, saved with the campaign for the post check (campaign/audit.py; for Ask before D216).
   const [pasted, setPasted] = useState("");
@@ -276,7 +279,7 @@ export function CampaignEditorPage() {
             )}
           </Field>
           <Field label="Campaign page link" optional hint="Opens from the campaign's page, for submitting links.">
-            {(id) => <TextInput id={id} type="url" value={form.campaign_url} placeholder="https://whop.com/…"
+            {(id) => <TextInput id={id} type="url" value={form.campaign_url} placeholder={hosted ? "https://…" : "https://whop.com/…"}
                                 onChange={(e) => set("campaign_url", e.target.value)} />}
           </Field>
           <Field label="How it pays">
