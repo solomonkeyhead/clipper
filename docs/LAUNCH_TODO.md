@@ -107,6 +107,10 @@ Why: the free tier takes audio files up to 25 MB, the Developer tier up to 100 M
 3. Create an API key and put it in the server env as `GROQ_API_KEY`.
 4. Read Groq's current data-use page once and confirm they do not train on API customers' audio. The privacy page
    says the providers do not train on it.
+5. Check the account's rate limits (Settings, Limits). The Developer tier allowed 7,200 audio seconds an hour and
+   28,800 a day for Whisper in October 2026, shared by every user: about 2 hours of footage an hour, 8 a day.
+   Clipper sends 10-minute chunks and waits when Groq says slow down (D230), but a busy day needs more. Ask Groq
+   for a raise before the beta opens.
 
 ## 3. Stock libraries: ask in writing (e)
 
