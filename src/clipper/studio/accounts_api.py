@@ -66,14 +66,13 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
 
     @app.delete("/api/accounts/{platform}/{account}")
     def disconnect(platform: str, account: str) -> dict:
-        from ..instagram import api as ig_api
-        from ..tiktok import api as tt_api
-        from ..youtube import api as yt_api
+        """Remove the account and, at once, the stats the platform's API gave Clipper for it (D231)."""
+        from . import platform_data
 
-        module = {"tiktok": tt_api, "instagram": ig_api, "youtube": yt_api}.get(platform)
-        if module is None or not module.remove(account):
+        if not platform_data.disconnect(platform, account):
             raise HTTPException(404, "no such account")
         publish("accounts.changed")
+        publish("clips.changed")
         return {"ok": True}
 
     @app.post("/api/accounts/tiktok/connect")

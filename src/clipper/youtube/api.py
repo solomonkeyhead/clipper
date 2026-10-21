@@ -59,6 +59,10 @@ class YouTubeError(RuntimeError):
     """Not connected, the sign-in was refused, or YouTube returned an error."""
 
 
+class AccessRevoked(YouTubeError):
+    """Google no longer honours the channel's sign-in (revoked at Google, or lapsed): invalid_grant (D231)."""
+
+
 @dataclass
 class Short:
     """One upload, shaped like instagram.api.Reel so the same sync fills the log."""
@@ -231,6 +235,7 @@ def _token(body: dict) -> dict:
         if data.get("error") == "invalid_grant":
             detail = ("the sign-in has expired (in \"Testing\", Google ends it after 7 days): set the "
                       "app's consent screen to In production, then connect the channel again")
+            raise AccessRevoked(f"sign-in failed: {detail}")
         raise YouTubeError(f"sign-in failed: {detail}")
     data["obtained_at"] = time.time()
     return data
@@ -241,19 +246,43 @@ def _save(token: dict, path: Path) -> None:
     path.write_text(json.dumps(token, indent=1), encoding="utf-8")
 
 
+def mark_revoked(path: Path) -> None:
+    """Google ended this channel's access: drop its tokens and keep the file as a marker, so the Accounts page
+    says "connect again" and the stored YouTube data is deleted (studio/platform_data.py, D231). The policy
+    (III.D.2) asks for that within 7 days of a revocation."""
+    token = read_token(path)
+    keep = {k: token[k] for k in ("channel_id", "title", "handle", "via") if k in token}
+    _save({**keep, "revoked_at": time.time()}, path)
+
+
+def is_revoked(path: Path) -> bool:
+    return "revoked_at" in read_token(path)
+
+
 def access_token(path: Path) -> str:
     """A valid access token for the channel; Google's last an hour."""
     token = read_token(path)
+    if "revoked_at" in token:
+        raise AccessRevoked("Google ended Clipper's access to this channel: connect it again on the Accounts page")
     if time.time() - float(token.get("obtained_at", 0)) < float(token.get("expires_in", 3600)) - 300:
         return token["access_token"]
     from .. import connect
 
-    if connect.refreshes_via_service(token, _own_app()):
-        fresh = {**connect.refresh("youtube", token["refresh_token"]), "obtained_at": time.time()}
-    else:
-        cid, secret = client()
-        fresh = _token({"grant_type": "refresh_token", "refresh_token": token["refresh_token"],
-                        "client_id": cid, "client_secret": secret})
+    try:
+        if connect.refreshes_via_service(token, _own_app()):
+            fresh = {**connect.refresh("youtube", token["refresh_token"]), "obtained_at": time.time()}
+        else:
+            cid, secret = client()
+            fresh = _token({"grant_type": "refresh_token", "refresh_token": token["refresh_token"],
+                            "client_id": cid, "client_secret": secret})
+    except AccessRevoked:
+        mark_revoked(path)
+        raise
+    except connect.ConnectError as exc:     # the service relays Google's "Token has been expired or revoked."
+        if "revoked" in str(exc) or "invalid_grant" in str(exc):
+            mark_revoked(path)
+            raise AccessRevoked(f"Google ended Clipper's access to this channel ({exc})") from exc
+        raise
     token.update(access_token=fresh["access_token"], expires_in=fresh.get("expires_in", 3600),
                  obtained_at=fresh["obtained_at"])
     _save(token, path)

@@ -403,7 +403,9 @@ def _few_shot_examples(config: Config) -> list[dict] | None:
     Off by default. The file is built by `clipper learn` from real view counts,
     so it does not exist until the user has logged some.
     """
-    if not config.llm.use_few_shot_examples:
+    from . import hosting
+
+    if not config.llm.use_few_shot_examples or hosting.hosted():   # their view counts go to the AI (D231)
         return None
 
     path = examples_dir() / "top_clips.jsonl"

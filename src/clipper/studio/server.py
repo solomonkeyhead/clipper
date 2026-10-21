@@ -40,7 +40,7 @@ from ..config import PLATFORM_NAMES, CampaignConfig
 from ..learn import log as perf
 from ..utils.logging import get_logger
 from . import accounts as account_groups
-from . import alerts, db, evidence, library, rerender, rulecheck, setup, stats
+from . import alerts, db, evidence, library, platform_data, rerender, rulecheck, setup, stats
 from .api_models import (
     Account,
     Brief,
@@ -459,9 +459,13 @@ def accounts() -> list[Account]:
     for path in yt_api.token_files():
         # Google's refresh tokens don't expire on a clock (in production); a
         # revoked or lapsed one shows up as a sync problem instead.
+        revoked = yt_api.is_revoked(path)     # Google ended the access: connect it again (D231)
         out.append(Account(
-            id=path.stem, platform="youtube", connected=True, handle=yt_api.name(path), health="ok",
-            detail="Stats: views, likes, comments, and a day or two later watch time and shares.",
+            id=path.stem, platform="youtube", connected=not revoked, handle=yt_api.name(path),
+            health="error" if revoked else "ok",
+            detail=("Google ended Clipper's access to this channel; its stored YouTube data is deleted. "
+                    "Connect it again with Add a YouTube account" if revoked else
+                    "Stats: views, likes, comments, and a day or two later watch time and shares."),
             expires_in_days=None))
     return out
 
@@ -669,6 +673,9 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
         # Words for clips without them (imported ones), for the duplicate check.
         # In the background: it loads a small Whisper model.
         words = asyncio.create_task(asyncio.to_thread(backfill_words))
+        if auto_sync:   # what an account that is no longer connected left behind (D231)
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(platform_data.sweep)
         task = asyncio.create_task(sync_loop()) if auto_sync else None
         watcher = asyncio.create_task(alerts_loop()) if auto_sync else None
         if auto_sync:

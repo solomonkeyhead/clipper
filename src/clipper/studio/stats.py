@@ -7,6 +7,7 @@ import threading
 from datetime import datetime
 
 from ..learn import log as perf
+from . import platform_data
 
 #: Per-post numbers shown on a clip, in display order.
 POST_FIELDS = ("posted_at", "views_latest", "likes", "comments", "shares", "saves",
@@ -68,6 +69,8 @@ def sync_all(rows: list[dict[str, str]]) -> list[str]:
             if own and result.unmatched:  # a Short on your own channel with no clip of Clipper's: adopt it (D144)
                 adopt_uploads(rows, result.unmatched, own, account)
                 ig_sync.apply(result.unmatched, rows, account=account, platform="youtube")
+        except yt_api.AccessRevoked as exc:    # its stored data is deleted by `run_sync` (platform_data, D231)
+            problems.append(f"YouTube {yt_api.name(path)}: {exc}")
         except yt_api.YouTubeError as exc:
             problems.append(f"YouTube {yt_api.name(path)}: {exc}")
     return problems
@@ -130,7 +133,11 @@ def run_sync() -> dict:
     try:
         rows = perf.read()
         ensure_create_rows(rows)
-        problems = sync_all(rows) + zero_view_runs(rows)
+        problems = sync_all(rows)
+        # Stored platform data follows the platforms' rules (D231): what a gone or revoked account left, and
+        # YouTube posts no sync could refresh for 30 days.
+        platform_data.enforce(rows, fresh=True)
+        problems += zero_view_runs(rows)
         try:
             perf.write(rows)
         except PermissionError:

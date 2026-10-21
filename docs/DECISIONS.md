@@ -3965,3 +3965,19 @@ Marc had every page clicked through for what a general user wouldn't need or und
   mis-hearings in noisy lines; word probabilities are per segment, so moment scores on these transcripts differ a
   little. Groq's developer tier allows 7,200 audio seconds an hour per organisation, shared by every user: a raise
   is on the launch checklist.
+
+## D231 — Stored platform stats follow the platforms' rules on the hosted site (2026-10-20)
+- The privacy page promised that YouTube data is deleted on disconnect, within 30 days of a revoked token, and
+  refreshed every 30 days; none of it was true in the code. The YouTube API Services policies say to delete
+  Authorized Data within 7 days of a revocation (III.D.2) and to delete or refresh stored data after 30 days
+  (III.E.4.c); Meta asks for deletion "as soon as reasonably possible"; TikTok's terms set no disconnect rule.
+- Decided: `studio/platform_data.py` clears the columns the APIs filled, the matching snapshots and the Shorts adopted
+  from an own channel, at once on disconnect, at start for accounts no longer connected, and after every sync for
+  YouTube posts not refreshed in 30 days. Typed columns (notes, payouts, verified views, TikTok Studio numbers) stay.
+  An invalid_grant marks the channel revoked: its tokens go, it stays listed as "connect again".
+- Only on the hosted site. On Marc's computer the data is his and the one-time 24h/7d/30d snapshots can't be fetched
+  again, so nothing is cleared there; the revoked-channel notice works in both. Hosted, view counts no longer go
+  into the taste block, the few-shot examples or the idea prompt sent to AI.
+- Left for the gateway: a user whose Clipper isn't started for 30 days gets no sweep, so the gateway runs
+  `python -m clipper.studio.platform_data` for each user monthly. TikTok and Instagram don't yet delete on a
+  failed token; only YouTube does.

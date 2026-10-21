@@ -604,6 +604,16 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
                                      "refine": refine, "transcription": transcription})
 
 
+def _post_performance(rows: list[dict]) -> dict:
+    """How each posted clip did against the usual, for the taste block. Hosted, platform stats never go to an AI
+    provider (the block says "it got Nx their usual views"), so none (D231)."""
+    from . import hosting
+    from .learn import log as perf_log
+    from .studio import stats
+
+    return {} if hosting.hosted() else stats.clip_performance(rows, perf_log.read())
+
+
 def _learning(config: Config, campaign: CampaignConfig) -> tuple[dict[str, float] | None, str]:
     """What the user's ratings teach this run: rubric weights (None: keep the
     defaults) and the taste block for the scoring prompt. Nothing while the
@@ -620,10 +630,7 @@ def _learning(config: Config, campaign: CampaignConfig) -> tuple[dict[str, float
         log.warning("not using clip ratings: %s", exc)
         return None, ""
     try:  # how posted clips did, once their views have settled (D86)
-        from .learn import log as perf_log
-        from .studio import stats
-
-        performance = stats.clip_performance(rows, perf_log.read())
+        performance = _post_performance(rows)
     except Exception as exc:  # optional, like the rest of learning
         log.warning("not using post views to learn: %s", exc)
         performance = {}
