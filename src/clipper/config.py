@@ -49,6 +49,10 @@ class TranscriptionConfig(StrictModel):
     beam_size: int = Field(default=5, ge=1, le=10)
     # Sources longer than this are transcribed in chunks to bound peak memory.
     chunk_seconds: int = Field(default=3600, ge=300)
+    # Where speech is recognised (D230). None: on this computer, except on the hosted site with a GROQ_API_KEY,
+    # where Groq's API does it so the server needs no GPU. Set it to choose either whatever the host is.
+    backend: Literal["local", "groq"] | None = None
+    groq_model: str = "whisper-large-v3-turbo"
 
 
 class CandidatesConfig(StrictModel):

@@ -2,7 +2,7 @@
 
 One Linux server runs everything: Clipper's gateway (sign-in, billing, one Clipper process per
 user) and Caddy, which gets the HTTPS certificate on its own. Everything is in `Dockerfile` and
-`deploy/`. Written with D-NEW.
+`deploy/`. Written with D225.
 
 ## 1. The server
 

@@ -107,7 +107,8 @@ def backfill_text() -> int:
     them can't be matched. They are transcribed once, with a small fast model --
     enough to compare, not to caption.
     """
-    from ..config import TranscriptionConfig
+    from ..config import Config, TranscriptionConfig
+    from ..transcribe import groq
     from ..transcribe.whisper import load_model
 
     with db.connect() as con:
@@ -118,14 +119,19 @@ def backfill_text() -> int:
         return 0
     from ..transcribe.whisper import GPU_LOCK
 
-    model, *_ = load_model(TranscriptionConfig(model="small", compute_type="int8_float16"))
+    cfg = Config.load().transcription
+    via_groq = groq.selected(cfg)   # hosted: Groq hears them, no GPU (D230)
+    model = None if via_groq else load_model(TranscriptionConfig(model="small", compute_type="int8_float16"))[0]
     done = 0
     for clip in todo:
         try:
-            with GPU_LOCK:  # clipping jobs use the GPU too (transcribe.whisper)
-                segments, _info = model.transcribe(str(clip_path(clip["file"])), vad_filter=True,
-                                                   beam_size=1)
-                text = " ".join(s.text.strip() for s in segments)[:TEXT_CHARS]
+            if via_groq:
+                text = " ".join(w.text for w in groq.transcribe_file(clip_path(clip["file"]), cfg)[0])[:TEXT_CHARS]
+            else:
+                with GPU_LOCK:  # clipping jobs use the GPU too (transcribe.whisper)
+                    segments, _info = model.transcribe(str(clip_path(clip["file"])), vad_filter=True,
+                                                       beam_size=1)
+                    text = " ".join(s.text.strip() for s in segments)[:TEXT_CHARS]
         except Exception as exc:  # one unreadable file mustn't stop the rest
             log.info("no words for clip %s: %s", clip["id"], exc)
             continue

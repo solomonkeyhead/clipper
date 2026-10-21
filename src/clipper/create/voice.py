@@ -72,9 +72,13 @@ def _norm(word: str) -> str:
 def heard(path: Path) -> list[TimedWord]:
     """The words in the file, timed (Clipper's own speech recognition)."""
     from ..config import Config
+    from ..transcribe import groq
     from ..transcribe.whisper import load_model
 
-    model, *_ = load_model(Config.load().transcription)
+    cfg = Config.load().transcription
+    if groq.selected(cfg):   # hosted: Groq hears it, no GPU (D230)
+        return [TimedWord(text=w.text, start=w.start, end=w.end) for w in groq.transcribe_file(path, cfg, language="en")[0]]
+    model, *_ = load_model(cfg)
     segments, _ = model.transcribe(str(path), language="en", word_timestamps=True, vad_filter=False)
     return [TimedWord(text=w.word.strip(), start=w.start, end=w.end) for s in segments for w in s.words or []]
 

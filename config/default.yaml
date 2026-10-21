@@ -9,6 +9,9 @@ transcription:
   vad_filter: true
   beam_size: 5
   chunk_seconds: 3600        # sources longer than this are transcribed in chunks
+  # backend: local           # local = this computer; groq = Groq's API (needs GROQ_API_KEY). Unset: local,
+  #                          # except on the hosted site, which uses groq when the key is set (D230).
+  groq_model: whisper-large-v3-turbo
 
 candidates:
   min_seconds: 20

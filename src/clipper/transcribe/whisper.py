@@ -198,6 +198,9 @@ def transcribe(
     Returns the transcript and, when it was actually computed rather than loaded
     from cache, the measured speed.
     """
+    from . import groq
+
+    use_groq = groq.selected(cfg)
     out_path = work_dir(info.source_id) / "transcript.json"
     if out_path.is_file() and not force:
         try:
@@ -206,10 +209,11 @@ def transcribe(
             # this check, `--model large-v3` on a source transcribed earlier with
             # `small` silently returns the small transcript.
             cached_model = cached.model.split("/")[0]
-            if cached.words and cached_model and cached_model != cfg.model:
+            wanted = cfg.groq_model if use_groq else cfg.model
+            if cached.words and cached_model and cached_model != wanted:
                 log.info(
                     "cached transcript was made with %s but %s was requested; re-transcribing",
-                    cached_model, cfg.model,
+                    cached_model, wanted,
                 )
             elif cached.words:
                 log.info("reusing transcript for %s (%d words)", info.source_id, len(cached.words))
@@ -221,10 +225,16 @@ def transcribe(
     if not audio.is_file():
         raise TranscriptionError(f"analysis audio missing: {audio}. Re-run ingest.")
 
-    with GPU_LOCK:
-        model, model_name, compute_type, device = shared_model(cfg)
+    if use_groq:   # no GPU, no lock: the hosted site (D230)
+        model_name, compute_type, device = cfg.groq_model, "api", "groq"
         started = time.perf_counter()
-        words, language, language_probability = _run(model, audio, info.media.duration, cfg)
+        words, language = groq.transcribe_file(audio, cfg, duration=info.media.duration)
+        language_probability = 1.0
+    else:
+        with GPU_LOCK:
+            model, model_name, compute_type, device = shared_model(cfg)
+            started = time.perf_counter()
+            words, language, language_probability = _run(model, audio, info.media.duration, cfg)
 
     wall = time.perf_counter() - started
     if not words:

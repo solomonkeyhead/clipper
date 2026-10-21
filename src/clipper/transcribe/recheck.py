@@ -39,6 +39,7 @@ import numpy as np
 from ..config import TranscriptionConfig
 from ..models import Word
 from ..utils.logging import get_logger
+from . import groq
 from .whisper import GPU_LOCK
 
 log = get_logger(__name__)
@@ -101,22 +102,27 @@ class AudioRecheck:
         swallow the lines after it.
         """
         try:
-            model = self._load_model()
             audio = self._load_audio()
             a = max(0, int(start * self._rate))
             b = min(len(audio), int(end * self._rate))
-            with GPU_LOCK:
-                segments, _ = model.transcribe(
-                    audio[a:b], language=self.cfg.language if self.cfg.language != "auto" else None,
-                    beam_size=5, temperature=0.0, word_timestamps=True,
-                    condition_on_previous_text=False, vad_filter=True,
-                )
-                segments = list(segments)  # decoding is lazy: finish it inside the lock
-            words = [Word(start=start + float(w.start),
-                          end=start + max(float(w.end), float(w.start)),
-                          text=w.word.strip(),
-                          probability=float(getattr(w, "probability", 1.0) or 1.0))
-                     for s in segments for w in (s.words or []) if w.word.strip()]
+            language = self.cfg.language if self.cfg.language != "auto" else None
+            if groq.selected(self.cfg):   # hosted: Groq hears it, no GPU (D230)
+                heard, _ = groq.transcribe_samples(audio[a:b], self._rate, self.cfg, language=language)
+                words = [w.model_copy(update={"start": start + w.start, "end": start + w.end}) for w in heard]
+            else:
+                model = self._load_model()
+                with GPU_LOCK:
+                    segments, _ = model.transcribe(
+                        audio[a:b], language=language,
+                        beam_size=5, temperature=0.0, word_timestamps=True,
+                        condition_on_previous_text=False, vad_filter=True,
+                    )
+                    segments = list(segments)  # decoding is lazy: finish it inside the lock
+                words = [Word(start=start + float(w.start),
+                              end=start + max(float(w.end), float(w.start)),
+                              text=w.word.strip(),
+                              probability=float(getattr(w, "probability", 1.0) or 1.0))
+                         for s in segments for w in (s.words or []) if w.word.strip()]
         except Exception as exc:  # a better transcript must never fail a render
             log.warning("re-transcribing %.1f-%.1fs failed (%s); keeping the episode's",
                         start, end, exc)
@@ -127,18 +133,23 @@ class AudioRecheck:
         return words
 
     def _transcribe(self, word: Word, replacement: str) -> str | None:
-        model = self._load_model()
         audio = self._load_audio()
         a = max(0, int((word.start - WINDOW_BEFORE) * self._rate))
         b = min(len(audio), int((word.end + WINDOW_AFTER) * self._rate))
-        with GPU_LOCK:
-            segments, _ = model.transcribe(
-                audio[a:b], language="en", beam_size=5, temperature=0.0,
-                initial_prompt=f"Vocabulary: {replacement.strip()}.",
-                condition_on_previous_text=False, vad_filter=False,
-            )
-            segments = list(segments)  # decoding is lazy: finish it inside the lock
-        text = " ".join(s.text.strip() for s in segments)
+        prompt = f"Vocabulary: {replacement.strip()}."
+        if groq.selected(self.cfg):   # hosted: Groq hears it, with the same nudge as a prompt (D230)
+            heard, _ = groq.transcribe_samples(audio[a:b], self._rate, self.cfg, language="en", prompt=prompt)
+            text = " ".join(w.text for w in heard)
+        else:
+            model = self._load_model()
+            with GPU_LOCK:
+                segments, _ = model.transcribe(
+                    audio[a:b], language="en", beam_size=5, temperature=0.0,
+                    initial_prompt=prompt,
+                    condition_on_previous_text=False, vad_filter=False,
+                )
+                segments = list(segments)  # decoding is lazy: finish it inside the lock
+            text = " ".join(s.text.strip() for s in segments)
         if _is_loop(text):
             log.info("audio recheck for %r looped; treating as no evidence",
                      word.text.strip())

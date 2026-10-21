@@ -3951,3 +3951,17 @@ Marc had every page clicked through for what a general user wouldn't need or und
 - ffmpeg and ffprobe read only files and pipes (`-protocol_whitelist file,pipe`), and stop after 10x the media's
   length (at least 10 minutes). Locally, a Host header that isn't this computer is refused (DNS rebinding) and every
   response says nosniff. The TikTok Studio page reader (`clipper tiktok collect`) is gone: scraping by another name.
+
+## D230 — Speech recognition through Groq on the hosted site (2026-10-20)
+- The hosted site has no GPU, and local Whisper large-v3 needs one. `transcription.backend` (local or groq): left unset
+  it is local, except on the hosted site with a GROQ_API_KEY, where Groq's `whisper-large-v3-turbo` ($0.04 an audio
+  hour) does it. Same `Transcript` and `Word` format, so nothing downstream changes. Marc's computer is unchanged.
+- Audio goes up in 10-minute 16 kHz mono FLAC chunks with a 6 s overlap, stitched by time so no word is kept twice.
+  Segments Whisper marks as no speech are dropped (Groq has no VAD filter, and silence turns into "Thank you.").
+  429 and 5xx are retried with backoff. Every chunk is in the usage log (at least 10 s each, Groq's minimum) and
+  passes the plan's budget check first. The caption-fix recheck, Create's voice timing and the library backfill
+  follow the same choice.
+- Measured on a 25 s clip against local large-v3: 77 of 82 words matched, starts about 0.1 s later on average, a few
+  mis-hearings in noisy lines; word probabilities are per segment, so moment scores on these transcripts differ a
+  little. Groq's developer tier allows 7,200 audio seconds an hour per organisation, shared by every user: a raise
+  is on the launch checklist.

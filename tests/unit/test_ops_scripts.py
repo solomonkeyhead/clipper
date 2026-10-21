@@ -1,4 +1,4 @@
-"""The hosted site's backup and disk-check scripts (D-NEW)."""
+"""The hosted site's backup and disk-check scripts (D225)."""
 
 from __future__ import annotations
 
