@@ -14,7 +14,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from ..models import MediaInfo
-from ..render.ffmpeg import FFmpegError, ffprobe_path, run
+from ..render.ffmpeg import SAFE_INPUT, FFmpegError, ffprobe_path, run
 
 DEVNULL = "NUL" if os.name == "nt" else "/dev/null"
 """FFmpeg's null sink target. Windows has no /dev/null."""
@@ -51,6 +51,7 @@ def probe_raw(path: Path | str) -> dict:
         raise FileNotFoundError(f"media file not found: {path}")
     proc = run(
         [
+            *SAFE_INPUT,  # a user's file is read as a file, never as a list of addresses to fetch (D229)
             "-v", "error",
             "-print_format", "json",
             "-show_format",

@@ -3932,3 +3932,22 @@ Marc had every page clicked through for what a general user wouldn't need or und
   `SMTP_URL` is set, else wait on /admin. Not built yet: Agency's 5 seats.
 - Why: no change to Marc's own copy, each user's files stay apart without touching Clipper's global state, and
   billing and metering attach at `billing_section`, `users.update` and `catalog.refresh`.
+
+## D229 — Closing the holes a Clipper others reach would have (2026-10-20)
+- The hosting audit found ways for one user, or a web page, to reach the server, its keys or its network. Hosted,
+  Clipper won't start without CLIPPER_TOKEN and takes only the gateway's Bearer header; the owner's own-computer
+  controls (setup keys, Which AI, plan, quit, Show in folder, the Downloads scan, picture paths in channel settings,
+  This computer, the System check) answer 403 or 404. Self-update is off and deletes are real (no Recycle Bin on a
+  server).
+- Drawings: `svgfilm.film()` cleans every SVG, whatever its source (a client can PUT a whole script), runs no page
+  scripts and aborts every request but `data:` and about:blank. `clean()` now works tag by tag: no script,
+  foreignObject, iframe, object, embed, link, meta, base, on* handlers quoted or not, `javascript:`, external href,
+  src, @import or url(). Marc's six saved drawings clean to the same text and film the same.
+- Link imports reach public addresses only, checked at every connection including redirects and made to the very
+  address checked (no DNS rebinding); exact host or dot-suffix match (`evildropbox.com` fails); hosted, only Google
+  Drive and Dropbox. Uploads, voice takes and zips have caps (CLIPPER_MAX_UPLOAD_GB: none locally, 8 GB hosted;
+  voice 200 MB; a zip 4x), a cut-off upload's .part is removed, and a taken name becomes "name (2)" instead of
+  overwriting (the one change Marc sees).
+- ffmpeg and ffprobe read only files and pipes (`-protocol_whitelist file,pipe`), and stop after 10x the media's
+  length (at least 10 minutes). Locally, a Host header that isn't this computer is refused (DNS rebinding) and every
+  response says nosniff. The TikTok Studio page reader (`clipper tiktok collect`) is gone: scraping by another name.

@@ -3,6 +3,7 @@
 The user's standing rule: nothing Clipper removes is deleted permanently. On Windows this uses the
 shell's own file operation with "allow undo", which is what Explorer's Delete key does; on a Mac, the
 Finder's own delete; on Linux, `gio trash` or `trash-put`, else the freedesktop trash folder by hand (D148).
+Hosted (D229) there is no one's Recycle Bin to fill: a server deletes for real, files and folders.
 """
 
 from __future__ import annotations
@@ -32,6 +33,18 @@ class _SHFILEOPSTRUCTW(ctypes.Structure):
 def recycle(path: Path) -> bool:
     """Send `path` to the Recycle Bin. False (logged) if that isn't possible."""
     if not path.exists():
+        return True
+    from ..hosting import hosted
+
+    if hosted():
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        except OSError as exc:
+            log.warning("could not delete %s (%s)", path, exc)
+            return False
         return True
     if sys.platform != "win32":
         return _trash_elsewhere(path)

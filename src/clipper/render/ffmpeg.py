@@ -15,6 +15,7 @@ Three Windows-specific hazards are handled here, not at the call sites:
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -109,6 +110,49 @@ def ffprobe_path() -> Path:
     return _find("ffprobe")
 
 
+#: Inputs may only be read from files and pipes (D229): a user's "video" can be a playlist or a concat list
+#: naming http:// or other addresses, which FFmpeg would otherwise fetch from wherever Clipper runs.
+SAFE_INPUT = ["-protocol_whitelist", "file,pipe"]
+#: The shortest a run may take before it is stopped as hung (D229); longer media get about 10x their length.
+MIN_TIMEOUT = 600.0
+
+
+def safe_inputs(cmd: list[str]) -> list[str]:
+    """`cmd` with SAFE_INPUT before every `-i` that reads a file (a `-f lavfi` input reads none)."""
+    if "-protocol_whitelist" in cmd:
+        return cmd
+    out: list[str] = []
+    for k, arg in enumerate(cmd):
+        if arg == "-i" and cmd[max(0, k - 2):k] != ["-f", "lavfi"]:
+            out += SAFE_INPUT
+        out.append(arg)
+    return out
+
+
+@cache
+def _seconds(path: str, stamp: tuple[int, int]) -> float:
+    """A media file's length, 0.0 when ffprobe can't tell (cached by the file's size and time)."""
+    try:
+        proc = subprocess.run([str(ffprobe_path()), *SAFE_INPUT, "-v", "error", "-show_entries", "format=duration",
+                               "-of", "csv=p=0", path], capture_output=True, timeout=MIN_TIMEOUT, check=False)
+        return float(proc.stdout.decode("utf-8", "replace").strip() or 0)
+    except (OSError, ValueError, subprocess.SubprocessError, FFmpegNotFound):
+        return 0.0
+
+
+def media_timeout(cmd: list[str]) -> float:
+    """How long a run may take: 10x its longest input file, and at least MIN_TIMEOUT."""
+    longest = 0.0
+    for k, arg in enumerate(cmd[:-1]):
+        if arg == "-i":
+            path = Path(cmd[k + 1])
+            with contextlib.suppress(OSError):
+                if path.is_file():
+                    st = path.stat()
+                    longest = max(longest, _seconds(str(path), (st.st_size, st.st_mtime_ns)))
+    return max(MIN_TIMEOUT, 10 * longest)
+
+
 def run(
     args: list[str | Path],
     *,
@@ -119,24 +163,34 @@ def run(
     capture: bool = True,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run FFmpeg with UTF-8 forced on both the child's IO and our decoding."""
+    """Run FFmpeg with UTF-8 forced on both the child's IO and our decoding. Inputs are read from files and
+    pipes only, and a run that takes far longer than its media could (`media_timeout`) is stopped (D229)."""
     exe = exe or ffmpeg_path()
-    cmd = [str(exe), *(str(a) for a in args)]
+    cmd = safe_inputs([str(exe), *(str(a) for a in args)])
+    given = timeout is not None
+    if timeout is None:
+        timeout = media_timeout(cmd)
 
     env = dict(os.environ)
     env.setdefault("PYTHONIOENCODING", "utf-8")
     # Ask FFmpeg for UTF-8 on stderr regardless of the console codepage.
     env["AV_LOG_FORCE_NOCOLOR"] = "1"
 
-    proc = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd else None,
-        input=stdin_data,
-        capture_output=capture,
-        env=env,
-        timeout=timeout,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(cwd) if cwd else None,
+            input=stdin_data,
+            capture_output=capture,
+            env=env,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:   # subprocess.run has stopped it already
+        if given:   # a caller with its own limit handles it (the NVENC probe)
+            raise
+        raise FFmpegError(f"{exe.name} ran for over {timeout / 60:.0f} minutes and was stopped",
+                          returncode=-1, stderr="", args=cmd) from exc
     stdout = (proc.stdout or b"").decode("utf-8", errors="replace") if capture else ""
     stderr = (proc.stderr or b"").decode("utf-8", errors="replace") if capture else ""
 

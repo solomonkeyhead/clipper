@@ -23,6 +23,8 @@ from .jobs import failure
 
 log = get_logger(__name__)
 
+#: The most a dropped-in voiceover may be (D229): a minute's Short is a few MB even as WAV.
+VOICE_MAX_BYTES = 200 * 1024**2
 #: video id -> (stage, percent) while it's being timed or built.
 progress: dict[int, tuple[str, float]] = {}
 #: When each video's writing or build began, for the page's time so far and time left (D189).
@@ -404,6 +406,13 @@ def routes(app: FastAPI, publish) -> None:
         texts = ("name", "handle", "niche", "persona", "voice", "subject", "expert", "areas", "watermark",
                  "idea_focus", "idea_avoid", "script_focus", "script_avoid", "character", "signoff", "presenter")
         updates = {k: str(body[k]).strip() for k in texts if k in body}
+        from .server import hosted
+
+        # Hosted, a picture path would point into the server's disk, so none is taken (D229).
+        if hosted() and (any(updates.get(k) for k in ("character", "presenter", "watermark"))
+                         or any(str(r).strip() for r in body.get("reactions") or [])
+                         or str(body.get("poses") or "").strip()):
+            raise HTTPException(403, "Pictures from a folder on this computer only work in Clipper on your own computer.")
         if "rules" in body:
             updates["rules"] = [str(r).strip() for r in body["rules"] if str(r).strip()]
         for flag in ("drawings", "music", "sfx", "short_takes"):
@@ -721,15 +730,13 @@ def routes(app: FastAPI, publish) -> None:
         if suffix not in voice.AUDIO:
             raise HTTPException(400, f"that isn't an audio file ({', '.join(sorted(voice.AUDIO))})")
         from ..utils.recycle import recycle
+        from .imports import receive
 
+        # Received first (at most VOICE_MAX_BYTES, D229), so a failed upload keeps the take there was.
+        took = await receive(request, voice.folder(video_id) / f"upload{suffix}", VOICE_MAX_BYTES)
         for old in voice.folder(video_id).glob("voice.*"):  # an earlier take goes to the Recycle Bin
             recycle(old)
-        kept = voice.folder(video_id) / f"voice{suffix}"
-        partial = kept.with_name(kept.name + ".part")
-        with partial.open("wb") as out:
-            async for chunk in request.stream():
-                out.write(chunk)
-        partial.replace(kept)
+        kept = took.replace(voice.folder(video_id) / f"voice{suffix}")
         store.update_video(video_id, voice=str(kept), status="voiced", error="", timings="")  # timed afresh
         _start(video_id, publish)
         return {"queued": True}

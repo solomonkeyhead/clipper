@@ -115,9 +115,19 @@ def ready() -> bool:
 @contextmanager
 def film(svg: str, at: list[float], seconds: float, board: tuple[int, int, int], width: int, height: int,
          scale: float = 1.0, shift: float = 0.0):
-    """A camera on the drawing: yields `shoot(t)`, the picture at `t` seconds as an RGB image."""
+    """A camera on the drawing: yields `shoot(t)`, the picture at `t` seconds as an RGB image.
+
+    Whatever the SVG came from (the model, or a script the page sent whole) it is cleaned here, the page runs no
+    script of its own, and every request but the page's own data is refused, so a drawing can't reach the network
+    or an address inside it (D229). Animations are CSS and SMIL, which need no script; SEEK is Playwright's."""
+    try:
+        svg = clean(svg)
+    except ValueError:
+        svg = "<svg xmlns='http://www.w3.org/2000/svg'></svg>"   # nothing drawable: an empty board
     with _browser() as b:
-        page = b.new_page(viewport={"width": width, "height": height})
+        page = b.new_page(viewport={"width": width, "height": height}, java_script_enabled=False)
+        page.route("**/*", lambda route: route.continue_() if route.request.url.startswith(("data:", "about:blank"))
+                   else route.abort())
         page.set_content(_page(svg, at, seconds, board, width, height, scale, shift))
         page.evaluate("document.fonts.ready.then(() => true)")
 
@@ -164,15 +174,49 @@ def set_texts(svg: str, new: list[str]) -> str:
     return _TEXT.sub(one, svg)
 
 
+#: Elements that run, embed or load something: taken out with what is inside them (D229).
+_RUNS = "script|foreignObject|iframe|object|embed|frame|frameset|applet|link|meta|base|portal"
+_ATTR_VALUE = r"""(\"[^\"]*\"|'[^']*'|[^\s>]+)"""
+
+
+def _local_link(m: re.Match) -> str:
+    """An href or src kept only when it points inside the drawing (#id) or is a picture held in the SVG itself."""
+    value = m.group(2).strip("\"'").strip()
+    return m.group(0) if value.startswith("#") or value.lower().startswith("data:image/") else f'{m.group(1)}"#"'
+
+
+#: A start tag, quoted values and all (a ">" inside quotes doesn't end it).
+_TAG = re.compile(r"""<[a-zA-Z][^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>""")
+
+
+def _clean_tag(m: re.Match) -> str:
+    """Inside one tag, never in the words drawn: no on* handler (quoted or not, also after a / or straight after
+    a quote), no link out."""
+    tag = re.sub(rf"(?<=[\s/\"'])on[\w.-]+\s*=\s*{_ATTR_VALUE}", " ", m.group(0), flags=re.I)
+    return re.sub(rf"((?<=[\s/\"'])(?:[\w-]+:)?(?:href|src)\s*=\s*){_ATTR_VALUE}", _local_link, tag, flags=re.I)
+
+
+def _clean_once(svg: str) -> str:
+    svg = re.sub(rf"<({_RUNS})\b.*?</\1\s*>", "", svg, flags=re.S | re.I)
+    svg = re.sub(rf"</?({_RUNS})\b[^>]*>", "", svg, flags=re.I)                 # unclosed or self-closing ones
+    svg = _TAG.sub(_clean_tag, svg)
+    svg = re.sub(r"j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:", "", svg, flags=re.I)
+    svg = re.sub(r"@import\b[^;{}<]*;?", "", svg, flags=re.I)
+    # url(#chalk) and url(data:...) stay, url(http...) goes
+    return re.sub(r"url\(\s*(?!['\"]?\s*(?:#|data:))[^)]*\)", "none", svg, flags=re.I)
+
+
 def clean(svg: str) -> str:
-    """Just the <svg> element, with nothing that runs or loads: no scripts, event handlers or outside links."""
+    """Just the <svg> element, with nothing that runs or loads: no scripts or embedded pages, no event handlers
+    (quoted or not), no javascript:, no outside links, styles or pictures. Repeated until nothing changes, so a
+    tag split around a removed one (`<scr<script></script>ipt>`) doesn't come back together (D229)."""
     start, end = svg.find("<svg"), svg.rfind("</svg>")
     if start < 0 or end < start:
         raise ValueError("no <svg> element")
     svg = svg[start:end + 6]
-    svg = re.sub(r"<script\b.*?</script>", "", svg, flags=re.S | re.I)
-    svg = re.sub(r"<foreignObject\b.*?</foreignObject>", "", svg, flags=re.S | re.I)
-    svg = re.sub(r"\son\w+\s*=\s*(\"[^\"]*\"|'[^']*')", "", svg, flags=re.I)
-    svg = re.sub(r"@import[^;]*;", "", svg, flags=re.I)
-    svg = re.sub(r"url\(\s*['\"]?(?!#)[^)]*\)", "none", svg, flags=re.I)   # url(#chalk) stays, url(http...) goes
-    return re.sub(r"(href\s*=\s*[\"'])(?!#)[^\"']*", r"\1#", svg, flags=re.I)
+    for _ in range(10):
+        again = _clean_once(svg)
+        if again == svg:
+            break
+        svg = again
+    return svg

@@ -481,10 +481,33 @@ def _quiet_resets(loop: asyncio.AbstractEventLoop, context: dict) -> None:
 
 
 def source_folders() -> list[Path]:
-    """Where footage for new clips is looked for: Clipper's downloads, then yours."""
+    """Where footage for new clips is looked for: Clipper's downloads, then yours. Hosted only Clipper's: the
+    server's own Downloads folder is nobody's footage (D229)."""
     from ..paths import downloads_dir
 
-    return [downloads_dir(), Path.home() / "Downloads"]
+    return [downloads_dir()] if hosted() else [downloads_dir(), Path.home() / "Downloads"]
+
+
+#: Hosted, what only makes sense on one's own computer answers this (D229).
+NOT_HOSTED = "That is only for Clipper on your own computer."
+
+
+def own_computer_only() -> None:
+    if hosted():
+        raise HTTPException(403, NOT_HOSTED)
+
+
+def local_host(host: str) -> bool:
+    """The Host header names this computer (any port): a page on another site that renamed its own address
+    to 127.0.0.1 (DNS rebinding) still sends its own name, so it is refused (D229)."""
+    name = host.rsplit("]", 1)[0] + "]" if host.startswith("[") else host.rsplit(":", 1)[0]
+    return name.lower() in ("127.0.0.1", "localhost", "[::1]")
+
+
+def https(request: Request) -> bool:
+    """Reached over https, directly or through a proxy that says so."""
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return request.url.scheme == "https" or forwarded == "https"
 
 
 #: A clip downloaded to post: "<title> - <campaign>.mp4", "(1)" if downloaded twice.
@@ -562,7 +585,9 @@ class _BuiltFiles(StaticFiles):
         return response
 
 
-def create_app(*, auto_sync: bool = False) -> FastAPI:
+def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
+    """`local_only`: refuse requests whose Host isn't this computer (`serve` sets it on one's own computer;
+    tests' clients call themselves "testserver", D229)."""
     from .jobs import JobRunner
 
     broker = Broker()
@@ -674,7 +699,9 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.post("/api/quit")
     def quit_server(request: Request) -> dict:
-        """Stop, for a `clipper studio` started on newer code (only from this computer)."""
+        """Stop, for a `clipper studio` started on newer code (only from this computer). Hosted never: behind
+        the gateway every request comes from 127.0.0.1 (D229)."""
+        own_computer_only()
         if request.client and request.client.host not in ("127.0.0.1", "::1", "localhost"):
             raise HTTPException(403, "only from this computer")
         from . import create_api
@@ -693,19 +720,26 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     @app.middleware("http")
     async def access_token(request: Request, call_next):
         """On a server (CLIPPER_TOKEN set): nothing without the token, given once as ?token=... and
-        kept in a cookie. On this computer alone there is no token and nothing changes (D148)."""
+        kept in a cookie. On this computer alone there is no token and nothing changes (D148).
+        Behind the gateway (CLIPPER_HOSTED=1) only its `Authorization: Bearer` counts: a link or a cookie
+        could carry one user's token to another (D229)."""
         if not token:
             return await call_next(request)
         import hmac
 
         from fastapi.responses import JSONResponse, RedirectResponse
 
-        given = request.query_params.get("token", "")
+        gateway = os.environ.get("CLIPPER_HOSTED", "") == "1"
+        given = "" if gateway else request.query_params.get("token", "")
         if given and hmac.compare_digest(given, token):
             reply = RedirectResponse(request.url.path or "/", status_code=303)
-            reply.set_cookie("clipper_token", token, httponly=True, samesite="strict", max_age=60 * 60 * 24 * 90)
+            reply.set_cookie("clipper_token", token, httponly=True, samesite="strict", secure=https(request),
+                             max_age=60 * 60 * 24 * 7)
             return reply
-        have = request.cookies.get("clipper_token", "") or request.headers.get("authorization", "").removeprefix("Bearer ")
+        bearer = request.headers.get("authorization", "")
+        have = bearer.removeprefix("Bearer ") if bearer.startswith("Bearer ") else ""
+        if not gateway:
+            have = request.cookies.get("clipper_token", "") or have
         if have and hmac.compare_digest(have, token):
             return await call_next(request)
         return JSONResponse({"detail": "this Clipper needs its access token: open it once with ?token=..."}, status_code=401)
@@ -726,6 +760,19 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
                 return JSONResponse({"detail": "cross-site request refused"}, status_code=403)
         return await call_next(request)
+
+    @app.middleware("http")
+    async def this_computer(request: Request, call_next):
+        """Outermost (D229): on one's own computer only requests that name it in Host; and every answer says
+        what it is, so a browser never guesses an uploaded file to be a page."""
+        from fastapi.responses import JSONResponse
+
+        if local_only and not local_host(request.headers.get("host", "")):
+            reply = JSONResponse({"detail": "open Clipper at http://127.0.0.1"}, status_code=403)
+        else:
+            reply = await call_next(request)
+        reply.headers["X-Content-Type-Options"] = "nosniff"
+        return reply
 
     @app.get("/api/status")
     def status() -> Status:
@@ -758,9 +805,11 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.put("/api/ai-jobs")
     def set_ai_jobs(body: dict) -> dict:
-        """One AI for every job, or Automatic ("") to put each back on Clipper's own order."""
+        """One AI for every job, or Automatic ("") to put each back on Clipper's own order. Hosted the server's
+        settings are the same for everyone, so they aren't changed from a page (D229)."""
         from ..config import write_auto
 
+        own_computer_only()
         choice = str(body.get("choice") or "")
         if choice and choice not in BACKENDS:
             raise HTTPException(400, "unknown provider")
@@ -785,6 +834,7 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
     def compute_apply() -> dict:
         from .. import hardware
 
+        own_computer_only()  # the server's speech-recognition settings are everyone's (D229)
         plan = hardware.recommend(hardware.detect())
         hardware.apply(plan)
         return {"applied": plan.label}
@@ -1162,7 +1212,10 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.post("/api/clips/{clip_id}/reveal")
     def reveal(clip_id: int) -> dict:
-        """Show the clip's file in Explorer, selected, e.g. to drag it into an upload page."""
+        """Show the clip's file in Explorer, selected, e.g. to drag it into an upload page. Hosted there is
+        no Explorer to show it in, and the path is the server's (D229)."""
+        if hosted():
+            raise HTTPException(404, NOT_HOSTED)
         with db.connect() as con:
             found = db.clip(con, clip_id)
         if found is None:
@@ -1209,18 +1262,15 @@ def create_app(*, auto_sync: bool = False) -> FastAPI:
 
     @app.put("/api/uploads/{filename}")
     async def upload(filename: str, request: Request, campaign: str = "") -> dict:
-        """Stream an uploaded video into Clipper's downloads folder (no size limit)."""
+        """Stream an uploaded video into Clipper's downloads folder, up to `imports.upload_cap()` (none on one's
+        own computer unless set). A name already there gets " (2)" instead of overwriting it (D229)."""
         from ..paths import downloads_dir, ensure
+        from .imports import free_name, receive, upload_cap
 
         name = re.sub(r"[^\w .()\-]+", "_", Path(filename).name).strip() or "upload.mp4"
         if Path(name).suffix.lower() not in VIDEO_EXTENSIONS:
             raise HTTPException(400, "only video files (mp4, mov, mkv, m4v, webm, avi)")
-        target = ensure(downloads_dir()) / name
-        partial = target.with_name(target.name + ".part")
-        with partial.open("wb") as out:
-            async for chunk in request.stream():
-                out.write(chunk)
-        partial.replace(target)
+        target = await receive(request, free_name(ensure(downloads_dir()), name), upload_cap())
         if campaign:
             from . import footage
 
@@ -1419,6 +1469,11 @@ def serve(*, open_browser: bool = True, port: int = PORT) -> None:
 
     import uvicorn
 
+    if hosted() and not os.environ.get("CLIPPER_TOKEN", "").strip():
+        # Hosted behind a proxy on 127.0.0.1 too: whatever reaches the proxy would reach Clipper (D229).
+        raise SystemExit("Clipper runs hosted here (CLIPPER_HOSTED=1 or CLIPPER_HOST not this computer): set "
+                         "CLIPPER_TOKEN too (any long secret), or it would be open to anyone who finds it. "
+                         "See docs/HOSTING.md.")
     url = f"http://{HOST}:{port}/"
     if _running(port) and not _replace_older(port):
         # Opened twice (e.g. the desktop shortcut clicked again): show the one running.
@@ -1427,10 +1482,8 @@ def serve(*, open_browser: bool = True, port: int = PORT) -> None:
         return
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-    if HOST not in LOOPBACK and not os.environ.get("CLIPPER_TOKEN", "").strip():
-        raise SystemExit("CLIPPER_HOST makes Clipper reachable from other computers: set CLIPPER_TOKEN too "
-                         "(any long secret), or it would be open to anyone who finds it. See docs/HOSTING.md.")
-    uvicorn.run(create_app(auto_sync=True), host=HOST, port=port, log_level="warning")
+    local_only = not os.environ.get("CLIPPER_HOST", "").strip() and not hosted()
+    uvicorn.run(create_app(auto_sync=True, local_only=local_only), host=HOST, port=port, log_level="warning")
 
 
 def code_version() -> str:

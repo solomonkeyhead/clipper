@@ -255,9 +255,10 @@ def dump(data: dict) -> str:
 
 
 def path_for(folder: Path, name: str) -> Path | None:
-    """The file that defines campaign `name` (its file name need not match)."""
-    direct = folder / f"{name}.yaml"
-    if direct.exists():
+    """The file that defines campaign `name` (its file name need not match). The name comes from the page, so
+    it names a file directly only when it is a plain slug: "../x" can't reach outside the folder (D229)."""
+    direct = folder / f"{slugify(name)}.yaml"
+    if name == slugify(name) and direct.exists():
         return direct
     for path in sorted(folder.glob("*.yaml")):
         try:

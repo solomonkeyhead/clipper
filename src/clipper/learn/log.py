@@ -40,7 +40,7 @@ COLUMNS = ["caption", *RESULT_COLUMNS, *ID_COLUMNS]
 NUMERIC = ["views_24h", "views_7d", "views_30d", "views_latest", "likes", "comments", "shares",
            "saves", "avg_watch_s", "avg_view_pct", "watched_full_pct", "drop_off_s", "skip_rate_pct",
            "new_followers", "verified_views", "payout_usd"]
-#: Filled by `clipper tiktok collect` from a copied TikTok Studio page.
+#: Typed in from TikTok Studio by hand (`clipper tiktok collect` read copied pages until D229; no scraping).
 COLLECTED = {"avg_watch_s", "watched_full_pct", "drop_off_s", "saves", "new_followers"}
 #: Filled by `clipper tiktok sync` (and `clipper instagram sync`, which also
 #: fills saves, average watch time and skip rate on Instagram rows); the rest of
@@ -203,7 +203,7 @@ def _write_xlsx(rows: list[dict[str, str]], columns: list[str], path: Path) -> N
 
     fill = PatternFill("solid", fgColor="FFF2CC")      # typed in by the user
     synced = PatternFill("solid", fgColor="DDEBF7")    # filled by `clipper tiktok sync`
-    collected = PatternFill("solid", fgColor="E2EFDA")  # filled by `clipper tiktok collect`
+    collected = PatternFill("solid", fgColor="E2EFDA")  # typed in from TikTok Studio
     for i, name in enumerate(columns, start=1):
         cell = ws.cell(row=1, column=i)
         cell.font = Font(bold=True)

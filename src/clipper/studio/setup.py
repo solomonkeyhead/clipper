@@ -50,7 +50,12 @@ def key_set(name: str) -> bool:
 
 
 def set_keys(values: dict[str, str]) -> list[str]:
-    """Write keys to .env and this process's environment. Returns the names changed."""
+    """Write keys to .env and this process's environment. Returns the names changed. Never hosted (D229):
+    there the .env is the server's, with keys every user's Clipper shares."""
+    from ..hosting import hosted
+
+    if hosted():
+        raise PermissionError("keys are set on the server, not from a page")
     from dotenv import set_key
 
     unknown = set(values) - set(KEYS)

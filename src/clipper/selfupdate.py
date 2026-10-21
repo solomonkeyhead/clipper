@@ -3,7 +3,8 @@ GitHub before it starts, so a restart is all the user does after a change is pus
 
 Only a fast-forward on a clean checkout: local edits, another branch or no network
 just skip the update (said in the window), never a merge or anything overwritten.
-When the dependencies changed it reinstalls them. CLIPPER_NO_UPDATE=1 turns it off.
+When the dependencies changed it reinstalls them. CLIPPER_NO_UPDATE=1 turns it off, and so does
+running hosted (D229): a server's code is deployed, never pulled by the app itself.
 """
 
 from __future__ import annotations
@@ -25,8 +26,10 @@ def _git(*args: str, timeout: float = 30) -> subprocess.CompletedProcess:
 
 def pull() -> str:
     """Pull new commits if it's safe; returns what happened, in a line for the window:
-    "" (nothing new, or off), "updated ..." or "not updated: why"."""
-    if os.environ.get("CLIPPER_NO_UPDATE", "").strip() in ("1", "true", "yes"):
+    "" (nothing new, or off), "updated ..." or "not updated: why". Only "updated" restarts."""
+    from .hosting import hosted
+
+    if os.environ.get("CLIPPER_NO_UPDATE", "").strip() in ("1", "true", "yes") or hosted():
         return ""
     if not (REPO_ROOT / ".git").exists():
         return ""

@@ -150,6 +150,7 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
 
     @app.put("/api/setup/keys")
     def put_keys(values: dict[str, str]) -> Setup:
+        server.own_computer_only()  # hosted the keys are the server's .env, shared by everyone (D229)
         try:
             setup.set_keys(values)
         except ValueError as exc:
@@ -171,6 +172,7 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
 
     @app.post("/api/setup/check")
     async def system_check() -> list[dict]:
+        server.own_computer_only()  # it lists the server's paths, GPU and disk (D229)
         return await asyncio.to_thread(setup.system_check)
 
     @app.get("/api/settings")
@@ -180,6 +182,8 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
 
     @app.put("/api/settings")
     def update_settings(changes: dict) -> dict[str, str]:
+        if "plan" in changes and server.hosted():
+            raise HTTPException(403, "Your plan comes from your account: change it on the billing page.")  # D229
         with db.connect() as con:
             try:
                 for key, value in changes.items():
