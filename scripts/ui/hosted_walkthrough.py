@@ -15,8 +15,8 @@ BASE = "http://127.0.0.1:8798"
 USAGE = {"hosted": True, "plan": "free", "status": "active", "period_end": "2026-11-20T12:00:00Z",
          "minutes": {"used": 42, "limit": 60, "credits_left": 0},
          "shorts": {"used": 1, "limit": 1, "credits_left": 0, "once": True},
-         "redraws_per_short": 5, "retention_days": 7, "watermark_after": 3, "clips_this_period": 2,
-         "ai": {"spent_usd": 0.41, "budget_usd": 2.0}, "billing_url": "/billing", "logout_url": "/logout"}
+         "redraws_per_short": 3, "retention_days": 7, "watermark_after": 3, "clips_this_period": 2,
+         "ai": {"spent_usd": 0.41, "budget_usd": 5.5}, "billing_url": "/billing", "logout_url": "/logout"}
 LIMIT = "Your free Short is used. A plan, or a pack of 5 Shorts, gives you more."
 
 
