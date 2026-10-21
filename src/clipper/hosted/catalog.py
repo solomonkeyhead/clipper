@@ -70,9 +70,31 @@ def parse(stamp: str) -> datetime:
     return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
 
-def add_month(dt: datetime) -> datetime:
-    year, month = (dt.year + 1, 1) if dt.month == 12 else (dt.year, dt.month + 1)
+def day(stamp: str | None) -> str:
+    """"20 October 2026", for the pages."""
+    if not stamp:
+        return ""
+    dt = parse(stamp)
+    return f"{dt.day} {dt:%B %Y}"
+
+
+def add_month(dt: datetime, n: int = 1) -> datetime:
+    months = dt.month - 1 + n
+    year, month = dt.year + months // 12, months % 12 + 1
     return dt.replace(year=year, month=month, day=min(dt.day, calendar.monthrange(year, month)[1]))
+
+
+def allowance_period(user: dict, now: float | None = None) -> tuple[str, str]:
+    """The month the allowance counts in. A yearly plan's billing period is a year, but its minutes and Shorts
+    are a month's (pricing: "$/mo yearly"), so this is the month of that year we are in (D234)."""
+    if not user["period_start"] or not user["period_end"]:
+        return user["period_start"], user["period_end"]
+    start, end = parse(user["period_start"]), parse(user["period_end"])
+    now_dt = datetime.fromtimestamp(now or time.time(), UTC)
+    k = 0
+    while add_month(start, k + 1) <= now_dt and add_month(start, k + 1) < end:
+        k += 1
+    return iso(add_month(start, k)), iso(min(add_month(start, k + 1), end))
 
 
 def first_period(now: float | None = None) -> tuple[str, str]:
@@ -83,10 +105,17 @@ def first_period(now: float | None = None) -> tuple[str, str]:
 
 def roll(user: dict, now: float | None = None) -> dict:
     """A user Paddle doesn't bill (Free, or a plan given by hand) gets a new month when the last one ends;
-    paid periods come from Paddle (E2)."""
+    paid periods come from Paddle (E2). A canceled plan ends at its period's end and an unpaid one after
+    its grace (billing.GRACE_DAYS), even when Paddle's own event is late or lost (D234)."""
+    now_dt = datetime.fromtimestamp(now or time.time(), UTC)
+    ended = user["status"] == "canceled" and user["period_end"] and parse(user["period_end"]) <= now_dt
+    unpaid = user["status"] == "past_due" and user.get("grace_until") and parse(user["grace_until"]) <= now_dt
+    if ended or unpaid:
+        start, end = first_period(now)
+        return users.update(user["id"], plan="free", status="active", paddle_subscription_id=None,
+                            period_start=start, period_end=end, grace_until=None)
     if user["paddle_subscription_id"] or not user["period_end"]:
         return user
-    now_dt = datetime.fromtimestamp(now or time.time(), UTC)
     start, end = parse(user["period_start"]), parse(user["period_end"])
     if end > now_dt:
         return user
@@ -120,11 +149,12 @@ def plan_json(user: dict) -> dict:
         # The campaign pack's clips have no watermark and are kept 30 days. ponytail: lifts the whole
         # account while the pack is held; per-clip once Clipper reports which minutes a clip used (E3).
         watermark, retention = None, max(retention, 30)
+    start, end = allowance_period(user)
     return {
         "plan": plan.name,
         "status": user["status"] if user["status"] in ("active", "past_due", "canceled") else "active",
-        "period_start": user["period_start"],
-        "period_end": user["period_end"],
+        "period_start": start,
+        "period_end": end,
         "limits": {"minutes": plan.minutes, "shorts": plan.shorts, "shorts_once": plan.shorts_once,
                    "redraws_per_short": REDRAWS_PER_SHORT, "retention_days": retention,
                    "accounts_per_platform": plan.accounts_per_platform, "seats": plan.seats,

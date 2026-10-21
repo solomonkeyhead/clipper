@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import html
+import json
 import os
 import secrets
 import shutil
@@ -30,7 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
 from ..utils.logging import get_logger
-from . import catalog, data_dir, env, proxy, root, user_dir, users
+from . import billing, catalog, data_dir, env, proxy, root, user_dir, users
 from .procs import Procs, StartFailed
 
 log = get_logger(__name__)
@@ -44,19 +45,6 @@ OWNED = {"login", "signup", "logout", "reset", "billing", "pricing", "terms", "p
 EXPORT_SKIP = {("cache",), ("work",), ("models",), ("create", "stock")}
 STORED = {".mp4", ".mov", ".mkv", ".webm", ".mp3", ".m4a", ".wav", ".aac", ".jpg", ".jpeg", ".png", ".webp", ".zip"}
 DISK_WARN = 0.15
-
-
-# ---------- the E2 seams: Paddle replaces these two
-
-def billing_section(user: dict) -> str:
-    """The plan and pack buttons on /billing. E2 (Paddle) replaces this with checkout links for each plan
-    and pack and a link to Paddle's customer portal."""
-    return ('<section class="card" data-billing="placeholder"><h2>Change plan</h2>'
-            '<p class="muted">Paid plans and packs open here soon. See <a href="/pricing">pricing</a>.</p></section>')
-
-
-def on_account_deleted(user: dict) -> None:
-    """Runs before an account's folder is deleted. E2 cancels the Paddle subscription here."""
 
 
 # ---------- small helpers
@@ -139,13 +127,6 @@ def _size(path: Path) -> int:
 
 def _gb(n: float) -> str:
     return f"{n / 1e9:.1f} GB" if n >= 1e8 else f"{n / 1e6:.0f} MB"
-
-
-def _day(stamp: str | None) -> str:
-    if not stamp:
-        return ""
-    day = catalog.parse(stamp)
-    return f"{day.day} {day:%B %Y}"
 
 
 def send_mail(to: str, subject: str, text: str) -> None:
@@ -304,9 +285,10 @@ def starting(request: Request) -> Response:
     return JSONResponse({"detail": "Your studio is starting. Try again in a few seconds."}, 503, headers=headers)
 
 
-def _signup_form(error: str = "", email: str = "") -> str:
+def _signup_form(error: str = "", email: str = "", nxt: str = "/") -> str:
     err = f'<p class="error" role="alert">{html.escape(error)}</p>' if error else ""
     return (f'<h1>Sign up</h1>{err}<form class="card" method="post" action="/signup">'
+            f'<input type="hidden" name="next" value="{html.escape(nxt)}">'
             f'<label>Email<input type="email" name="email" required autocomplete="email" value="{html.escape(email)}">'
             f'</label><label>Password (at least {users.MIN_PASSWORD} characters)<input type="password" name="password" '
             f'required minlength="{users.MIN_PASSWORD}" autocomplete="new-password"></label>'
@@ -324,7 +306,8 @@ def _login_form(error: str = "", email: str = "", nxt: str = "/") -> str:
             f'<label>Email<input type="email" name="email" required autocomplete="email" value="{html.escape(email)}">'
             '</label><label>Password<input type="password" name="password" required autocomplete="current-password">'
             '</label><div class="row"><button class="primary">Log in</button><a href="/reset">Forgot your password?</a>'
-            '</div></form><p class="muted">No account yet? <a href="/signup">Sign up</a></p>')
+            f'</div></form><p class="muted">No account yet? <a href="/signup?next={html.escape(quote(nxt))}">'
+            'Sign up</a></p>')
 
 
 # ---------- the app
@@ -395,29 +378,30 @@ def create_app(procs: Procs | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.get("/signup")
-    def signup_page(request: Request) -> Response:
+    def signup_page(request: Request, next: str = "/") -> Response:
         if current(request):
-            return RedirectResponse("/", 303)
-        return page("Sign up", _signup_form())
+            return RedirectResponse(_next(next), 303)
+        return page("Sign up", _signup_form(nxt=_next(next)))
 
     @app.post("/signup")
     async def signup(request: Request) -> Response:
         check_post(request)
         form = await _form(request)
-        email = users.normal_email(form.get("email", ""))
+        email, nxt = users.normal_email(form.get("email", "")), _next(form.get("next", "/"))
         if not attempts.allow(f"signup-ip:{_ip(request)}", f"signup:{email}"):
-            return page("Sign up", _signup_form("Too many tries. Wait ten minutes and try again.", email), status=429)
+            return page("Sign up", _signup_form("Too many tries. Wait ten minutes and try again.", email, nxt),
+                        status=429)
         if not form.get("adult") or not form.get("terms"):
-            return page("Sign up", _signup_form("Confirm that you are 18 or older and accept the Terms.", email),
-                        status=400)
+            return page("Sign up", _signup_form("Confirm that you are 18 or older and accept the Terms.", email,
+                                                nxt), status=400)
         try:
             user = users.create_user(email, form.get("password", ""), age_confirmed=True,
                                      terms_version=TERMS_VERSION, period=catalog.first_period())
         except users.AccountError as exc:
-            return page("Sign up", _signup_form(str(exc), email), status=400)
+            return page("Sign up", _signup_form(str(exc), email, nxt), status=400)
         catalog.refresh(user)
         log.info("gateway: new account %d", user["id"])
-        return sign_in(request, user["id"])
+        return sign_in(request, user["id"], nxt)
 
     @app.get("/login")
     def login_page(request: Request, next: str = "/") -> Response:
@@ -503,23 +487,43 @@ def create_app(procs: Procs | None = None) -> FastAPI:
         pending[user["id"]] = (email, link, time.time() + users.RESET_MINUTES * 60)
         return sent
 
-    @app.get("/billing")
-    def billing(request: Request) -> Response:
+    def owner_only(request: Request) -> dict:
+        """Billing, export and deletion are the team owner's (a member works in the owner's studio)."""
         user = signed_in(request)
+        if billing.team_owner(user):
+            raise HTTPException(403, "Only the team's owner can do this.")
+        return user
+
+    def member_page(user: dict, owner: dict) -> Response:
+        return page("Plan and account", (
+            f'<h1>Plan and account</h1><section class="card"><h2>Team</h2><p>You work in the studio of '
+            f'{html.escape(owner["email"])}, on their {owner["plan"].title()} plan. They manage the plan and '
+            'payments.</p><form method="post" action="/billing/team/leave"><button>Leave the team</button></form>'
+            '<p class="muted">After leaving you have your own studio again, and can delete your account there.</p>'
+            '</section>'), user=user)
+
+    def billing_page(request: Request, user: dict, *, note: str = "", link: str = "", team_error: str = "",
+                     status: int = 200) -> Response:
+        owner = billing.team_owner(user)
+        if owner:
+            return member_page(user, owner)
+        user = catalog.refresh(user)   # a canceled or unpaid plan that has run out shows as Free
+        if request.query_params.get("paid") and not note:
+            note = "Thanks. Your plan or pack shows here within a minute; reload the page to see it."
         doc = catalog.plan_json(user)
         lim, credit = doc["limits"], doc["credits"]
-        status = {"past_due": " <span class='warn'>(payment overdue)</span>",
+        badge = {"past_due": " <span class='warn'>(payment overdue)</span>",
                   "canceled": " <span class='muted'>(canceled)</span>"}.get(doc["status"], "")
         mark = ("No watermark" if lim["watermark_after"] is None
                 else f"The first {lim['watermark_after']} clips without a watermark, then a small one")
         extra = (f"<p>Credits from packs: {credit['minutes']} minutes, {credit['shorts']} Shorts. They never expire.</p>"
                  if credit["minutes"] or credit["shorts"] else "")
-        body = (f'<h1>Plan and account</h1><section class="card"><h2>{doc["plan"].title()} plan{status}</h2>'
-                f'<p>This month: {_day(doc["period_start"])} to {_day(doc["period_end"])}.</p>'
+        body = (f'<h1>Plan and account</h1><section class="card"><h2>{doc["plan"].title()} plan{badge}</h2>'
+                f'<p>This month: {catalog.day(doc["period_start"])} to {catalog.day(doc["period_end"])}.</p>'
                 f'<p>{lim["minutes"]} footage minutes and {lim["shorts"]} Create Short'
                 f'{"s" if lim["shorts"] != 1 else ""}{" (once)" if lim["shorts_once"] else ""}. '
                 f'Clips kept {lim["retention_days"]} days. {mark}.</p>{extra}</section>'
-                f'{billing_section(user)}'
+                f'{billing.section(user, note)}{billing.team_section(user, link, team_error)}'
                 '<section class="card"><h2>Your data</h2><p>Everything in your studio as a zip file, without the '
                 'caches Clipper can make again.</p><a class="button" href="/billing/export">Download my data</a>'
                 '</section><section class="card"><h2>Delete my account</h2><p>This stops your studio and deletes '
@@ -527,11 +531,152 @@ def create_app(procs: Procs | None = None) -> FastAPI:
                 '<form method="post" action="/billing/delete"><label>Your password<input type="password" '
                 'name="password" required autocomplete="current-password"></label>'
                 '<button class="danger">Delete my account</button></form></section>')
-        return page("Plan and account", body, user=user)
+        return page("Plan and account", body, user=user, status=status,
+                    head=billing.head(user, _public_url(request) + "/billing?paid=1"))
+
+    @app.get("/billing")
+    def billing_view(request: Request) -> Response:
+        return billing_page(request, signed_in(request))
+
+    def subscriber(request: Request) -> dict:
+        user = owner_only(request)
+        if not billing.ready():
+            raise HTTPException(400, "Payments aren't set up yet.")
+        return user
+
+    @app.post("/billing/change")
+    async def change_plan(request: Request) -> Response:
+        check_post(request)
+        user = subscriber(request)
+        form = await _form(request)
+        plan, cycle = form.get("plan", ""), form.get("cycle", "")
+        if plan not in billing.PAID or cycle not in billing.CYCLES or not billing.price_id(plan, cycle) \
+                or not user["paddle_subscription_id"]:
+            raise HTTPException(400, "unknown plan")
+        try:
+            await asyncio.to_thread(billing.change_plan, user, plan, cycle)
+        except httpx.HTTPError as exc:
+            log.warning("gateway: account %d: plan change refused (%s)", user["id"], type(exc).__name__)
+            return billing_page(request, user, status=502, note="Paddle didn't take the change. If your last "
+                                "payment failed, update your card under Manage first, then try again.")
+        return billing_page(request, user, note=f"Changing to {plan.title()}. It shows here within a minute.")
+
+    @app.post("/billing/portal")
+    async def portal(request: Request) -> Response:
+        check_post(request)
+        user = subscriber(request)
+        if not user["paddle_customer_id"]:
+            return RedirectResponse("/billing", 303)
+        try:
+            url = await asyncio.to_thread(billing.portal_url, user)
+        except (httpx.HTTPError, KeyError, TypeError) as exc:
+            log.warning("gateway: account %d: portal didn't open (%s)", user["id"], type(exc).__name__)
+            return billing_page(request, user, status=502, note="Paddle's page didn't open. Try again in a minute.")
+        return RedirectResponse(url, 303)
+
+    @app.post("/billing/team/invite")
+    async def team_invite(request: Request) -> Response:
+        check_post(request)
+        user = owner_only(request)
+        form = await _form(request)
+        email = users.normal_email(form.get("email", ""))
+        if billing.seats(user) - 1 - len(users.members(user["id"])) <= 0:
+            return billing_page(request, user, team_error="Every seat is taken.", status=400)
+        if not attempts.allow(f"invite:{user['id']}"):
+            return billing_page(request, user, team_error="Too many invites. Wait ten minutes.", status=429)
+        try:
+            token = users.invite(user["id"], email)
+        except users.AccountError as exc:
+            return billing_page(request, user, team_error=str(exc), status=400)
+        link = f"{_public_url(request)}/billing/join?token={token}"
+        if env("SMTP_URL"):
+            try:
+                await asyncio.to_thread(send_mail, email, "You're invited to a Clipper team",
+                                        f"{user['email']} invited you to work in their Clipper studio.\n\n"
+                                        f"Open this link within {users.INVITE_DAYS} days to join:\n{link}\n\n"
+                                        "If you don't know them, ignore this email.")
+            except (OSError, smtplib.SMTPException) as exc:
+                log.warning("gateway: invite email for account %d failed (%s)", user["id"], type(exc).__name__)
+        log.info("gateway: account %d invited a team member", user["id"])
+        return billing_page(request, user, link=link)
+
+    @app.post("/billing/team/remove")
+    async def team_remove(request: Request) -> Response:
+        check_post(request)
+        user = owner_only(request)
+        form = await _form(request)
+        member = form.get("member", "")
+        if member.isdigit():
+            users.remove_member(user["id"], int(member))
+        return RedirectResponse("/billing", 303)
+
+    @app.post("/billing/team/leave")
+    def team_leave(request: Request) -> Response:
+        check_post(request)
+        users.leave_team(signed_in(request)["id"])
+        return RedirectResponse("/billing", 303)
+
+    @app.get("/billing/join")
+    def join_page(request: Request, token: str = "") -> Response:
+        user = current(request)
+        if user is None:
+            return RedirectResponse("/login?next=" + quote(f"/billing/join?token={token}"), 303)
+        invite = users.invite_owner(token) if token else None
+        if invite is None:
+            return page("Team", "<h1>Invite expired</h1><p>This invite has expired or was already used. Ask "
+                        "for a new one.</p>", user=user, status=400)
+        owner = users.get_user(invite["owner_id"])
+        return page("Team", (
+            f'<h1>Join a team</h1><section class="card"><p>{html.escape(owner["email"])} invited '
+            f'{html.escape(invite["invited_email"])} to work in their studio. Once you join, Clipper opens their '
+            'studio for you instead of your own.</p><form method="post" action="/billing/join"><input type="hidden" '
+            f'name="token" value="{html.escape(token)}"><button class="primary">Join</button></form></section>'),
+            user=user)
+
+    @app.post("/billing/join")
+    async def join(request: Request) -> Response:
+        check_post(request)
+        user = signed_in(request)
+        form = await _form(request)
+        try:
+            owner = users.accept_invite(form.get("token", ""), user)
+        except users.AccountError as exc:
+            return page("Team", f"<h1>Not joined</h1><p class='error'>{html.escape(str(exc))}</p>", user=user,
+                        status=400)
+        log.info("gateway: account %d joined the team of account %d", user["id"], owner["id"])
+        return RedirectResponse("/", 303)
+
+    @app.post("/paddle/webhook")
+    async def paddle_webhook(request: Request) -> Response:
+        """Signed by Paddle (no Origin, no cookie). Retries of an event are skipped by its id; anything Clipper
+        can't place (an unknown price or account) is logged and still answered 200, or Paddle retries for days."""
+        body = b""
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > 2_000_000:
+                raise HTTPException(413, "too much")
+        if not billing.verify(request.headers.get("paddle-signature", ""), body):
+            log.warning("gateway: a Paddle webhook with a bad or old signature was refused")
+            return JSONResponse({"detail": "bad signature"}, status_code=401)
+        try:
+            event = json.loads(body)
+            event_id = str(event["event_id"])
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"detail": "not an event"}, status_code=400)
+        if not users.first_seen_event(event_id):
+            return JSONResponse({"ok": True, "seen": True})
+        try:
+            cancel = billing.handle(event)
+        except Exception:
+            users.forget_event(event_id)   # let Paddle's retry through
+            log.exception("gateway: Paddle event %s (%s) failed", event_id, event.get("event_type"))
+            return JSONResponse({"detail": "failed"}, status_code=500)
+        task = BackgroundTask(lambda: [billing.cancel(s) for s in cancel]) if cancel else None
+        return JSONResponse({"ok": True}, background=task)
 
     @app.get("/billing/export")
     async def export(request: Request) -> Response:
-        user = signed_in(request)
+        user = owner_only(request)
         path = await asyncio.to_thread(export_zip, user["id"])
         return FileResponse(path, media_type="application/zip", filename="clipper-data.zip",
                             background=BackgroundTask(path.unlink, missing_ok=True))
@@ -539,13 +684,13 @@ def create_app(procs: Procs | None = None) -> FastAPI:
     @app.post("/billing/delete")
     async def delete_account(request: Request) -> Response:
         check_post(request)
-        user = signed_in(request)
+        user = owner_only(request)
         form = await _form(request)
         if not users.check_password(form.get("password", ""), user["password"]):
             return page("Plan and account", "<h1>Not deleted</h1><p class='error'>That password is wrong. "
                         "<a href='/billing'>Back</a></p>", user=user, status=401)
         await procs.stop(user["id"])
-        on_account_deleted(user)
+        await asyncio.to_thread(billing.on_account_deleted, user)
         folder = user_dir(user["id"])
         await asyncio.to_thread(shutil.rmtree, folder, True)
         if folder.exists():
@@ -577,6 +722,7 @@ def create_app(procs: Procs | None = None) -> FastAPI:
             rows.append(
                 f"<tr><td>{u['id']}</td><td>{html.escape(u['email'])}</td><td>{u['plan']}</td><td>{u['status']}</td>"
                 f"<td>{seen}</td><td>{_gb(_size(folder)) if folder.exists() else ''}</td>"
+                f"<td>{datetime.fromtimestamp(u['refunded_at']).strftime('%Y-%m-%d') if u['refunded_at'] else ''}</td>"
                 f"<td>{procs.state(u['id'])}</td><td><form class='row' method='post' action='/admin/plan'>"
                 f"<input type='hidden' name='user' value='{u['id']}'><select name='plan' aria-label='Plan'>"
                 f"{options}</select>"
@@ -589,7 +735,7 @@ def create_app(procs: Procs | None = None) -> FastAPI:
                         for e, link, until in pending.values())
         body = (f"<h1>Admin</h1><p>Disk: {_gb(disk.free)} free of {_gb(disk.total)} ({free:.0%}).{warn}</p>"
                 "<h2>Accounts</h2><div class='table'><table><tr><th>Id</th><th>Email</th><th>Plan</th><th>Status</th>"
-                "<th>Last seen</th><th>Data</th><th>Studio</th><th>Set plan by hand</th></tr>"
+                "<th>Last seen</th><th>Data</th><th>Refund given</th><th>Studio</th><th>Set plan by hand</th></tr>"
                 f"{''.join(rows)}</table></div>"
                 "<h2 style='margin-top:32px'>Password reset links not emailed</h2>"
                 + (f"<div class='table'><table><tr><th>Email</th><th>Link</th><th>Until</th></tr>{links}</table></div>"
@@ -629,7 +775,7 @@ def create_app(procs: Procs | None = None) -> FastAPI:
             if path.startswith("api/") or request.method != "GET":
                 return JSONResponse({"detail": "Log in first."}, status_code=401)
             return RedirectResponse("/login?next=" + quote("/" + path), status_code=303)
-        uid = user["id"]
+        uid = billing.studio_user(user)["id"]   # a team member works in the owner's studio (D234)
         if path == "api/events":
             # The page's live stream neither wakes a stopped studio nor keeps one awake: an open tab
             # reconnects forever. 204 tells the browser to stop; the page tries again later.

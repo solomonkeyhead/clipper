@@ -4019,3 +4019,19 @@ Marc had every page clicked through for what a general user wouldn't need or und
   cancelled round caches nothing. `create/meterhooks.py` (`on_first_build`, `on_redraw`) is where the hosted plan
   counts Shorts and redraws; every build's calls are tagged `video:<id>` in usage.sqlite.
 - To get the old behaviour back locally: `create: {critic: true, max_auto_drawings: 10}` in data/config.yaml.
+
+## D234 — Paddle billing and Agency's team seats in the gateway (2026-10-20)
+- The gateway sold nothing. `hosted/billing.py` adds Paddle Billing: Paddle.js checkout on /billing only (the user id
+  with an HMAC tag in customData, so nobody can buy for someone else's account), signed webhooks (HMAC-SHA256 of
+  `ts:body`, 5 minute window, once per event id, retried when handling fails), the customer portal, and plan
+  changes on the existing subscription, never a second checkout.
+- Paddle's events set the plan and period. A scheduled cancel keeps the paid plan to the period end; a failed renewal
+  keeps it 7 days; `catalog.roll` ends both on time even if Paddle's event is lost. Packs add credits. An approved
+  refund is noted on /admin (one per account, D226), and a full refund ends the subscription. Deleting an account
+  cancels it at once. Unknown prices or accounts are logged and answered 200.
+- Yearly plans bill once a year but count their allowance by month, so plan.json carries the current month.
+- Agency's 5 seats: the owner invites by email (one-time link, 7 days, only for that address). A member's requests
+  reach the owner's studio; billing, export and deletion stay the owner's. Seats end when the owner's plan drops.
+- Why: Paddle is the merchant of record, so Clipper only mirrors what its signed events say, and every change goes
+  through `users.update` and `catalog.refresh` as D228 planned. LAUNCH_TODO lists the Paddle setup (events, default
+  payment link, env).

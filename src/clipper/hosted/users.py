@@ -41,12 +41,20 @@ CREATE TABLE IF NOT EXISTS credits (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id),
   minutes INTEGER NOT NULL DEFAULT 0, shorts INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL, at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS webhook_events (event_id TEXT PRIMARY KEY, at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, owner_id INTEGER NOT NULL REFERENCES users(id),
+  user_id INTEGER REFERENCES users(id), invited_email TEXT NOT NULL, token_hash TEXT UNIQUE,
+  created REAL NOT NULL, accepted_at REAL);
 """
+#: Columns added after D228's first schema (billing, D234), added to an older database on open.
+LATER_COLUMNS = (("grace_until", "TEXT"), ("refunded_at", "REAL"), ("paddle_event_at", "REAL"))
 
 _made: set[Path] = set()
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 #: Fields E2 (billing) and the admin page may change with update().
-FIELDS = ("plan", "status", "paddle_customer_id", "paddle_subscription_id", "period_start", "period_end")
+FIELDS = ("plan", "status", "paddle_customer_id", "paddle_subscription_id", "period_start", "period_end",
+          "grace_until", "refunded_at", "paddle_event_at")
+INVITE_DAYS = 7
 
 
 class AccountError(ValueError):
@@ -64,6 +72,10 @@ def connect() -> Iterator[sqlite3.Connection]:
         if path not in _made:
             con.execute("PRAGMA journal_mode=WAL")
             con.executescript(SCHEMA)
+            have = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
+            for name, kind in LATER_COLUMNS:
+                if name not in have:
+                    con.execute(f"ALTER TABLE users ADD COLUMN {name} {kind}")
             _made.add(path)
         with con:
             yield con
@@ -187,6 +199,7 @@ def mark_deleted(user_id: int, now: float | None = None) -> None:
                     (f"deleted-{user_id}", now or time.time(), user_id))
         con.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         con.execute("DELETE FROM password_resets WHERE user_id = ?", (user_id,))
+        con.execute("DELETE FROM members WHERE owner_id = ? OR user_id = ?", (user_id, user_id))
 
 
 # ---------- sessions
@@ -270,3 +283,93 @@ def first_seen_event(event_id: str, now: float | None = None) -> bool:
     with connect() as con:
         cur = con.execute("INSERT OR IGNORE INTO webhook_events VALUES (?, ?)", (event_id, now or time.time()))
     return cur.rowcount == 1
+
+
+def forget_event(event_id: str) -> None:
+    """An event whose handling failed: Paddle's retry of it is let through again."""
+    with connect() as con:
+        con.execute("DELETE FROM webhook_events WHERE event_id = ?", (event_id,))
+
+
+def by_paddle(*, subscription_id: str | None = None, customer_id: str | None = None) -> dict | None:
+    """The live account with this Paddle subscription, or else this Paddle customer."""
+    column, value = ("paddle_subscription_id", subscription_id) if subscription_id else (
+        "paddle_customer_id", customer_id)
+    if not value:
+        return None
+    with connect() as con:
+        row = con.execute(f"SELECT * FROM users WHERE {column} = ? AND deleted_at IS NULL ORDER BY id DESC",
+                          (value,)).fetchone()
+    return dict(row) if row else None
+
+
+# ---------- team seats (Agency, D234)
+
+def invite(owner_id: int, email: str, now: float | None = None) -> str:
+    """A seat held for `email` until they open the link (token stored only as its sha256)."""
+    email = normal_email(email)
+    if len(email) > 254 or not EMAIL.match(email):
+        raise AccountError("That doesn't look like an email address.")
+    with connect() as con:
+        owner = con.execute("SELECT email FROM users WHERE id = ?", (owner_id,)).fetchone()
+        if owner and owner["email"] == email:
+            raise AccountError("That is your own address.")
+        if con.execute("SELECT 1 FROM members WHERE owner_id = ? AND invited_email = ?", (owner_id, email)).fetchone():
+            raise AccountError("That address is already on your team or invited.")
+        token = secrets.token_urlsafe(32)
+        con.execute("INSERT INTO members (owner_id, invited_email, token_hash, created) VALUES (?, ?, ?, ?)",
+                    (owner_id, email, _sha(token), now or time.time()))
+    return token
+
+
+def members(owner_id: int, now: float | None = None) -> list[dict]:
+    """Joined members and invites still in time (an expired invite frees its seat)."""
+    cutoff = (now or time.time()) - INVITE_DAYS * 86400
+    with connect() as con:
+        con.execute("DELETE FROM members WHERE owner_id = ? AND accepted_at IS NULL AND created < ?",
+                    (owner_id, cutoff))
+        return [dict(r) for r in con.execute("SELECT * FROM members WHERE owner_id = ? ORDER BY id", (owner_id,))]
+
+
+def invite_owner(token: str, now: float | None = None) -> dict | None:
+    """The invite behind a link, while unused and in time, with the owner's id."""
+    with connect() as con:
+        row = con.execute("SELECT * FROM members WHERE token_hash = ? AND accepted_at IS NULL AND created > ?",
+                          (_sha(token), (now or time.time()) - INVITE_DAYS * 86400)).fetchone()
+    return dict(row) if row else None
+
+
+def accept_invite(token: str, user: dict, now: float | None = None) -> dict:
+    """Join the owner's team. The invite is for one address: a forwarded link doesn't let someone else in."""
+    row = invite_owner(token, now)
+    if row is None:
+        raise AccountError("This invite has expired or was already used. Ask for a new one.")
+    if row["invited_email"] != normal_email(user["email"]):
+        raise AccountError("This invite is for another email address. Log in with that one.")
+    if row["owner_id"] == user["id"]:
+        raise AccountError("That is your own team.")
+    with connect() as con:
+        if con.execute("SELECT 1 FROM members WHERE owner_id = ? AND accepted_at IS NOT NULL", (user["id"],)).fetchone():
+            raise AccountError("You have a team of your own. Remove its members first.")
+        con.execute("DELETE FROM members WHERE user_id = ?", (user["id"],))   # one team at a time
+        con.execute("UPDATE members SET user_id = ?, accepted_at = ?, token_hash = NULL WHERE id = ?",
+                    (user["id"], now or time.time(), row["id"]))
+    return get_user(row["owner_id"])
+
+
+def remove_member(owner_id: int, member_id: int) -> None:
+    with connect() as con:
+        con.execute("DELETE FROM members WHERE id = ? AND owner_id = ?", (member_id, owner_id))
+
+
+def leave_team(user_id: int) -> None:
+    with connect() as con:
+        con.execute("DELETE FROM members WHERE user_id = ?", (user_id,))
+
+
+def team_owner(user_id: int) -> dict | None:
+    """The live account whose team this user has joined, if any."""
+    with connect() as con:
+        row = con.execute("SELECT u.* FROM members m JOIN users u ON u.id = m.owner_id WHERE m.user_id = ?"
+                          " AND m.accepted_at IS NOT NULL AND u.deleted_at IS NULL", (user_id,)).fetchone()
+    return dict(row) if row else None

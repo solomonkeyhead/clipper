@@ -277,10 +277,24 @@ two env files and do not mix them.
   checkout uses in the browser.
 - `PADDLE_WEBHOOK_SECRET`: create a notification destination (Notifications under Developer tools in the
   dashboard), type webhook, URL `<public url>/paddle/webhook`, and tick exactly these events:
-  `subscription.created`, `subscription.updated`, `subscription.canceled`, `transaction.completed`. Save, then open
-  the destination and copy its secret key. Paddle's own docs do not name these menus in one place, and the
-  dashboard moves them now and then: if a name differs, look for the same word.
-- Set all of them in the server env only. Never paste them in chat, commit them or log them.
+  `subscription.created`, `subscription.updated`, `subscription.canceled`, `subscription.past_due`,
+  `transaction.completed`, `adjustment.created`, `adjustment.updated` (the last two tell Clipper a refund was
+  given). Save, then open the destination and copy its secret key. Paddle's own docs do not name these menus in one
+  place, and the dashboard moves them now and then: if a name differs, look for the same word.
+- `PADDLE_ENV`: `sandbox` with the sandbox keys, `production` with the live ones. Left empty it means sandbox.
+- Default payment link: Paddle, Checkout, Checkout configuration, "Default payment link": enter `<public url>/billing`
+  and save, in the sandbox and again in live. Paddle sells nothing until one is set. In live the domain has to be
+  approved first (above), and a subdomain such as `clip.example.com` needs its own approval.
+- Customer portal: nothing to set. The "Manage or cancel" button on /billing opens Paddle's portal for that
+  customer (card, invoices, cancel).
+- Set all of them in the server env only. Never paste them in chat, commit them or log them. After changing the
+  env, restart the gateway.
+
+What Clipper does with each event: a new or changed subscription sets the plan and its period; a cancel the user
+schedules keeps the paid plan to the period's end, then Free; a failed renewal keeps the plan 7 more days, then
+Free unless the payment goes through; a pack adds its credits; an approved refund is noted on /admin ("Refund
+given", one per account) and a full refund of a subscription also cancels it at once. An event for a price or an
+account Clipper doesn't know is logged and answered 200 (otherwise Paddle retries it for two days).
 
 ### Test before you go live
 
@@ -288,9 +302,13 @@ two env files and do not mix them.
 2. Confirm the Billing page shows Starter, the meters show 300 minutes and 3 Shorts, and the receipt email arrives.
 3. Use the whole allowance and confirm the work stops at zero before any AI is called.
 4. Buy a pack and confirm it adds to the meter and does not expire.
-5. Cancel, and confirm access ends at the period's end.
-6. Refund the test order from the sandbox dashboard and confirm the plan drops back.
-7. Only then switch the env to live keys and live price ids, and do one real purchase of the $5 pack with your own
+5. Cancel with "Manage or cancel", and confirm the Billing page says when the plan ends and access lasts until then.
+   (To see the end without waiting a month, cancel "immediately" from the sandbox dashboard instead.)
+6. Refund the test order in full from the sandbox dashboard. Sandbox approves refunds every ten minutes; then
+   confirm the plan drops back to Free and /admin shows "Refund given" for the account.
+7. Subscribe to Agency, invite a second email from Billing, open the link in a private window, sign up with that
+   email and join. Confirm the second login sees the same studio and no Billing or Delete.
+8. Only then switch the env to live keys and live price ids, and do one real purchase of the $5 pack with your own
    card. Refund it.
 
 ## 6. A lawyer reads the legal pages (i)
