@@ -290,7 +290,7 @@ export const useJobs = () =>
 
 /** One job per video, queued in turn. */
 export async function startJob(campaign: string, sources: string | string[], mode: JobMode,
-                               options: { top?: number; ranges?: [string, string][] } = {}): Promise<Job[]> {
+                               options: { top?: number; ranges?: [string, string][]; shape?: string } = {}): Promise<Job[]> {
   const res = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" },
                                          body: JSON.stringify({ campaign, sources: [sources].flat(), mode, ...options }) });
   const data = await res.json();
@@ -324,6 +324,22 @@ export function uploadVideo(file: File, onProgress: (fraction: number) => void, 
 /* ---------- campaigns: create, edit, read a brief ---------- */
 
 export type CampaignForm = Required<components["schemas"]["CampaignForm"]>;
+export type BrandKit = Required<components["schemas"]["BrandKit"]>;
+
+/** The clip shapes a campaign can pick (D240): [value, label, what it's for]. */
+export const SHAPES: [string, string, string][] = [
+  ["9:16", "9:16 tall", "TikTok, Reels, Shorts"], ["1:1", "1:1 square", "Feeds"], ["16:9", "16:9 wide", "YouTube, X"]];
+
+/** An uploaded brand font or logo, served back for previews. */
+export const brandUrl = (name: string) => `/api/brand/${name}`;
+
+/** Upload a brand font or logo (D240): the server checks it and keeps it under a name it makes. */
+export async function uploadBrand(kind: "font" | "logo", file: File): Promise<{ file: string; family?: string }> {
+  const res = await fetch(`/api/brand/${kind}?filename=${encodeURIComponent(file.name)}`, { method: "PUT", body: file });
+  const data = await res.json();
+  if (!res.ok) throw failure(res.status, data.detail, res.statusText);
+  return data;
+}
 
 export const useCampaignForm = (name: string | undefined) =>
   useQuery({

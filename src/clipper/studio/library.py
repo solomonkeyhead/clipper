@@ -40,6 +40,18 @@ def clip_path(relative: str) -> Path:
     return library_dir() / (relative or "<no file>")
 
 
+def captions_path(video: Path) -> Path:
+    """The clip's caption file (D240): an .srt beside its video, made with it; older clips have none."""
+    return video.with_suffix(".srt")
+
+
+def move_captions(video: Path, to: Path, *, copy: bool = False) -> None:
+    """The caption file goes where its video went (or is copied with it); none, and nothing happens."""
+    found = captions_path(video)
+    if found.is_file():
+        (shutil.copy2 if copy else shutil.move)(found, captions_path(to))
+
+
 def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignConfig,
              captions: list[str] | None = None) -> list[int]:
     """Copy a run's accepted clips into the library and record them. Returns their ids."""
@@ -57,8 +69,10 @@ def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignC
             # of duplicates after a week. A folder the user chose keeps its copy.
             if record.file.resolve().is_relative_to(runs_dir().resolve()):
                 shutil.move(record.file, folder / name)
+                move_captions(record.file, folder / name)
             else:
                 shutil.copy2(record.file, folder / name)
+                move_captions(record.file, folder / name, copy=True)
             ids.append(db.upsert_clip(con, {
                 "campaign": campaign.name, "source_id": info.source_id,
                 "clip_id": plan.clip_id, "source_title": info.title or "",
@@ -66,7 +80,8 @@ def register(records: list[ClipRecord], *, info: SourceInfo, campaign: CampaignC
                 "hook": plan.hook_text if plan.hook_shown else "",
                 "caption": captions[i] if captions else full_caption(plan),
                 "duration_s": record.duration, "start_s": plan.start, "end_s": plan.end,
-                "scores": json.dumps(scores_of(record)),
+                # The shape it was made in (D240), so a new hook doesn't change it back.
+                "scores": json.dumps({**scores_of(record), "shape": campaign.output_shape}),
                 "evidence": json.dumps(evidence.snapshot(
                     record, info=info, campaign=campaign,
                     caption=captions[i] if captions else full_caption(plan)), ensure_ascii=False),

@@ -26,7 +26,7 @@ from . import meter
 from .campaign import compliance, rotation
 from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
 from .candidates.boundaries import RefinedBounds, refine
-from .config import CampaignConfig, Config, LLMConfig
+from .config import SHAPES, CampaignConfig, Config, LLMConfig, shape_render
 from .editing import ClipEdit, Piece, apply_fixes, kept_words
 from .ingest.download import IngestError, is_url, probe_rights
 from .ingest.probe import probe
@@ -37,6 +37,7 @@ from .models import ClipPlan, Sentences, SourceInfo, Transcript, Word
 from .paths import ensure
 from .pipeline import ScoreOutcome, build_backend, choose, judge_backend, score
 from .qa.checks import QAContext, check_clip, summarize
+from .render.brand import render_updates as brand_updates
 from .render.clip import render_clip
 from .render.faces import plan_layout_for
 from .render.graph import output_size
@@ -396,7 +397,7 @@ class RerenderError(RuntimeError):
 
 def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
              out_root: Path, backend_override: str | None = None,
-             edit: ClipEdit | None = None, draft: bool = False) -> Path:
+             edit: ClipEdit | None = None, draft: bool = False, shape: str | None = None) -> Path:
     """Make a library clip again with a different on-screen hook (D90), or as
     edited in the editor (`edit`, D103; the hook is then the edit's).
 
@@ -416,6 +417,10 @@ def rerender(clip: dict, hook: str, *, config: Config, campaign: CampaignConfig,
     if clip.get("start_s") is None or clip.get("end_s") is None:
         raise RerenderError("this clip has no time range on record")
     transcript = Transcript.load(work_src / "transcript.json")
+    # Its shape (D240): the one asked for, else the one it was made in, else its campaign's.
+    shape = shape or (json.loads(clip.get("scores") or "{}") or {}).get("shape")
+    if shape in SHAPES and shape != campaign.output_shape:
+        campaign = campaign.model_copy(update={"output_shape": shape})
     config = campaign_config(config, campaign)
     if edit is not None:
         edit = edit.tidy(info.media.duration)
@@ -644,6 +649,9 @@ def campaign_config(config: Config, campaign: CampaignConfig) -> Config:
         # (each trims to its own window of an in-order decode).
         "max_shots": (max(config.render.max_shots, SCRIPTED_MAX_SHOTS) if campaign.scripted
                       else config.render.max_shots),
+        # The campaign's shape and brand kit (D240): nothing for a 9:16 campaign without one.
+        **shape_render(campaign.output_shape),
+        **brand_updates(campaign),
     })
     weights, taste = _learning(config, campaign)
     llm = config.llm.model_copy(update={
@@ -1076,6 +1084,7 @@ def _render_plan(
 
         cover_at = pick(output, rendered.duration, ass_text=context.ass_text)
     before = rendered.duration
+    teased = None   # the part of the clip put first, if any
     if passed and plan.teaser and render_source is source_path and cold_open_allowed(campaign):
         from .render.teaser import prepend
 
@@ -1091,11 +1100,12 @@ def _render_plan(
         # holding the punchline appears.
         at, to = a - render_plan.start, b - render_plan.start
         clash = hook_showing(context.ass_text, at) or captions_on_top(context.ass_text, at, to)
-        prepend(output, at, to,
-                hook="" if clash else hook_on_top, config=config,
-                work_dir=work, draft=draft, has_audio=info.media.has_audio, words=spoken,
-                pages=page_starts(context.ass_text))
+        teased = prepend(output, at, to,
+                         hook="" if clash else hook_on_top, config=config,
+                         work_dir=work, draft=draft, has_audio=info.media.has_audio, words=spoken,
+                         pages=page_starts(context.ass_text))
         rendered = probe(output)
+    cover_len = 0.0
     if cover_at is not None:
         from .render.cover import hook_showing, put_first
 
@@ -1104,8 +1114,15 @@ def _render_plan(
         put_first(output, cover_at + max(0.0, rendered.duration - before),
                   hook="" if hook_showing(context.ass_text, cover_at) else hook_on_top, config=config,
                   work_dir=work, fps=int(config.render.fps), has_audio=info.media.has_audio)
+        longer = probe(output).duration - rendered.duration
         rendered = probe(output)
+        from .render.cover import FRAMES
+
+        # Its cover frames, unless put_first left the clip as it was (it does when it fails).
+        cover_len = FRAMES / config.render.fps if longer > 0.01 else 0.0
         plan = plan.model_copy(update={"cover": cover_at})
+    if passed and not draft:
+        _write_captions(output, context.ass_text, teased, cover_len)
 
     return ClipRecord(
         plan=plan,
@@ -1115,6 +1132,22 @@ def _render_plan(
         rendered_duration=rendered.duration,
         caption_fixes=fixes,
     )
+
+
+def _write_captions(output: Path, ass_text: str, teased: tuple[float, float] | None, cover_len: float) -> None:
+    """The clip's captions as an .srt beside it (D240): the pages burned in, on the finished file's clock --
+    after its cover frames and the payoff it opens on, whose captions it repeats. None when it has no captions."""
+    from .render.captions import build_srt
+
+    pieces = [(0.0, float("inf"), cover_len)]
+    if teased:
+        pieces = [(teased[0], teased[1], cover_len), (0.0, float("inf"), cover_len + teased[1] - teased[0])]
+    srt = build_srt(ass_text, pieces) if ass_text else ""
+    target = output.with_suffix(".srt")
+    if srt:
+        target.write_text(srt, encoding="utf-8")
+    else:
+        target.unlink(missing_ok=True)
 
 
 def _build_plan(

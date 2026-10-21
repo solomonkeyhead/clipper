@@ -97,7 +97,8 @@ def upload_cap() -> int | None:
 
 
 def too_big(cap: int) -> str:
-    return f"That file is over {cap / 1024**3:g} GB, the most one file can be here."
+    size = f"{cap / 1024**3:g} GB" if cap >= 1024**3 else f"{cap / 1024**2:g} MB"   # a brand kit's are MBs (D240)
+    return f"That file is over {size}, the most one file can be here."
 
 
 async def receive(request, target: Path, cap: int | None) -> Path:

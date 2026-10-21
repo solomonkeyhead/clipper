@@ -114,6 +114,14 @@ def crop_size_for_aspect(src_w: int, src_h: int, out_w: int, out_h: int) -> tupl
     return crop_w, crop_h
 
 
+def fits_by_height(region_w: int, region_h: int, out_w: int, out_h: int) -> bool:
+    """Whether a fitted picture is scaled to the output's height (and centred across it) rather than its width.
+
+    A 9:16 output always fits by width, as it always has: its pictures are wider than it is. A square or wide
+    output (D240) fits a narrower picture -- a vertical source in 16:9 -- by height, or its middle would be cut."""
+    return out_w >= out_h and region_w * out_h < region_h * out_w
+
+
 def _make_even(value: int) -> int:
     return value if value % 2 == 0 else value - 1
 
@@ -406,7 +414,7 @@ def _frame_everyone(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h:
         # whole frame here was a 16:9 strip over 32% of the screen -- in the dark
         # Chad Powers romance scenes (a crowd under blue light, profiles in a
         # kiss, where the detector finds no face) a murky band. 4:5 fills 70%.
-        return _centre_four_five(src_w=src_w, src_h=src_h,
+        return _centre_four_five(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
                                  reason="no face found in this shot: centre, 4:5 at most")
     seen = {o.t for t in people for o in t.observations}
     face_ratio = len(seen) / samples
@@ -442,9 +450,9 @@ def _frame_opening(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h: 
     people = [t for t in tracks
               if t.median_width / src_w >= SCRIPTED_PERSON_WIDTH
               and t.coverage(samples) >= SCRIPTED_PERSON_COVERAGE]
-    limit = _make_even(int(src_h * OPENING_MAX_ASPECT))
+    limit = _opening_limit(src_w, src_h, out_w, out_h)
     if not people:
-        return _centre_four_five(src_w=src_w, src_h=src_h,
+        return _centre_four_five(src_w=src_w, src_h=src_h, out_w=out_w, out_h=out_h,
                                  reason="opening with no one in shot: centre, 4:5 at most")
     talker = clear_talker(people) if len(people) > 1 else None
     primary = talker[0] if talker else max(
@@ -465,9 +473,15 @@ def _frame_opening(tracks: list[FaceTrack], samples: int, *, src_w: int, src_h: 
     return plan.model_copy(update={"reason": f"opening: {who} full-screen; {plan.reason}"})
 
 
-def _centre_four_five(*, src_w: int, src_h: int, reason: str) -> LayoutPlan:
-    """The centre of the frame at `OPENING_MAX_ASPECT`, over a blurred copy."""
-    limit = _make_even(int(src_h * OPENING_MAX_ASPECT))
+def _opening_limit(src_w: int, src_h: int, out_w: int, out_h: int) -> int:
+    """The widest an opening's picture may be: 4:5, or the output's own shape when that is wider (a square or
+    wide clip, D240), so it still fills the frame. 9:16 is narrower than 4:5, so its limit is as before."""
+    return max(_make_even(int(src_h * OPENING_MAX_ASPECT)), crop_size_for_aspect(src_w, src_h, out_w, out_h)[0])
+
+
+def _centre_four_five(*, src_w: int, src_h: int, reason: str, out_w: int = 9, out_h: int = 16) -> LayoutPlan:
+    """The centre of the frame at `OPENING_MAX_ASPECT` (or the output's shape, if wider), over a blurred copy."""
+    limit = _opening_limit(src_w, src_h, out_w, out_h)
     x, y = clamp_crop_origin((src_w - limit) / 2, 0, limit, src_h, src_w, src_h)
     return LayoutPlan(kind="fit_crop", crop_width=limit, crop_height=_make_even(src_h),
                       keyframes=[CropKeyframe(t=0.0, x=x, y=y)], face_ratio=0.0,

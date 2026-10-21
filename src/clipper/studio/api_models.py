@@ -9,7 +9,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from ..campaign.editor import CampaignForm
-from ..config import CaptionRule
+from ..config import BrandKit, CaptionRule
 
 
 class ReasonOption(BaseModel):
@@ -146,6 +146,8 @@ class Clip(BaseModel):
     file_exists: bool
     video: str
     thumb: str
+    captions: str | None = None    # its .srt, made with the video (D240); clips made before have none
+    shape: str = "9:16"            # 9:16, 1:1 or 16:9 (D240)
     posts: list[Post]
     # What the scorer thought (0-10, the rubric's six parts, and its rank among
     # the video's moments), and what the user thought (1-5, with reasons).
@@ -194,6 +196,7 @@ class Campaign(BaseModel):
     platforms: list[str]
     reward_per_1k_usd: float | None = None
     max_clips: int | None = None   # most clips per video when Clipper decides; None: no limit
+    output_shape: str = "9:16"     # the clips' shape (D240)
     clips: int
     counts: CampaignCounts
     views: float
@@ -451,3 +454,5 @@ class EditorView(BaseModel):
     clip_id: int | None = None
     clip_status: str | None = None
     edit: dict | None = None       # editing.ClipEdit: pieces, hook, fixes
+    shape: str = "9:16"            # the frame the clip is cut to (D240)
+    brand: BrandKit = BrandKit()   # the campaign's brand kit, for the stage's captions (D240)

@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Fi
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  sourceVideoUrl, startJob, stopJob, uploadVideo, useCampaignTitle, useCampaigns, useHosted, useJobs, useSettings, useSetup, useSources,
+  SHAPES, sourceVideoUrl, startJob, stopJob, uploadVideo, useCampaignTitle, useCampaigns, useHosted, useJobs, useSettings, useSetup, useSources,
   type Job, type JobMode, type Source,
 } from "@/api/client";
 import { JobResults, LinkImport } from "@/components/footage";
@@ -402,6 +402,9 @@ export function NewClipsPage() {
   const [ranges, setRanges] = useState<Range[]>([{ start: "", end: "" }]);
   const [busy, setBusy] = useState(false);
   const chosen = active.find((c) => c.name === campaign);
+  // The clips' shape (D240): the campaign's own, changeable for this run only.
+  const [shape, setShape] = useState("9:16");
+  useEffect(() => setShape(chosen?.output_shape ?? "9:16"), [chosen?.name, chosen?.output_shape]);
   // Below Pro a video gives at most 10 clips; Pro gets every moment that qualifies (D71).
   const pro = (settings?.plan ?? "pro") === "pro";
   const counts = pro ? [1, 3, 5, 8, 10, 15, 20, 30] : [1, 2, 3, 4, 5, 6, 8, 10];
@@ -472,9 +475,9 @@ export function NewClipsPage() {
   const make = async () => {
     setBusy(true);
     try {
-      const started = await startJob(campaign, picked, mode, mode === "manual"
-        ? { ranges: filled.map((r) => [r.start, r.end] as [string, string]) }
-        : mode === "top" ? { top } : {});
+      const started = await startJob(campaign, picked, mode, {
+        ...(mode === "manual" ? { ranges: filled.map((r) => [r.start, r.end] as [string, string]) } : mode === "top" ? { top } : {}),
+        shape });
       await qc.invalidateQueries({ queryKey: ["jobs"] });
       toast.success(started.length > 1 ? `Clipping ${started.length} videos` : "Clipping started",
         { description: started.length > 1 ? "One after another; each shows its progress below." : "You can keep using Clipper; progress shows below." });
@@ -523,6 +526,20 @@ export function NewClipsPage() {
                     className={buttonClass("primary")}>
                 <Plus className="size-4" /> Add a campaign
               </Link>
+            </div>
+          )}
+          {chosen && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted">Shape</span>
+              <div className="flex gap-1 rounded-md bg-surface-2 p-1" role="radiogroup" aria-label="Shape">
+                {SHAPES.map(([value, label, hint]) => (
+                  <button key={value} type="button" role="radio" aria-checked={shape === value} title={hint} onClick={() => setShape(value)}
+                    className={cn("rounded-sm px-2.5 py-1 text-xs font-medium", shape === value ? "bg-surface-1 text-fg shadow-1" : "text-muted hover:text-fg")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {shape !== chosen.output_shape && <span className="text-xs text-muted">This run only; the campaign stays {chosen.output_shape}.</span>}
             </div>
           )}
           {chosen && chosen.reward_per_1k_usd != null && (

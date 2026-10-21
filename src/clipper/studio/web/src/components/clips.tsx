@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {
-  AlertTriangle, Check, CheckCircle2, Download, ThumbsDown, ThumbsUp, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
+  AlertTriangle, Captions, Check, CheckCircle2, Download, ThumbsDown, ThumbsUp, ExternalLink, FileCheck2, FolderOpen, Info, Loader2, Send, SkipForward, Trash2, Undo2,
   Pencil, Scissors, ShieldAlert, Upload, X, XCircle,
 } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -15,7 +15,7 @@ import { useUI } from "@/lib/store";
 import { NO_STATS } from "@/api/platforms.gen";
 import { PLATFORM_NAME, ago, cn, copyText, formatCount, formatDuration, formatMoney, openTab } from "@/lib/utils";
 import { PlatformIcon } from "./PlatformIcon";
-import { CaptionChoice, HookControl } from "./lines";
+import { CaptionChoice, HookControl, ShapeControl } from "./lines";
 import { PasteLink, PostPanel } from "./posting";
 import { RatingMark, RatingPanel, ScoreBadge, ScoreBreakdown } from "./scoring";
 import { FadeImg } from "./progress";
@@ -784,7 +784,8 @@ export function ClipSheet() {
               <div className="flex shrink-0 flex-col gap-3 md:w-[300px]">
                 {clip.file_exists ? (
                   <video key={clip.id} src={clip.video} poster={clip.thumb} controls playsInline preload="metadata"
-                         className="aspect-[9/16] max-h-[78vh] w-full rounded-md bg-black object-contain" />
+                         style={{ aspectRatio: (clip.shape ?? "9:16").replace(":", " / ") }}
+                         className="max-h-[78vh] w-full rounded-md bg-black object-contain" />
                 ) : (
                   <div className="grid aspect-[9/16] place-items-center rounded-md bg-surface-2 text-sm text-muted">File missing</div>
                 )}
@@ -800,6 +801,14 @@ export function ClipSheet() {
                   </Button></Tip>}
                   <DeleteButton clip={clip} size="md" />
                 </div>
+                {clip.captions && (
+                  <Tip label="The captions as a file, to add to the post on YouTube, Facebook or LinkedIn">
+                    <a href={clip.captions} download className={cn(buttonClass("secondary", "sm"), "w-fit")}>
+                      <Captions className="size-3.5" /> Captions (.srt)
+                    </a>
+                  </Tip>
+                )}
+                {!own && clip.file_exists && <ShapeControl clip={clip} />}
                 {/* A Short of your own is changed in Create and built again, not in the clip editor (D221). */}
                 {(clip.status === "ready" || clip.status === "skipped") && !own && (
                   <Tip label="Trim to the frame, cut words out, punch in, fix captions">

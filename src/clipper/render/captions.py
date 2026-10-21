@@ -125,6 +125,39 @@ def get_style(name: str) -> CaptionStyle:
         ) from None
 
 
+def _hex_colour(value: str) -> str:
+    """"#RRGGBB" as an ASS colour."""
+    return ass_colour(int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16))
+
+
+def style_for(rc, name: str | None = None) -> CaptionStyle:
+    """The caption style a render uses: `name` (else the config's), with the campaign's brand kit laid over it
+    (D240): its uploaded font by the family name inside the file, and its text, highlight and outline colours."""
+    from dataclasses import replace
+
+    from .brand import family_of
+
+    style = get_style(name or rc.caption_style)
+    changes: dict = {}
+    family = family_of(rc.brand_font) if rc.brand_font else ""
+    if family:
+        changes["font"] = family
+    for field_name, colour in (("primary", rc.caption_text_colour), ("highlight", rc.caption_highlight_colour),
+                               ("outline_colour", rc.caption_outline_colour)):
+        if colour:
+            changes[field_name] = _hex_colour(colour)
+    return replace(style, **changes) if changes else style
+
+
+def fonts_dir_for(rc) -> Path | None:
+    """The folder libass finds the captions' font in: the campaign's uploads when it has its own font, else the
+    bundled fonts. libass takes one folder; a glyph the font lacks falls back to the system's fonts either way."""
+    from .brand import assets_dir, path_of
+    from .ffmpeg import bundled_fonts_dir
+
+    return assets_dir() if rc.brand_font and path_of(rc.brand_font) else bundled_fonts_dir()
+
+
 @dataclass
 class Chunk:
     """A group of words shown together, one of which is active at a time."""
@@ -214,7 +247,7 @@ PAGE_GAP = 2 / 30
 
 
 def _bare_word(text: str) -> str:
-    return text.strip().strip(".,!?;:…\"'").lower()
+    return text.strip().strip(".,!?;:â€¦\"'").lower()
 
 
 def speech_rate(words: list[Word]) -> float:
@@ -331,11 +364,14 @@ def build_ass(
     to the clip. Events outside [0, duration] are dropped, because the QA gate
     checks for exactly that and a stray event would be a real bug.
     """
-    scale = width / style.reference_width
-    font_size = _scaled(style.font_size, width, style)
-    margin_v = _scaled(safe_area.bottom, width, style)
-    margin_h = _scaled(safe_area.side, width, style)
-    margin_r = _scaled(max(safe_area.right, safe_area.side), width, style)
+    # Sized by the frame's short side, which is its width for 9:16 (as before) and its height for 16:9:
+    # by width, a 1920-wide frame got 171 px captions on a 1080 px picture (D240).
+    unit = min(width, height)
+    scale = unit / style.reference_width
+    font_size = _scaled(style.font_size, unit, style)
+    margin_v = _scaled(safe_area.bottom, unit, style)
+    margin_h = _scaled(safe_area.side, unit, style)
+    margin_r = _scaled(max(safe_area.right, safe_area.side), unit, style)
     outline = round(style.outline * scale, 1)
     shadow = round(style.shadow * scale, 1)
 
@@ -352,10 +388,10 @@ def build_ass(
     # of a 1920px frame -- under the platform's own top bar, measured on a real
     # render. A credit nobody can see does not meet an attribution licence.
     credit_size = max(18, round(font_size * 0.32))
-    top_safe = _scaled(safe_area.top, width, style)
+    top_safe = _scaled(safe_area.top, unit, style)
     credit_on_top = bool(credit_text) and credit_position.startswith("top")
     if credit_text:
-        edge = top_safe if credit_on_top else _scaled(safe_area.bottom, width, style)
+        edge = top_safe if credit_on_top else _scaled(safe_area.bottom, unit, style)
         events.append(_credit_event(
             credit_text, duration=duration, position=credit_position,
             font_size=credit_size, margin_v=edge,
@@ -393,7 +429,8 @@ def build_ass(
                                         style.max_chars_per_line))
             box = (margin_r, bottom_edge - lines * line_height, width - margin_r, bottom_edge)
             seen = [b for t, boxes in faces if chunk.start - 0.1 <= t <= hold + 0.1 for b in boxes]
-            where = place(box, seen, bottom_limit=height * 1248 / 1920,
+            # The phone apps' safe box ends at y=1248 of 1920; a square or wide frame's at its bottom margin.
+            where = place(box, seen, bottom_limit=height * 1248 / 1920 if height > width else bottom_edge,
                           top_limit=(hook_bottom + 20 * scale) if chunk.start < hook_until
                           else top_safe, gap=40 * scale)
         captions.extend(_chunk_events(chunk, style, mask_profanity_words, hold_until=hold,
@@ -623,6 +660,54 @@ def write_ass(content: str, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
     return path
+
+
+def caption_pages(content: str) -> list[tuple[float, float, str]]:
+    """(start, end, text) for each caption page the ASS burns in: a page is its run of per-word events (one per
+    lit word, the same words), so it runs from the first one's start to the last one's end. Line breaks kept,
+    masking and capitals as burned in; the hook and credit aren't captions."""
+    from ..utils.timecode import from_ass
+
+    pages: list[list] = []
+    for line in content.splitlines():
+        if not line.startswith("Dialogue:"):
+            continue
+        fields = line.split(":", 1)[1].split(",", 9)
+        if len(fields) < 10 or fields[3].strip() != "Caption":
+            continue
+        try:
+            start, end = from_ass(fields[1].strip()), from_ass(fields[2].strip())
+        except ValueError:
+            continue
+        text = re.sub(r"(?<!\\)\{[^}]*\}", "", fields[9])
+        text = text.replace("\\N", "\n").replace("\\{", "{").replace("\\}", "}").replace("\\\\", "\\").strip()
+        if pages and pages[-1][2] == text and start - pages[-1][1] < 0.05:
+            pages[-1][1] = max(pages[-1][1], end)
+        else:
+            pages.append([start, end, text])
+    return [(a, b, t) for a, b, t in pages if t]
+
+
+def _srt_time(seconds: float) -> str:
+    ms = max(0, round(seconds * 1000))
+    return f"{ms // 3_600_000:02d}:{ms // 60_000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
+
+
+def build_srt(content: str, pieces: list[tuple[float, float, float]] | None = None) -> str:
+    """An .srt of the captions burned in from ASS `content` (D240), for platforms' own caption tracks.
+
+    `pieces` place the clip's timeline in the finished file: (from, to, at) shows the clip's [from, to) starting
+    `at` seconds in. A clip that opens on its cover and payoff is [(at, to, cover), (0, inf, cover + payoff)];
+    None is the clip as rendered."""
+    pieces = pieces or [(0.0, float("inf"), 0.0)]
+    cues = []
+    for start, end, text in caption_pages(content):
+        for lo, hi, at in pieces:
+            a, b = max(start, lo), min(end, hi)
+            if b - a >= MIN_EVENT_SECONDS:
+                cues.append((a - lo + at, b - lo + at, text))
+    cues.sort()
+    return "".join(f"{n}\n{_srt_time(a)} --> {_srt_time(b)}\n{text}\n\n" for n, (a, b, text) in enumerate(cues, 1))
 
 
 def parse_event_times(content: str) -> list[tuple[float, float, str]]:

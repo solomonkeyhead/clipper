@@ -29,15 +29,21 @@ def _to_output(layout: LayoutPlan, box: Box, out_w: int, out_h: int) -> Box | No
         return None
     x = layout.keyframes[0].x if layout.keyframes else 0
     y = layout.keyframes[0].y if layout.keyframes else 0
+    from .layouts import fits_by_height
+
     x0, y0, x1, y1 = box
+    left = 0.0
     if layout.kind == "follow_crop":
         scale = out_h / layout.crop_height
         top = 0.0
+    elif fits_by_height(layout.crop_width, layout.crop_height, out_w, out_h):
+        scale = out_h / layout.crop_height   # a narrower picture on a square or wide frame (D240)
+        top, left = 0.0, (out_w - layout.crop_width * scale) / 2
     else:  # the picture is scaled to the full width, centred vertically
         scale = out_w / layout.crop_width
         top = (out_h - layout.crop_height * scale) / 2
-    return ((x0 - x) * scale, top + (y0 - y) * scale,
-            (x1 - x) * scale, top + (y1 - y) * scale)
+    return (left + (x0 - x) * scale, top + (y0 - y) * scale,
+            left + (x1 - x) * scale, top + (y1 - y) * scale)
 
 
 def faces_on_screen(scan, layout: LayoutPlan, out_w: int, out_h: int) -> list[tuple[float, list[Box]]]:

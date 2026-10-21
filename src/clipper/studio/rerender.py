@@ -24,13 +24,13 @@ log = get_logger(__name__)
 class Rerenders:
     def __init__(self, publish) -> None:
         self.publish = publish
-        self._queue: queue.Queue[tuple[int, str, dict | None]] = queue.Queue()
+        self._queue: queue.Queue[tuple[int, str, dict | None, str | None]] = queue.Queue()
         self._lock = threading.Lock()
         self.state: dict[int, str] = {}     # clip id -> "queued" | "rendering"
         self.failed: dict[int, str] = {}    # clip id -> why the last try failed
         self._worker: threading.Thread | None = None
 
-    def submit(self, clip_id: int, hook: str, edit: dict | None = None) -> None:
+    def submit(self, clip_id: int, hook: str, edit: dict | None = None, shape: str | None = None) -> None:
         with self._lock:
             if self.state.get(clip_id):
                 return
@@ -39,7 +39,7 @@ class Rerenders:
             if self._worker is None or not self._worker.is_alive():
                 self._worker = threading.Thread(target=self._run, name="rerender", daemon=True)
                 self._worker.start()
-        self._queue.put((clip_id, hook, edit))
+        self._queue.put((clip_id, hook, edit, shape))
         self.publish("clips.changed", {"id": clip_id})
 
     def status(self, clip_id: int) -> str | None:
@@ -48,13 +48,13 @@ class Rerenders:
     def _run(self) -> None:
         while True:
             try:
-                clip_id, hook, edit = self._queue.get(timeout=60)
+                clip_id, hook, edit, shape = self._queue.get(timeout=60)
             except queue.Empty:
                 return
             self.state[clip_id] = "rendering"
             self.publish("clips.changed", {"id": clip_id})
             try:
-                self._one(clip_id, hook, edit)
+                self._one(clip_id, hook, edit, shape)
             except Exception as exc:  # shown on the clip; the old video stays
                 log.warning("re-render of clip %s failed: %s", clip_id, exc)
                 self.failed[clip_id] = failure(exc, 300)
@@ -62,7 +62,8 @@ class Rerenders:
                 self.state.pop(clip_id, None)
                 self.publish("clips.changed", {"id": clip_id})
 
-    def _one(self, clip_id: int, hook: str, edit: dict | None = None) -> None:
+    def _one(self, clip_id: int, hook: str, edit: dict | None = None, shape: str | None = None) -> None:
+        """`shape`: made again in another shape (D240), kept for its later re-renders."""
         import json
 
         from ..config import Config
@@ -80,12 +81,20 @@ class Rerenders:
         if campaign is None:
             raise RuntimeError(f"its campaign {clip['campaign']!r} is gone")
         made = ClipEdit.model_validate(edit) if edit is not None else None
-        new = rerender(clip, hook, config=Config.load(), campaign=campaign, out_root=runs_dir(), edit=made)
+        new = rerender(clip, hook, config=Config.load(), campaign=campaign, out_root=runs_dir(), edit=made,
+                       shape=shape)
         old = library.clip_path(clip["file"])
         if old.exists() and not recycle(old):
             raise RuntimeError("couldn't move the old video to the Recycle Bin")
         shutil.move(str(new), str(old))
+        captions = library.captions_path(old)   # the old captions go with the old video; the new ones replace them
+        if captions.exists():
+            recycle(captions)
+        library.move_captions(new, old)
         changes: dict = {"hook": hook, "title": hook or clip["title"]}
+        if shape:
+            changes["scores"] = json.dumps({**json.loads(clip.get("scores") or "{}"), "shape": shape})
+            clip = {**clip, "scores": changes["scores"]}
         if made is not None:  # the clip is now the edit: its range, length and pieces
             scores = {**json.loads(clip.get("scores") or "{}"), "edit": made.model_dump()}
             changes |= {"start_s": made.start, "end_s": made.end, "duration_s": round(made.length, 2),

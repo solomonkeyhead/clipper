@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { failure, useCampaign, useEditCaption, type Clip } from "@/api/client";
+import { SHAPES, failure, useCampaign, useEditCaption, type Clip } from "@/api/client";
 import { Button, Tip } from "./ui";
 
 async function rerender(id: number, hook?: string) {
@@ -36,7 +36,7 @@ export function HookControl({ clip }: { clip: Clip }) {
     return (
       <p className="flex items-center gap-1.5 text-xs text-muted">
         <Loader2 className="size-3.5 animate-spin text-fg" />
-        {clip.rerendering === "queued" ? "Waiting to be made again with its new hook…" : "Making it again with its new hook…"}
+        {clip.rerendering === "queued" ? "Waiting to be made again…" : "Making it again…"}
       </p>
     );
   }
@@ -74,6 +74,33 @@ export function HookControl({ clip }: { clip: Clip }) {
           <Button size="sm" variant="ghost" onClick={() => setCustom(null)}>Cancel</Button>
         </form>
       )}
+    </div>
+  );
+}
+
+/** The clip made again in another shape (D240): same moment, hook and edit, framed for 9:16, 1:1 or 16:9. */
+export function ShapeControl({ clip }: { clip: Clip }) {
+  const qc = useQueryClient();
+  const go = useMutation({
+    mutationFn: async (shape: string) => {
+      const res = await fetch(`/api/clips/${clip.id}/rerender`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shape }) });
+      const data = await res.json();
+      if (!res.ok) throw failure(res.status, data.detail, res.statusText);
+      return shape;
+    },
+    onSuccess: (shape) => { void qc.invalidateQueries({ queryKey: ["clips"] });
+      toast("Making it again", { description: `As a ${shape} clip. Takes about a minute; you can keep working.` }); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  if ((clip.status !== "ready" && clip.status !== "skipped") || clip.rerendering) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted">Shape</span>
+      <select aria-label="Make it again in another shape" className={SELECT} value={clip.shape} disabled={go.isPending}
+              onChange={(e) => e.target.value !== clip.shape && go.mutate(e.target.value)}>
+        {SHAPES.map(([value, label]) => <option key={value} value={value}>{value === clip.shape ? label : `Make it ${label}`}</option>)}
+      </select>
     </div>
   );
 }

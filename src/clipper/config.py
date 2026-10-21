@@ -24,6 +24,12 @@ CaptionStyle = Literal["bold_pop", "clean_white", "yellow_highlight"]
 LLMBackend = Literal["gemini", "anthropic", "claude_code", "mock"]
 Encoder = Literal["auto", "h264_nvenc", "libx264"]
 CreditPosition = Literal["top_left", "top_right", "bottom_left", "bottom_right"]
+#: A campaign's clip shape (D240): 9:16 for the phone apps (the default, as every clip was before), 1:1 for
+#: feeds, 16:9 for YouTube and X players.
+OutputShape = Literal["9:16", "1:1", "16:9"]
+LogoCorner = Literal["auto", "top_left", "top_right", "bottom_left", "bottom_right"]
+#: A brand colour: "#RRGGBB", or "" for the caption style's own.
+_COLOUR = r"^(#[0-9a-fA-F]{6})?$"
 
 Unit = Annotated[float, Field(ge=0.0, le=1.0)]
 """A weight or ratio in [0, 1]."""
@@ -354,6 +360,14 @@ class RenderConfig(StrictModel):
     max_shots: int = Field(default=8, ge=1)
     draft_width: int = Field(default=540, gt=0)
     draft_height: int = Field(default=960, gt=0)
+    # A campaign's brand kit (D240), set by runner.campaign_config from the campaign: an uploaded font and logo
+    # (file names in <data>/campaigns/assets, render/brand.py reads them only from there) and the caption colours.
+    brand_font: str = ""
+    brand_logo: str = ""
+    logo_corner: LogoCorner = "auto"
+    caption_text_colour: str = Field(default="", pattern=_COLOUR)
+    caption_highlight_colour: str = Field(default="", pattern=_COLOUR)
+    caption_outline_colour: str = Field(default="", pattern=_COLOUR)
 
     @model_validator(mode="after")
     def _check_safe_area(self) -> RenderConfig:
@@ -612,6 +626,38 @@ LANGUAGES = {"en": "English", "es": "Spanish", "fr": "French", "de": "German", "
              "zh": "Chinese", "ar": "Arabic", "hi": "Hindi", "id": "Indonesian"}
 
 
+class BrandKit(StrictModel):
+    """A campaign's own caption look and logo (D240). Empty fields keep Clipper's own: the caption style's font
+    and colours, no logo. `font` and `logo` are file names the upload made (render/brand.py), never paths."""
+
+    font: str = Field(default="", pattern=r"^([0-9a-f]{16}\.(ttf|otf))?$")
+    text_colour: str = Field(default="", pattern=_COLOUR)
+    highlight_colour: str = Field(default="", pattern=_COLOUR)
+    outline_colour: str = Field(default="", pattern=_COLOUR)
+    logo: str = Field(default="", pattern=r"^([0-9a-f]{16}\.png)?$")
+    logo_corner: LogoCorner = "auto"
+
+
+#: Output size per shape, and where each keeps clear (D240). 9:16 is whatever render config says (1080x1920
+#: and the phone apps' zones by default), so Marc's campaigns render exactly as before. 1:1 keeps clear of the
+#: same phone zones as the square sits on a phone screen (its middle 1080 of 1920 rows: the rail right of
+#: x=780 below y=420, the description below y=828); 16:9 is for landscape players: a plain lower third.
+SHAPES: dict[str, tuple[int, int, SafeArea | None]] = {
+    "9:16": (1080, 1920, None),
+    "1:1": (1080, 1080, SafeArea(top=60, bottom=252, side=120, right=300)),
+    "16:9": (1920, 1080, SafeArea(top=60, bottom=80, side=96, right=96)),
+}
+
+
+def shape_render(shape: str) -> dict:
+    """RenderConfig updates for a campaign's shape; none for 9:16 (byte-identical renders, D240)."""
+    width, height, safe = SHAPES.get(shape, SHAPES["9:16"])
+    if safe is None:
+        return {}
+    return {"width": width, "height": height, "draft_width": width // 2, "draft_height": height // 2,
+            "safe_area": safe}
+
+
 class CampaignConfig(StrictModel):
     """Per-campaign rules. `source_authorization` is the gate on the whole tool."""
 
@@ -715,6 +761,9 @@ class CampaignConfig(StrictModel):
     campaign_url: str = ""   # the campaign's page on Whop / Vyro
     deadline: str = ""       # YYYY-MM-DD, if the brief gives one
     notes: str = ""
+    # The clips' shape (D240); a campaign that doesn't say is 9:16, as every clip was before.
+    output_shape: OutputShape = "9:16"
+    brand: BrandKit = BrandKit()
 
     @field_validator("source_authorization")
     @classmethod

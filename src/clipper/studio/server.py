@@ -285,6 +285,9 @@ class Snapshot:
                 source_title=display_source(c["source_title"]), status=status,
                 marked=c["status"], notes=c["notes"], created_at=c["created_at"],
                 file_exists=bool(version), video=f"/media/{c['id']}?v={version}",
+                captions=(f"/media/{c['id']}/captions?v={version}"
+                          if version and library.captions_path(file).is_file() else None),
+                shape=scores.get("shape") or "9:16",
                 thumb=f"/thumb/{c['id']}?v={version}", posts=models,
                 rerendering=rerender.state_of(c["id"])[0], rerender_error=rerender.state_of(c["id"])[1],
                 submit_at_views=threshold if threshold and best < threshold else None))
@@ -354,6 +357,7 @@ class Snapshot:
             platforms=list(brief.platform_targets) if brief else [],
             reward_per_1k_usd=brief.reward_per_1k_usd if brief else None,
             max_clips=brief.max_clips_per_source if brief else None,
+            output_shape=brief.output_shape if brief else "9:16",
             campaign_url=brief.campaign_url if brief else "",
             posting_rules=list(brief.posting_rules) if brief else [],
             clips=len(mine), counts=counts,
@@ -573,6 +577,9 @@ def purge_trash() -> int:
     with db.connect() as con:
         for clip in db.expired_trash(con):
             if recycle(library.clip_path(clip["file"])):
+                captions = library.captions_path(library.clip_path(clip["file"]))
+                if captions.is_file():
+                    recycle(captions)
                 db.forget(con, clip["id"])
                 purged += 1
     return purged
@@ -1009,13 +1016,22 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
         """Make the clip again with a new on-screen hook (D90): the one given, or the brief's line its
         campaign has used least."""
         from ..campaign import rotation
+        from ..config import SHAPES
 
         hook = str((body or {}).get("hook") or "").strip()
+        shape = str((body or {}).get("shape") or "") or None
+        if shape is not None and shape not in SHAPES:
+            raise HTTPException(400, f"the shape is one of {', '.join(SHAPES)}")
         found = next((c for c in Snapshot().clips if c.id == clip_id), None)
         if found is None:
             raise HTTPException(404, "no such clip")
         if found.posts or found.status in ("posted", "submitted"):
             raise HTTPException(400, "it's posted: its video is what's live")
+        if shape is not None:   # made again in another shape (D240): its hook and any edit kept
+            with db.connect() as con:
+                edit = (json.loads(db.clip(con, clip_id).get("scores") or "{}") or {}).get("edit")
+            rerenders.submit(clip_id, found.hook, edit, shape)
+            return {"queued": True, "hook": found.hook, "shape": shape}
         if not hook:
             campaign = load_campaigns().get(found.campaign)
             lines = [h for h in (campaign.hook_texts if campaign else ()) if h != found.hook]
@@ -1363,10 +1379,14 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
     @app.post("/api/jobs")
     def start_job(body: dict) -> list[dict]:
         """One job per video, queued and run in turn (D72)."""
+        from ..config import SHAPES
         from . import footage, plans
 
         name = str(body.get("campaign") or "")
         campaign = load_campaigns().get(name)
+        shape = str(body.get("shape") or "")
+        if campaign is not None and shape in SHAPES and shape != campaign.output_shape:
+            campaign = campaign.model_copy(update={"output_shape": shape})   # this run only (D240)
         if campaign is None:   # a run clipped again after its campaign was deleted says so (D175)
             raise HTTPException(400, f"the campaign {name} isn't there any more" if name else "pick a campaign")
         wanted = [str(s) for s in body.get("sources") or [body.get("source") or ""] if s]
@@ -1475,6 +1495,18 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
 
         return Response(data, media_type="application/zip", headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name + ' - proof.zip')}"})
+
+    @app.get("/media/{clip_id}/captions")
+    def media_captions(clip_id: int) -> FileResponse:
+        """The clip's captions as an .srt (D240), named like its video's download."""
+        with db.connect() as con:
+            found = db.clip(con, clip_id)
+        path = library.captions_path(library.clip_path(found["file"])) if found and found["file"] else None
+        if path is None or not path.is_file():
+            raise HTTPException(404, "this clip has no caption file")
+        name = re.sub(r'[\\/:*?"<>|]+', "", found["title"] or found["clip_id"]).strip()[:80]
+        return FileResponse(path, media_type="application/x-subrip",
+                            filename=f"{name or 'clip'} - {found['campaign']}.srt")
 
     @app.get("/media/{clip_id}")
     def media(clip_id: int, download: bool = False) -> FileResponse:

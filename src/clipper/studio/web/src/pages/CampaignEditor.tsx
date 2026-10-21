@@ -3,7 +3,7 @@ import { ArrowLeft, Loader2, Plus, Save, Sparkles, Trash2, Wand2, X } from "luci
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  readBrief, saveCampaignBrief, useCampaign, useCampaignBrief, useCampaignForm, useDeleteCampaign, useHosted, useSaveCampaign,
+  SHAPES, readBrief, saveCampaignBrief, useCampaign, useCampaignBrief, useCampaignForm, useDeleteCampaign, useHosted, useSaveCampaign,
   type CampaignForm, type CaptionRule,
 } from "@/api/client";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/components/form";
 import { TARGETS } from "@/api/platforms.gen";
 import { PlatformIcon } from "@/components/PlatformIcon";
+import { BrandFields } from "@/components/brand";
 import { Button, Card, EmptyState, PageHeader, Skeleton, buttonClass } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,8 @@ const BLANK: CampaignForm = {
   keep_original_audio: false, censor_flagged_words: true, brief_rules: "", caption_rules: [], posting_rules: [],
   long_description: true, description_context: "",
   description_keywords: [], max_clips_per_source: null, notes: "",
+  output_shape: "9:16",
+  brand: { font: "", text_colour: "", highlight_colour: "", outline_colour: "", logo: "", logo_corner: "auto" },
 };
 
 const MARKETS = ["Content Rewards", "Vyro"];
@@ -436,6 +439,21 @@ export function CampaignEditorPage() {
               </Field>
             </>
           )}
+        </Section>
+
+        <Section title="Shape and brand" id="brand" hint="How the clips look. Leave it as it is for tall clips in Clipper's own caption style.">
+          <Field label="Shape">
+            {() => (
+              <Segmented label="Shape" value={form.output_shape} onChange={(v) => set("output_shape", v)}
+                options={SHAPES as [CampaignForm["output_shape"], string, string][]} />
+            )}
+          </Field>
+          <p className="-mt-2 text-xs text-muted">
+            {form.output_shape === "16:9" ? "Wide clips show the whole picture, with captions in the lower third."
+              : form.output_shape === "1:1" ? "Square clips follow the faces like tall ones, and keep clear of the apps' buttons on a phone."
+              : "Tall clips follow the faces and keep clear of the apps' buttons."} One clip can be made again in another shape from its page.
+          </p>
+          <BrandFields shape={form.output_shape} kit={{ ...BLANK.brand, ...form.brand }} onChange={(v) => set("brand", v)} />
         </Section>
 
         <Section title="Permission" hint="Clipper only clips footage you're allowed to use, and keeps this note as the record.">

@@ -21,7 +21,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, ValidationError
 
-from ..config import PLATFORMS, CampaignConfig, CaptionRule
+from ..config import PLATFORMS, BrandKit, CampaignConfig, CaptionRule, OutputShape
 from ..utils.logging import get_logger
 
 log = get_logger(__name__)
@@ -75,6 +75,9 @@ class CampaignForm(BaseModel):
     description_keywords: list[str] = Field(default_factory=list)
     max_clips_per_source: int | None = None  # None: no limit
     notes: str = ""
+    # The clips' shape and the brand kit (D240): 9:16 and Clipper's own look unless the user picks otherwise.
+    output_shape: OutputShape = "9:16"
+    brand: BrandKit = Field(default_factory=BrandKit)
 
 
 def slugify(title: str) -> str:
@@ -126,7 +129,8 @@ def to_form(campaign: CampaignConfig) -> CampaignForm:
         posting_rules=list(campaign.posting_rules), long_description=campaign.long_description,
         description_context=campaign.description_context,
         description_keywords=list(campaign.description_keywords),
-        max_clips_per_source=campaign.max_clips_per_source, notes=campaign.notes)
+        max_clips_per_source=campaign.max_clips_per_source, notes=campaign.notes,
+        output_shape=campaign.output_shape, brand=campaign.brand)
 
 
 def _lines(items: list[str]) -> list[str]:
@@ -206,6 +210,13 @@ def merged(form: CampaignForm, existing: dict | None) -> dict:
         "notes": form.notes.strip(),
     }
     data.update(updates)
+    # Written only when chosen (D240): a campaign file that doesn't say is 9:16 in Clipper's own look.
+    for key, value, default in (("output_shape", form.output_shape, "9:16"),
+                                ("brand", form.brand.model_dump(exclude_defaults=True), {})):
+        if value != default:
+            data[key] = value
+        else:
+            data.pop(key, None)
     # A credit burned into the video needs its text; drop the flag with the text.
     if not updates["required_credit_text"]:
         data["burn_credit_in_video"] = False

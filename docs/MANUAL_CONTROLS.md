@@ -85,6 +85,14 @@ is the order I'd build them.
 4. The AI choice in Settings, with the "only Claude" switch.
 5. Cover frame per clip (Create has it, D171).
 
+## Clips: shape, look and caption file (D240)
+
+| Step | Automatic today | Manual option | Status | Effort |
+|---|---|---|---|---|
+| Clip shape | 9:16, framed on the faces | 1:1 or 16:9 per campaign (campaign editor), per run (New clips), per clip (the clip sheet's Shape re-renders it) | **Done** (D240) | |
+| Caption look and logo | Clipper's style (Anton, white, yellow for the word being said, black outline), no logo | Campaign editor, Shape and brand: your font, the three colours, a logo and its corner | **Done** (D240) | |
+| Caption file | An .srt made for every new clip | Download it from the clip sheet or the Post queue | **Done** (D240) | |
+
 ## For anyone adding a feature
 
 Ask three questions before it ships: what does this do automatically, how does the user see what

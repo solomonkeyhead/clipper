@@ -480,6 +480,11 @@ def plan_layout_for(
     from .shots import plan_per_shot
 
     media = probe(video)
+    if out_width > out_height:
+        # A wide clip (16:9, D240) is the whole picture: a 16:9 source fills it, anything else is fitted over
+        # its blur. No faces to follow, so no scan; its captions keep to a plain lower third.
+        return plan_blurred_fit(src_w=media.width, src_h=media.height, out_w=out_width, out_h=out_height,
+                                reason="a wide clip shows the whole picture")
     try:
         result = scan(video, start=start, duration=duration, sample_fps=sample_fps)
     except FaceDetectionUnavailable as exc:

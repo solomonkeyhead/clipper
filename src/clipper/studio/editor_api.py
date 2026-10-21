@@ -95,7 +95,9 @@ def routes(app: FastAPI, publish, *, jobs, rerenders) -> None:
             rules=[EditRule(key=c, label=EDIT_LABELS.get(c, c), allowed=perms.allowed[c], blocked=c in no,
                             why=perms.reasons[c]) for c in CLASSES],
             min_seconds=found.duration.min_seconds, max_seconds=found.duration.max_seconds,
-            hooks=list(found.hook_texts), clip_id=clip, clip_status=row["status"] if row else None, edit=edit)
+            hooks=list(found.hook_texts), clip_id=clip, clip_status=row["status"] if row else None, edit=edit,
+            shape=((json.loads(row.get("scores") or "{}") or {}).get("shape") if row else None) or found.output_shape,
+            brand=found.brand)
 
     @app.post("/api/editor/prepare")
     def editor_prepare(body: dict) -> dict:

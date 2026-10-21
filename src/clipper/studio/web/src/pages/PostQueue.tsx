@@ -1,5 +1,5 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { CheckCircle2, Download, PartyPopper, SkipForward, X } from "lucide-react";
+import { Captions, CheckCircle2, Download, PartyPopper, SkipForward, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { downloadUrl, useCampaigns, useClips, type Clip } from "@/api/client";
 import { SubmitLinkButton, useStatusWithUndo, useSubmittedWithUndo } from "@/components/clips";
@@ -71,7 +71,8 @@ export function PostQueuePage() {
         <div key={clip.id} className="fade-in grid gap-5 md:grid-cols-[17rem_1fr]">
           <div className="flex flex-col gap-2">
             <video key={clip.id} src={clip.video} poster={clip.thumb} controls playsInline preload="metadata"
-                   className="aspect-[9/16] w-full rounded-md bg-black object-contain" />
+                   style={{ aspectRatio: (clip.shape ?? "9:16").replace(":", " / ") }}
+                   className="w-full rounded-md bg-black object-contain" />
             <div className="text-center text-xs text-muted">{line.length} left in this step</div>
           </div>
           <Card className="flex min-w-0 flex-col gap-4 p-5">
@@ -86,6 +87,11 @@ export function PostQueuePage() {
                      className={buttonClass("secondary")}>
                     <Download className="size-4" /> Download
                   </a>
+                  {clip.captions && (
+                    <a href={clip.captions} download className={buttonClass("ghost")}>
+                      <Captions className="size-4" /> Captions (.srt)
+                    </a>
+                  )}
                 </div>
                 <PostPanel clip={clip} />
                 <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">

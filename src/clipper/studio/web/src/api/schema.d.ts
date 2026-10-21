@@ -356,6 +356,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/brand/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload Brand
+         * @description A brand kit's font or logo (D240), streamed under the upload cap (D229) and the kit's own, checked to
+         *     be a real font or picture, kept by its content's hash. The campaign stores the name this returns.
+         */
+        put: operations["upload_brand_api_brand__kind__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/brand/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Brand File
+         * @description An uploaded font or logo, for the editor's previews; only names an upload made (D240).
+         */
+        get: operations["brand_file_api_brand__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/campaigns/check": {
         parameters: {
             query?: never;
@@ -2482,6 +2523,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/{clip_id}/captions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Media Captions
+         * @description The clip's captions as an .srt (D240), named like its video's download.
+         */
+        get: operations["media_captions_media__clip_id__captions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/{clip_id}": {
         parameters: {
             query?: never;
@@ -2624,6 +2685,44 @@ export interface components {
             /** Median Views */
             median_views?: number | null;
         };
+        /**
+         * BrandKit
+         * @description A campaign's own caption look and logo (D240). Empty fields keep Clipper's own: the caption style's font
+         *     and colours, no logo. `font` and `logo` are file names the upload made (render/brand.py), never paths.
+         */
+        BrandKit: {
+            /**
+             * Font
+             * @default
+             */
+            font: string;
+            /**
+             * Text Colour
+             * @default
+             */
+            text_colour: string;
+            /**
+             * Highlight Colour
+             * @default
+             */
+            highlight_colour: string;
+            /**
+             * Outline Colour
+             * @default
+             */
+            outline_colour: string;
+            /**
+             * Logo
+             * @default
+             */
+            logo: string;
+            /**
+             * Logo Corner
+             * @default auto
+             * @enum {string}
+             */
+            logo_corner: "auto" | "top_left" | "top_right" | "bottom_left" | "bottom_right";
+        };
         /** Brief */
         Brief: {
             /** Min Seconds */
@@ -2716,6 +2815,11 @@ export interface components {
             reward_per_1k_usd?: number | null;
             /** Max Clips */
             max_clips?: number | null;
+            /**
+             * Output Shape
+             * @default 9:16
+             */
+            output_shape: string;
             /** Clips */
             clips: number;
             counts: components["schemas"]["CampaignCounts"];
@@ -2971,6 +3075,13 @@ export interface components {
              * @default
              */
             notes: string;
+            /**
+             * Output Shape
+             * @default 9:16
+             * @enum {string}
+             */
+            output_shape: "9:16" | "1:1" | "16:9";
+            brand?: components["schemas"]["BrandKit"];
         };
         /**
          * CaptionRule
@@ -3039,6 +3150,13 @@ export interface components {
             video: string;
             /** Thumb */
             thumb: string;
+            /** Captions */
+            captions?: string | null;
+            /**
+             * Shape
+             * @default 9:16
+             */
+            shape: string;
             /** Posts */
             posts: components["schemas"]["Post"][];
             /** Score */
@@ -3217,6 +3335,22 @@ export interface components {
             edit?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Shape
+             * @default 9:16
+             */
+            shape: string;
+            /**
+             * @default {
+             *       "font": "",
+             *       "text_colour": "",
+             *       "highlight_colour": "",
+             *       "outline_colour": "",
+             *       "logo": "",
+             *       "logo_corner": "auto"
+             *     }
+             */
+            brand: components["schemas"]["BrandKit"];
         };
         /** EditorWord */
         EditorWord: {
@@ -4428,6 +4562,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignForm"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_brand_api_brand__kind__put: {
+        parameters: {
+            query?: {
+                filename?: string;
+            };
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    brand_file_api_brand__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -8236,6 +8436,37 @@ export interface operations {
         };
     };
     proof_pack_media__clip_id__proof_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    media_captions_media__clip_id__captions_get: {
         parameters: {
             query?: never;
             header?: never;

@@ -28,7 +28,7 @@ from pathlib import Path
 from ..config import Config
 from ..utils.logging import get_logger
 from . import captions as cap
-from .ffmpeg import bundled_fonts_dir, escape_filter_path, run, select_video_encoder
+from .ffmpeg import escape_filter_path, run, select_video_encoder
 from .graph import output_size
 
 log = get_logger(__name__)
@@ -53,11 +53,12 @@ def hook_filter(clip: Path, hook: str, length: float, *, config: Config, work_di
     rc = config.render
     width, height = output_size(rc, draft=draft)
     ass = work_dir / f"{clip.stem}.{tag}.ass"
-    cap.write_ass(cap.build_ass([], style=cap.get_style(rc.caption_style), width=width, height=height,
+    cap.write_ass(cap.build_ass([], style=cap.style_for(rc), width=width, height=height,
                                 safe_area=rc.safe_area, clip_start=0.0, duration=length,
                                 hook_text=hook if rc.show_hook_text else "",
                                 hook_seconds=length if rc.show_hook_text else 0.0), ass)
-    return f"ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(bundled_fonts_dir())}'"
+    # In the campaign's own font and colours, like the clip's hook (D240).
+    return f"ass=f='{escape_filter_path(ass)}':fontsdir='{escape_filter_path(cap.fonts_dir_for(rc))}'"
 
 
 def reencode_args(config: Config) -> list[str]:
@@ -142,16 +143,19 @@ def open_loop(start: float, end: float, words: list[tuple[float, float, str]] | 
 
 def prepend(clip: Path, start: float, end: float, *, hook: str, config: Config, work_dir: Path,
             draft: bool = False, has_audio: bool = True,
-            words: list[tuple[float, float, str]] | None = None, pages: list[float] | None = None) -> Path:
+            words: list[tuple[float, float, str]] | None = None,
+            pages: list[float] | None = None) -> tuple[float, float] | None:
     """`clip` with the opening of its own payoff line (`start`-`end`, seconds into
     it; `words` the line's words on that clock) played first. Replaces `clip` in
-    place and returns it; on any failure, or a line too short to tease, the clip is
-    left as it was."""
+    place; on any failure, or a line too short to tease, the clip is
+    left as it was. Returns the part of the clip it put first (seconds into it), for the caption file
+    (D240); None when nothing was.
+    """
     rc = config.render
     span = open_loop(start, end, words, pages)
     if span is None:
         log.info("%s: payoff too short to hold back; no teaser", clip.name)
-        return clip
+        return None
     start, end = span
     length = end - start
     fps = rc.fps
@@ -180,6 +184,6 @@ def prepend(clip: Path, start: float, end: float, *, hook: str, config: Config, 
     except Exception as exc:  # the clip without its cold open beats no clip
         log.warning("%s: couldn't put its payoff first (%s); kept as rendered", clip.name, str(exc)[:200])
         out.unlink(missing_ok=True)
-        return clip
+        return None
     log.info("%s: opens on its payoff (%.1fs from %.1fs in)", clip.name, length, start)
-    return clip
+    return start, end

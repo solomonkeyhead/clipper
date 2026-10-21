@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 
 from ..campaign import editor
 from ..campaign.editor import CampaignError, CampaignForm
@@ -192,6 +192,41 @@ def routes(app: FastAPI, publish) -> None:
             log.warning("reading a brief failed: %s", exc)
             raise HTTPException(503, "the AI model didn't answer (it may be busy). Try again "
                                      "in a minute, or fill the form in yourself.") from exc
+
+    @app.put("/api/brand/{kind}")
+    async def upload_brand(kind: str, request: Request, filename: str = "") -> dict:
+        """A brand kit's font or logo (D240), streamed under the upload cap (D229) and the kit's own, checked to
+        be a real font or picture, kept by its content's hash. The campaign stores the name this returns."""
+        import tempfile
+        from pathlib import Path
+
+        from ..render import brand
+        from .imports import receive, upload_cap
+
+        if kind not in ("font", "logo"):
+            raise HTTPException(404, "upload a font or a logo")
+        own = brand.FONT_CAP if kind == "font" else brand.LOGO_CAP
+        site = upload_cap()
+        with tempfile.TemporaryDirectory() as tmp:
+            part = await receive(request, Path(tmp) / "upload", min(own, site) if site else own)
+            data = part.read_bytes()
+        try:
+            return brand.save_font(data, filename) if kind == "font" else brand.save_logo(data)
+        except brand.BrandError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/api/brand/{name}")
+    def brand_file(name: str):
+        """An uploaded font or logo, for the editor's previews; only names an upload made (D240)."""
+        from fastapi.responses import FileResponse
+
+        from ..render import brand
+
+        path = brand.path_of(name)
+        if path is None:
+            raise HTTPException(404, "no such file")
+        kind = {".png": "image/png", ".ttf": "font/ttf", ".otf": "font/otf"}[path.suffix]
+        return FileResponse(path, media_type=kind, headers={"Cache-Control": "max-age=31536000, immutable"})
 
     @app.post("/api/campaigns/check")
     async def check_campaign(body: dict) -> CampaignCheck:

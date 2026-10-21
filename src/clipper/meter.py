@@ -353,6 +353,8 @@ def retention(now: float | None = None) -> dict[str, int]:
             if not _inside(path, library.library_dir()) or (path.exists() and _age(path) >= cutoff):
                 continue   # outside the library, or made again since (a new hook)
             if recycle(path):
+                if library.captions_path(path).is_file():   # its .srt goes with it (D240)
+                    recycle(library.captions_path(path))
                 con.execute("UPDATE clips SET file = '' WHERE id = ?", (row["id"],))
                 gone["clips"] += 1
     root = data_root()

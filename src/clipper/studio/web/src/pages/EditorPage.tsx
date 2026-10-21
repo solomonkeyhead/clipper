@@ -8,6 +8,7 @@ import {
   prepareEditor, previewEdit, saveEdit, tightenEdit, useEditor, useJobs, usePeaks, type EditorView, type EditRule,
 } from "@/api/client";
 import { JobProgress } from "@/components/progress";
+import { captionCss, useBrandFont } from "@/components/brand";
 import { Button, CaptionTitle, Card, Kbd, Skeleton, Tip } from "@/components/ui";
 import {
   clipTime, clock, cutRange, cuts, emptyEdit, endOf, keepRange, kept, length, nextZoom, pieceAt, setFix, setIn,
@@ -362,7 +363,8 @@ function Workbench({ view }: { view: EditorView }) {
           </div>
           {tab === "preview" && preview && (
             <div className="flex flex-col items-center gap-2">
-              <video key={preview.url} src={preview.url} controls autoPlay playsInline className="aspect-[9/16] max-h-[62vh] rounded-md bg-black" />
+              <video key={preview.url} src={preview.url} controls autoPlay playsInline className="max-h-[62vh] max-w-full rounded-md bg-black"
+                     style={{ aspectRatio: (view.shape ?? "9:16").replace(":", " / ") }} />
               {stale && <p className="text-xs text-warning">You've changed the edit since. Press <Kbd>P</Kbd> for a new preview.</p>}
             </div>
           )}
@@ -426,6 +428,7 @@ function Stage({ view, video, zoom, edit, words, t, inClip, onEnded, onSeeked }:
     return words.slice(from, from + 3).filter((w) => kept(edit, w)).map((w) => ({ text: shownText(edit, w), now: w.start <= t && t < w.end + 0.05 }));
   }, [words, t, edit, inClip]);
   const hookUp = inClip && edit.hook && (clipTime(edit, t) ?? 99) < 3;
+  const look = captionCss(view.brand, useBrandFont(view.brand?.font || undefined));
   if (!view.proxy_ready) {
     return (
       <div className="grid aspect-video place-items-center rounded-md border border-dashed border-line-strong text-center text-sm text-muted">
@@ -440,11 +443,14 @@ function Stage({ view, video, zoom, edit, words, t, inClip, onEnded, onSeeked }:
              className="absolute inset-0 size-full object-contain transition-transform duration-150"
              style={{ transform: `scale(${zoom})`, transformOrigin: "50% 35%" }} />
       {/* The vertical frame, with the rest dimmed: Clipper moves it to the faces when it renders. */}
-      <div className="pointer-events-none absolute inset-y-0 left-1/2 aspect-[9/16] -translate-x-1/2 rounded-md border-2 border-white/80 shadow-[0_0_0_9999px_rgb(0_0_0/0.5)]">
-        {hookUp && <div className="cap absolute inset-x-[6%] top-[12%] text-center text-[clamp(0.7rem,1.6vw,1.05rem)] text-white">{edit.hook}</div>}
+      {/* In the campaign's shape and caption look (D240). */}
+      <div className="pointer-events-none absolute inset-y-0 left-1/2 max-w-full -translate-x-1/2 rounded-md border-2 border-white/80 shadow-[0_0_0_9999px_rgb(0_0_0/0.5)]"
+           style={{ aspectRatio: (view.shape ?? "9:16").replace(":", " / ") }}>
+        {hookUp && <div className="cap absolute inset-x-[6%] top-[12%] text-center text-[clamp(0.7rem,1.6vw,1.05rem)]" style={look}>{edit.hook}</div>}
         {line.length > 0 && (
-          <div className="cap absolute inset-x-[6%] top-[55%] text-center text-[clamp(0.8rem,1.9vw,1.3rem)] text-white">
-            {line.map((w, i) => <span key={i} className={cn(w.now && "font-bold text-fg underline underline-offset-4")}>{w.text} </span>)}
+          <div className={cn("cap absolute inset-x-[6%] text-center text-[clamp(0.8rem,1.9vw,1.3rem)]", view.shape === "16:9" ? "bottom-[10%]" : "top-[55%]")} style={look}>
+            {line.map((w, i) => <span key={i} className={cn(w.now && "font-bold underline underline-offset-4")}
+                                      style={w.now ? { color: view.brand?.highlight_colour || "#ffd600" } : undefined}>{w.text} </span>)}
           </div>
         )}
       </div>

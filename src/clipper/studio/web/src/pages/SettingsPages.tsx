@@ -215,11 +215,17 @@ function AddAccount({ platform, name, label, ready, appKeys, start, state, waiti
 
 function AddTikTok({ label = "Add a TikTok account" }: { label?: string }) {
   const { data: setup } = useSetup();
+  // Hosted (D239): the login comes back to this browser's Clipper session, and the app is the site's, not the user's.
+  const hosted = useHosted();
   return (
     <AddAccount platform="tiktok" name="TikTok" label={label} ready={!!setup?.tiktok_app}
       appKeys={<TikTokAppKeys />} start={startTikTokConnect} state={tiktokConnectState}
-      waitingHint="TikTok connects whichever account is logged in on tiktok.com in that browser. For a different account, log into it there first, or copy this link into another browser."
-      trouble={`Seeing "non_sandbox_target" or "We couldn't log in with TikTok"? Your TikTok app is still in Sandbox: open it at developers.tiktok.com, go to Sandbox → Target users, add this TikTok account, then try again.`} />
+      waitingHint={hosted
+        ? "TikTok connects whichever account is logged in on tiktok.com in this browser. For a different account, log into it there first."
+        : "TikTok connects whichever account is logged in on tiktok.com in that browser. For a different account, log into it there first, or copy this link into another browser."}
+      trouble={hosted
+        ? `Seeing "non_sandbox_target"? TikTok is still reviewing this site's app, so only test accounts can connect for now.`
+        : `Seeing "non_sandbox_target" or "We couldn't log in with TikTok"? Your TikTok app is still in Sandbox: open it at developers.tiktok.com, go to Sandbox → Target users, add this TikTok account, then try again.`} />
   );
 }
 

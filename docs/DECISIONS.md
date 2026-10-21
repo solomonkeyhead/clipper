@@ -4103,3 +4103,16 @@ Marc had every page clicked through for what a general user wouldn't need or und
   `127.0.0.1:1@evil.example` address passed its prefix check) and never signs with an empty key.
 - Why: one origin needs no cross-site cookie and one redirect URI per platform (LAUNCH_TODO section 7). Local mode is
   unchanged. Left: Meta's deauthorize callback; a cancelled login's return page still says "Connected".
+
+## D240 — Clip shapes, caption files and a brand kit (2026-10-21)
+- Paying clippers expect three things Clipper lacked: a caption file, shapes other than 9:16, and their own look.
+- Every accepted clip gets an .srt from the caption pages it burns in (after caption fixes), timed to the finished
+  file past its cover and teaser, offered beside Download; it moves, re-renders and is deleted with its clip.
+- A campaign picks 9:16 (the default; renders byte-identical, pinned by a test), 1:1 (follows the faces like 9:16 and
+  keeps the phone zones a square gets) or 16:9 (the whole picture, captions in a plain lower third). New clips can
+  change it for one run, and one clip can be made again in another shape, which it keeps. Captions are sized by the
+  frame's short side.
+- Brand kit per campaign: an uploaded font, three caption colours and a logo in a corner clear of the captions and the
+  button rail. Uploads go through D229's caps (8 MB font, 5 MB logo), must load in Pillow (a logo is re-encoded as a
+  plain PNG), are stored by content hash under the data folder and read only from there, so a hosted user can't point
+  a render at other files. On the hosted site the TikTok connect hints speak of the site's app (D239).

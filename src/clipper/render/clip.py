@@ -15,6 +15,7 @@ from ..config import Config
 from ..models import ClipPlan, LayoutPlan, MediaInfo, Word
 from ..utils.logging import get_logger
 from . import captions as cap
+from .brand import path_of
 from .ffmpeg import bundled_fonts_dir, run, select_video_encoder
 from .graph import WATERMARK, RenderSpec, build_command, output_size
 
@@ -65,7 +66,8 @@ def render_clip(
     work_dir.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    style = cap.get_style(plan.caption_style or rc.caption_style)
+    # The campaign's brand kit over the caption style (D240); none, and it is the style as it always was.
+    style = cap.style_for(rc, plan.caption_style)
     ass_path = work_dir / f"{plan.clip_id}.ass"
     cap.write_ass(
         cap.build_ass(
@@ -116,6 +118,9 @@ def render_clip(
         loudness_range=rc.loudness_range,
         lift_gamma=lift_gamma,
         watermark=WATERMARK if watermark else "",
+        logo=path_of(rc.brand_logo) if rc.brand_logo else None,
+        logo_corner=rc.logo_corner,
+        ass_fonts_dir=cap.fonts_dir_for(rc) if rc.brand_font else None,
     )
 
     command = build_command(spec)

@@ -27,7 +27,7 @@ def test_the_payoff_plays_first_then_the_whole_clip(tmp_path, media_cache):
 def test_a_failed_teaser_leaves_the_clip_as_it_was(tmp_path):
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"not a video")
-    assert prepend(clip, 1.0, 2.0, hook="", config=Config(), work_dir=tmp_path) == clip
+    assert prepend(clip, 1.0, 2.0, hook="", config=Config(), work_dir=tmp_path) is None
     assert clip.read_bytes() == b"not a video"
 
 

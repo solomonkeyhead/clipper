@@ -60,6 +60,45 @@ class RenderSpec:
     lift_gamma: float | None = None
     #: Text drawn small in a corner (a hosted Free plan's clips past its first few, D237), or "".
     watermark: str = ""
+    #: The campaign's logo (render/brand.py), the command's second input, and its corner (D240).
+    logo: Path | None = None
+    logo_corner: str = "auto"
+    #: libass's font folder when it isn't `fonts_dir` (a campaign's uploaded font, D240).
+    ass_fonts_dir: Path | None = None
+
+
+def logo_box(width: int, height: int) -> tuple[float, float, float, float]:
+    """(left, top, right, bottom) of where a logo may sit, on the output (D240). Each corner of it is clear of
+    the captions (which stay between x=300 and 780 of 1080 on a phone), the hook's usual lines and the apps'
+    button rail: on 9:16 the box ends at y=820, above the rail; a square keeps the phone zones it gets on a
+    phone screen (the rail starts 420 rows down it); 16:9 has plain margins and captions in its lower third."""
+    s = min(width, height) / 1080
+    if height > width:
+        return 120 * s, 300 * s, width - 120 * s, 820 * s
+    if width == height:
+        return 120 * s, 60 * s, width - 120 * s, 400 * s
+    return 96 * s, 60 * s, width - 96 * s, height - 80 * s
+
+
+def logo_corner(corner: str, width: int, height: int) -> str:
+    """The corner a logo goes in: "auto" is top right on 16:9 (where a channel's mark sits on TV and YouTube),
+    else bottom right, just above the rail and below the hook."""
+    if corner != "auto":
+        return corner
+    return "top_right" if width > height else "bottom_right"
+
+
+def _logo_filter(spec: RenderSpec) -> str:
+    """The logo branch and its overlay onto ``[base]``, at most 180x120 (of a 1080 short side)."""
+    s = min(spec.width, spec.height) / 1080
+    left, top, right, bottom = logo_box(spec.width, spec.height)
+    corner = logo_corner(spec.logo_corner, spec.width, spec.height)
+    if spec.watermark and corner == "bottom_right":
+        bottom -= 48 * s   # stacked above the watermark, which sits in that corner
+    x = f"{round(left)}" if corner.endswith("left") else f"{round(right)}-w"
+    y = f"{round(top)}" if corner.startswith("top") else f"{round(bottom)}-h"
+    return (f"[1:v]format=rgba,scale={round(180 * s)}:{round(120 * s)}:force_original_aspect_ratio=decrease"
+            f"[logo];[base][logo]overlay=x={x}:y={y}:format=auto")
 
 
 def build_video_filter(spec: RenderSpec) -> str:
@@ -75,12 +114,16 @@ def build_video_filter(spec: RenderSpec) -> str:
     # Normalise frame rate and pixel aspect before captions, so caption
     # positioning is computed against the final geometry.
     tail = [f"fps={spec.fps}", "setsar=1", "format=yuv420p"]
+    if spec.logo is not None:
+        # Under the captions, so a caption page moved there would still read over it.
+        chain = f"{chain},{','.join(tail)}[base];{_logo_filter(spec)},format=yuv420p"
+        tail = []
     if spec.ass_path is not None:
         tail.append(_ass_filter(spec))
     if spec.watermark:
         tail.append(_watermark_filter(spec))
 
-    return f"{chain},{','.join(tail)}[v]"
+    return f"{chain}{''.join(',' + t for t in tail)}[v]"
 
 
 #: What a hosted Free plan's clips carry past the first few (D237).
@@ -92,13 +135,17 @@ def _watermark_filter(spec: RenderSpec) -> str:
     SafeArea): clear of the captions (left of x=780 down there), the hook and credit (top), the username and
     description (bottom) and the rail itself. Inter, a caption font; without the file, FFmpeg's default font.
     The teaser and cover are cut from this render, so they carry it too."""
-    s = spec.width / 1080
+    s = min(spec.width, spec.height) / 1080
     font = spec.fonts_dir / "Inter.ttf" if spec.fonts_dir is not None else None
     face = f"fontfile='{escape_filter_path(font)}':" if font is not None and font.is_file() else ""
     shadow = max(1, round(2 * s))   # the text is WATERMARK: no quote, colon or % to escape
+    if spec.height > spec.width:
+        where = f"x=w-tw-{round(120 * s)}:y={round(spec.height * 820 / 1920)}-th"
+    else:   # a square or wide clip: the logo box's bottom-right corner (D240)
+        _, _, right, bottom = logo_box(spec.width, spec.height)
+        where = f"x={round(right)}-tw:y={round(bottom)}-th"
     return (f"drawtext={face}text='{spec.watermark}':fontsize={round(28 * s)}:fontcolor=white@0.8:"
-            f"shadowcolor=black@0.6:shadowx={shadow}:shadowy={shadow}:"
-            f"x=w-tw-{round(120 * s)}:y={round(spec.height * 820 / 1920)}-th")
+            f"shadowcolor=black@0.6:shadowx={shadow}:shadowy={shadow}:{where}")
 
 
 def _layout_chain(spec: RenderSpec, layout: LayoutPlan, src: str, tag: str) -> str:
@@ -117,7 +164,7 @@ def _layout_chain(spec: RenderSpec, layout: LayoutPlan, src: str, tag: str) -> s
     if layout.kind == "content_stack":
         return _content_stack_chain(spec, layout, src, tag)
     if layout.kind == "blurred_fit":
-        return _blurred_fit_chain(spec, src, tag)
+        return _blurred_fit_chain(spec, src, tag, layout)
     raise ValueError(f"unknown layout {layout.kind!r}")
 
 
@@ -163,8 +210,9 @@ def _ass_filter(spec: RenderSpec) -> str:
     machine happens to have.
     """
     parts = [f"f='{escape_filter_path(spec.ass_path)}'"]
-    if spec.fonts_dir is not None:
-        parts.append(f"fontsdir='{escape_filter_path(spec.fonts_dir)}'")
+    fonts = spec.ass_fonts_dir or spec.fonts_dir
+    if fonts is not None:
+        parts.append(f"fontsdir='{escape_filter_path(fonts)}'")
     # original_size tells libass what PlayRes maps onto; our ASS header already
     # uses the output size, so they agree.
     parts.append(f"original_size={spec.width}x{spec.height}")
@@ -237,11 +285,19 @@ def _blurred_fit_chain(spec: RenderSpec, src: str, tag: str,
     graphic beside them -- which is cropped first, so the background is a blur
     of that same region rather than of content the viewer cannot see.
     """
-    sigma = round(BACKGROUND_BLUR_SIGMA * spec.width / 1080, 1)
+    from .layouts import fits_by_height
+
+    sigma = round(BACKGROUND_BLUR_SIGMA * min(spec.width, spec.height) / 1080, 1)
     region = ""
     if layout is not None and layout.keyframes:
         kf = layout.keyframes[0]
         region = f"crop={layout.crop_width}:{layout.crop_height}:{kf.x}:{kf.y},"
+    rw, rh = (layout.crop_width, layout.crop_height) if layout is not None else (0, 0)
+    if spec.width >= spec.height and rw and rh and rw * spec.height == rh * spec.width:
+        # The picture already has the output's shape (16:9 from 16:9, D240): the full frame, no blur behind.
+        return f"{src}{region}scale={spec.width}:{spec.height}:flags=lanczos"
+    fit = (f"scale=-2:{spec.height}:flags=lanczos" if rw and rh and fits_by_height(rw, rh, spec.width, spec.height)
+           else f"scale={spec.width}:-2:flags=lanczos")
     # Blurred at a quarter size and scaled back up (D75): the same soft fill --
     # compared frame by frame on a 16:9 episode -- at under half the render time;
     # a full-size gblur was the slowest part of a render.
@@ -252,7 +308,7 @@ def _blurred_fit_chain(spec: RenderSpec, src: str, tag: str,
         f"crop={w}:{h},gblur=sigma={round(sigma / BLUR_DOWNSCALE, 1)},"
         f"scale={spec.width}:{spec.height}:flags=bicubic,"
         f"eq=brightness={BACKGROUND_DARKEN}[bgb{tag}];"
-        f"[fg{tag}]scale={spec.width}:-2:flags=lanczos[fgs{tag}];"
+        f"[fg{tag}]{fit}[fgs{tag}];"
         f"[bgb{tag}][fgs{tag}]overlay=(W-w)/2:(H-h)/2:shortest=1"
     )
 
@@ -295,6 +351,7 @@ def build_command(spec: RenderSpec) -> list[str]:
         "-ss", f"{spec.start:.3f}",
         "-t", f"{spec.duration:.3f}",
         "-i", str(spec.source),
+        *(["-i", str(spec.logo)] if spec.logo is not None else []),
         "-filter_complex", ";".join(filters),
         "-map", "[v]",
     ]
