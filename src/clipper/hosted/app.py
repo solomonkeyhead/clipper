@@ -325,7 +325,8 @@ def create_app(procs: Procs | None = None) -> FastAPI:
     http = proxy.client()
 
     async def tend() -> None:
-        rolled = 0.0
+        rolled = swept = 0.0
+        sweep: asyncio.Task | None = None
         while True:
             await asyncio.sleep(60)
             try:
@@ -334,6 +335,10 @@ def create_app(procs: Procs | None = None) -> FastAPI:
                     rolled = time.time()
                     for user_id in list(procs.procs):
                         prepare(user_id)
+                # What a stopped studio would delete each day (D231, D237), beside the reaping, not in its way.
+                if time.time() - swept > 86400 and (sweep is None or sweep.done()):
+                    swept = time.time()
+                    sweep = asyncio.create_task(procs.daily([u["id"] for u in users.all_users()]))
             except Exception:
                 log.exception("gateway: looking after the studios failed")
 
@@ -511,18 +516,22 @@ def create_app(procs: Procs | None = None) -> FastAPI:
         if request.query_params.get("paid") and not note:
             note = "Thanks. Your plan or pack shows here within a minute; reload the page to see it."
         doc = catalog.plan_json(user)
-        lim, credit = doc["limits"], doc["credits"]
+        lim, have = doc["limits"], catalog.left(user, doc)
+        credit = have["credits"]
         badge = {"past_due": " <span class='warn'>(payment overdue)</span>",
                   "canceled": " <span class='muted'>(canceled)</span>"}.get(doc["status"], "")
         mark = ("No watermark" if lim["watermark_after"] is None
                 else f"The first {lim['watermark_after']} clips without a watermark, then a small one")
-        extra = (f"<p>Credits from packs: {credit['minutes']} minutes, {credit['shorts']} Shorts. They never expire.</p>"
-                 if credit["minutes"] or credit["shorts"] else "")
+        extra = (f"<p>Credits left from packs: {credit['minutes']} minutes, {credit['shorts']} Shorts. They never "
+                 "expire.</p>" if credit["minutes"] or credit["shorts"] else "")
         body = (f'<h1>Plan and account</h1><section class="card"><h2>{doc["plan"].title()} plan{badge}</h2>'
                 f'<p>This month: {catalog.day(doc["period_start"])} to {catalog.day(doc["period_end"])}.</p>'
                 f'<p>{lim["minutes"]} footage minutes and {lim["shorts"]} Create Short'
                 f'{"s" if lim["shorts"] != 1 else ""}{" (once)" if lim["shorts_once"] else ""}. '
-                f'Clips kept {lim["retention_days"]} days. {mark}.</p>{extra}</section>'
+                f'Clips kept {lim["retention_days"]} days. {mark}.</p>'
+                f'<p>Used: {have["minutes_used"]} of {lim["minutes"]} minutes, {have["shorts_used"]} of '
+                f'{lim["shorts"]} Short{"s" if lim["shorts"] != 1 else ""}'
+                f'{"" if lim["shorts_once"] else " this month"}.</p>{extra}</section>'
                 f'{billing.section(user, note)}{billing.team_section(user, link, team_error)}'
                 '<section class="card"><h2>Your data</h2><p>Everything in your studio as a zip file, without the '
                 'caches Clipper can make again.</p><a class="button" href="/billing/export">Download my data</a>'

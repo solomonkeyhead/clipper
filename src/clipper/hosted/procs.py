@@ -89,6 +89,20 @@ def _kill(popen: subprocess.Popen) -> None:
         popen.wait(5)
 
 
+def user_env(user_id: int) -> dict[str, str]:
+    """What a user's Clipper runs with: the gateway's environment less its own secrets, hosted, on their folder."""
+    env = {k: v for k, v in os.environ.items() if k not in GATEWAY_ONLY and not k.startswith("PADDLE_")}
+    return env | {"CLIPPER_HOSTED": "1", "CLIPPER_HOST": "127.0.0.1", "CLIPPER_DATA_DIR": str(data_dir(user_id)),
+                  "CLIPPER_NO_UPDATE": "1", "PYTHONUNBUFFERED": "1"}
+
+
+#: What a stopped user's Clipper would do each day if it ran (D237): delete stored platform data not refreshed
+#: for 30 days or left by a disconnected account (D231; a running one does it in its syncs), and what is older
+#: than the plan keeps (clipper/meter.py retention; a running one does it in its own daily task).
+DAILY = (["-m", "clipper.studio.platform_data"], ["-m", "clipper.meter"])
+DAILY_SECONDS = 600
+
+
 class Procs:
     def __init__(self, command: Callable[[int], list[str]] = clipper_command, *,
                  prepare: Callable[[int], None] | None = None, idle: float = IDLE_SECONDS,
@@ -131,9 +145,7 @@ class Procs:
         data = data_dir(user_id)
         data.mkdir(parents=True, exist_ok=True)
         port, token = free_port(), secrets.token_urlsafe(32)
-        env = {k: v for k, v in os.environ.items() if k not in GATEWAY_ONLY and not k.startswith("PADDLE_")}
-        env |= {"CLIPPER_HOSTED": "1", "CLIPPER_HOST": "127.0.0.1", "CLIPPER_DATA_DIR": str(data),
-                "CLIPPER_TOKEN": token, "CLIPPER_NO_UPDATE": "1", "PYTHONUNBUFFERED": "1"}
+        env = user_env(user_id) | {"CLIPPER_TOKEN": token}
         with (user_dir(user_id) / "clipper.log").open("ab") as out:
             popen = subprocess.Popen(self.command(port), env=env, stdout=out, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, start_new_session=os.name != "nt")
@@ -187,6 +199,31 @@ class Procs:
             elif p.ready and now - p.last_used > self.idle and not await self.busy(p):
                 log.info("user %d: idle, stopping Clipper", user_id)
                 await self.stop(user_id)
+
+    async def daily(self, user_ids: list[int]) -> int:
+        """DAILY for each user whose Clipper isn't running, one after another; returns how many. The user's start
+        lock is held meanwhile, so their studio can't start and write the same files half way through."""
+        done = 0
+        for user_id in user_ids:
+            if not data_dir(user_id).is_dir():
+                continue
+            async with self._locks[user_id]:
+                p = self.procs.get(user_id)
+                if p is not None and p.alive():
+                    continue
+                if self.prepare:   # retention reads plan.json: the current plan, not last month's
+                    self.prepare(user_id)
+                for args in DAILY:
+                    try:
+                        result = await asyncio.to_thread(
+                            subprocess.run, [sys.executable, *args], env=user_env(user_id), capture_output=True,
+                            stdin=subprocess.DEVNULL, timeout=DAILY_SECONDS, check=False)
+                        if result.returncode:
+                            log.warning("user %d: %s failed (exit %d)", user_id, args[-1], result.returncode)
+                    except (OSError, subprocess.SubprocessError) as exc:
+                        log.warning("user %d: %s didn't run (%s)", user_id, args[-1], type(exc).__name__)
+            done += 1
+        return done
 
     async def stop(self, user_id: int) -> None:
         p = self.procs.pop(user_id, None)

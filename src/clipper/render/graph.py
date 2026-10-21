@@ -58,6 +58,8 @@ class RenderSpec:
     loudness_range: float = 8.0
     #: A gamma lift for dark footage (render/prepare.py), or None.
     lift_gamma: float | None = None
+    #: Text drawn small in a corner (a hosted Free plan's clips past its first few, D237), or "".
+    watermark: str = ""
 
 
 def build_video_filter(spec: RenderSpec) -> str:
@@ -75,8 +77,28 @@ def build_video_filter(spec: RenderSpec) -> str:
     tail = [f"fps={spec.fps}", "setsar=1", "format=yuv420p"]
     if spec.ass_path is not None:
         tail.append(_ass_filter(spec))
+    if spec.watermark:
+        tail.append(_watermark_filter(spec))
 
     return f"{chain},{','.join(tail)}[v]"
+
+
+#: What a hosted Free plan's clips carry past the first few (D237).
+WATERMARK = "Made with Clipper"
+
+
+def _watermark_filter(spec: RenderSpec) -> str:
+    """The watermark, small, right-aligned just above the platforms' button rail (which starts at y=840 of 1920,
+    SafeArea): clear of the captions (left of x=780 down there), the hook and credit (top), the username and
+    description (bottom) and the rail itself. Inter, a caption font; without the file, FFmpeg's default font.
+    The teaser and cover are cut from this render, so they carry it too."""
+    s = spec.width / 1080
+    font = spec.fonts_dir / "Inter.ttf" if spec.fonts_dir is not None else None
+    face = f"fontfile='{escape_filter_path(font)}':" if font is not None and font.is_file() else ""
+    shadow = max(1, round(2 * s))   # the text is WATERMARK: no quote, colon or % to escape
+    return (f"drawtext={face}text='{spec.watermark}':fontsize={round(28 * s)}:fontcolor=white@0.8:"
+            f"shadowcolor=black@0.6:shadowx={shadow}:shadowy={shadow}:"
+            f"x=w-tw-{round(120 * s)}:y={round(spec.height * 820 / 1920)}-th")
 
 
 def _layout_chain(spec: RenderSpec, layout: LayoutPlan, src: str, tag: str) -> str:

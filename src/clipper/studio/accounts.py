@@ -10,9 +10,10 @@ one group or one account (`scope`): posts on its accounts, and clips ready to po
 for its campaigns (a group's own campaigns, or those posting on the account's
 platform).
 
-More than one account on a platform is part of the Pro plan (studio/plans.py).
-A sign-in that would go over the plan's limit is undone, so reconnecting an
-account you already have always works.
+More than one account on a platform is part of the Pro plan (studio/plans.py);
+hosted, the plan's `accounts_per_platform` (clipper/meter.py, D237). A sign-in
+that would go over the plan's limit is undone, so reconnecting an account you
+already have always works.
 """
 
 from __future__ import annotations
@@ -47,26 +48,35 @@ def token_files(platform: str):
     raise ValueError(f"unknown platform {platform!r}")
 
 
-def over_limit_message(platform: str) -> str:
+def over_limit_message(platform: str, limit: int | None = None) -> str:
     from ..config import PLATFORM_NAMES
     from . import plans
 
-    return (f"Your plan connects one {PLATFORM_NAMES.get(platform, platform)} account. More than one per platform "
+    name = PLATFORM_NAMES.get(platform, platform)
+    if limit is not None:   # hosted: the account's plan (D237)
+        return (f"Your plan connects {limit} {name} account{'s' if limit != 1 else ''}. Change plan on the Billing "
+                "page to connect more.")
+    return (f"Your plan connects one {name} account. More than one per platform "
             f"is part of the {plans.PLAN_NAMES[plans.FEATURES['multi_account']]} plan.")
 
 
 def undo_if_over(platform: str, before: set) -> str | None:
     """After a sign-in: remove a newly added account beyond the plan's limit.
     Returns the message to show, or None when it's allowed."""
+    from .. import meter
     from . import plans
 
-    added = set(token_files(platform)()) - before
-    if not added or plans.has("multi_account") or not before:
+    now = set(token_files(platform)())
+    added = now - before
+    limit = meter.accounts_per_platform()
+    # Hosted, the plan's number; on one's own computer the Settings tier, as before.
+    allowed = len(now) <= limit if limit is not None else (plans.has("multi_account") or not before)
+    if not added or allowed:
         return None
     for path in added:
         path.unlink(missing_ok=True)
     log.info("removed %s account(s) over the plan's limit: %s", platform, ", ".join(p.stem for p in added))
-    return over_limit_message(platform)
+    return over_limit_message(platform, limit)
 
 
 # -- groups ---------------------------------------------------------------------

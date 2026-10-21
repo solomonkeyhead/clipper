@@ -132,6 +132,10 @@ def routes(app: FastAPI, publish, *, tiktok, youtube, instagram, last_problems: 
             raise HTTPException(400, f"Instagram refused the token: {exc}") from exc
         refused = account_groups.undo_if_over("instagram", before)
         if refused:
+            from .. import meter
+
+            if meter.plan() is not None:   # hosted: the 402 with the way to Billing (D237)
+                raise meter.PlanLimit(refused)
             raise HTTPException(402, refused)
         publish("accounts.changed")
         return {"username": username}

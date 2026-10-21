@@ -4059,3 +4059,21 @@ Marc had every page clicked through for what a general user wouldn't need or und
   rated clips of one source, good and bad, would settle it. `scripts/cost/judge_eval.py` now prints cache writes, a
   comparison over every answered moment (not each model's own survivors), how often good beats bad, and no top-k
   number when the ratings are all the same.
+
+## D237 — The plan meter inside each hosted Clipper (2026-10-21)
+- Hosted Clippers kept no limits: plan.json was written but only its AI budget was read. `clipper/meter.py` reads it
+  and keeps every charge in `<data>/meter.sqlite`, then writes `meter.json` so the gateway's /billing shows what is
+  left. The month's allowance goes first, then pack credits (bought ever minus used ever); Free's Short is once ever.
+- Footage minutes are charged once per source in `ingest()` (every way in: a run, a cut, the editor, a link), whole
+  minutes, at least 10, before transcription or any AI call; /api/jobs and the editor's prepare check first. Shorts:
+  a video's first build, once by id, plus one more per `redraws_per_short` (3, D236) redraws past those. A refusal is a
+  402 with a link to Billing, checked before a build or job starts where it can be; the AI budget stop gives the same
+  402 (code "ai_budget"). GET /api/usage gives the page the numbers (`{"hosted": false}` locally).
+- Free's clips past the period's first 3 carry a small "Made with Clipper" above the platforms' button rail; a clip
+  keeps what it was first given. Retention deletes clip files, sources and work folders past the plan's days, daily,
+  keeping the library rows. Accounts per platform and how many clips render at once (1, 2, 3) follow the plan, and the
+  old Settings tiers (D62) come from plan.json: Free keeps 10 clips a video, paid plans act as Pro.
+- The gateway runs the platform-data sweep (D231) and retention daily for studios that aren't running; backups keep
+  meter.sqlite (losing it would bill every source again). Locally there is no plan.json and nothing changes.
+- Left: redraws are counted when a build starts, so one cancelled before drawing counts again on retry; a clip that
+  fails QA still uses one of Free's clean clips; Create Shorts are never watermarked.

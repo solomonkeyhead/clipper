@@ -5,6 +5,9 @@ Research (10 videos at a time; it added the Ask chat, D90, gone since D216), Pro
 every clip a video has, several accounts per platform). Nothing
 is billed; a local install is on Pro, and the setting exists so the tiers can
 be tried and the checks sit in the right places.
+
+Hosted, the tier is the account's plan (plan.json, clipper/meter.py, D237): Free is "free", every paid plan
+"pro", and Settings can't change it (studio/accounts_api.py answers 403).
 """
 
 from __future__ import annotations
@@ -29,6 +32,11 @@ BATCH_LIMIT = {"free": 3, "research": 10, "pro": None}
 
 
 def current() -> str:
+    from .. import meter
+
+    paid = meter.plan()
+    if paid is not None:
+        return "free" if paid["plan"] == "free" else "pro"
     with db.connect() as con:
         plan = db.settings(con).get("plan", "pro")
     return plan if plan in PLANS else "free"
@@ -53,5 +61,9 @@ def batch_limit(plan: str | None = None) -> int | None:
 
 def require(feature: str) -> None:
     if not has(feature):
+        from .. import meter
+
+        if meter.plan() is not None:   # hosted: the 402 the page shows with the way to Billing (D237)
+            raise meter.PlanLimit("This comes with the paid plans. Change plan on the Billing page.")
         needed = PLAN_NAMES[FEATURES[feature]]
         raise HTTPException(402, f"This is part of the {needed} plan.")

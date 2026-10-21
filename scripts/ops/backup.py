@@ -1,10 +1,10 @@
-"""Back up the hosted site's databases and plans, or restore a day (D-NEW).
+"""Back up the hosted site's databases and plans, or restore a day (D237).
 
     python scripts/ops/backup.py --root /srv/clipper --dest /backups
     python scripts/ops/backup.py --root /srv/clipper --dest /backups --restore 2026-10-20
 
-A backup copies `<root>/gateway.sqlite` and, per user, `users/*/data/*.db`, `usage.sqlite`
-and `plan.json` into `<dest>/<date>/`, keeping the same folder layout. SQLite files go through
+A backup copies `<root>/gateway.sqlite` and, per user, `users/*/data/*.db`, `usage.sqlite`,
+`meter.sqlite` and `plan.json` into `<dest>/<date>/`, keeping the same folder layout. SQLite files go through
 the online backup API, so the site can stay up. The last 14 days are kept. Exit code is
 non-zero on any failure. Restore refuses while the app answers /healthz, unless --force.
 Stdlib only.
@@ -30,7 +30,8 @@ def sources(root: Path) -> list[Path]:
     """Every file worth backing up, as paths under root."""
     found = [root / "gateway.sqlite"]
     for data in sorted(root.glob("users/*/data")):
-        found += [*sorted(data.glob("*.db")), data / "usage.sqlite", data / "plan.json"]
+        # meter.sqlite: what the plan meter charged (clipper/meter.py); lost, every source would be billed again.
+        found += [*sorted(data.glob("*.db")), data / "usage.sqlite", data / "meter.sqlite", data / "plan.json"]
     return [p for p in found if p.is_file()]
 
 

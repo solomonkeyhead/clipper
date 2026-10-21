@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import meter
 from .campaign import compliance, rotation
 from .campaign.manifest import ClipRecord, write_outputs, write_rejection_reason
 from .candidates.boundaries import RefinedBounds, refine
@@ -733,11 +734,11 @@ def _render_with_replacement(
     attempted: set[str] = set()
     attempt = 0
     prefix = f"{threading.current_thread().name}-render"
-
-    with ThreadPoolExecutor(max_workers=RENDER_WORKERS, thread_name_prefix=prefix) as pool:
+    workers = meter.render_workers(RENDER_WORKERS)   # hosted, the plan's queue: 1, 2 or 3 at once (D237)
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=prefix) as pool:
         while queue and len(result.accepted) < limit:
             wave = []
-            while queue and len(wave) < min(RENDER_WORKERS, limit - len(result.accepted)):
+            while queue and len(wave) < min(workers, limit - len(result.accepted)):
                 pick = queue.pop(0)
                 if pick.candidate.candidate_id in attempted:
                     continue
@@ -1043,6 +1044,8 @@ def _render_plan(
         show_captions=allowed.captions,
         # Where faces sit on the 9:16 frame, so captions move off them (R5.2).
         faces=faces_on_screen(scans[0], layout, width, height) if scans else None,
+        # Hosted Free, past the period's first clips: "Made with Clipper" (D237). Never a preview, never locally.
+        watermark=not draft and meter.watermark(f"clip:{info.source_id}:{plan.clip_id}"),
     )
 
     rendered = probe(output)

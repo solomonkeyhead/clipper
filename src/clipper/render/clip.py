@@ -16,7 +16,7 @@ from ..models import ClipPlan, LayoutPlan, MediaInfo, Word
 from ..utils.logging import get_logger
 from . import captions as cap
 from .ffmpeg import bundled_fonts_dir, run, select_video_encoder
-from .graph import RenderSpec, build_command, output_size
+from .graph import WATERMARK, RenderSpec, build_command, output_size
 
 log = get_logger(__name__)
 
@@ -50,6 +50,7 @@ def render_clip(
     lift_gamma: float | None = None,
     show_captions: bool = True,
     faces: list | None = None,
+    watermark: bool = False,
 ) -> RenderResult:
     """Render one `ClipPlan` to an MP4.
 
@@ -114,6 +115,7 @@ def render_clip(
                            if normalize_audio and media.has_audio else None),
         loudness_range=rc.loudness_range,
         lift_gamma=lift_gamma,
+        watermark=WATERMARK if watermark else "",
     )
 
     command = build_command(spec)

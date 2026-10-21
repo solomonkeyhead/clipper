@@ -34,7 +34,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 
-from .. import connect
+from .. import connect, meter
 from ..campaign import editor
 from ..config import PLATFORM_NAMES, CampaignConfig
 from ..learn import log as perf
@@ -661,6 +661,20 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
                     log.exception("campaign alert check failed")
             await asyncio.sleep(alerts.CHECK_MINUTES * 60)
 
+    async def retention_loop() -> None:
+        """Hosted, once a day from the start: what is older than the plan keeps is deleted (meter.retention,
+        D237). Not while a job or a Create build runs, whose source or work folder may be among it: an hour later."""
+        from . import create_api
+
+        while True:
+            busy = bool(create_api._running) or any(j["status"] in ("queued", "running") for j in jobs.list())
+            if not busy:
+                try:
+                    await asyncio.to_thread(meter.retention)
+                except Exception:
+                    log.exception("retention failed")
+            await asyncio.sleep(3600 if busy else 86400)
+
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         loop = asyncio.get_running_loop()
@@ -678,6 +692,7 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
                 await asyncio.to_thread(platform_data.sweep)
         task = asyncio.create_task(sync_loop()) if auto_sync else None
         watcher = asyncio.create_task(alerts_loop()) if auto_sync else None
+        keeper = asyncio.create_task(retention_loop()) if auto_sync and hosted() else None
         if auto_sync:
             # Clips made before a rule existed, or never read by the AI check (D81).
             with contextlib.suppress(Exception):
@@ -691,13 +706,33 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
                     log.info("moved %d clip(s) from the 30-day trash to the Recycle Bin", purged)
         yield
         words.cancel()
-        for t in (task, watcher):
+        for t in (task, watcher, keeper):
             if t:
                 t.cancel()
 
     app = FastAPI(title="Clipper Control Center", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     started_on = code_version()
+
+    def stopped_by_plan(code: str):
+        """Hosted, a plan limit (meter.PlanLimit) or the AI budget (llm.usage.BudgetExceeded) that reaches an
+        endpoint is a 402 the page shows with the way to Billing (wave 3 contract, D237)."""
+        async def answer(request: Request, exc: Exception):
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse({"detail": {"code": code, "message": str(exc), "billing_url": meter.billing_url()}},
+                                status_code=402)
+        return answer
+
+    from ..llm.usage import BudgetExceeded
+
+    app.add_exception_handler(meter.PlanLimit, stopped_by_plan("plan_limit"))
+    app.add_exception_handler(BudgetExceeded, stopped_by_plan("ai_budget"))
+
+    @app.get("/api/usage")
+    def plan_usage() -> dict:
+        """The plan and what is used of it, hosted; {"hosted": false} on one's own computer (meter.usage)."""
+        return meter.usage()
 
     @app.get("/api/code-version")
     def running_code() -> dict:
@@ -1339,8 +1374,12 @@ def create_app(*, auto_sync: bool = False, local_only: bool = False) -> FastAPI:
             raise HTTPException(400, "pick a video")
         cap = plans.batch_limit()
         if cap is not None and len(wanted) > cap:
+            if meter.plan() is not None:   # hosted (D237)
+                raise meter.PlanLimit(f"Your plan clips up to {cap} videos at a time; the paid plans have no "
+                                      "limit. Change plan on the Billing page.")
             raise HTTPException(402, f"Your plan clips up to {cap} videos at a time; Pro has no limit.")
         sources = list(dict.fromkeys(str(allowed_source(s)) for s in wanted))
+        meter.check_sources(sources)   # hosted: enough footage minutes left for them, or a 402 (D237)
         mode = str(body.get("mode") or "auto")
         if mode == "manual":
             from ..runner import parse_range

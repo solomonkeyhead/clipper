@@ -128,10 +128,8 @@ def roll(user: dict, now: float | None = None) -> dict:
 
 def credit_totals(user_id: int) -> tuple[dict, float, bool]:
     """Credits as given (minutes, shorts), the AI budget they add, and whether a campaign pack is among them.
-
-    ponytail: totals of everything ever bought, not what is left: Clipper reports use (E3), and then the
-    remaining credits replace these totals.
-    """
+    plan.json carries these totals of everything ever bought: the user's Clipper subtracts what it has used
+    (clipper/meter.py, D237), and `left` shows the rest from its meter.json."""
     total, budget, campaign = {"minutes": 0, "shorts": 0}, 0.0, False
     for row in users.credits(user_id):
         total["minutes"] += row["minutes"]
@@ -140,6 +138,27 @@ def credit_totals(user_id: int) -> tuple[dict, float, bool]:
         budget += pack.ai_budget_usd if pack else row["minutes"] * USD_PER_MINUTE + row["shorts"] * USD_PER_SHORT
         campaign = campaign or row["source"] == "pack:campaign"
     return total, budget, campaign
+
+
+def meter(user_id: int) -> dict:
+    """What the user's Clipper has used (`<data>/meter.json`, written after each charge); {} before the first."""
+    try:
+        doc = json.loads((data_dir(user_id) / "meter.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def left(user: dict, doc: dict | None = None) -> dict:
+    """This month's allowance used, and the credits left, for /billing (D237). Use counted in an earlier month
+    is this month's 0, except Free's once-ever Short."""
+    doc = doc or plan_json(user)
+    used = meter(user["id"])
+    current = used.get("period_start") == doc["period_start"]
+    spent = used.get("credits_used") or {}
+    return {"minutes_used": int(used.get("minutes_used") or 0) if current else 0,
+            "shorts_used": int(used.get("shorts_used") or 0) if current or doc["limits"]["shorts_once"] else 0,
+            "credits": {k: max(0, doc["credits"][k] - int(spent.get(k) or 0)) for k in ("minutes", "shorts")}}
 
 
 def plan_json(user: dict) -> dict:

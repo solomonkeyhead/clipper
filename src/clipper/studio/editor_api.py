@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 
+from .. import meter
 from . import db, server
 from . import editor as clip_editor
 from .api_models import EditorView, EditorWord, EditRule
@@ -101,6 +102,7 @@ def routes(app: FastAPI, publish, *, jobs, rerenders) -> None:
         """Read and transcribe a video so the editor can open it: a job, with progress."""
         found = editor_campaign(str(body.get("campaign") or ""))
         target = server.allowed_source(str(body.get("source") or ""))
+        meter.check_sources([str(target)])   # hosted: its footage minutes, or a 402 (D237)
         return jobs.submit(found, str(target), None, prepare=True).view()
 
     @app.get("/api/editor/{source_id}/proxy")

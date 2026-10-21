@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlparse
 
+from ..meter import charge_source
 from ..models import MediaInfo, SourceInfo
 from ..paths import downloads_dir, ensure, work_dir
 from ..render.ffmpeg import run
@@ -91,12 +92,16 @@ def ingest(
             cached = SourceInfo.load(info_path)
             if Path(cached.media.path).is_file() and Path(cached.audio_path).is_file():
                 log.info("reusing ingest for %s (%s)", sid, cached.title or media_path.name)
+                charge_source(sid, cached.media.duration)
                 return cached
         except (ValueError, OSError):
             log.debug("cached info.json for %s is unreadable; re-ingesting", sid)
 
     media = probe(media_path)
     _validate(media, media_path)
+    # Hosted, the plan's footage minutes (D237): once a source, its length known, before transcription or any AI
+    # call; every way into the pipeline (a run, a cut, the editor, a link) comes through here.
+    charge_source(sid, media.duration)
 
     audio_path = wdir / "audio.wav"
     if force or not audio_path.is_file():

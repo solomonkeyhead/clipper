@@ -315,6 +315,22 @@ def _write(video_id: int, publish, question: str, angle: str, take: int = 1, ste
         publish("create.changed", {"id": video_id})
 
 
+def _metered(row: dict) -> None:
+    """Hosted, a build the plan can't pay for is refused before it starts, a 402 (D237): a first build needs a
+    Short, a rebuild that redraws past its Shorts' redraws needs one more. The build counts them itself when it
+    starts (create/meterhooks.py); this only asks first, so the page says so at once."""
+    from .. import meter
+    from ..create.script import Script
+    from ..create.sketch import missing
+
+    if meter.plan() is None:
+        return
+    if not row["clip_id"]:
+        meter.charge_first_build(row["id"], dry=True)
+    else:
+        meter.charge_redraws(row["id"], len(missing(Script.model_validate(row["script"]))), dry=True)
+
+
 def _start(video_id: int, publish) -> None:
     threading.Thread(target=_work, args=(video_id, publish), name=f"create-{video_id}", daemon=True).start()
 
@@ -729,6 +745,7 @@ def routes(app: FastAPI, publish) -> None:
         suffix = Path(filename).suffix.lower()
         if suffix not in voice.AUDIO:
             raise HTTPException(400, f"that isn't an audio file ({', '.join(sorted(voice.AUDIO))})")
+        _metered(row)
         from ..utils.recycle import recycle
         from .imports import receive
 
@@ -753,6 +770,7 @@ def routes(app: FastAPI, publish) -> None:
         _editable(row)
         if row["status"] not in ("approved", "built", "failed"):
             raise HTTPException(400, "approve the script first")
+        _metered(row)
         script = Script.model_validate(row["script"])
         words, seconds = voice.silent(script, channels.load().words_per_second)
         for old in voice.folder(video_id).glob("voice.*"):
@@ -788,6 +806,7 @@ def routes(app: FastAPI, publish) -> None:
             raise HTTPException(400, "drop the voiceover in first")
         if row["status"] in ("voiced", "building"):
             raise HTTPException(409, "it's being built already")
+        _metered(row)
         # Locked from now: the clips and placements can't change under a build that has begun (D119).
         store.update_video(video_id, status="voiced", error="")
         _start(video_id, publish)
