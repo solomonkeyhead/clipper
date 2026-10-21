@@ -4,6 +4,27 @@ Written 2026-10-04 at the end of a long cloud session (D118 to D131), for the ne
 Marc plans to run locally on his own machine. A local session can do what this one couldn't: build
 real videos on his GPU, play real H.264 stock previews, and reach Coverr's and NASA's servers.
 
+## The hosted site, 2026-10-21 (D224 to D238; read this first)
+
+Marc accepted the ship audit ("Clipper: ship audit, costs and pricing", a Claude Doc) and chose: clipping is the paid
+product, Create in beta, sign-in built into Clipper, Paddle for payments. Everything for the site is gated on
+`clipper.hosting.hosted()`; Marc's own copy works as before (his stats are never deleted, nothing is metered).
+- **Gateway** (`python -m clipper.hosted`, D228): sign-up, sessions, one `clipper studio` per user with its own data
+  folder and token, a streaming proxy, /billing, /admin, export and delete. Paddle checkout, webhooks, portal, packs,
+  refunds and Agency seats (D234). Public pages, terms and checklist (D226). Docker + Caddy, backups (D225).
+- **Inside each user's Clipper:** the safety holes closed (D229, D235), Groq speech to text (D230), platform-data
+  rules (D231), the AI usage log and budget (D227), the plan meter, 402s, watermark, retention (D237), the page's
+  usage line and hidden own-computer settings (D238).
+- **Costs:** clipping and Create cut (D232, D233); measured on Marc's plan (D236): an hour about $0.85, a Short about
+  $2.20 (up to $3.50 with redraws). Plan contents follow that (Starter 2 Shorts, Pro 5, Agency 12, 3 redraws).
+- **Try it here:** `python scripts/ui/serve_hosted.py <empty folder>` runs the gateway at 127.0.0.1:8090; sign up with
+  test values and a real studio starts behind it. `scripts/ui/hosted_walkthrough.py` checks the hosted page.
+- **What only Marc can do:** `docs/LAUNCH_TODO.md` (domain, Anthropic workspace and spend limit, paid Gemini, Groq
+  with a rate-limit raise, stock-library permissions, DMCA agent, Paddle setup, a lawyer, the platform app reviews,
+  the closed beta and its gates).
+- **Open:** the judge model (Opus stays until about 40 rated clips of one source can settle Sonnet, D236); Create
+  Shorts carry no watermark on Free; TikTok and Instagram data aren't deleted on a failed token (only YouTube's).
+
 ## Audit, 2026-10-08 (D168 to D178; read this first)
 
 A pass over the whole app on Marc's machine. Done and pushed, Clipper restarted on it:
