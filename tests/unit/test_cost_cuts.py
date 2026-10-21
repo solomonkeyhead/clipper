@@ -185,3 +185,11 @@ class TestJudgeEval:
         assert (rho, top, n) == (-1.0, 0.0, 4)
         assert ev.top_k_overlap({"a": 9.0, "c": 8.0, "b": 1.0}, ratings, k=2) == 0.5
         assert ev.top_k_overlap({}, ratings, k=2) is None
+        assert ev.top_k_overlap({"a": 1.0, "b": 2.0, "c": 3.0}, {"a": 5.0, "b": 5.0, "c": 5.0}, k=2) is None  # ties only
+
+    def test_pairwise_is_how_often_better_rated_wins(self):
+        ev = _judge_eval()
+        ratings = {"a": 5.0, "b": 1.0, "c": 1.0}
+        assert ev.pairwise({"a": 9.0, "b": 2.0, "c": 3.0}, ratings) == 1.0
+        assert ev.pairwise({"a": 2.0, "b": 2.0, "c": 3.0}, ratings) == 0.25
+        assert ev.pairwise({"a": 1.0}, {"a": 5.0}) is None

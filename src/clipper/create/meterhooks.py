@@ -1,4 +1,4 @@
-"""Where a hosted plan counts a Create Short (D233): a Short is one first build plus 5 redraws, so the build tells
+"""Where a hosted plan counts a Create Short (D233): a Short is one first build plus its plan's redraws (3, D236), so the build tells
 these hooks when each starts. Both do nothing here; the hosted plan meter (package E3) fills them in. Each is called
 before any AI call of what it counts, so raising from one (a plain-words CreateError) stops that build before it
 spends anything, and the reason shows on the video."""

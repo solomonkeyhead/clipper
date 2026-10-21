@@ -4041,3 +4041,21 @@ Marc had every page clicked through for what a general user wouldn't need or und
   frame readers and writers, thumbnails, the voice and sound readers, scene detection, the cover check). They now go
   through `safe_inputs` too. The list is `file,pipe,fd`: newer FFmpeg reads "-" (stdin) through `fd`, and Create's
   frame writer failed without it. Hosted, GET /api/compute (the server's hardware) answers 403 like its apply.
+
+## D236 — Shorts per plan follow what a Short really costs (2026-10-21)
+- Package M measured on Marc's plan (Claude Code, no API key; prices from `llm/usage.py`): an Opus drawing $0.13,
+  Sonnet's look $0.01, Opus's redraw $0.22 at direct API rates. The reviewer asked for a redraw on both drawings tried,
+  and both were right (one showed convection for radiation, one moved too fast to follow), so its prompt stays and a
+  Short is about $2.20 in AI, up to $3.50 with its redraws. An hour of footage is about $0.85 (judge $0.76 with Opus
+  on prompt A and Haiku on B, D232). The launch numbers (D224) assumed far less for a Short, so the 5-Shorts pack sold
+  below cost and Free's $2 AI budget would stop its one Short mid-build.
+- Decided: prices stay; Starter 2 Shorts (was 3), Pro 5 (8), Agency 12 (20), the 5-Shorts pack $20 (was $7.50), 3
+  redraws a Short (5). AI budgets cover a plan's full use: Free $5.50, Starter $13, Pro $30, Agency $78, the Shorts
+  pack $21. Every plan stays above its cost at full use after Paddle's fee; LAUNCH_TODO's cost gates now read under
+  $1.00 an hour and $3.50 a Short. Marc can change any of it in `hosted/catalog.py` and the landing page.
+- Judge: Opus and Sonnet ranked Marc's rated moments about the same (rank agreement 0.7-0.85; a good-rated moment beat
+  a bad one 70% of the time on Opus, 61% on Sonnet, pooled over 34), but his ratings are too few and too one-sided to
+  tell them apart, and Sonnet's "needs earlier context" flag swung 0-70% between identical runs. Opus stays; about 40
+  rated clips of one source, good and bad, would settle it. `scripts/cost/judge_eval.py` now prints cache writes, a
+  comparison over every answered moment (not each model's own survivors), how often good beats bad, and no top-k
+  number when the ratings are all the same.

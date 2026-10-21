@@ -1,7 +1,9 @@
 """What each plan and pack gives (D228), and the plan.json the gateway writes for each user's Clipper.
 
-The prices are the launch pricing. `ai_budget_usd` is a safety net for the AI spend inside Clipper
-(llm.usage.before_call): about 1.5x what a plan costs us at full use, plus 1.5x the cost of each pack bought.
+The prices are the launch pricing; the Shorts in each plan and the budgets follow the costs measured on real runs
+(D236: a Short about $2.20 in AI, up to $3.50 with its redraws; an hour of footage about $0.85). `ai_budget_usd` is a
+safety net for the AI spend inside Clipper (llm.usage.before_call): about 1.15x what a plan costs at full use, plus
+about 1.2x the cost of each pack bought.
 Every manual control is on every plan (D120): plans differ only in volume, watermark, retention, accounts,
 seats and queue speed.
 """
@@ -45,19 +47,19 @@ class Pack:
 
 
 PLANS = {p.name: p for p in (
-    Plan("free", 0, None, 60, 1, True, 7, 1, 1, 3, "normal", 2.0),
-    Plan("starter", 15, 12, 300, 3, False, 30, 1, 1, None, "normal", 10.0),
+    Plan("free", 0, None, 60, 1, True, 7, 1, 1, 3, "normal", 5.5),
+    Plan("starter", 15, 12, 300, 2, False, 30, 1, 1, None, "normal", 13.0),
     # "Several accounts per platform": 5 on Pro, 20 on Agency (5 seats), a number to revisit with use.
-    Plan("pro", 29, 23, 600, 8, False, 90, 5, 1, None, "fast", 20.0),
-    Plan("agency", 79, 63, 1800, 20, False, 180, 20, 5, None, "fastest", 55.0),
+    Plan("pro", 29, 23, 600, 5, False, 90, 5, 1, None, "fast", 30.0),
+    Plan("agency", 79, 63, 1800, 12, False, 180, 20, 5, None, "fastest", 78.0),
 )}
 PACKS = {p.name: p for p in (
     # One campaign: no subscription needed, no watermark on those clips, kept 30 days.
     Pack("campaign", "One campaign", 5, 120, 0, 2.5),
     Pack("minutes", "300 minutes", 10, 300, 0, 6.0),
-    Pack("shorts", "5 Shorts", 7.5, 0, 5, 4.5),
+    Pack("shorts", "5 Shorts", 20, 0, 5, 21.0),
 )}
-REDRAWS_PER_SHORT = 5
+REDRAWS_PER_SHORT = 3
 #: AI budget for credits given by hand (comps), at the packs' rates.
 USD_PER_MINUTE, USD_PER_SHORT = PACKS["minutes"].ai_budget_usd / 300, PACKS["shorts"].ai_budget_usd / 5
 

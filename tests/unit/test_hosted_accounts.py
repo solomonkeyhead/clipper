@@ -48,10 +48,10 @@ def test_signup_signs_in_and_writes_a_valid_plan(gw):
     assert set(plan) == {"plan", "status", "period_start", "period_end", "limits", "credits", "ai_budget_usd",
                          "billing_url"}
     assert plan["plan"] == "free" and plan["status"] == "active" and plan["billing_url"] == "/billing"
-    assert plan["limits"] == {"minutes": 60, "shorts": 1, "shorts_once": True, "redraws_per_short": 5,
+    assert plan["limits"] == {"minutes": 60, "shorts": 1, "shorts_once": True, "redraws_per_short": 3,
                               "retention_days": 7, "accounts_per_platform": 1, "seats": 1, "watermark_after": 3,
                               "queue": "normal"}
-    assert plan["credits"] == {"minutes": 0, "shorts": 0} and plan["ai_budget_usd"] == 2.0
+    assert plan["credits"] == {"minutes": 0, "shorts": 0} and plan["ai_budget_usd"] == 5.5
     start, end = catalog.parse(plan["period_start"]), catalog.parse(plan["period_end"])
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT00:00:00Z", plan["period_start"])
     assert 28 <= (end - start).days <= 31
@@ -154,7 +154,7 @@ def test_admin_only_for_admins_and_sets_plans(gw):
     assert gw.post("/admin/plan", data={"user": str(uid), "plan": "pro"}).status_code == 303
     plan = json.loads((data_dir(uid) / "plan.json").read_text())
     assert plan["plan"] == "pro" and plan["limits"]["minutes"] == 600 and plan["limits"]["watermark_after"] is None
-    assert plan["ai_budget_usd"] == 20.0
+    assert plan["ai_budget_usd"] == 30.0
 
 
 def test_packs_add_credits_budget_and_lift_free_limits(gw):
@@ -164,7 +164,7 @@ def test_packs_add_credits_budget_and_lift_free_limits(gw):
     users.add_credits(user["id"], shorts=5, source="pack:shorts")
     plan = catalog.plan_json(user)
     assert plan["credits"] == {"minutes": 120, "shorts": 5}
-    assert plan["ai_budget_usd"] == 2.0 + 2.5 + 4.5
+    assert plan["ai_budget_usd"] == 5.5 + 2.5 + 21.0
     assert plan["limits"]["watermark_after"] is None and plan["limits"]["retention_days"] == 30
 
 

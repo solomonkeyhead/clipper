@@ -267,7 +267,7 @@ and the SaaS tax category, and fill the Paddle price id (starts `pri_`) into the
 | Agency | $756.00 | every 1 year (= $63 a month) | `PADDLE_PRICE_AGENCY_YEARLY` |
 | Pack: one campaign (120 minutes) | $5.00 | one time | `PADDLE_PRICE_PACK_CAMPAIGN` |
 | Pack: 300 minutes | $10.00 | one time | `PADDLE_PRICE_PACK_MINUTES` |
-| Pack: 5 Shorts | $7.50 | one time | `PADDLE_PRICE_PACK_SHORTS` |
+| Pack: 5 Shorts | $20 | one time | `PADDLE_PRICE_PACK_SHORTS` |
 
 No trial on any price (the free plan is the trial). The sandbox and live dashboards have different ids, so keep
 two env files and do not mix them.
@@ -303,7 +303,7 @@ account Clipper doesn't know is logged and answered 200 (otherwise Paddle retrie
 ### Test before you go live
 
 1. In the sandbox, buy Starter with the sandbox test card from Paddle's docs.
-2. Confirm the Billing page shows Starter, the meters show 300 minutes and 3 Shorts, and the receipt email arrives.
+2. Confirm the Billing page shows Starter, the meters show 300 minutes and 2 Shorts, and the receipt email arrives.
 3. Use the whole allowance and confirm the work stops at zero before any AI is called.
 4. Buy a pack and confirm it adds to the meter and does not expire.
 5. Cancel with "Manage or cancel", and confirm the Billing page says when the plan ends and access lasts until then.
@@ -427,9 +427,9 @@ reach you; do not promise earnings.
 
 All of these must be true. Write down each result and the date.
 
-1. **Cost per hour.** A real hour of footage, run through the live site, costs under $0.80 in AI calls. Read it from
+1. **Cost per hour.** A real hour of footage, run through the live site, costs under $1.00 in AI calls (measured about $0.85, D236). Read it from
    the usage table (`usage.sqlite`) or the provider consoles.
-2. **Cost per Short.** One Create Short with its 5 redraws costs under $0.70 in AI calls.
+2. **Cost per Short.** One Create Short with its 3 redraws costs under $3.50 in AI calls (measured about $2.20 before redraws, D236).
 3. **Isolation.** A second account cannot see or spend the first account's files, clips, accounts or allowance. Try
    it by hand: other account's URLs, ids and files.
 4. **Billing works.** A test card buys Starter in sandbox, and the meters stop at zero with no AI call after.

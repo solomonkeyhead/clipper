@@ -37,14 +37,24 @@ def match_ratings(candidates: list[tuple[str, float, float]], rated: list[tuple[
 
 
 def top_k_overlap(scores: dict[str, float], ratings: dict[str, float], k: int) -> float | None:
-    """Share of the k best-rated moments that are also among the model's k best (of the rated ones)."""
+    """Share of the k best-rated moments that are also among the model's k best (of the rated ones). None when it
+    can't tell anything: every rating the same (only tie order), or no more rated moments than k."""
     both = [c for c in ratings if c in scores]
-    k = min(k, len(both))
-    if not k:
+    if len(both) <= k or len({ratings[c] for c in both}) < 2:
         return None
     by_rating = set(sorted(both, key=lambda c: ratings[c], reverse=True)[:k])
     by_model = set(sorted(both, key=lambda c: scores[c], reverse=True)[:k])
     return round(len(by_rating & by_model) / k, 3)
+
+
+def pairwise(scores: dict[str, float], ratings: dict[str, float]) -> float | None:
+    """The chance a better-rated moment outscores a worse-rated one (ties half): steadier than rho on a few ratings."""
+    both = [c for c in ratings if c in scores]
+    pairs = [(a, b) for a in both for b in both if ratings[a] > ratings[b]]
+    if not pairs:
+        return None
+    return round(sum(1.0 if scores[a] > scores[b] else 0.5 if scores[a] == scores[b] else 0.0
+                     for a, b in pairs) / len(pairs), 3)
 
 
 def agreement(scores: dict[str, float], ratings: dict[str, float], k: int = 5) -> tuple[float | None, float | None, int]:
@@ -89,9 +99,9 @@ def _spent(ref: str) -> dict:
 
     with contextlib.closing(usage._connect()) as con:
         row = con.execute("SELECT COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), "
-                          "COALESCE(SUM(cache_read),0), COALESCE(SUM(usd),0) FROM ai_calls WHERE ref=?",
-                          (ref,)).fetchone()
-    return dict(zip(("calls", "input", "output", "cache_read", "usd"), row, strict=True))
+                          "COALESCE(SUM(cache_read),0), COALESCE(SUM(cache_write),0), COALESCE(SUM(usd),0) FROM ai_calls "
+                          "WHERE ref=?", (ref,)).fetchone()
+    return dict(zip(("calls", "input", "output", "cache_read", "cache_write", "usd"), row, strict=True))
 
 
 def main() -> None:
@@ -110,7 +120,7 @@ def main() -> None:
     from clipper.models import Candidates
     from clipper.paths import campaigns_dir, work_dir
     from clipper.runner import campaign_config
-    from clipper.signals.llm import score_candidates
+    from clipper.signals.llm import combine_totals, score_candidates
 
     config = Config.load()
     if args.campaign:
@@ -133,11 +143,18 @@ def main() -> None:
         backend, ref = _backend(config, model), f"{run}:{model}"
         with usage.tag(ref):   # nothing cached: every model answers every candidate
             result = score_candidates(chosen, backend, config.llm, cache=LLMCache(enabled=False))
+        # A single opinion's "needs earlier context" drops differ by model, so compare on every answered moment too:
+        # otherwise each model is scored on a different set (package M found Sonnet dropping 0-70% run to run).
+        weights = config.llm.rubric_weights.as_dict()
+        answered = {cid: combine_totals(a, None, weights, 0.0) for cid, (a, _b) in result.scores.items() if a is not None}
         rho, top, n = agreement(result.totals, ratings, args.k)
+        all_rho, _, all_n = agreement(answered, ratings, args.k)
         spent = _spent(ref)
         print(f"{model}: {spent['calls']} calls, {spent['input']} in / {spent['output']} out tokens "
-              f"({spent['cache_read']} cache read), ${spent['usd']:.3f}; scored {len(result.totals)}, "
-              f"rho {rho} over {n} rated, top-{args.k} overlap {top}")
+              f"({spent['cache_read']} cache read, {spent['cache_write']} cache write), ${spent['usd']:.3f}; "
+              f"scored {len(result.totals)} (dropped {len(result.drops)}), rho {rho} over {n} rated, "
+              f"top-{args.k} overlap {top}; every answered moment: rho {all_rho} over {all_n} rated, "
+              f"good beats bad {pairwise(answered, ratings)}")
 
 
 if __name__ == "__main__":

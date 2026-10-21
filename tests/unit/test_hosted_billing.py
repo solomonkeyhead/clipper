@@ -203,7 +203,7 @@ def test_packs_add_credits_and_unknown_prices_are_ignored(c, paddle):
     assert plan["limits"]["watermark_after"] is None and plan["limits"]["retention_days"] == 30
     send(c, txn_event(uid, "pri_km", "pri_ks"))
     assert plan_file(uid)["credits"] == {"minutes": 420, "shorts": 5}
-    assert plan_file(uid)["ai_budget_usd"] == 2.0 + 2.5 + 6.0 + 4.5
+    assert plan_file(uid)["ai_budget_usd"] == 5.5 + 2.5 + 6.0 + 21.0
     assert me()["paddle_customer_id"] == "ctm_9"
     assert send(c, txn_event(uid, "pri_nope")).status_code == 200
     assert send(c, txn_event(uid, "pri_sm")).status_code == 200   # a plan's payment: the subscription has it
