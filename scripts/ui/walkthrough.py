@@ -42,7 +42,7 @@ with sync_playwright() as p:
     # D208: the bar says the step and what Approve locks; a checked (ready-made) script has Approve as its filled button
     expect(page.get_by_text("Step 1 of 4, the script.")).to_be_visible()
     # D215: the draft's other actions are under its bar's More
-    bar = page.get_by_text("Step 1 of 4, the script.").locator("xpath=..")
+    bar = page.get_by_text("Step 1 of 4, the script.").locator("xpath=../..")   # the bar: b -> p -> the sticky div
     bar.locator("summary", has_text="More").click()
     expect(page.get_by_role("button", name="Check physics again")).to_be_visible()
     bar.locator("summary", has_text="More").click()
@@ -233,6 +233,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Build again").locator("xpath=..").locator("summary", has_text="More").click()
     page.get_by_role("button", name="New pictures for every part…").click()
     expect(page.get_by_text("Plans every picture you haven't chosen yourself")).to_be_visible()
+    expect(page.get_by_text("Press Build again to make them")).to_be_visible()   # D233: it plans, Build makes them
     page.get_by_role("button", name="Keep these").click()
     print("new pictures asks first")
     # the archive (D131): the posted video is in it by itself, comes back, and goes in again by hand

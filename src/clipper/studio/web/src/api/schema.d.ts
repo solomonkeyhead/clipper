@@ -31,7 +31,8 @@ export interface paths {
         put?: never;
         /**
          * Quit Server
-         * @description Stop, for a `clipper studio` started on newer code (only from this computer).
+         * @description Stop, for a `clipper studio` started on newer code (only from this computer). Hosted never: behind
+         *     the gateway every request comes from 127.0.0.1 (D229).
          */
         post: operations["quit_server_api_quit_post"];
         delete?: never;
@@ -72,7 +73,8 @@ export interface paths {
         get: operations["ai_jobs_api_ai_jobs_get"];
         /**
          * Set Ai Jobs
-         * @description One AI for every job, or Automatic ("") to put each back on Clipper's own order.
+         * @description One AI for every job, or Automatic ("") to put each back on Clipper's own order. Hosted the server's
+         *     settings are the same for everyone, so they aren't changed from a page (D229).
          */
         put: operations["set_ai_jobs_api_ai_jobs_put"];
         post?: never;
@@ -1032,7 +1034,8 @@ export interface paths {
         put?: never;
         /**
          * Create Pictures
-         * @description New pictures for the same words and voice, then built again.
+         * @description New pictures planned for the same words and voice. Not built (D233): the video shows them as not built
+         *     yet, and the user presses Build again, so a replan they don't like costs no drawings.
          */
         post: operations["create_pictures_api_create_videos__video_id__pictures_post"];
         delete?: never;
@@ -1987,7 +1990,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Disconnect */
+        /**
+         * Disconnect
+         * @description Remove the account and, at once, the stats the platform's API gave Clipper for it (D231).
+         */
         delete: operations["disconnect_api_accounts__platform___account__delete"];
         options?: never;
         head?: never;
@@ -2229,7 +2235,8 @@ export interface paths {
         put?: never;
         /**
          * Reveal
-         * @description Show the clip's file in Explorer, selected, e.g. to drag it into an upload page.
+         * @description Show the clip's file in Explorer, selected, e.g. to drag it into an upload page. Hosted there is
+         *     no Explorer to show it in, and the path is the server's (D229).
          */
         post: operations["reveal_api_clips__clip_id__reveal_post"];
         delete?: never;
@@ -2285,7 +2292,8 @@ export interface paths {
         get?: never;
         /**
          * Upload
-         * @description Stream an uploaded video into Clipper's downloads folder (no size limit).
+         * @description Stream an uploaded video into Clipper's downloads folder, up to `imports.upload_cap()` (none on one's
+         *     own computer unless set). A name already there gets " (2)" instead of overwriting it (D229).
          */
         put: operations["upload_api_uploads__filename__put"];
         post?: never;

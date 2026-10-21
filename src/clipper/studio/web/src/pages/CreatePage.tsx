@@ -670,7 +670,7 @@ function Body({ video, wps, lead = false }: { video: CreateVideo; wps: number; l
     );
   }
   if (video.status === "built" || (video.status === "failed" && video.clip_id)) {
-    return <Built video={video} wps={wps} lead={lead} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: building")}
+    return <Built video={video} wps={wps} lead={lead} busy={busy} onPictures={run("pictures", () => createApi.pictures(video.id), "New pictures planned: press Build again to make them")}
                   onRebuild={run("rebuild", () => createApi.build(video.id), "Rebuilding: only the parts that changed are made again")} />;
   }
 
@@ -1393,7 +1393,7 @@ function Built({ video, wps, lead, busy, onPictures, onRebuild }: {
           </div>
           {replan && (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-line p-3 text-sm">
-              <span className="flex-1 text-muted">Plans every picture you haven't chosen yourself again and builds it; same words and voice. Uses AI.</span>
+              <span className="flex-1 text-muted">Plans every picture you haven't chosen yourself again; same words and voice. Press Build again to make them. Uses AI.</span>
               <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => { setReplan(false); onPictures(); }}>
                 {busy === "pictures" ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} New pictures
               </Button>
